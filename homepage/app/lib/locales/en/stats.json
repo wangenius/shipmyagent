@@ -1,0 +1,26 @@
+{
+  "sectionLabel": "The Platform",
+  "title": "Designed for",
+  "titleItalic": "Builders",
+  "titleEnd": "",
+  "fast": {
+    "value": "Instant",
+    "label": "Fast",
+    "description": "Ship your agent in seconds"
+  },
+  "simple": {
+    "value": "1-Click",
+    "label": "Simple",
+    "description": "Repo is the only artifact"
+  },
+  "anytime": {
+    "value": "24/7",
+    "label": "Anytime",
+    "description": "Always on, always listening"
+  },
+  "anywhere": {
+    "value": "Omni",
+    "label": "Anywhere",
+    "description": "Telegram, Discord, Slack supported"
+  }
+}

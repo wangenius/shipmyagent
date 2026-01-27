@@ -1,32 +1,24 @@
 {
-  "sectionLabel": "特性",
-  "title": "强大",
-  "titleItalic": "功能",
-  "description": "构建、部署和管理 AI 代理所需的一切功能。",
+  "sectionLabel": "核心特性",
+  "title": "不仅仅是",
+  "titleItalic": "Copilot",
+  "description": "ShipMyAgent 为企业提供安全、可控的 AI Agent 运行时环境。",
   "features": {
     "repo": {
-      "title": "仓库集成",
-      "description": "与 GitHub 仓库无缝集成。版本控制您的代理并跟踪所有变更。"
+      "title": "Repo is the Agent",
+      "description": "代码仓库就是 Agent 的大脑。它读取代码、理解上下文，并拥有长期的项目记忆。"
     },
-    "conversational": {
-      "title": "对话式界面",
-      "description": "与代理进行自然语言交互。上下文感知响应，实现更好的协作。"
+    "approval": {
+      "title": "Human-in-the-Loop",
+      "description": "所有敏感操作（如写代码、执行命令）必须经过人类审批。安全是第一原则。"
     },
-    "scheduling": {
-      "title": "任务调度",
-      "description": "通过灵活的调度自动化重复性任务。按您的时间表运行代理。"
+    "interactive": {
+      "title": "Chat Interface",
+      "description": "通过 Telegram、飞书等 IM 软件与 Agent 直接对话。它是您的 24/7 在线同事。"
     },
-    "humanInLoop": {
-      "title": "人工审核",
-      "description": "通过人工审批工作流保持控制。审查和批准代理决策。"
-    },
-    "auditable": {
-      "title": "完整审计跟踪",
-      "description": "跟踪每个代理的操作和决策。完全透明，便于调试和合规。"
-    },
-    "permissions": {
-      "title": "细粒度权限",
-      "description": "控制谁可以部署和管理代理。基于角色的访问控制，支持团队协作。"
+    "schedule": {
+      "title": "Tasks & Schedule",
+      "description": "支持 Cron 定时任务和事件驱动。让 Agent 自动执行每日维护、代码审查等任务。"
     }
   }
 }

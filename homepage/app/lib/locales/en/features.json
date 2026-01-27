@@ -1,24 +1,24 @@
 {
   "sectionLabel": "Features",
-  "title": "How It",
-  "titleItalic": "Works",
-  "description": "Three steps to ship your repo as an AI agent.",
+  "title": "More Than",
+  "titleItalic": "Copilot",
+  "description": "ShipMyAgent provides a safe and controllable Agent Runtime for your team.",
   "features": {
-    "documents": {
-      "title": "Connect Your Repo",
-      "description": "Link your GitHub repository. We analyze your codebase structure and documentation."
+    "repo": {
+      "title": "Repo is the Agent",
+      "description": "Your codebase is the agent's context and memory. It understands your project deeply."
     },
-    "aiTasks": {
-      "title": "Configure Agent",
-      "description": "Define what your agent can do. Set permissions, tools, and conversation context."
+    "approval": {
+      "title": "Human-in-the-Loop",
+      "description": "Sensitive actions require human approval. Security and control are built-in defaults."
     },
-    "automation": {
-      "title": "Deploy & Share",
-      "description": "Ship your agent instantly. Share it with your team or the world."
+    "interactive": {
+      "title": "Chat Interface",
+      "description": "Interact with your agent via Telegram, Discord, or Slack. It works where you work."
     },
-    "decentralized": {
-      "title": "Scale Effortlessly",
-      "description": "Handle multiple conversations concurrently. Your agent learns from every interaction."
+    "schedule": {
+      "title": "Tasks & Schedule",
+      "description": "Automate repetitive tasks with Cron jobs. Let the agent handle maintenance autonomously."
     }
   }
 }

@@ -41,7 +41,7 @@ export function HeroSection() {
           <div className="flex flex-col sm:flex-row items-start gap-4 mb-16">
             <Button asChild>
               <Link to={GITHUB_URL} target="_blank" rel="noopener noreferrer">
-                Get Started
+                {t("common:getStarted")}
               </Link>
             </Button>
             <Button asChild variant="outline">

@@ -10,7 +10,7 @@ export const product: ShipMyAgentProduct = {
   name: "shipmyagent",
   productName: "ShipMyAgent",
   version: "1.0.0",
-  description: "Ship your Repo as Agent",
+  description:
+    "Turn your repository into a conversational, schedulable, and auditable Agent Runtime.",
   homepage: "https://github.com/wangenius/ShipMyAgent",
 };
-

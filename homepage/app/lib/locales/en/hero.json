@@ -1,10 +1,10 @@
 {
-  "title": "Ship Your",
-  "titleItalic": "Repo",
-  "titleEnd": "as Agent",
-  "subtitle": "Transform any GitHub repository into an AI agent instantly",
-  "tag1": "Connect Repo",
-  "tag2": "Deploy Agent",
-  "tag3": "Ship It",
-  "verticalText": "Ship Your Repo as Agent"
+  "title": "Repo",
+  "titleItalic": "is the",
+  "titleEnd": "Agent",
+  "subtitle": "Turn your repository into a conversational, schedulable, and auditable Agent Runtime.",
+  "tag1": "Conversational",
+  "tag2": "Schedulable",
+  "tag3": "Auditable",
+  "verticalText": "AGENT RUNTIME"
 }

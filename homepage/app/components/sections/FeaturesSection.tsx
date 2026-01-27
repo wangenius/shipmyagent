@@ -9,27 +9,27 @@ import {
 
 const features = [
   {
-    titleKey: "features:features.documents.title",
-    descriptionKey: "features:features.documents.description",
+    titleKey: "features:features.repo.title",
+    descriptionKey: "features:features.repo.description",
     icon: FolderTreeIcon,
     number: "01",
   },
   {
-    titleKey: "features:features.aiTasks.title",
-    descriptionKey: "features:features.aiTasks.description",
-    icon: BrainCircuitIcon,
+    titleKey: "features:features.approval.title",
+    descriptionKey: "features:features.approval.description",
+    icon: ShieldCheckIcon,
     number: "02",
   },
   {
-    titleKey: "features:features.automation.title",
-    descriptionKey: "features:features.automation.description",
-    icon: CodeIcon,
+    titleKey: "features:features.interactive.title",
+    descriptionKey: "features:features.interactive.description",
+    icon: BrainCircuitIcon,
     number: "03",
   },
   {
-    titleKey: "features:features.decentralized.title",
-    descriptionKey: "features:features.decentralized.description",
-    icon: ShieldCheckIcon,
+    titleKey: "features:features.schedule.title",
+    descriptionKey: "features:features.schedule.description",
+    icon: CodeIcon,
     number: "04",
   },
 ];

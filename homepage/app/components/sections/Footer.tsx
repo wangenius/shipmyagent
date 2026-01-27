@@ -1,14 +1,17 @@
 import type { FC } from "react";
 import { Link } from "react-router";
 import { GithubIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { product } from "@/lib/product";
 
 export const Footer: FC = () => {
   const currentYear = new Date().getFullYear();
+  const { t } = useTranslation();
 
   return (
-    <footer className="py-16 md:py-24 bg-[#000] text-[#fff]">
+    <footer className="py-16 md:py-24 bg-black text-white">
       {/* Thick horizontal rule - inverted */}
-      <div className="h-1 bg-[#fff]" />
+      <div className="h-1 bg-white" />
 
       <div className="mx-auto w-full max-w-6xl px-6 md:px-8 lg:px-12 pt-16 md:pt-24">
         <div className="grid grid-cols-12 gap-8 md:gap-12">
@@ -19,14 +22,14 @@ export const Footer: FC = () => {
                 className="text-2xl md:text-3xl font-normal"
                 style={{ fontFamily: "var(--font-serif)" }}
               >
-                Vibecape
+                {product.productName}
               </span>
             </Link>
             <p className="text-sm text-[#A3A3A3] leading-relaxed mb-6">
-              AI-powered writing assistant with local-first document management.
+              {t("hero:subtitle")}
             </p>
             <Link
-              to="https://github.com/wangenius/vibecape"
+              to="https://github.com/wangenius/shipmyagent"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-sm text-[#A3A3A3] hover:text-[#fff] transition-colors duration-100"
@@ -44,7 +47,7 @@ export const Footer: FC = () => {
             <ul className="space-y-3">
               <li>
                 <Link
-                  to="/features"
+                  to="/" // features are on homepage
                   className="text-sm text-[#A3A3A3] hover:text-[#fff] transition-colors duration-100"
                 >
                   Features
@@ -60,7 +63,7 @@ export const Footer: FC = () => {
               </li>
               <li>
                 <Link
-                  to="https://github.com/wangenius/vibecape/releases"
+                  to="https://github.com/wangenius/shipmyagent/releases"
                   target="_blank"
                   className="text-sm text-[#A3A3A3] hover:text-[#fff] transition-colors duration-100"
                 >
@@ -77,7 +80,7 @@ export const Footer: FC = () => {
             <ul className="space-y-3">
               <li>
                 <Link
-                  to="https://github.com/wangenius/vibecape"
+                  to="https://github.com/wangenius/shipmyagent"
                   target="_blank"
                   className="text-sm text-[#A3A3A3] hover:text-[#fff] transition-colors duration-100"
                 >
@@ -86,7 +89,7 @@ export const Footer: FC = () => {
               </li>
               <li>
                 <Link
-                  to="https://github.com/wangenius/vibecape/issues"
+                  to="https://github.com/wangenius/shipmyagent/issues"
                   target="_blank"
                   className="text-sm text-[#A3A3A3] hover:text-[#fff] transition-colors duration-100"
                 >
@@ -95,11 +98,11 @@ export const Footer: FC = () => {
               </li>
               <li>
                 <Link
-                  to="https://github.com/wangenius/vibecape/discussions"
+                  to="https://twitter.com/shipmyagent" // Assuming from README links
                   target="_blank"
                   className="text-sm text-[#A3A3A3] hover:text-[#fff] transition-colors duration-100"
                 >
-                  Discussions
+                  Twitter
                 </Link>
               </li>
             </ul>
@@ -110,7 +113,8 @@ export const Footer: FC = () => {
         <div className="mt-16 md:mt-24 pt-8 border-t border-[#333]">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <p className="text-xs text-[#A3A3A3] uppercase tracking-[0.15em]">
-              © {currentYear} Vibecape. Open source under MIT License.
+              © {currentYear} {product.productName}. Open source under MIT
+              License.
             </p>
             <p className="text-xs text-[#A3A3A3] uppercase tracking-[0.15em]">
               Made with intent

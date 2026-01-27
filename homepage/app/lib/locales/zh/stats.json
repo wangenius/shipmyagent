@@ -1,0 +1,26 @@
+{
+  "sectionLabel": "平台架构",
+  "title": "专为",
+  "titleItalic": "构建者",
+  "titleEnd": "设计",
+  "fast": {
+    "value": "极速",
+    "label": "快速",
+    "description": "秒级将代码启动为 Agent"
+  },
+  "simple": {
+    "value": "极简",
+    "label": "简单",
+    "description": "代码仓库即是 Agent"
+  },
+  "anytime": {
+    "value": "24/7",
+    "label": "任何时刻",
+    "description": "全天候响应与自动执行"
+  },
+  "anywhere": {
+    "value": "全端",
+    "label": "任何地方",
+    "description": "支持 Telegram、飞书、Discord"
+  }
+}

@@ -1,10 +1,12 @@
 import type { FC } from "react";
 import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 
 const GITHUB_URL = "https://github.com/wangenius/ShipMyAgent";
 
 export const CTASection: FC = () => {
+  const { t } = useTranslation();
   return (
     <section className="py-24 md:py-32 lg:py-40 bg-[#fff] relative">
       {/* Thick horizontal rule */}
@@ -27,23 +29,17 @@ export const CTASection: FC = () => {
             </h2>
 
             <p className="text-lg md:text-xl text-[#525252] mb-12 max-w-lg leading-relaxed">
-              Transform any GitHub repository into an AI agent. Open source,
-              self-hostable, and developer-friendly.
+              {t("hero:subtitle")}
             </p>
 
             <div className="flex flex-col sm:flex-row items-start gap-4 mb-12">
               <Button asChild>
-                <Link
-                  to={GITHUB_URL}
-                  target="_blank"
-                >
-                  Get Started
+                <Link to={GITHUB_URL} target="_blank">
+                  {t("common:getStarted")}
                 </Link>
               </Button>
               <Button asChild variant="outline">
-                <Link to="/docs">
-                  Read the Docs
-                </Link>
+                <Link to="/docs">{t("common:readDocs")}</Link>
               </Button>
             </div>
 

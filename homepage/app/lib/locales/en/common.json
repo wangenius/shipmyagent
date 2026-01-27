@@ -1,5 +1,7 @@
 {
   "download": "Download",
   "documentation": "Documentation",
-  "version": "Version"
+  "version": "Version",
+  "getStarted": "Get Started",
+  "readDocs": "Read Docs"
 }
