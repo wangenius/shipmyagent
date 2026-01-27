@@ -35,6 +35,10 @@ export declare class PermissionEngine {
     private projectRoot;
     private approvalRequests;
     constructor(config: PermissionConfig, projectRoot: string);
+    /**
+     * 从文件系统加载待审批请求到内存
+     */
+    private loadApprovalsFromDisk;
     checkReadRepo(filePath: string): Promise<PermissionCheckResult>;
     checkWriteRepo(filePath: string, content: string): Promise<PermissionCheckResult>;
     checkExecShell(command: string): Promise<PermissionCheckResult>;

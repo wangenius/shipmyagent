@@ -9,6 +9,37 @@ export class PermissionEngine {
     constructor(config, projectRoot) {
         this.config = config;
         this.projectRoot = projectRoot;
+        // 从文件系统加载已有的审批请求
+        this.loadApprovalsFromDisk();
+    }
+    /**
+     * 从文件系统加载待审批请求到内存
+     */
+    async loadApprovalsFromDisk() {
+        const approvalsDir = getApprovalsDirPath(this.projectRoot);
+        if (!fs.existsSync(approvalsDir)) {
+            return;
+        }
+        try {
+            const files = await fs.readdir(approvalsDir);
+            const jsonFiles = files.filter(f => f.endsWith('.json'));
+            for (const file of jsonFiles) {
+                const filePath = path.join(approvalsDir, file);
+                try {
+                    const request = await fs.readJson(filePath);
+                    // 只加载 pending 状态的请求
+                    if (request.status === 'pending') {
+                        this.approvalRequests.set(request.id, request);
+                    }
+                }
+                catch (readError) {
+                    console.warn(`⚠️ 读取审批文件失败: ${filePath}`);
+                }
+            }
+        }
+        catch (error) {
+            console.warn(`⚠️ 加载审批请求目录失败: ${approvalsDir}`);
+        }
     }
     async checkReadRepo(filePath) {
         const paths = this.config.read_repo;
