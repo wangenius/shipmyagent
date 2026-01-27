@@ -1,0 +1,15 @@
+{
+    "name": "shipmyagent",
+    "version": "1.0.0",
+    "description": "shipmyagent is a service which can make your repo an agent",
+    "main": "./dist/index.js",
+    "bin": "./dist/cli.js",
+    "types": "./dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "...",
+        "prepublishOnly": "npm run build"
+    }
+}
