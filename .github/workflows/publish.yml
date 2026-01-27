@@ -1,0 +1,42 @@
+name: Publish to npmjs
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+        registry-url: 'https://registry.npmjs.org'
+
+    - name: Install dependencies
+      run: |
+        cd package
+        npm install --legacy-peer-deps
+        
+    - name: Build package
+      run: |
+        cd package
+        npm run build
+    
+    - name: Check version and publish
+      run: |
+        cd package
+        VERSION=$(node -p "require('./package.json').version")
+        if ! npm view . versions | grep -q "\"$VERSION\""; then
+          npm publish
+        else
+          echo "Version $VERSION already exists, skipping publish"
+        fi
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

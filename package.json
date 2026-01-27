@@ -1,0 +1,18 @@
+{
+  "name": "shipmyagent",
+  "version": "1.0.0",
+  "type": "module",
+  "workspaces": {
+    "packages": [
+      "package",
+      "examples/*"
+    ]
+  },
+  "scripts": {
+    "build": "cd package && bun run build"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "dependencies": {}
+}

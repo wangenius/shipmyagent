@@ -1,0 +1,280 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/vitepress.css";
+@import "fumadocs-ui/css/preset.css";
+
+/* Tailwind CSS v4 自定义属性 */
+@theme {
+  --color-primary: #3b82f6;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f1f5f9;
+  --color-secondary-foreground: #0f172a;
+  --color-muted: #f8fafc;
+  --color-muted-foreground: #64748b;
+  --color-accent: #f1f5f9;
+  --color-accent-foreground: #0f172a;
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #e2e8f0;
+  --color-input: #e2e8f0;
+  --color-ring: #3b82f6;
+  --radius: 0.5rem;
+}
+
+/* 极简动画 */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* 打字机光标 */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.cursor {
+  animation: blink 1s infinite;
+}
+
+/* 浅色主题滚动条 */
+::-webkit-scrollbar {
+  width: 2px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 1px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* 首页特殊样式 */
+#homepage-body {
+  background: white;
+}
+
+/* 科幻连接动画 */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.6), 0 0 30px rgba(255, 255, 255, 0.4);
+  }
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* 连接状态指示器 */
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.rotate {
+  animation: rotate 8s linear infinite;
+}/*
+ 故事动画效果 */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 1s ease-out;
+}
+
+@keyframes bounce {
+  0%, 20%, 53%, 80%, 100% {
+    transform: translate3d(0,0,0);
+  }
+  40%, 43% {
+    transform: translate3d(0, -10px, 0);
+  }
+  70% {
+    transform: translate3d(0, -5px, 0);
+  }
+  90% {
+    transform: translate3d(0, -2px, 0);
+  }
+}
+
+.animate-bounce {
+  animation: bounce 2s infinite;
+}
+
+/* 故事书翻页效果 */
+@keyframes page-turn {
+  0% {
+    transform: rotateY(0deg);
+  }
+  50% {
+    transform: rotateY(-90deg);
+  }
+  100% {
+    transform: rotateY(0deg);
+  }
+}
+
+.page-turn {
+  animation: page-turn 0.8s ease-in-out;
+}
+/* 游戏界面样式 */
+.game-hud {
+  font-family: 'Courier New', monospace;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+}
+
+/* 网络连接动画 */
+@keyframes network-pulse {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.network-pulse {
+  animation: network-pulse 2s ease-in-out infinite;
+}
+
+/* HUD 面板 */
+.hud-panel {
+  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 状态指示器 */
+@keyframes status-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0.3; }
+}
+
+.status-active {
+  animation: status-blink 1s infinite;
+}
+
+/* 3D 场景容器 */
+.scene-container {
+  cursor: grab;
+}
+
+.scene-container:active {
+  cursor: grabbing;
+}/* React Flow 自定义样式 */
+.react-flow__node {
+  cursor: pointer;
+}
+
+.react-flow__node:hover {
+  transform: scale(1.05);
+  transition: transform 0.2s ease;
+}
+
+.react-flow__edge.animated {
+  stroke-dasharray: 5;
+  animation: dashdraw 0.5s linear infinite;
+}
+
+@keyframes dashdraw {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+.react-flow__controls {
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid #374151;
+}
+
+.react-flow__controls button {
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid #374151;
+  color: #ffffff;
+}
+
+.react-flow__controls button:hover {
+  background: rgba(55, 65, 81, 0.8);
+}/*
+ 宇宙主题样式 */
+.cosmic-glow {
+  box-shadow: 0 0 20px rgba(147, 51, 234, 0.5), 0 0 40px rgba(59, 130, 246, 0.3);
+}
+
+.stellar-text {
+  text-shadow: 0 0 10px rgba(147, 51, 234, 0.8), 0 0 20px rgba(59, 130, 246, 0.6);
+}
+
+/* 星空粒子动画 */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.twinkle {
+  animation: twinkle 2s ease-in-out infinite;
+}
+
+/* 宇宙背景渐变 */
+.cosmic-bg {
+  background: radial-gradient(ellipse at center, 
+    rgba(147, 51, 234, 0.1) 0%, 
+    rgba(59, 130, 246, 0.05) 35%, 
+    rgba(0, 0, 0, 0.8) 100%);
+}
+
+/* 能量流动效果 */
+@keyframes energy-flow {
+  0% { 
+    background-position: 0% 50%; 
+    opacity: 0.6;
+  }
+  50% { 
+    background-position: 100% 50%; 
+    opacity: 1;
+  }
+  100% { 
+    background-position: 0% 50%; 
+    opacity: 0.6;
+  }
+}
+
+.energy-flow {
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(16, 185, 129, 0.8) 50%, 
+    transparent 100%);
+  background-size: 200% 100%;
+  animation: energy-flow 2s ease-in-out infinite;
+}
+
+/* 3D 场景容器增强 */
+.universe-container {
+  background: radial-gradient(circle at 50% 50%, 
+    rgba(30, 41, 59, 0.1) 0%, 
+    rgba(0, 0, 0, 0.9) 100%);
+  border: 1px solid rgba(147, 51, 234, 0.3);
+  box-shadow: 
+    inset 0 0 50px rgba(147, 51, 234, 0.1),
+    0 0 50px rgba(59, 130, 246, 0.2);
+}
