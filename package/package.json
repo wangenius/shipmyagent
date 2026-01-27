@@ -1,22 +1,52 @@
 {
-    "name": "shipmyagent",
-    "version": "1.0.4",
-    "description": "shipmyagent is a service which can make your repo an agent",
-    "main": "./dist/index.js",
-    "bin": {
-        "shipmyagent": "dist/cli.js"
-    },
-    "types": "./dist/index.d.ts",
-    "files": [
-        "dist"
-    ],
-    "scripts": {
-        "build": "tsc",
-        "prepublishOnly": "npm run build"
-    },
-    "devDependencies": {
-        "typescript": "^5.0.0",
-        "@types/node": "^20.0.0"
-    },
-    "license": "MIT"
+  "name": "shipmyagent",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "把一个代码仓库，启动成一个可对话、可调度、可审计的 Agent Runtime",
+  "bin": {
+    "shipmyagent": "./bin/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node bin/start.js"
+  },
+  "keywords": [
+    "agent",
+    "ai",
+    "runtime",
+    "telegram",
+    "claude",
+    "autonomous"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ai": "^4.0.0",
+    "@ai-sdk/anthropic": "^1.0.0",
+    "@ai-sdk/openai": "^1.0.0",
+    "chalk": "^5.4.0",
+    "commander": "^12.0.0",
+    "diff": "^7.0.0",
+    "dotenv": "^16.4.0",
+    "execa": "^9.5.0",
+    "fast-glob": "^3.3.0",
+    "fs-extra": "^11.2.0",
+    "hono": "^4.0.0",
+    "js-yaml": "^4.1.0",
+    "node-cron": "^3.0.0",
+    "openai": "^4.0.0",
+    "ora": "^8.2.0",
+    "prompts": "^2.4.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/diff": "^5.2.0",
+    "@types/fs-extra": "^11.0.4",
+    "@types/js-yaml": "^4.0.0",
+    "@types/node": "^22.0.0",
+    "@types/node-cron": "^3.0.0",
+    "@types/prompts": "^2.4.0",
+    "typescript": "^5.7.0"
+  }
 }
