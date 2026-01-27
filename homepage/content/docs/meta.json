@@ -1,12 +1,11 @@
 {
-  "title": "Documentation",
-  "description": "",
+  "title": "文档",
   "pages": [
     "index",
-    "getting-started",
-    "core-concepts",
-    "guides",
-    "api-reference",
-    "examples"
+    "---快速开始---",
+    "guide",
+    "---开发者---",
+    "hero-system",
+    "context-system"
   ]
 }

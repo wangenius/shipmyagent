@@ -1,0 +1,24 @@
+{
+  "sectionLabel": "Features",
+  "title": "How It",
+  "titleItalic": "Works",
+  "description": "Three steps to ship your repo as an AI agent.",
+  "features": {
+    "documents": {
+      "title": "Connect Your Repo",
+      "description": "Link your GitHub repository. We analyze your codebase structure and documentation."
+    },
+    "aiTasks": {
+      "title": "Configure Agent",
+      "description": "Define what your agent can do. Set permissions, tools, and conversation context."
+    },
+    "automation": {
+      "title": "Deploy & Share",
+      "description": "Ship your agent instantly. Share it with your team or the world."
+    },
+    "decentralized": {
+      "title": "Scale Effortlessly",
+      "description": "Handle multiple conversations concurrently. Your agent learns from every interaction."
+    }
+  }
+}

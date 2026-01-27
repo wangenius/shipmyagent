@@ -1,0 +1,770 @@
+---
+title: Hero 编辑器扩展
+---
+
+# Hero 编辑器扩展
+
+## 概述
+
+Hero 编辑器使用 Tiptap 富文本编辑器，并通过自定义节点扩展实现 Hero 的特定功能。这些扩展将 Hero 配置的不同部分（名称、描述、工具策略）映射到可视化的编辑器节点。
+
+## 自定义节点类型
+
+Hero 编辑器包含三个核心自定义节点：
+
+| 节点类型 | 用途 | HTML 渲染 | 输入方式 |
+|---------|------|----------|---------|
+| `heroName` | Hero 名称 | `<h1>` | `/name` |
+| `heroDescription` | Hero 描述 | `<p class="italic">` | `/desc` |
+| `heroToolChoice` | 工具选择策略 | `<div class="badge">` | `/tool` |
+
+## HeroName 节点
+
+**位置：** `package/src/renderer/lib/editor/extensions/HeroName.ts`
+
+**功能：** 定义 Hero 的显示名称
+
+### 代码实现
+
+```typescript
+// package/src/renderer/lib/editor/extensions/HeroName.ts
+
+import { Node, mergeAttributes } from "@tiptap/core";
+
+export interface HeroNameOptions {
+  HTMLAttributes: Record<string, any>;
+}
+
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    heroName: {
+      setName: (name: string) => ReturnType;
+    };
+  }
+}
+
+export const HeroName = Node.create<HeroNameOptions>({
+  name: "heroName",
+
+  group: "block",
+
+  content: "inline*", // 允许内联内容（文本、格式等）
+
+  addOptions() {
+    return {
+      HTMLAttributes: {
+        class: "hero-name",
+      },
+    };
+  },
+
+  addCommands() {
+    return {
+      setName:
+        (name) =>
+        ({ commands }) => {
+          return commands.insertContent({
+            type: this.name,
+            content: [{ type: "text", text: name }],
+          });
+        },
+    };
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "h1",
+      mergeAttributes(HTMLAttributes, {
+        class: "text-2xl font-bold"
+      }),
+      0,
+    ];
+  },
+});
+```
+
+### JSON 结构
+
+```json
+{
+  "type": "heroName",
+  "content": [
+    {
+      "type": "text",
+      "text": "我的自定义 Hero"
+    }
+  ]
+}
+```
+
+### HTML 输出
+
+```html
+<h1 class="text-2xl font-bold">我的自定义 Hero</h1>
+```
+
+### 命令使用
+
+```typescript
+editor.commands.setName("我的 Hero");
+```
+
+## HeroDescription 节点
+
+**位置：** `package/src/renderer/lib/editor/extensions/HeroDescription.ts`
+
+**功能：** 简短描述 Hero 的功能和特点
+
+### 代码实现
+
+```typescript
+// package/src/renderer/lib/editor/extensions/HeroDescription.ts
+
+import { Node, mergeAttributes } from "@tiptap/core";
+
+export interface HeroDescriptionOptions {
+  HTMLAttributes: Record<string, any>;
+}
+
+export const HeroDescription = Node.create<HeroDescriptionOptions>({
+  name: "heroDescription",
+
+  group: "block",
+
+  content: "inline*",
+
+  addOptions() {
+    return {
+      HTMLAttributes: {
+        class: "hero-description",
+      },
+    };
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "p",
+      mergeAttributes(HTMLAttributes, {
+        class: "text-sm text-muted-foreground italic"
+      }),
+      0,
+    ];
+  },
+});
+```
+
+### JSON 结构
+
+```json
+{
+  "type": "heroDescription",
+  "content": [
+    {
+      "type": "text",
+      "text": "一个专业的写作助手，擅长..."
+    }
+  ]
+}
+```
+
+### HTML 输出
+
+```html
+<p class="text-sm text-muted-foreground italic">
+  一个专业的写作助手，擅长...
+</p>
+```
+
+## HeroToolChoice 节点
+
+**位置：** `package/src/renderer/lib/editor/extensions/HeroToolChoice.ts`
+
+**功能：** 定义 Hero 的工具使用策略
+
+### 工具策略选项
+
+| 值 | 说明 | 适用场景 |
+|----|------|---------|
+| `auto` | AI 自动决定是否使用工具 | 通用助手（推荐） |
+| `required` | 必须使用工具 | 需要强制执行操作的场景 |
+| `none` | 不使用工具 | 纯对话场景 |
+
+### 代码实现
+
+```typescript
+// package/src/renderer/lib/editor/extensions/HeroToolChoice.ts
+
+import { Node, mergeAttributes } from "@tiptap/core";
+
+export const toolChoiceOptions = ["auto", "required", "none"] as const;
+export type ToolChoiceOption = (typeof toolChoiceOptions)[number];
+
+export interface HeroToolChoiceOptions {
+  HTMLAttributes: Record<string, any>;
+}
+
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    heroToolChoice: {
+      setToolChoice: (toolChoice: ToolChoiceOption) => ReturnType;
+    };
+  }
+}
+
+export const HeroToolChoice = Node.create<HeroToolChoiceOptions>({
+  name: "heroToolChoice",
+
+  group: "block",
+
+  content: "", // 空内容，只存储属性
+
+  addOptions() {
+    return {
+      HTMLAttributes: {
+        class: "hero-tool-choice",
+      },
+    };
+  },
+
+  addAttributes() {
+    return {
+      toolChoice: {
+        default: "auto",
+        parseHTML: (element) =>
+          element.getAttribute("data-tool-choice") || "auto",
+        renderHTML: (attributes) => {
+          if (!attributes.toolChoice) {
+            return {};
+          }
+          return {
+            "data-tool-choice": attributes.toolChoice,
+            "data-label": toolChoiceLabel(
+              attributes.toolChoice as ToolChoiceOption
+            ),
+          };
+        },
+      },
+    };
+  },
+
+  addCommands() {
+    return {
+      setToolChoice:
+        (toolChoice) =>
+        ({ commands }) => {
+          return commands.insertContent({
+            type: this.name,
+            attrs: { toolChoice },
+          });
+        },
+    };
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    const toolChoice = node.attrs.toolChoice as ToolChoiceOption;
+    const label = toolChoiceLabel(toolChoice);
+
+    return [
+      "div",
+      mergeAttributes(HTMLAttributes, {
+        class: "flex items-center gap-2 text-sm py-2",
+        "data-tool-choice": toolChoice,
+      }),
+      ["span", { class: "font-medium" }, `工具选择: ${label}`],
+    ];
+  },
+});
+
+function toolChoiceLabel(toolChoice: ToolChoiceOption): string {
+  switch (toolChoice) {
+    case "auto":
+      return "自动";
+    case "required":
+      return "必须使用工具";
+    case "none":
+      return "不使用工具";
+    default:
+      return toolChoice;
+  }
+}
+```
+
+### JSON 结构
+
+```json
+{
+  "type": "heroToolChoice",
+  "attrs": {
+    "toolChoice": "auto"
+  }
+}
+```
+
+### HTML 输出
+
+```html
+<div
+  class="flex items-center gap-2 text-sm py-2"
+  data-tool-choice="auto"
+>
+  <span class="font-medium">工具选择: 自动</span>
+</div>
+```
+
+### 命令使用
+
+```typescript
+editor.commands.setToolChoice("auto");
+```
+
+## Slash Command 菜单
+
+**位置：** `package/src/renderer/lib/editor/menus/HeroSlashMenu.tsx`
+
+**功能：** 提供 `/` 命令菜单，快速插入 Hero 节点
+
+### 可用命令
+
+| 命令 | 别名 | 功能 | 图标 |
+|------|------|------|------|
+| `/name` | `name`, `mingcheng`, `mc`, `hero` | 插入 Hero 名称 | User |
+| `/desc` | `desc`, `miaoshu`, `ms`, `description` | 插入 Hero 描述 | User |
+| `/tool` | `tool`, `gongju`, `toolchoice`, `tc` | 插入工具选择策略 | Wrench |
+
+### 搜索功能
+
+菜单支持多种搜索方式：
+
+1. **普通文本匹配**：匹配标题和描述
+2. **别名匹配**：使用预定义的别名
+3. **拼音匹配**：使用 `pinyin-match` 库
+
+**示例：**
+
+```typescript
+// 匹配 "名称"
+/name          // ✅ 直接匹配
+/mingcheng     // ✅ 拼音
+/mc            // ✅ 别名
+/hero          // ✅ 别名
+```
+
+### 菜单组件
+
+```typescript
+// package/src/renderer/lib/editor/menus/HeroSlashMenu.tsx
+
+export interface HeroSlashMenuItem {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  category: HeroSlashMenuCategory;
+  aliases?: string[];
+  command: ({ editor, range }: { editor: Editor; range: any }) => void;
+}
+
+export const getHeroSlashMenuItems = (t: any): HeroSlashMenuItem[] => [
+  {
+    title: "Hero 名称",
+    description: "设置 Hero 的显示名称",
+    icon: <User className="size-4" />,
+    category: "hero",
+    aliases: ["name", "mingcheng", "mc", "hero"],
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run();
+      editor.chain().focus().insertContent({ type: "heroName" }).run();
+    },
+  },
+  {
+    title: "Hero 描述",
+    description: "简短描述 Hero 的功能",
+    icon: <User className="size-4" />,
+    category: "hero",
+    aliases: ["desc", "miaoshu", "ms", "description"],
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run();
+      editor.chain().focus().insertContent({ type: "heroDescription" }).run();
+    },
+  },
+  {
+    title: "工具选择",
+    description: "设置 Hero 的工具使用策略",
+    icon: <Wrench className="size-4" />,
+    category: "tool",
+    aliases: ["tool", "gongju", "toolchoice", "tc"],
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run();
+      editor.chain().focus().insertContent({
+        type: "heroToolChoice",
+        attrs: { toolChoice: "auto" },
+      }).run();
+    },
+  },
+];
+```
+
+### 菜单插件
+
+```typescript
+export const createHeroSlashMenuPlugin = (t: any) => {
+  let popup: TippyInstance[] | null = null;
+  const HERO_SLASH_MENU_ITEMS = getHeroSlashMenuItems(t);
+
+  return {
+    char: "/",
+
+    items: ({ query }: { query: string }) => {
+      if (!query) return HERO_SLASH_MENU_ITEMS;
+
+      return HERO_SLASH_MENU_ITEMS.filter((item) => {
+        const searchStr = query.toLowerCase();
+
+        // 文本匹配
+        if (item.title.toLowerCase().includes(searchStr) ||
+            item.description.toLowerCase().includes(searchStr)) {
+          return true;
+        }
+
+        // 别名匹配
+        if (item.aliases?.some((alias) =>
+            alias.toLowerCase().includes(searchStr))) {
+          return true;
+        }
+
+        // 拼音匹配
+        if (PinyinMatch.match(item.title, query) !== false ||
+            PinyinMatch.match(item.description, query) !== false) {
+          return true;
+        }
+
+        return false;
+      });
+    },
+
+    render: () => {
+      let localComponent: ReactRenderer;
+
+      return {
+        onStart: (props: any) => {
+          lockScroll(); // 锁定滚动
+
+          localComponent = new ReactRenderer(HeroSlashMenuComponent, {
+            props: {
+              items: props.items,
+              t,
+              command: (item: HeroSlashMenuItem) => {
+                props.editor.chain().focus().deleteRange(props.range).run();
+                item.command({ editor: props.editor, range: props.range });
+                popup?.[0]?.hide();
+              },
+            },
+            editor: props.editor,
+          });
+
+          popup = tippy("body", {
+            getReferenceClientRect: props.clientRect,
+            content: localComponent.element,
+            showOnCreate: true,
+            interactive: true,
+            trigger: "manual",
+            placement: "bottom-start",
+          });
+        },
+
+        onUpdate(props: any) {
+          localComponent.updateProps({ items: props.items });
+          popup?.[0]?.setProps({
+            getReferenceClientRect: props.clientRect,
+          });
+        },
+
+        onKeyDown(props: any) {
+          if (props.event.key === "Escape") {
+            popup?.[0]?.hide();
+            return true;
+          }
+
+          const ref = localComponent?.ref as HeroSlashMenuRef | null;
+          return ref?.onKeyDown(props) || false;
+        },
+
+        onExit() {
+          unlockScroll();
+          popup?.[0]?.destroy();
+          localComponent?.destroy();
+        },
+      };
+    },
+  };
+};
+```
+
+## Placeholder 扩展
+
+为不同的节点类型提供占位符提示：
+
+```typescript
+Placeholder.configure({
+  placeholder: ({ node }) => {
+    if (node.type.name === "heroName") {
+      return "Hero Name";
+    }
+    if (node.type.name === "heroDescription") {
+      return "What does this hero do?";
+    }
+    return "Type '/' for commands...";
+  },
+}),
+```
+
+## 完整 Hero 文档结构
+
+一个完整的 Hero 文档包含以下节点：
+
+```json
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "heroName",
+      "content": [
+        { "type": "text", "text": "写作助手" }
+      ]
+    },
+    {
+      "type": "heroDescription",
+      "content": [
+        { "type": "text", "text": "专业的写作助手，擅长润色和改进文本" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "你是一个专业的写作助手，擅长：" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "1. 润色和改进文本" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "2. 提供写作建议" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "3. 语法和拼写检查" }
+      ]
+    },
+    {
+      "type": "heroToolChoice",
+      "attrs": {
+        "toolChoice": "auto"
+      }
+    }
+  ]
+}
+```
+
+## 编辑器配置
+
+完整的 Hero 编辑器配置：
+
+```typescript
+const editor = useEditor({
+  extensions: [
+    StarterKit.configure({
+      heading: false,      // 禁用默认标题
+      bulletList: false,   // 禁用无序列表
+      orderedList: false,  // 禁用有序列表
+      blockquote: false,   // 禁用引用
+      codeBlock: false,    // 禁用代码块
+      horizontalRule: false, // 禁用分割线
+    }),
+    HeroName,             // Hero 名称节点
+    HeroDescription,      // Hero 描述节点
+    HeroToolChoice,       // 工具选择策略节点
+    Placeholder.configure({
+      placeholder: ({ node }) => {
+        if (node.type.name === "heroName") return "Hero Name";
+        if (node.type.name === "heroDescription") return "描述";
+        return "输入 '/' 命令...";
+      },
+    }),
+    SlashCommand.configure({
+      suggestion: heroSlashMenuConfig,
+    }),
+    CustomKeyboardExtension,
+  ],
+
+  content: initialContent,
+
+  editorProps: {
+    attributes: {
+      class: "prose prose-sm max-w-none focus:outline-none min-h-full",
+    },
+  },
+
+  onUpdate: ({ editor }) => {
+    const content = editor.getJSON();
+    onChangeRef.current?.(content);
+    debouncedSave(content); // 自动保存
+  },
+}, [hero?.id]);
+```
+
+## 样式定制
+
+### CSS 变量
+
+```css
+.hero-name {
+  /* 标题样式 */
+  @apply text-2xl font-bold;
+}
+
+.hero-description {
+  /* 描述样式 */
+  @apply text-sm text-muted-foreground italic;
+}
+
+.hero-tool-choice {
+  /* 工具选择样式 */
+  @apply flex items-center gap-2 text-sm py-2;
+}
+```
+
+### Tailwind 类
+
+编辑器使用 Tailwind CSS 类：
+
+```typescript
+class="prose prose-sm max-w-none focus:outline-none min-h-full"
+```
+
+## 数据提取
+
+从编辑器内容中提取 Hero 配置：
+
+```typescript
+function extractHeroConfig(editor: Editor) {
+  const content = editor.getJSON();
+  const nodes = content.content || [];
+
+  // 提取名称
+  const nameNode = nodes.find((n: any) => n.type === "heroName");
+  const name = nameNode?.content
+    ?.map((n: any) => n.text)
+    .join("") || "Untitled Hero";
+
+  // 提取描述
+  const descNode = nodes.find((n: any) => n.type === "heroDescription");
+  const description = descNode?.content
+    ?.map((n: any) => n.text)
+    .join("") || "A custom AI hero";
+
+  // 提取工具选择
+  const toolNode = nodes.find((n: any) => n.type === "heroToolChoice");
+  const toolChoice = toolNode?.attrs?.toolChoice || "auto";
+
+  // 提取系统提示词（从段落中）
+  const paragraphs = nodes
+    .filter((n: any) => n.type === "paragraph")
+    .map((n: any) => n.content
+      ?.map((c: any) => c.text)
+      .join("")
+      .trim()
+    )
+    .filter(Boolean);
+
+  const prompt = paragraphs.join("\n\n") ||
+    "You are a helpful AI assistant.";
+
+  return { name, description, prompt, toolChoice };
+}
+```
+
+## 扩展开发指南
+
+### 创建新的 Hero 节点
+
+```typescript
+import { Node, mergeAttributes } from "@tiptap/core";
+
+export const HeroCustomNode = Node.create({
+  name: "heroCustomNode",
+
+  group: "block",
+
+  content: "inline*", // 或 "" 如果不需要子内容
+
+  addAttributes() {
+    return {
+      customAttr: {
+        default: "default-value",
+        parseHTML: (element) =>
+          element.getAttribute("data-custom-attr"),
+        renderHTML: (attributes) => {
+          if (!attributes.customAttr) return {};
+          return {
+            "data-custom-attr": attributes.customAttr,
+          };
+        },
+      },
+    };
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "div",
+      mergeAttributes(HTMLAttributes, {
+        class: "hero-custom-node",
+      }),
+      0,
+    ];
+  },
+
+  addCommands() {
+    return {
+      insertCustomNode:
+        (attrs) =>
+        ({ commands }) => {
+          return commands.insertContent({
+            type: this.name,
+            attrs,
+          });
+        },
+    };
+  },
+});
+```
+
+### 添加到 Slash Menu
+
+```typescript
+{
+  title: "自定义节点",
+  description: "插入自定义 Hero 节点",
+  icon: <CustomIcon />,
+  category: "custom",
+  aliases: ["custom", "zidingyi"],
+  command: ({ editor, range }) => {
+    editor.chain().focus().deleteRange(range).run();
+    editor.chain().focus().insertContent({
+      type: "heroCustomNode",
+      attrs: { customAttr: "value" },
+    }).run();
+  },
+}
+```
+
+## 相关文档
+
+- [系统架构](./overview) - Hero 系统的整体架构
+- [前端实现](./frontend) - Hero 的 UI 组件和状态管理
+- [数据模型](./data-model) - Hero 的数据结构和存储

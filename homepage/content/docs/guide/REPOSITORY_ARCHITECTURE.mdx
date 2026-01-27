@@ -1,0 +1,222 @@
+---
+title: Repository 架构设计
+description: 工作区数据存储架构设计与讨论
+---
+
+# Repository 架构设计
+
+本文档用于记录和讨论 Vibecape 工作区（Repository）的数据存储架构设计。
+
+## 当前状态 ✅
+
+> **已实施**：2024-12-24
+
+目前每个工作区的目录结构：
+
+```
+{docs_root}/{repository_id}/
+├── config.json     # 配置文件（资源策略、外部关联等）
+├── entity.db       # 实体数据库 (SQLite) - 包含文档 + 工作区元信息
+└── chat.db         # 聊天数据库 (SQLite)
+```
+
+### entity.db 表结构
+
+- `indexnode` - 文档索引节点
+- `docs` - 文档内容
+- `repository_meta` - 工作区元信息（键值对形式）
+  - `name` - 工作区名称
+  - `description` - 工作区描述/AI 上下文
+
+## 设计原则
+
+### 1. config.json - 配置文件
+
+**作用**：存储工作区的配置信息
+
+**适用范围**：本地 + 远程 Repo 都应该有
+
+**应该存储的内容**：
+
+- 资源上传策略 (oss-first / local-first)
+- 外部关联配置 (fumadocs/docusaurus 路径等)
+- 其他纯配置项
+
+**不应该存储的内容**：
+
+- ❌ name (工作区名称) → 应该在 entity.db 中
+- ❌ description/context (工作区说明) → 应该在 entity.db 中
+
+### 2. entity.db - 实体数据库
+
+**作用**：存储文档内容和元数据
+
+**适用范围**：
+
+- 本地 Repo：使用本地 SQLite 文件
+- 远程 Repo：直接操作远程数据库（不需要本地 entity.db）
+
+**应该存储的内容**：
+
+- 文档内容 (documents 表)
+- **工作区元信息** (新增 repository_meta 表)
+  - name: 工作区名称
+  - description: 工作区描述/AI 上下文
+
+### 3. chat.db - 聊天数据库
+
+**作用**：存储对话历史
+
+**适用范围**：仅限本地
+
+**理由**：聊天记录是本地私有数据，不应同步到远程
+
+---
+
+## 架构方案讨论
+
+### 方案 A：每个 Repo 独立 entity.db（当前方案）
+
+```
+docs_root/
+├── repo_1/
+│   ├── config.json
+│   ├── entity.db      # repo_1 的文档
+│   └── chat.db
+├── repo_2/
+│   ├── config.json
+│   ├── entity.db      # repo_2 的文档
+│   └── chat.db
+└── repo_3/
+    ├── config.json
+    ├── entity.db      # repo_3 的文档
+    └── chat.db
+```
+
+**优点**：
+
+- ✅ 数据隔离清晰，删除工作区直接删除整个目录
+- ✅ 便于备份/导出单个工作区
+- ✅ 数据库文件小，查询快
+- ✅ 迁移简单，复制目录即可
+
+**缺点**：
+
+- ❌ 跨工作区搜索需要打开多个数据库
+- ❌ 文件数量多
+
+---
+
+### 方案 B：所有 Repo 共用一个 entity.db
+
+```
+docs_root/
+├── entity.db          # 所有 repo 的文档
+├── repo_1/
+│   ├── config.json
+│   └── chat.db
+├── repo_2/
+│   ├── config.json
+│   └── chat.db
+└── repo_3/
+    ├── config.json
+    └── chat.db
+```
+
+entity.db 表结构：
+
+```sql
+-- 工作区表
+CREATE TABLE repositories (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_at INTEGER,
+  updated_at INTEGER
+);
+
+-- 文档表（增加 repository_id 关联）
+CREATE TABLE documents (
+  id TEXT PRIMARY KEY,
+  repository_id TEXT NOT NULL,  -- 关联到 repositories
+  title TEXT,
+  content TEXT,
+  ...
+  FOREIGN KEY (repository_id) REFERENCES repositories(id)
+);
+```
+
+**优点**：
+
+- ✅ 全局搜索方便（直接查询一个数据库）
+- ✅ 统一管理所有工作区元信息
+- ✅ 文件数量少
+
+**缺点**：
+
+- ❌ 数据库文件会越来越大
+- ❌ 删除工作区需要 DELETE 操作，不能直接删目录
+- ❌ 单个工作区备份/导出需要额外处理
+- ❌ 远程 Repo 场景下逻辑复杂（部分数据在本地，部分在远程）
+
+---
+
+## 推荐方案
+
+### 混合方案：保持独立 entity.db + 新增 repository_meta 表
+
+保持当前的 **每个 Repo 独立 entity.db** 架构，但做以下调整：
+
+1. **entity.db 新增 `repository_meta` 表**：
+
+```sql
+CREATE TABLE repository_meta (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
+
+-- 存储内容示例：
+-- ('name', '我的项目')
+-- ('description', '这是一个 xxx 项目，用于...')
+```
+
+2. **config.json 中移除 name**，只保留纯配置项
+
+3. **删除 llm.txt**，description 字段替代其功能
+
+4. **最终目录结构**：
+
+```
+{docs_root}/{repository_id}/
+├── config.json     # 纯配置（资源策略、关联配置等）
+├── entity.db       # 文档 + 工作区元信息(name, description)
+└── chat.db         # 聊天记录（仅本地）
+```
+
+**理由**：
+
+- 保持数据隔离的优势
+- name/description 放在 entity.db 中，便于远程同步
+- config.json 专注于本地配置，不参与远程同步
+
+---
+
+## 待决定的问题
+
+1. **远程 Repo 的 config.json 如何处理？**
+   - 选项 A：远程 Repo 也有本地 config.json（存储本地配置）
+   - 选项 B：远程 Repo 不需要本地目录
+
+2. **repository_meta 表的 schema 是否需要更复杂的结构？**
+   - 如 created_at, updated_at, tags 等
+
+---
+
+## 变更记录
+
+- **2024-12-24**: 实施完成
+  - 新增 `repository_meta` 表到 entity.db
+  - 从 `RepositoryConfig` 移除 `name` 字段
+  - 删除 `llm.txt` 文件支持，使用 `description` 替代
+  - 更新前后端 API (`getRepositoryMeta/setRepositoryMeta`, `getDescription/setDescription`)
+- 2024-12-24: 初始设计讨论

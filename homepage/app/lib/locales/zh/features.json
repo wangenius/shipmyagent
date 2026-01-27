@@ -1,0 +1,32 @@
+{
+  "sectionLabel": "特性",
+  "title": "强大",
+  "titleItalic": "功能",
+  "description": "构建、部署和管理 AI 代理所需的一切功能。",
+  "features": {
+    "repo": {
+      "title": "仓库集成",
+      "description": "与 GitHub 仓库无缝集成。版本控制您的代理并跟踪所有变更。"
+    },
+    "conversational": {
+      "title": "对话式界面",
+      "description": "与代理进行自然语言交互。上下文感知响应，实现更好的协作。"
+    },
+    "scheduling": {
+      "title": "任务调度",
+      "description": "通过灵活的调度自动化重复性任务。按您的时间表运行代理。"
+    },
+    "humanInLoop": {
+      "title": "人工审核",
+      "description": "通过人工审批工作流保持控制。审查和批准代理决策。"
+    },
+    "auditable": {
+      "title": "完整审计跟踪",
+      "description": "跟踪每个代理的操作和决策。完全透明，便于调试和合规。"
+    },
+    "permissions": {
+      "title": "细粒度权限",
+      "description": "控制谁可以部署和管理代理。基于角色的访问控制，支持团队协作。"
+    }
+  }
+}

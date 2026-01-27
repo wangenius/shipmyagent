@@ -1,0 +1,289 @@
+---
+title: Vibecape 数据存储架构
+---
+
+本文档描述 Vibecape 应用的数据存储方式，采用**用户目录 + 统一文档根目录**的架构设计。
+
+**核心设计理念：** Repository 与实际项目目录解耦，所有工作区统一存储在 `docs_root` 下，用 ID 命名。
+
+---
+
+## 1. 用户目录 (`~/vibecape/`)
+
+用户目录存储全局配置和 AI 相关数据，位于用户主目录下。
+
+### 目录结构
+
+```
+~/vibecape/
+├── config.json                 # 应用配置 (UI、代理、OSS)
+├── app.db                      # AI 配置数据库 (providers、models)
+├── chat.db                     # 全局聊天记录
+├── repositorys.json             # 工作区索引 + docs_root 配置
+└── cache/                      # 缓存目录
+```
+
+### 文件说明
+
+#### `config.json` - 应用配置
+
+```typescript
+{
+  ui: {
+    theme: string; // 主题
+    mode: "light" | "dark"; // 明暗模式
+    language: string; // 界面语言
+    prompt_language: string; // 提示词语言
+    show_chapter_list: boolean; // 显示章节列表
+  }
+  model: {
+    primary: string; // 主模型 ID
+    fast: string; // 快速模型 ID
+    image: string; // 图像模型 ID
+    video: string; // 视频模型 ID
+    voice: string; // 语音模型 ID
+  }
+  proxy: {
+    enabled: boolean;
+    url: string;
+  }
+  oss: {
+    enabled: boolean;
+    provider: "aliyun" | "qiniu" | "tencent" | "s3";
+    region: string;
+    bucket: string;
+    access_key_id: string;
+    access_key_secret: string;
+    endpoint: string;
+    custom_domain: string;
+  }
+}
+```
+
+#### `repositorys.json` - 工作区索引
+
+```typescript
+{
+  docs_root: string; // 文档根目录路径
+  current: string | null; // 当前打开的工作区 ID
+  recent: Array<{
+    id: string; // 工作区 ID
+    name: string; // 显示名称
+    last_opened_at: number; // 最后打开时间戳
+  }>;
+}
+```
+
+#### `app.db` - AI 配置数据库
+
+| 表名        | 说明                                 |
+| ----------- | ------------------------------------ |
+| `providers` | AI 服务商配置 (API Key、Base URL 等) |
+| `models`    | AI 模型配置                          |
+
+#### `chat.db` - 全局聊天数据库
+
+存储与具体项目无关的 AI 对话历史记录。
+
+---
+
+## 2. 文档根目录 (`{docs_root}/`)
+
+所有工作区统一存储在 `docs_root` 目录下，每个工作区用唯一 ID 命名。 默认在 `~/vibecape/root/`
+
+### 目录结构
+
+```
+{docs_root}/                            # 用户配置的文档根目录
+├── {repository_id}/                     # 工作区目录 (用 ID 命名)
+│   ├── config.json                     # 工作区配置
+│   ├── docs.db                         # 文档数据库
+│   ├── chat.db                         # 项目聊天记录
+│   └── llm.txt                         # AI 上下文提示词
+├── {repository_id}/
+│   └── ...
+└── ...
+```
+
+### 示例
+
+```
+/Users/username/vibecape-docs/          # docs_root
+├── abc123/                             # 工作区: "我的文档"
+│   ├── config.json
+│   ├── docs.db
+│   ├── chat.db
+│   └── llm.txt
+├── def456/                             # 工作区: "API文档"
+│   ├── config.json
+│   ├── docs.db
+│   ├── chat.db
+│   └── llm.txt
+└── ghi789/                             # 工作区: "产品手册"
+    └── ...
+```
+
+### 工作区文件说明
+
+#### `config.json` - 工作区配置
+
+```typescript
+{
+  name: string;                         // 工作区名称
+  description?: string;                 // 描述
+  created_at: number;                   // 创建时间戳
+  updated_at: number;                   // 更新时间戳
+  publishing: {
+    asset_upload_priority: "oss-first" | "local-first";
+  };
+}
+```
+
+#### `docs.db` - 文档数据库
+
+| 表名   | 说明                               |
+| ------ | ---------------------------------- |
+| `docs` | 文档内容 (Tiptap JSONContent 格式) |
+
+**`docs` 表结构:**
+
+```typescript
+{
+  id: string; // 唯一 ID
+  parent_id: string | null; // 父节点 ID (null 为根节点)
+  title: string; // 文档标题
+  content: JSONContent; // Tiptap 编辑器内容
+  metadata: Record<string, any>; // Frontmatter 元数据
+  order: number; // 同级排序权重
+  created_at: number; // 创建时间戳
+  updated_at: number; // 更新时间戳
+}
+```
+
+#### `chat.db` - 项目聊天数据库
+
+存储与当前工作区相关的 AI 对话历史。
+
+#### `llm.txt` - AI 上下文提示词
+
+```
+这是一个关于 XXX 的文档项目。
+
+## 写作风格
+- 简洁明了
+- 技术准确
+
+## 术语表
+- Vibecape: 沉浸式创作工坊
+- Repository: 工作区
+
+## 注意事项
+- 使用中文
+- 代码示例使用 TypeScript
+```
+
+---
+
+## 3. 完整目录结构示例
+
+```
+~/vibecape/                             # 用户目录
+├── config.json                         # 应用配置
+├── app.db                              # AI 配置 (providers, models)
+├── chat.db                             # 全局聊天记录
+├── repositorys.json                     # 工作区索引
+└── cache/                              # 缓存
+
+/Users/username/vibecape-docs/          # docs_root (在 repositorys.json 中配置)
+├── abc123/                             # 工作区 1
+│   ├── config.json                     # 工作区配置
+│   ├── docs.db                         # 文档数据
+│   ├── chat.db                         # 项目聊天
+│   └── llm.txt                         # AI 提示词
+├── def456/                             # 工作区 2
+│   └── ...
+└── ...
+```
+
+---
+
+## 4. 数据流向
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   用户目录 ~/vibecape/                       │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ config.json │  │   app.db    │  │      chat.db        │  │
+│  │ (UI/代理等) │  │ (AI配置)    │  │   (全局聊天)        │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │              repositorys.json                         │   │
+│  │  { docs_root, current, recent: [...] }              │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ docs_root 指向
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 文档根目录 {docs_root}/                      │
+│                                                             │
+│  ┌─────────────────────┐  ┌─────────────────────────────┐  │
+│  │    {repository_id}/  │  │      {repository_id}/        │  │
+│  │  ├── config.json    │  │  ├── config.json            │  │
+│  │  ├── docs.db        │  │  ├── docs.db                │  │
+│  │  ├── chat.db        │  │  ├── chat.db                │  │
+│  │  └── llm.txt        │  │  └── llm.txt                │  │
+│  └─────────────────────┘  └─────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 5. 工作流程
+
+### 创建工作区
+
+1. 生成唯一 ID (如 nanoid)
+2. 在 `{docs_root}/{id}/` 创建目录
+3. 初始化 `config.json`、`docs.db`、`chat.db`、`llm.txt`
+4. 更新 `~/vibecape/repositorys.json` 的 `recent` 列表
+
+### 打开工作区
+
+1. 读取 `~/vibecape/repositorys.json` 获取 `docs_root`
+2. 根据 ID 定位 `{docs_root}/{id}/`
+3. 加载 `config.json` 和 `docs.db`
+4. 更新 `repositorys.json` 的 `current` 和 `lastOpenedAt`
+
+### 删除工作区
+
+1. 删除 `{docs_root}/{id}/` 目录
+2. 从 `repositorys.json` 的 `recent` 中移除
+
+---
+
+## 6. 设计优势
+
+| 对比项    | 旧方案               | 新方案                   |
+| --------- | -------------------- | ------------------------ |
+| 项目位置  | 分散在用户选择的各处 | 统一在 `docs_root`       |
+| 创建流程  | 选择目录 → 初始化    | 直接创建，自动分配 ID    |
+| 备份/迁移 | 需要逐个处理         | 复制 `docs_root` 即可    |
+| 项目聊天  | 无                   | 每个项目独立 `chat.db`   |
+| AI 上下文 | 无                   | `llm.txt` 提供项目提示词 |
+| 命名冲突  | 可能与项目文件冲突   | ID 命名，无冲突          |
+
+---
+
+## 7. 相关代码文件 (待重构)
+
+| 文件                             | 说明                         |
+| -------------------------------- | ---------------------------- |
+| `src/main/db/app.ts`             | 用户 AI 配置数据库           |
+| `src/main/db/chat.ts`            | 聊天数据库                   |
+| `src/main/db/docs.ts`            | 工作区文档数据库             |
+| `src/main/services/Settings.ts`  | 应用配置服务 (改为读写 JSON) |
+| `src/main/services/Repository.ts` | 工作区服务 (新增)            |
+| `src/common/schema/app.ts`       | 应用配置类型定义             |
+| `src/common/schema/repository.ts` | 工作区类型定义 (新增)        |

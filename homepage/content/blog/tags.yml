@@ -1,0 +1,34 @@
+vibe-cli:
+  label: vibecape
+  permalink: /vibe-cli
+  description: vibecape 相关内容
+
+saas:
+  label: SaaS
+  permalink: /saas
+  description: SaaS 应用开发相关
+
+快速开发:
+  label: 快速开发
+  permalink: /rapid-development
+  description: 快速开发工具和技巧
+
+typescript:
+  label: TypeScript
+  permalink: /typescript
+  description: TypeScript 相关内容
+
+nextjs:
+  label: Next.js
+  permalink: /nextjs
+  description: Next.js 框架相关
+
+认证:
+  label: 认证
+  permalink: /auth
+  description: 用户认证相关
+
+支付:
+  label: 支付
+  permalink: /payments
+  description: 支付系统集成

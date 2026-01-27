@@ -1,0 +1,11 @@
+vibe_team:
+  name: vibecape Team
+  title: 开发团队
+  url: https://github.com/vibe-cli
+  image_url: https://github.com/vibe-cli.png
+
+admin:
+  name: vibecape
+  title: 官方账号
+  url: https://github.com/vibe-cli/vibe
+  image_url: https://vibecape.com/logo.png

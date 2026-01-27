@@ -1,0 +1,12 @@
+{
+  "title": "指南",
+  "pages": [
+    "getting-started",
+    "creating-project",
+    "agent-tools",
+    "memory",
+    "DATA_STORAGE",
+    "REPOSITORY_ARCHITECTURE",
+    "hero-system"
+  ]
+}

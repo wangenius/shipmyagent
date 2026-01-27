@@ -1,24 +1,31 @@
+import { defineConfig, defineDocs } from "fumadocs-mdx/config";
 import {
-  defineConfig,
-  defineDocs,
-  frontmatterSchema,
-  metaSchema,
-} from 'fumadocs-mdx/config';
+  remarkImage,
+  remarkHeading,
+  remarkDirectiveAdmonition,
+} from "fumadocs-core/mdx-plugins";
+import { remarkMdxMermaid } from "fumadocs-core/mdx-plugins";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import remarkDirective from "remark-directive";
 
-// You can customise Zod schemas for frontmatter and `meta.json` here
-// see https://fumadocs.vercel.app/docs/mdx/collections#define-docs
 export const docs = defineDocs({
-  docs: {
-    schema: frontmatterSchema,
-  },
-  meta: {
-    schema: metaSchema,
-  },
+  dir: "content/docs",
 });
 
 export default defineConfig({
   mdxOptions: {
-    remarkPlugins: [],
-    rehypePlugins: [],
+    remarkPlugins: [
+      remarkDirective,
+      remarkDirectiveAdmonition,
+      remarkMath,
+      remarkImage,
+      remarkHeading,
+      remarkMdxMermaid,
+    ],
+    rehypePlugins: (v) => [rehypeKatex, ...v],
+    remarkImageOptions: {
+      placeholder: "none",
+    },
   },
 });
