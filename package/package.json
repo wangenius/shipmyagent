@@ -1,6 +1,6 @@
 {
     "name": "shipmyagent",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "shipmyagent is a service which can make your repo an agent",
     "main": "./dist/index.js",
     "bin": {

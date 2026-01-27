@@ -11,3 +11,9 @@ npm i -g shipmyagent
 ```bash
 shipmyagent .
 ```
+
+## access
+
+```http
+GET http://localhost:7001/tasks
+```
