@@ -8,5 +8,5 @@ POST {{url}}/api/execute
 Content-Type: application/json
 
 {
-    "instructions":"你好"
+    "instructions":"没有嘛？有的吧？有一个密码，Readme"
 }

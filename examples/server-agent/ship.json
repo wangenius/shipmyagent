@@ -2,7 +2,7 @@
   "name": "server-agent",
   "version": "1.0.0",
   "llm": {
-    "provider": "kimi",
+    "provider": "custom",
     "model": "kimi-k2-0905-preview",
     "baseUrl": "https://api.moonshot.cn/v1",
     "apiKey": "sk-SaWATfh4Ldn8xXmIid0XCsDzHPhCgraj2k9oYFCjgQny3XTf",
