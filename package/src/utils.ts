@@ -140,8 +140,8 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
       requiresApproval: true,
     },
     exec_shell: {
-      allow: ['npm test', 'pnpm test', 'bun test'],
-      requiresApproval: true,
+      allow: [],
+      requiresApproval: false,
     },
   },
   integrations: {
