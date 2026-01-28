@@ -7,6 +7,8 @@ import { createTaskScheduler, TaskScheduler, TaskDefinition } from '../runtime/s
 import { createTaskExecutor, TaskExecutor } from '../runtime/task-executor.js';
 import { createToolExecutor, ToolExecutor } from '../runtime/tools.js';
 import http from 'node:http';
+import fs from 'fs-extra';
+import path from 'path';
 
 export interface ServerContext {
   projectRoot: string;
@@ -26,9 +28,11 @@ export class AgentServer {
   private app: Hono;
   private context: ServerContext;
   private server: ReturnType<typeof import('http').createServer> | null = null;
+  private projectRoot: string;
 
   constructor(context: ServerContext) {
     this.context = context;
+    this.projectRoot = context.projectRoot;
     this.app = new Hono();
 
     // 中间件
@@ -44,6 +48,43 @@ export class AgentServer {
   }
 
   private setupRoutes(): void {
+    // 静态文件服务 (前端页面)
+    this.app.get('/', async (c) => {
+      const indexPath = path.join(this.projectRoot, 'public', 'index.html');
+      if (await fs.pathExists(indexPath)) {
+        const content = await fs.readFile(indexPath, 'utf-8');
+        return c.body(content, 200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-cache',
+        });
+      }
+      return c.text('ShipMyAgent Agent Server', 200);
+    });
+
+    this.app.get('/styles.css', async (c) => {
+      const cssPath = path.join(this.projectRoot, 'public', 'styles.css');
+      if (await fs.pathExists(cssPath)) {
+        const content = await fs.readFile(cssPath, 'utf-8');
+        return c.body(content, 200, {
+          'Content-Type': 'text/css; charset=utf-8',
+          'Cache-Control': 'no-cache',
+        });
+      }
+      return c.text('Not Found', 404);
+    });
+
+    this.app.get('/app.js', async (c) => {
+      const jsPath = path.join(this.projectRoot, 'public', 'app.js');
+      if (await fs.pathExists(jsPath)) {
+        const content = await fs.readFile(jsPath, 'utf-8');
+        return c.body(content, 200, {
+          'Content-Type': 'application/javascript; charset=utf-8',
+          'Cache-Control': 'no-cache',
+        });
+      }
+      return c.text('Not Found', 404);
+    });
+
     // 健康检查
     this.app.get('/health', (c) => {
       return c.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -90,8 +131,17 @@ export class AgentServer {
     this.app.post('/api/approvals/:id/:action', async (c) => {
       const approvalId = c.req.param('id');
       const action = c.req.param('action');
-      const body = await c.req.json();
-      const response = body.response || '';
+
+      let body = {};
+      try {
+        const text = await c.req.text();
+        if (text) {
+          body = JSON.parse(text);
+        }
+      } catch {
+        // JSON 解析失败，使用空 body
+      }
+      const response = (body as { response?: string }).response || '';
 
       let success = false;
       if (action === 'approve') {

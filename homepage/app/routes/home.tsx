@@ -78,29 +78,6 @@ export function meta() {
       rel: "canonical",
       href: baseUrl,
     },
-    {
-      tagName: "script",
-      type: "application/ld+json",
-      innerHTML: JSON.stringify({
-        "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        name: product.productName,
-        description: description,
-        url: baseUrl,
-        applicationCategory: "DeveloperApplication",
-        operatingSystem: "Web",
-        offers: {
-          "@type": "Offer",
-          price: "0",
-          priceCurrency: "USD",
-        },
-        creator: {
-          "@type": "Organization",
-          name: "ShipMyAgent",
-          url: baseUrl,
-        },
-      }),
-    },
   ];
 }
 

@@ -75,10 +75,15 @@ export async function initCommand(cwd: string = '.', options: InitOptions = {}):
       initial: 0,
     },
     {
-      type: 'confirm',
-      name: 'enableTelegram',
-      message: '是否启用 Telegram 集成？',
-      initial: false,
+      type: 'select',
+      name: 'integration',
+      message: '选择消息集成方式',
+      choices: [
+        { title: '不启用', value: 'none' },
+        { title: 'Telegram', value: 'telegram' },
+        { title: '飞书', value: 'feishu' },
+      ],
+      initial: 0,
     },
   ]);
 
@@ -111,7 +116,13 @@ export async function initCommand(cwd: string = '.', options: InitOptions = {}):
     permissions: DEFAULT_SHIP_JSON.permissions,
     integrations: {
       telegram: {
-        enabled: response.enableTelegram || false,
+        enabled: response.integration === 'telegram',
+      },
+      feishu: {
+        enabled: response.integration === 'feishu',
+        appId: response.integration === 'feishu' ? '${FEISHU_APP_ID}' : undefined,
+        appSecret: response.integration === 'feishu' ? '${FEISHU_APP_SECRET}' : undefined,
+        domain: 'https://open.feishu.cn',
       },
     },
   };
@@ -153,10 +164,25 @@ notify: telegram
   console.log('\n🎉 初始化完成！\n');
   console.log(`📦 当前模型: ${llmConfig.provider} / ${llmConfig.model}`);
   console.log(`🌐 API URL: ${llmConfig.baseUrl}\n`);
+
+  if (response.integration === 'feishu') {
+    console.log('📱 飞书集成已启用');
+    console.log('   请在 ship.json 中配置 FEISHU_APP_ID 和 FEISHU_APP_SECRET');
+    console.log('   或设置环境变量: FEISHU_APP_ID 和 FEISHU_APP_SECRET\n');
+  } else if (response.integration === 'telegram') {
+    console.log('📱 Telegram 集成已启用');
+    console.log('   请在 ship.json 中配置 botToken\n');
+  }
+
   console.log('下一步：');
   console.log('  1. 编辑 Agent.md 自定义 Agent 行为');
   console.log('  2. 编辑 ship.json 修改 LLM 配置（baseUrl、apiKey、temperature 等）');
-  console.log('  3. 运行 "shipmyagent start" 启动 Agent\n');
+  if (response.integration === 'feishu') {
+    console.log('  3. 配置飞书 App ID 和 App Secret');
+    console.log('  4. 运行 "shipmyagent start" 启动 Agent\n');
+  } else {
+    console.log('  3. 运行 "shipmyagent start" 启动 Agent\n');
+  }
   console.log('💡 提示：API Key 建议使用环境变量（如 ${ANTHROPIC_API_KEY} 或 ${OPENAI_API_KEY}）\n');
   console.log('如需切换模型或修改配置，直接编辑 ship.json 中的 llm 字段即可。\n');
 }

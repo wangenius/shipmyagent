@@ -282,6 +282,39 @@ export class PermissionEngine {
     return this.approvalRequests.get(id);
   }
 
+  /**
+   * 等待审批结果
+   * @param requestId 审批请求 ID
+   * @param timeoutSeconds 超时时间（秒）
+   * @returns 审批结果: approved | rejected | timeout
+   */
+  async waitForApproval(requestId: string, timeoutSeconds: number = 300): Promise<'approved' | 'rejected' | 'timeout'> {
+    const startTime = Date.now();
+    const timeoutMs = timeoutSeconds * 1000;
+
+    while (Date.now() - startTime < timeoutMs) {
+      const request = this.approvalRequests.get(requestId);
+
+      if (!request) {
+        // 可能已被加载，重新尝试从磁盘读取
+        await this.loadApprovalsFromDisk();
+        continue;
+      }
+
+      if (request.status === 'approved') {
+        return 'approved';
+      }
+      if (request.status === 'rejected') {
+        return 'rejected';
+      }
+
+      // 等待 1 秒后重试
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    return 'timeout';
+  }
+
   getConfig(): PermissionConfig {
     return this.config;
   }

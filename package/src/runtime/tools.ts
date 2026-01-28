@@ -71,15 +71,36 @@ export class ToolExecutor {
     // 检查权限
     const permission = await this.context.permissionEngine.checkWriteRepo(absolutePath, content);
     if (!permission.allowed && permission.requiresApproval) {
-      this.context.logger.approval(`写文件等待审批: ${filePath}`, {
-        approvalId: (permission as PermissionCheckResult & { approvalId: string }).approvalId,
-      });
+      const approvalId = (permission as PermissionCheckResult & { approvalId: string }).approvalId;
+      this.context.logger.approval(`写文件等待审批: ${filePath}`, { approvalId });
 
-      return {
-        success: false,
-        error: `写操作需要审批: ${permission.reason}`,
-        filePath: absolutePath,
-      };
+      // 等待审批结果
+      const result = await this.context.permissionEngine.waitForApproval(approvalId);
+
+      if (result === 'approved') {
+        this.context.logger.info(`审批通过，重新执行写文件: ${filePath}`);
+        // 重新检查权限（应该通过了）
+        const newPermission = await this.context.permissionEngine.checkWriteRepo(absolutePath, content);
+        if (!newPermission.allowed) {
+          return {
+            success: false,
+            error: `审批后仍无权限: ${newPermission.reason}`,
+            filePath: absolutePath,
+          };
+        }
+      } else if (result === 'rejected') {
+        return {
+          success: false,
+          error: `写操作已被拒绝`,
+          filePath: absolutePath,
+        };
+      } else {
+        return {
+          success: false,
+          error: `审批等待超时`,
+          filePath: absolutePath,
+        };
+      }
     }
 
     if (!permission.allowed) {
@@ -132,14 +153,33 @@ export class ToolExecutor {
     // 检查权限
     const permission = await this.context.permissionEngine.checkExecShell(command);
     if (!permission.allowed && permission.requiresApproval) {
-      this.context.logger.approval(`执行命令等待审批: ${command}`, {
-        approvalId: (permission as PermissionCheckResult & { approvalId: string }).approvalId,
-      });
+      const approvalId = (permission as PermissionCheckResult & { approvalId: string }).approvalId;
+      this.context.logger.approval(`执行命令等待审批: ${command}`, { approvalId });
 
-      return {
-        success: false,
-        error: `Shell 执行需要审批: ${permission.reason}`,
-      };
+      // 等待审批结果
+      const result = await this.context.permissionEngine.waitForApproval(approvalId);
+
+      if (result === 'approved') {
+        this.context.logger.info(`审批通过，重新执行命令: ${command}`);
+        // 重新检查权限（应该通过了）
+        const newPermission = await this.context.permissionEngine.checkExecShell(command);
+        if (!newPermission.allowed) {
+          return {
+            success: false,
+            error: `审批后仍无权限: ${newPermission.reason}`,
+          };
+        }
+      } else if (result === 'rejected') {
+        return {
+          success: false,
+          error: `命令执行已被拒绝`,
+        };
+      } else {
+        return {
+          success: false,
+          error: `审批等待超时`,
+        };
+      }
     }
 
     if (!permission.allowed) {
@@ -223,14 +263,32 @@ export class ToolExecutor {
     // 检查权限
     const permission = await this.context.permissionEngine.checkWriteRepo(absolutePath, '');
     if (!permission.allowed && permission.requiresApproval) {
-      this.context.logger.approval(`删除文件等待审批: ${filePath}`, {
-        approvalId: (permission as PermissionCheckResult & { approvalId: string }).approvalId,
-      });
+      const approvalId = (permission as PermissionCheckResult & { approvalId: string }).approvalId;
+      this.context.logger.approval(`删除文件等待审批: ${filePath}`, { approvalId });
 
-      return {
-        success: false,
-        error: `删除操作需要审批: ${permission.reason}`,
-      };
+      // 等待审批结果
+      const result = await this.context.permissionEngine.waitForApproval(approvalId);
+
+      if (result === 'approved') {
+        this.context.logger.info(`审批通过，重新检查删除权限: ${filePath}`);
+        const newPermission = await this.context.permissionEngine.checkWriteRepo(absolutePath, '');
+        if (!newPermission.allowed) {
+          return {
+            success: false,
+            error: `审批后仍无权限: ${newPermission.reason}`,
+          };
+        }
+      } else if (result === 'rejected') {
+        return {
+          success: false,
+          error: `删除操作已被拒绝`,
+        };
+      } else {
+        return {
+          success: false,
+          error: `审批等待超时`,
+        };
+      }
     }
 
     if (!permission.allowed) {

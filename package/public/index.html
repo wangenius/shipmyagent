@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShipMyAgent - Agent 控制台</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="logo">
+        <h1>🚀 ShipMyAgent</h1>
+      </div>
+      <nav class="nav">
+        <button class="nav-btn active" data-tab="chat">
+          <span class="icon">💬</span> Agent 对话
+        </button>
+        <button class="nav-btn" data-tab="approvals">
+          <span class="icon">📋</span> 待审批
+          <span class="badge" id="approval-count">0</span>
+        </button>
+        <button class="nav-btn" data-tab="status">
+          <span class="icon">📊</span> 系统状态
+        </button>
+      </nav>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main">
+      <!-- Agent 对话面板 -->
+      <section class="panel active" id="chat-panel">
+        <div class="panel-header">
+          <h2>💬 Agent 对话</h2>
+        </div>
+        <div class="chat-container">
+          <div class="chat-messages" id="chat-messages">
+            <div class="message system">
+              <div class="message-content">
+                <p>👋 您好！我是 ShipMyAgent 助手。请告诉我您想要完成什么任务。</p>
+              </div>
+            </div>
+          </div>
+          <div class="chat-input-container">
+            <textarea
+              id="chat-input"
+              placeholder="输入您的指令... (Ctrl+Enter 发送)"
+              rows="3"
+            ></textarea>
+            <button class="send-btn" id="send-btn">发送</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 待审批面板 -->
+      <section class="panel" id="approvals-panel">
+        <div class="panel-header">
+          <h2>📋 待审批操作</h2>
+          <button class="refresh-btn" id="refresh-approvals">刷新</button>
+        </div>
+        <div class="approvals-container" id="approvals-container">
+          <div class="empty-state" id="empty-approvals">
+            <span class="icon">✅</span>
+            <p>暂无待审批操作</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 系统状态面板 -->
+      <section class="panel" id="status-panel">
+        <div class="panel-header">
+          <h2>📊 系统状态</h2>
+        </div>
+        <div class="status-container" id="status-container">
+          <div class="status-card">
+            <h3>Agent 状态</h3>
+            <p class="status-value" id="agent-status">加载中...</p>
+          </div>
+          <div class="status-card">
+            <h3>任务数量</h3>
+            <p class="status-value" id="tasks-count">-</p>
+          </div>
+          <div class="status-card">
+            <h3>待审批数量</h3>
+            <p class="status-value" id="pending-count">-</p>
+          </div>
+        </div>
+        <div class="logs-section">
+          <h3>📝 最近日志</h3>
+          <div class="logs-container" id="logs-container">
+            <pre id="logs-content">加载中...</pre>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 审批详情弹窗 -->
+  <div class="modal" id="approval-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>审批详情</h3>
+        <button class="close-btn" id="close-modal">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <!-- 动态内容 -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-reject" id="reject-btn">拒绝</button>
+        <button class="btn btn-approve" id="approve-btn">批准</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 通知 -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
