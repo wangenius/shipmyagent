@@ -1,0 +1,505 @@
+---
+title: API Reference
+description: Complete API reference for ShipMyAgent extensibility
+---
+
+# API Reference
+
+Complete API reference for extending and customizing ShipMyAgent.
+
+## Core APIs
+
+### Tool API
+
+Create custom tools that the agent can use.
+
+```typescript
+import { Tool, ToolContext, ToolResult } from '@shipmyagent/core';
+
+interface Tool {
+  name: string;
+  description: string;
+  parameters?: ToolParameters;
+  execute(params: any, context: ToolContext): Promise<ToolResult>;
+}
+
+// Example: Custom Tool
+export class DatabaseTool extends Tool {
+  name = 'database_query';
+  description = 'Execute SQL queries on the database';
+
+  parameters = {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: 'SQL query to execute'
+      }
+    },
+    required: ['query']
+  };
+
+  async execute(params: { query: string }, context: ToolContext): Promise<ToolResult> {
+    // Execute query
+    const result = await database.query(params.query);
+
+    return {
+      success: true,
+      data: result
+    };
+  }
+
+  validate(params: any): boolean {
+    // Validate SQL injection
+    return !params.query.includes('DROP') &&
+           !params.query.includes('DELETE') &&
+           params.query.match(/^SELECT/i);
+  }
+}
+```
+
+### LLM Provider API
+
+Create custom LLM provider implementations.
+
+```typescript
+import { LLMProvider, ChatParams, ChatResponse } from '@shipmyagent/core';
+
+export class CustomProvider extends LLMProvider {
+  name = 'custom';
+
+  constructor(private config: ProviderConfig) {
+    super();
+  }
+
+  async chat(params: ChatParams): Promise<ChatResponse> {
+    const response = await fetch(this.config.baseUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.config.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: this.config.model,
+        messages: params.messages,
+        temperature: params.temperature || 0.7,
+        max_tokens: params.maxTokens || 4096
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  async *stream(params: ChatParams): AsyncIterator<ChatChunk> {
+    const response = await fetch(this.config.baseUrl + '/stream', {
+      method: 'POST',
+      headers: { ... },
+      body: JSON.stringify({ ... })
+    });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      yield JSON.parse(chunk);
+    }
+  }
+
+  async validate(): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.config.baseUrl}/models`, {
+        headers: { 'Authorization': `Bearer ${this.config.apiKey}` }
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  estimateTokens(text: string): number {
+    // Rough estimate: ~4 characters per token
+    return Math.ceil(text.length / 4);
+  }
+}
+```
+
+### Task API
+
+Create custom scheduled tasks.
+
+```typescript
+import { Task, TaskContext } from '@shipmyagent/core';
+
+export class CustomTask extends Task {
+  id = 'custom-task';
+  name = 'Custom Task';
+  cron = '0 9 * * *';  // Daily at 9 AM
+
+  async execute(context: TaskContext): Promise<TaskResult> {
+    // Access repository
+    const files = await context.repo.listFiles();
+
+    // Use LLM
+    const response = await context.llm.chat({
+      messages: [{
+        role: 'user',
+        content: `Analyze these files: ${files.join(', ')}`
+      }]
+    });
+
+    return {
+      success: true,
+      output: response.content
+    };
+  }
+}
+```
+
+---
+
+## Configuration Schema
+
+### ship.json Schema
+
+Complete schema for `ship.json`:
+
+```typescript
+interface ShipConfig {
+  name: string;
+  version: string;
+
+  // LLM Configuration
+  llm: LLMConfig;
+
+  // Permissions
+  permissions: PermissionConfig;
+
+  // Integrations
+  integrations: {
+    telegram?: TelegramConfig;
+    github?: GitHubConfig;
+    slack?: SlackConfig;
+    discord?: DiscordConfig;
+    webhook?: WebhookConfig;
+  };
+
+  // Logging
+  logging?: {
+    level: 'debug' | 'info' | 'warn' | 'error';
+    file?: string;
+    timing?: boolean;
+    rotation?: RotationConfig;
+  };
+
+  // Caching
+  cache?: {
+    enabled: boolean;
+    fileReads?: boolean;
+    llmResponses?: boolean;
+    ttl?: number;
+  };
+
+  // Server
+  server?: {
+    port?: number;
+    host?: string;
+  };
+}
+
+interface LLMConfig {
+  provider: 'anthropic' | 'openai' | 'deepseek' | 'custom';
+  model: string;
+  baseUrl?: string;
+  apiKey: string;
+  temperature?: number;
+  maxTokens?: number;
+  timeout?: number;
+  streaming?: boolean;
+  fallback?: Array<{
+    provider: string;
+    model: string;
+    apiKey: string;
+  }>;
+}
+
+interface PermissionConfig {
+  read_repo: boolean;
+  write_repo?: boolean | {
+    paths?: string[];
+    exclude?: string[];
+    requiresApproval?: boolean;
+  };
+  exec_shell?: boolean | {
+    allow?: string[];
+    requiresApproval?: boolean;
+  };
+}
+```
+
+### Agent.md Frontmatter Schema
+
+Task file frontmatter schema:
+
+```typescript
+interface TaskFrontmatter {
+  id: string;              // Unique identifier
+  name: string;            // Human-readable name
+  cron: string;            // Cron expression
+  notify?: string | string[];  // Notification channels
+  enabled?: boolean;       // Active state (default: true)
+  timeout?: number;        // Max execution time (seconds)
+  retryOnFailure?: boolean; // Auto-retry (default: false)
+  maxRetries?: number;      // Max retry attempts (default: 3)
+  condition?: string;      // Conditional execution
+}
+```
+
+---
+
+## Error Codes
+
+### Standard Errors
+
+| Code | Name | Description | Solution |
+|------|------|-------------|----------|
+| `E001` | `INVALID_CONFIG` | Invalid ship.json format | Validate JSON syntax |
+| `E002` | `MISSING_API_KEY` | LLM API key not set | Set environment variable |
+| `E003` | `PERMISSION_DENIED` | Operation not permitted | Check permissions |
+| `E004` | `LLM_ERROR` | LLM API call failed | Check API key and quota |
+| `E005` | `TOOL_EXECUTION_FAILED` | Tool execution error | Check tool parameters |
+| `E006` | `TASK_FAILED` | Task execution failed | Review task logs |
+| `E007` | `INTEGRATION_ERROR` | Integration connection failed | Verify integration config |
+| `E008` | `TIMEOUT` | Operation timeout | Increase timeout or optimize |
+
+### Error Response Format
+
+```json
+{
+  "error": {
+    "code": "E002",
+    "name": "MISSING_API_KEY",
+    "message": "LLM API key is not configured",
+    "suggestion": "Set the ANTHROPIC_API_KEY environment variable",
+    "documentation": "https://shipmyagent.com/docs/configuration"
+  }
+}
+```
+
+---
+
+## CLI API
+
+### Programmatic Usage
+
+Use ShipMyAgent in your Node.js applications:
+
+```typescript
+import { Agent } from '@shipmyagent/core';
+
+// Initialize agent
+const agent = new Agent({
+  configPath: './ship.json',
+  agentPromptPath: './Agent.md'
+});
+
+// Start agent
+await agent.start();
+
+// Chat with agent
+const response = await agent.chat('What files are in src/?');
+
+// Run task
+const result = await agent.tasks.run('daily-report');
+
+// Stop agent
+await agent.stop();
+```
+
+### Embedded Mode
+
+Run ShipMyAgent embedded in your application:
+
+```typescript
+import { EmbeddedAgent } from '@shipmyagent/core';
+
+const agent = new EmbeddedAgent({
+  llm: {
+    provider: 'anthropic',
+    model: 'claude-3-5-sonnet-20241022',
+    apiKey: process.env.ANTHROPIC_API_KEY
+  },
+  permissions: {
+    read_repo: true,
+    write_repo: {
+      paths: ['src/**'],
+      requiresApproval: false
+    }
+  }
+});
+
+// Use in your app
+app.post('/api/code-review', async (req, res) => {
+  const result = await agent.chat('Review this code: ' + req.body.code);
+  res.json(result);
+});
+```
+
+---
+
+## Plugin Development
+
+### Plugin Structure
+
+```typescript
+// my-plugin/index.ts
+import { Plugin } from '@shipmyagent/core';
+
+export default class MyPlugin extends Plugin {
+  name = 'my-plugin';
+  version = '1.0.0';
+
+  async onLoad(agent: Agent): Promise<void> {
+    // Register tools
+    agent.registerTool(new MyCustomTool());
+
+    // Register hooks
+    agent.on('before.chat', this.onBeforeChat);
+  }
+
+  async onUnload(agent: Agent): Promise<void> {
+    // Cleanup
+    agent.unregisterTool('my_custom_tool');
+  }
+}
+
+// my-plugin/tool.ts
+import { Tool } from '@shipmyagent/core';
+
+export class MyCustomTool extends Tool {
+  name = 'my_custom_tool';
+  // ... tool implementation
+}
+```
+
+### Lifecycle Hooks
+
+Available hooks:
+
+```typescript
+// Before LLM call
+agent.on('before.llm', (context) => {
+  console.log('LLM call:', context.prompt);
+});
+
+// After LLM call
+agent.on('after.llm', (context, response) => {
+  console.log('LLM response:', response);
+});
+
+// Before tool execution
+agent.on('before.tool', (context, tool) => {
+  console.log('Tool execution:', tool.name);
+});
+
+// After tool execution
+agent.on('after.tool', (context, tool, result) => {
+  console.log('Tool result:', result);
+});
+
+// On error
+agent.on('error', (error) => {
+  console.error('Error:', error);
+});
+
+// On task completion
+agent.on('task.completed', (task, result) => {
+  console.log('Task completed:', task.id);
+});
+```
+
+---
+
+## Testing API
+
+### Testing Tools
+
+```typescript
+import { MockLLMProvider, MockTool } from '@shipmyagent/testing';
+
+describe('MyCustomTool', () => {
+  it('should execute successfully', async () => {
+    const tool = new MyCustomTool();
+    const context = createMockContext();
+
+    const result = await tool.execute({
+      query: 'SELECT * FROM users'
+    }, context);
+
+    expect(result.success).toBe(true);
+    expect(result.data).toBeDefined();
+  });
+});
+
+describe('Agent Integration', () => {
+  it('should process chat command', async () => {
+    const agent = new Agent({
+      llm: new MockLLMProvider(),
+      tools: [new MockTool()]
+    });
+
+    const response = await agent.chat('Hello');
+
+    expect(response.content).toBeDefined();
+  });
+});
+```
+
+---
+
+## Events API
+
+### Event Emission
+
+```typescript
+import { EventEmitter } from '@shipmyagent/core';
+
+const events = new EventEmitter();
+
+// Listen for events
+events.on('task.completed', (task, result) => {
+  console.log(`Task ${task.id} completed`);
+});
+
+// Emit events
+events.emit('custom.event', { data: 'value' });
+```
+
+### Available Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `agent.started` | `{ timestamp }` | Agent started |
+| `agent.stopped` | `{ timestamp }` | Agent stopped |
+| `task.started` | `{ task, timestamp }` | Task started |
+| `task.completed` | `{ task, result, timestamp }` | Task completed |
+| `task.failed` | `{ task, error, timestamp }` | Task failed |
+| `llm.request` | `{ params, timestamp }` | LLM request made |
+| `llm.response` | `{ response, timestamp, duration }` | LLM response received |
+| `tool.executed` | `{ tool, params, result, timestamp }` | Tool executed |
+| `permission.denied` | `{ operation, reason, timestamp }` | Permission denied |
+
+---
+
+## Next Steps
+
+- [Architecture](/docs/architecture) - System design details
+- [Customization](/docs/customization) - Advanced customization
+- [Contributing](/docs/community/contributing) - Contribution guide

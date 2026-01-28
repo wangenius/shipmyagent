@@ -1,0 +1,524 @@
+---
+title: 性能问题
+description: 诊断和解决性能缓慢问题
+---
+
+# 性能问题
+
+您的 ShipMyAgent 运行缓慢吗？本指南帮助您识别瓶颈并优化性能。
+
+## 常见性能瓶颈
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    请求流程                         │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  用户 → Agent → 工具执行 → LLM API → 响应           │
+│   ↓        ↓          ↓            ↓         ↓      │
+│  延迟  │ 文件 I/O  │ 网络     │ 模型    │         │
+│          │  数据库   │ 超时     │ 速度    │         │
+└─────────────────────────────────────────────────────┘
+```
+
+## 诊断命令
+
+```bash
+# 检查系统健康
+shipmyagent doctor
+
+# 查看性能指标
+shipmyagent metrics
+
+# LLM 响应时间基准测试
+shipmyagent benchmark
+
+# 分析当前操作
+shipmyagent profile
+```
+
+## 测量性能
+
+### 1. 响应时间分解
+
+启用计时日志以查看时间花费在哪里：
+
+```json
+{
+  "logging": {
+    "level": "info",
+    "timing": {
+      "enabled": true,
+      "threshold": 1000  // 记录超过 1 秒的操作
+    }
+  }
+}
+```
+
+**示例输出**：
+```
+[INFO] [TIMING] 工具执行：read_file (245ms)
+[INFO] [TIMING] LLM 请求：completion (3,421ms)
+[INFO] [TIMING] 文件写入：update (89ms)
+[INFO] [TIMING] 总请求：3,755ms
+```
+
+### 2. LLM 响应时间
+
+跟踪 LLM API 性能：
+
+```bash
+# 查看平均响应时间
+shipmyagent logs | grep "LLM response time" | tail -20
+
+# 计算平均值
+shipmyagent logs | grep "LLM response time" | awk '{print $NF}' | awk '{sum+=$1; count++} END {print sum/count "ms"}'
+```
+
+### 3. 内存使用
+
+监控内存消耗：
+
+```bash
+# 检查当前使用
+ps aux | grep shipmyagent
+
+# 持续监控
+watch -n 5 'ps aux | grep shipmyagent'
+
+# 内存分析
+shipmyagent profile --memory
+```
+
+## 优化策略
+
+### 1. LLM 优化
+
+#### 使用更快的模型
+
+对于快速操作，使用更快的模型：
+
+```json
+{
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-haiku-20241022",  // 比 Sonnet 快
+    "baseUrl": "https://api.anthropic.com/v1"
+  }
+}
+```
+
+**模型速度对比**（近似值）：
+- Haiku：~200-300ms 首个 token
+- Sonnet：~400-600ms 首个 token
+- Opus：~800-1000ms 首个 token
+
+#### 减少 Token 使用
+
+优化提示以减少 token：
+
+```markdown
+# ❌ 冗长（低效）
+你是一个非常智能和有能力的 AI 助手，专门帮助开发者...
+
+# ✅ 简洁（高效）
+专家编程助手。专注于干净、可维护的代码。
+```
+
+#### 启用流式传输
+
+流式传输响应以获得更快的感知性能：
+
+```json
+{
+  "llm": {
+    "streaming": true
+  }
+}
+```
+
+#### 配置超时
+
+设置适当的超时：
+
+```json
+{
+  "llm": {
+    "timeout": 30000,      // 30 秒
+    "maxRetries": 2,
+    "retryDelay": 1000
+  }
+}
+```
+
+### 2. 文件系统优化
+
+#### 限制文件访问
+
+将文件操作限制在特定目录：
+
+```json
+{
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": ["src/**", "docs/**"],  // 仅这些目录
+      "requiresApproval": false
+    }
+  }
+}
+```
+
+#### 使用 Git 操作
+
+对于大型仓库，使用 Git 命令而不是文件读取：
+
+```markdown
+# 不要用："读取 src/ 中的所有文件"
+使用："git diff HEAD~1" 查看最近的更改
+```
+
+#### 缓存文件读取
+
+为频繁访问的文件启用缓存：
+
+```json
+{
+  "cache": {
+    "enabled": true,
+    "fileReads": true,
+    "ttl": 300  // 5 分钟
+  }
+}
+```
+
+### 3. 任务调度优化
+
+#### 调整任务频率
+
+不要过于频繁地运行任务：
+
+```markdown
+---
+cron: "*/5 * * * *"  # 每 5 分钟（频繁）
+---
+
+# 更好：每 30 分钟
+---
+cron: "*/30 * * * *"
+---
+```
+
+#### 使用智能 Cron 调度
+
+在非高峰时段安排任务：
+
+```markdown
+# 深夜执行繁重任务
+---
+cron: "0 2 * * *"  # 每天凌晨 2 点
+---
+
+# 工作时间执行轻量任务
+---
+cron: "0 */4 9-17 * * *"  # 每 4 小时，上午 9 点 - 下午 5 点
+---
+```
+
+#### 批量处理相似操作
+
+组合相关任务：
+
+```markdown
+---
+id: combined-maintenance
+name: 组合日常维护
+cron: "0 18 * * *"
+---
+
+1. 检查 TODO
+2. 审查最近的提交
+3. 更新依赖
+4. 生成摘要
+```
+
+### 4. 网络优化
+
+#### 使用更近的 API 端点
+
+选择地理上接近的 API 端点：
+
+```json
+{
+  "llm": {
+    "provider": "anthropic",
+    "baseUrl": "https://api.anthropic.com/v1"  // 默认美国
+    // 或使用区域端点（如果可用）
+  }
+}
+```
+
+#### 启用 HTTP Keep-Alive
+
+维持持久连接：
+
+```json
+{
+  "http": {
+    "keepAlive": true,
+    "maxSockets": 50,
+    "keepAliveTimeout": 30000
+  }
+}
+```
+
+#### 压缩请求
+
+为大型负载启用压缩：
+
+```json
+{
+  "http": {
+    "compression": true,
+    "minBodySize": 1024  // 如果 > 1KB 则压缩
+  }
+}
+```
+
+### 5. 集成优化
+
+#### Telegram 优化
+
+减少不必要的 Telegram 更新：
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}",
+      "updates": {
+        "timeout": 30,         // 轮询超时
+        "limit": 10,           // 每次轮询最大更新数
+        "allowedUpdates": ["message"]  // 仅消息
+      }
+    }
+  }
+}
+```
+
+#### Webhook 优化
+
+优化 webhook 传递：
+
+```json
+{
+  "integrations": {
+    "webhook": {
+      "enabled": true,
+      "url": "https://your-server.com/webhook",
+      "timeout": 5000,
+      "retryAttempts": 3,
+      "retryDelay": 1000,
+      "batch": {
+        "enabled": true,
+        "maxSize": 100,
+        "maxWait": 5000  // 5 秒
+      }
+    }
+  }
+}
+```
+
+## 性能监控
+
+### 实时监控
+
+```bash
+# 监控 agent 性能
+shipmyagent monitor
+
+# 输出示例：
+┌─────────────────────────────────────┐
+│ ShipMyAgent 监控器                  │
+├─────────────────────────────────────┤
+│ CPU: 12%                            │
+│ 内存: 245MB / 512MB                 │
+│ 活跃任务：3                         │
+│ LLM 平均响应：1.2s                  │
+│ 运行时间：2d 4h 32m                 │
+└─────────────────────────────────────┘
+```
+
+### 性能指标
+
+要跟踪的关键指标：
+
+| 指标 | 良好 | 警告 | 严重 |
+|------|------|------|------|
+| **LLM 响应时间** | < 2s | 2-5s | > 5s |
+| **内存使用** | < 500MB | 500MB-1GB | > 1GB |
+| **CPU 使用** | < 20% | 20-50% | > 50% |
+| **任务队列** | 0-5 | 5-10 | > 10 |
+| **错误率** | < 1% | 1-5% | > 5% |
+
+### 设置警报
+
+配置性能警报：
+
+```json
+{
+  "monitoring": {
+    "enabled": true,
+    "alerts": {
+      "llmTimeout": {
+        "threshold": 5000,  // 5 秒
+        "action": "notify"
+      },
+      "highMemory": {
+        "threshold": 1000000000,  // 1GB 字节
+        "action": "notify"
+      },
+      "taskFailure": {
+        "threshold": 3,  // 连续 3 次失败
+        "action": "restart"
+      }
+    }
+  }
+}
+```
+
+## 慢性能故障排查
+
+### 问题：LLM 响应缓慢
+
+**诊断**：
+```bash
+# 测试 LLM 连接速度
+shipmyagent test-llm --benchmark
+
+# 检查网络延迟
+ping api.anthropic.com
+```
+
+**解决方案**：
+1. 切换到更快的模型（Haiku）
+2. 降低提示复杂度
+3. 检查网络连接
+4. 尝试其他 API 端点
+
+### 问题：高内存使用
+
+**诊断**：
+```bash
+# 检查内存配置
+shipmyagent profile --memory
+
+# 识别大缓存
+du -sh .ship/cache/*
+```
+
+**解决方案**：
+1. 清除缓存：`shipmyagent cache clear`
+2. 减少配置中的缓存大小
+3. 禁用不必要的功能
+4. 定期重启 agent
+
+### 问题：任务运行缓慢
+
+**诊断**：
+```bash
+# 检查任务执行时间
+shipmyagent tasks list --timing
+
+# 查看任务日志
+shipmyagent logs --file tasks | grep "execution time"
+```
+
+**解决方案**：
+1. 优化任务提示
+2. 将复杂任务拆分为较小的任务
+3. 调整 cron 调度
+4. 使用更高效的工具调用
+
+### 问题：频繁超时
+
+**诊断**：
+```bash
+# 检查超时错误
+shipmyagent logs | grep -i timeout
+
+# 测试网络稳定性
+ping -c 100 api.anthropic.com
+```
+
+**解决方案**：
+1. 增加超时值
+2. 启用重试并退避
+3. 使用网络优化
+4. 考虑 API 速率限制
+
+## 性能检查清单
+
+使用此清单优化您的设置：
+
+- [ ] 使用最快的适当模型
+- [ ] 提示简洁且专注
+- [ ] 文件访问限制在必要的目录
+- [ ] 为频繁访问的数据启用缓存
+- [ ] 任务调度优化
+- [ ] 启用 HTTP keep-alive
+- [ ] 为大型负载启用压缩
+- [ ] 适当配置超时
+- [ ] 设置监控和警报
+- [ ] 定期缓存清理
+
+## 性能调优示例
+
+这是一个完整的优化配置：
+
+```json
+{
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-haiku-20241022",
+    "temperature": 0.3,
+    "maxTokens": 2048,
+    "timeout": 30000,
+    "streaming": true
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": ["src/**", "tests/**"],
+      "requiresApproval": false
+    },
+    "exec_shell": {
+      "allow": ["npm test", "npm run lint"],
+      "requiresApproval": false
+    }
+  },
+  "cache": {
+    "enabled": true,
+    "fileReads": true,
+    "llmResponses": true,
+    "ttl": 600
+  },
+  "http": {
+    "keepAlive": true,
+    "compression": true,
+    "timeout": 30000
+  },
+  "monitoring": {
+    "enabled": true,
+    "metrics": true
+  }
+}
+```
+
+## 下一步
+
+- [常见问题](/docs/troubleshooting/common-issues) - 一般故障排查
+- [日志与调试](/docs/troubleshooting/logs-debugging) - 理解日志
+- [权限错误](/docs/troubleshooting/permission-errors) - 访问控制问题

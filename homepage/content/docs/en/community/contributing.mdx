@@ -1,0 +1,413 @@
+---
+title: Contributing
+description: How to contribute to ShipMyAgent
+---
+
+# Contributing
+
+Thank you for your interest in contributing to ShipMyAgent! This guide will help you get started.
+
+## Ways to Contribute
+
+### 🐛 Report Bugs
+
+Found a bug? Report it:
+
+1. Search existing issues first
+2. Create a bug report with:
+   - Clear title and description
+   - Steps to reproduce
+   - Expected vs actual behavior
+   - Environment details (OS, Node version, etc.)
+   - Screenshots if applicable
+
+### 💡 Suggest Features
+
+Have an idea? Propose it:
+
+1. Check roadmap and existing discussions
+2. Create a feature request with:
+   - Problem statement
+   - Proposed solution
+   - Use cases
+   - Potential implementation
+
+### 📖 Improve Documentation
+
+Docs are code too! You can:
+
+- Fix typos and grammar
+- Add examples
+- Clarify confusing sections
+- Translate to other languages
+- Add new guides
+
+### 🔧 Code Contributions
+
+Ready to code? Great!
+
+1. Start with good first issues (tagged `good-first-issue`)
+2. Follow the contributing guide below
+3. Submit a pull request
+
+---
+
+## Development Setup
+
+### Prerequisites
+
+- Node.js >= 18
+- pnpm (recommended) or npm
+- Git
+
+### Fork and Clone
+
+```bash
+# Fork the repository on GitHub
+# Clone your fork
+git clone https://github.com/YOUR_USERNAME/shipmyagent.git
+cd shipmyagent
+
+# Add upstream remote
+git remote add upstream https://github.com/wangenius/shipmyagent.git
+```
+
+### Install Dependencies
+
+```bash
+# Install dependencies
+pnpm install
+
+# Setup development environment
+pnpm dev:setup
+```
+
+### Build and Test
+
+```bash
+# Build the project
+pnpm build
+
+# Run tests
+pnpm test
+
+# Run linter
+pnpm lint
+
+# Type check
+pnpm typecheck
+```
+
+---
+
+## Project Structure
+
+```
+shipmyagent/
+├── packages/
+│   ├── cli/              # CLI tool
+│   ├── core/             # Core agent logic
+│   ├── llm/              # LLM provider implementations
+│   └── tools/            # Built-in tools
+├── homepage/             # Documentation site
+└── examples/             # Example configurations
+```
+
+---
+
+## Making Changes
+
+### Branch Strategy
+
+```bash
+# Create a feature branch
+git checkout -b feature/my-feature
+
+# Or for bug fix
+git checkout -b fix/issue-123
+
+# Or documentation
+git checkout -b docs/update-guide
+```
+
+### Commit Messages
+
+Follow conventional commits:
+
+```
+feat: add support for custom tools
+fix: resolve race condition in task scheduler
+docs: update installation guide
+chore: upgrade dependencies
+test: add tests for permission system
+refactor: improve LLM provider abstraction
+```
+
+### Code Style
+
+Follow the project's code style:
+
+```bash
+# Run formatter
+pnpm format
+
+# Run linter
+pnpm lint:fix
+
+# Type check
+pnpm typecheck
+```
+
+---
+
+## Pull Request Process
+
+### Before Submitting
+
+1. **Run tests**: `pnpm test`
+2. **Format code**: `pnpm format`
+3. **Check types**: `pnpm typecheck`
+4. **Update docs**: If applicable
+5. **Add tests**: For new features
+
+### Submitting PR
+
+1. Push to your fork
+2. Create pull request to `wangenius/shipmyagent:main`
+3. Fill PR template:
+   - Description of changes
+   - Related issues
+   - Testing steps
+   - Breaking changes (if any)
+
+### Review Process
+
+Maintainers will review your PR and provide feedback. Address review comments and push updates to your branch.
+
+### Merging
+
+Once approved, your PR will be merged. Maintainers will:
+
+- Squash commits if needed
+- Update changelog
+- Deploy to production
+
+---
+
+## Coding Standards
+
+### TypeScript
+
+- Use strict mode
+- Avoid `any` type
+- Prefer `const`/`let` over `var`
+- Use arrow functions for callbacks
+- Document public APIs
+
+### Testing
+
+- Write unit tests for new features
+- Aim for >80% code coverage
+- Mock external dependencies
+- Test edge cases
+
+### Documentation
+
+- Document public APIs
+- Add JSDoc comments
+- Include usage examples
+- Update guides if behavior changes
+
+---
+
+## Development Workflow
+
+### Example Feature Development
+
+```bash
+# 1. Create branch
+git checkout -b feature/add-discord-integration
+
+# 2. Make changes
+# ... edit files ...
+
+# 3. Commit changes
+git add .
+git commit -m "feat: add Discord bot integration"
+
+# 4. Test
+pnpm test
+
+# 5. Push to fork
+git push origin feature/add-discord-integration
+
+# 6. Create PR on GitHub
+# Visit your fork and create pull request
+```
+
+### Syncing with Upstream
+
+Keep your fork up-to-date:
+
+```bash
+# Fetch upstream
+git fetch upstream
+
+# Merge upstream main
+git checkout main
+git merge upstream/main
+
+# Push to your fork
+git push origin main
+```
+
+---
+
+## Community Guidelines
+
+### Code of Conduct
+
+- Be respectful and inclusive
+- Provide constructive feedback
+- Accept feedback gracefully
+- Focus on what is best for the community
+
+### Getting Help
+
+- Ask questions in Discord
+- Start discussions for complex topics
+- Request reviews early (WIP PRs)
+
+### Recognition
+
+Contributors are recognized in:
+- Release notes
+- Contributors section
+- Annual community highlights
+
+---
+
+## Developer Certificate of Origin
+
+By contributing, you agree to the DCO:
+
+```
+Developer Certificate of Origin
+Version 1.1
+
+Copyright (C) 2004, 2006 The Linux Foundation and its contributors.
+
+1. The making of contributions and patches to the Project by
+   developers and other stakeholders is the intended method
+   of cooperation and collaboration for the Project.
+
+2. The Developer Certifies that:
+   (a) The contribution was created in whole or in part by me and I
+       have the right to submit it under the open source license
+       indicated in the file; or
+   (b) The contribution is based upon previous work that, to the best
+       of my knowledge, is covered under an appropriate open
+       source license and I have the right under that license to
+       submit that work with modifications, whether created in whole
+       or in part by me, under the same open source license (unless
+       I am permitted to submit under a different license), as
+       indicated in the file; or
+   (c) The contribution was provided directly to me by some other
+       person who certified (a), (b) or (c) and I have not modified
+       it.
+   (d) I understand and agree that this project and the contribution
+       are public and that a record of the contribution (including
+       all personal information I submit with it, including my
+       sign-off) is maintained indefinitely and may be redistributed
+       consistent with this project or the open source license(s)
+       involved.
+```
+
+Add this to your commits:
+
+```bash
+git commit -s -m "feat: add new feature"
+```
+
+---
+
+## Project-Specific Guidelines
+
+### Core Package Changes
+
+For changes to `packages/core`:
+- Add tests for new features
+- Update architecture docs if needed
+- Consider backward compatibility
+
+### CLI Changes
+
+For changes to `packages/cli`:
+- Update CLI help text
+- Add usage examples
+- Document new commands
+
+### Documentation Changes
+
+For changes to `homepage/`:
+- Test locally: `pnpm dev`
+- Check for broken links
+- Update navigation if needed
+
+---
+
+## Release Process
+
+Maintainers follow this process:
+
+1. Update version in `package.json`
+2. Update CHANGELOG.md
+3. Create release branch
+4. Test thoroughly
+5. Tag release
+6. Build and publish
+7. Create GitHub release
+8. Announce on community channels
+
+---
+
+## Resources
+
+### Documentation
+
+- [Architecture](/docs/architecture) - System architecture
+- [Customization](/docs/customization) - Plugin development
+- [API Reference](/docs/reference/api) - API docs
+
+### Community
+
+- [Discord](https://discord.gg/shipmyagent) - Real-time chat
+- [GitHub Discussions](https://github.com/wangenius/shipmyagent/discussions) - Q&A
+- [GitHub Issues](https://github.com/wangenius/shipmyagent/issues) - Bug reports
+
+### Related Projects
+
+- [Fumadocs](https://fumadocs.com) - Documentation framework
+- [Anthropic Claude](https://www.anthropic.com) - AI model
+- [OpenAI GPT](https://openai.com) - AI model
+
+---
+
+## Recognition
+
+Thank you for contributing! Your help makes ShipMyAgent better for everyone.
+
+Contributors are recognized in:
+- [Contributors](https://github.com/wangenius/shipmyagent/graphs/contributors)
+- Release notes
+- Annual highlights
+
+---
+
+## Next Steps
+
+Ready to contribute?
+
+1. Look for [good first issues](https://github.com/wangenius/shipmyagent/labels/good-first-issue)
+2. Join the [Discord community](https://discord.gg/shipmyagent)
+3. Start coding! 🚀

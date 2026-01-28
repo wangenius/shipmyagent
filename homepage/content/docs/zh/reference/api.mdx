@@ -1,0 +1,291 @@
+---
+title: API 参考
+description: ShipMyAgent 可扩展性完整 API 参考
+---
+
+# API 参考
+
+ShipMyAgent 扩展和定制的完整 API 参考。
+
+## 核心 API
+
+### 工具 API
+
+创建 agent 可以使用的自定义工具。
+
+```typescript
+import { Tool, ToolContext, ToolResult } from '@shipmyagent/core';
+
+interface Tool {
+  name: string;
+  description: string;
+  parameters?: ToolParameters;
+  execute(params: any, context: ToolContext): Promise<ToolResult>;
+}
+
+// 示例：自定义工具
+export class DatabaseTool extends Tool {
+  name = 'database_query';
+  description = '在数据库上执行 SQL 查询';
+
+  parameters = {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: '要执行的 SQL 查询'
+      }
+    },
+    required: ['query']
+  };
+
+  async execute(params: { query: string }, context: ToolContext): Promise<ToolResult> {
+    // 执行查询
+    const result = await database.query(params.query);
+
+    return {
+      success: true,
+      data: result
+    };
+  }
+
+  validate(params: any): boolean {
+    // 验证 SQL 注入
+    return !params.query.includes('DROP') &&
+           !params.query.includes('DELETE') &&
+           params.query.match(/^SELECT/i);
+  }
+}
+```
+
+### LLM 提供商 API
+
+创建自定义 LLM 提供商实现。
+
+```typescript
+import { LLMProvider, ChatParams, ChatResponse } from '@shipmyagent/core';
+
+export class CustomProvider extends LLMProvider {
+  name = 'custom';
+
+  constructor(private config: ProviderConfig) {
+    super();
+  }
+
+  async chat(params: ChatParams): Promise<ChatResponse> {
+    const response = await fetch(this.config.baseUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.config.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: this.config.model,
+        messages: params.messages,
+        temperature: params.temperature || 0.7,
+        max_tokens: params.maxTokens || 4096
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  async *stream(params: ChatParams): AsyncIterator<ChatChunk> {
+    const response = await fetch(this.config.baseUrl + '/stream', {
+      method: 'POST',
+      headers: { ... },
+      body: JSON.stringify({ ... })
+    });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      yield JSON.parse(chunk);
+    }
+  }
+
+  async validate(): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.config.baseUrl}/models`, {
+        headers: { 'Authorization': `Bearer ${this.config.apiKey}` }
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  estimateTokens(text: string): number {
+    // 粗略估计：约 4 个字符 = 1 个 token
+    return Math.ceil(text.length / 4);
+  }
+}
+```
+
+---
+
+## 配置 Schema
+
+### ship.json Schema
+
+`ship.json` 的完整 schema：
+
+```typescript
+interface ShipConfig {
+  name: string;
+  version: string;
+
+  // LLM 配置
+  llm: LLMConfig;
+
+  // 权限
+  permissions: PermissionConfig;
+
+  // 集成
+  integrations: {
+    telegram?: TelegramConfig;
+    github?: GitHubConfig;
+    slack?: SlackConfig;
+    discord?: DiscordConfig;
+    webhook?: WebhookConfig;
+  };
+
+  // 日志
+  logging?: {
+    level: 'debug' | 'info' | 'warn' | 'error';
+    file?: string;
+    timing?: boolean;
+    rotation?: RotationConfig;
+  };
+
+  // 缓存
+  cache?: {
+    enabled: boolean;
+    fileReads?: boolean;
+    llmResponses?: boolean;
+    ttl?: number;
+  };
+
+  // 服务器
+  server?: {
+    port?: number;
+    host?: string;
+  };
+}
+```
+
+---
+
+## 错误代码
+
+### 标准错误
+
+| 代码 | 名称 | 描述 | 解决方案 |
+|------|------|------|----------|
+| `E001` | `INVALID_CONFIG` | ship.json 格式无效 | 验证 JSON 语法 |
+| `E002` | `MISSING_API_KEY` | LLM API key 未设置 | 设置环境变量 |
+| `E003` | `PERMISSION_DENIED` | 操作不被允许 | 检查权限 |
+| `E004` | `LLM_ERROR` | LLM API 调用失败 | 检查 API key 和配额 |
+| `E005` | `TOOL_EXECUTION_FAILED` | 工具执行错误 | 检查工具参数 |
+| `E006` | `TASK_FAILED` | 任务执行失败 | 审查任务日志 |
+| `E007` | `INTEGRATION_ERROR` | 集成连接失败 | 验证集成配置 |
+| `E008` | `TIMEOUT` | 操作超时 | 增加超时或优化 |
+
+---
+
+## CLI API
+
+### 编程式使用
+
+在您的 Node.js 应用中使用 ShipMyAgent：
+
+```typescript
+import { Agent } from '@shipmyagent/core';
+
+// 初始化 agent
+const agent = new Agent({
+  configPath: './ship.json',
+  agentPromptPath: './Agent.md'
+});
+
+// 启动 agent
+await agent.start();
+
+// 与 agent 聊天
+const response = await agent.chat('src/ 中有什么文件？');
+
+// 运行任务
+const result = await agent.tasks.run('daily-report');
+
+// 停止 agent
+await agent.stop();
+```
+
+---
+
+## 插件开发
+
+### 插件结构
+
+```typescript
+// my-plugin/index.ts
+import { Plugin } from '@shipmyagent/core';
+
+export default class MyPlugin extends Plugin {
+  name = 'my-plugin';
+  version = '1.0.0';
+
+  async onLoad(agent: Agent): Promise<void> {
+    // 注册工具
+    agent.registerTool(new MyCustomTool());
+
+    // 注册钩子
+    agent.on('before.chat', this.onBeforeChat);
+  }
+
+  async onUnload(agent: Agent): Promise<void> {
+    // 清理
+    agent.unregisterTool('my_custom_tool');
+  }
+}
+```
+
+---
+
+## 测试 API
+
+### 测试工具
+
+```typescript
+import { MockLLMProvider, MockTool } from '@shipmyagent/testing';
+
+describe('MyCustomTool', () => {
+  it('should execute successfully', async () => {
+    const tool = new MyCustomTool();
+    const context = createMockContext();
+
+    const result = await tool.execute({
+      query: 'SELECT * FROM users'
+    }, context);
+
+    expect(result.success).toBe(true);
+  });
+});
+```
+
+---
+
+## 下一步
+
+- [架构](/docs/architecture) - 系统设计细节
+- [自定义](/docs/customization) - 高级自定义
+- [贡献](/docs/community/contributing) - 贡献指南

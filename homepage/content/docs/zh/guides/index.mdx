@@ -1,0 +1,622 @@
+---
+title: 用例指南
+description: 常见 ShipMyAgent 工流程的分步指南
+---
+
+# 用例指南
+
+在真实场景中实施 ShipMyAgent 的实用分步指南。
+
+## 可用指南
+
+- [代码审查自动化](#代码审查自动化) - 自动化 PR 审查
+- [仓库维护](#仓库维护) - 依赖更新、清理
+- [团队协作](#团队协作) - 多团队协调
+- [自然语言操作](#自然语言操作) - 聊天驱动开发
+
+---
+
+## 代码审查自动化
+
+使用一致、彻底的反馈自动化拉取请求审查。
+
+### 用例
+
+**问题**：手动代码审查耗时且不一致。
+
+**解决方案**：ShipMyAgent 自动审查每个 PR，在人工审查之前发现问题。
+
+### 实施
+
+#### 步骤 1：配置 PR 审查 Agent
+
+**ship.json**:
+
+```json
+{
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": ["*.md"],
+      "requiresApproval": false
+    }
+  },
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo"
+    }
+  }
+}
+```
+
+#### 步骤 2：创建审查任务
+
+**`.ship/tasks/pr-review.md`**:
+
+```markdown
+---
+id: pr-review
+name: 自动化 PR 审查
+cron: "*/30 * * * *"
+notify: ["github", "telegram"]
+---
+
+审查所有开放的拉取请求：
+
+## 审查标准
+
+1. **代码质量**
+   - 遵循项目风格指南
+   - 没有明显的错误
+   - 适当的错误处理
+   - 性能考虑
+
+2. **测试**
+   - 包含新测试
+   - 覆盖边缘情况
+   - 测试确实测试了代码
+
+3. **文档**
+   - API 更改已记录
+   - 示例已更新
+   - 记录了破坏性更改
+
+## 输出格式
+
+对于每个 PR，发布评论：
+
+### 摘要
+[一句话概述]
+
+### 发现的问题
+- 🔴 严重：[问题]
+- 🟡 中等：[问题]
+- 🟢 轻微：[问题]
+
+### 建议
+[具体的、可操作的改进]
+
+### 结论
+[✅ 看起来不错 / ⚠️ 需要更改 / ❌ 需要工作]
+```
+
+### 结果
+
+**之前**：
+- 手动审查：每个 PR 30-45 分钟
+- 反馈不一致
+- 流程后期发现问题
+
+**之后**：
+- 即时自动审查
+- 标准一致
+- 立即发现问题
+- 人工审查者专注于架构和设计
+
+---
+
+## 仓库维护
+
+使用自动化维护任务保持仓库健康。
+
+### 用例
+
+**问题**：技术债务累积、依赖过时、文档腐烂。
+
+**解决方案**：定时任务自动维护仓库健康。
+
+### 实施
+
+#### 每日依赖检查
+
+**`.ship/tasks/dependency-check.md`**:
+
+```markdown
+---
+id: dependency-check
+name: 每日依赖扫描
+cron: "0 9 * * *"
+notify: telegram
+---
+
+检查依赖健康状况：
+
+1. **过时的软件包**
+   ```bash
+   npm outdated
+   ```
+   列出有可用更新的软件包
+
+2. **安全漏洞**
+   ```bash
+   npm audit
+   ```
+   报告发现的任何漏洞
+
+3. **许可证合规性**
+   检查 GPL/AGPL 许可证
+
+4. **已弃用的软件包**
+   识别有弃用警告的软件包
+
+报告格式：
+## 📦 依赖报告
+
+### 可用更新
+- [软件包]：当前 → 最新（类型：major/minor/patch）
+
+### 漏洞
+- 🔴 严重：[CVE]
+- 🟡 中等：[CVE]
+
+### 需要的操作
+- [ ] 更新软件包
+- [ ] 审查破坏性更改
+- [ ] 更新许可证
+```
+
+#### 每周 TODO 清理
+
+**`.ship/tasks/todo-cleanup.md`**:
+
+```markdown
+---
+id: todo-cleanup
+name: 每周 TODO 清理
+cron: "0 9 * * 1"
+notify: slack
+---
+
+查找和组织 TODO：
+
+1. 扫描代码库：
+   ```bash
+   grep -r "TODO\|FIXME" --include="*.js" --include="*.ts"
+   ```
+
+2. 按严重程度分类：
+   - 严重：阻止生产
+   - 高：影响用户
+   - 中：代码质量
+   - 低：优化
+
+3. 生成优先级列表
+
+4. 为高优先级项目创建 GitHub issue
+```
+
+#### 月度文档同步
+
+**`.ship/tasks/doc-sync.md`**:
+
+```markdown
+---
+id: doc-sync
+name: 文档同步
+cron: "0 18 * * 1"
+---
+
+同步文档与代码：
+
+1. **API 更改**
+   - 扫描新/修改的公共 API
+   - 更新 API 文档
+   - 验证示例有效
+
+2. **README 更新**
+   - 更新设置说明
+   - 验证快速入门示例
+   - 检查损坏的链接
+
+3. **更新日志**
+   - 审查自上次同步以来的提交
+   - 对更改进行分类
+   - 更新 CHANGELOG.md
+
+4. **创建 PR** 并附带文档更新
+```
+
+---
+
+## 团队协作
+
+跨多个团队和贡献者协调工作。
+
+### 用例
+
+**问题**：大团队需要协调、一致的标准和知识共享。
+
+**解决方案**：ShipMyAgent 通过自动化工作流程和一致的反馈促进团队协作。
+
+### 实施
+
+#### 特定团队的 Agent
+
+为不同团队创建多个 agent：
+
+**团队 A（后端）**:
+
+**Agent.backend.md**:
+
+```markdown
+# 后端团队 Agent
+
+你是一位后端工程专家。
+
+## 重点领域
+- API 设计和一致性
+- 数据库优化
+- 安全和认证
+- 可扩展性和性能
+
+## 团队标准
+- RESTful API 约定
+- GraphQL schema 最佳实践
+- 数据库索引策略
+- 缓存模式
+- 错误处理标准
+
+## 协调
+- 标记 @backend-team 进行后端审查
+- 将 API 更改通知 @frontend-team
+- 在 API.md 中记录 API 更改
+```
+
+**团队 B（前端）**:
+
+**Agent.frontend.md**:
+
+```markdown
+# 前端团队 Agent
+
+你是一位前端工程专家。
+
+## 重点领域
+- 用户界面一致性
+- 组件可重用性
+- 性能优化
+- 可访问性
+
+## 团队标准
+- 组件库使用
+- 状态管理模式
+- 样式约定
+- 测试方法（Jest + Testing Library）
+
+## 协调
+- 标记 @frontend-team 进行前端审查
+- 向后端团队提议 API 更改
+- 为新组件更新 Storybook
+```
+
+#### 跨团队协调任务
+
+**`.ship/tasks/cross-team-sync.md`**:
+
+```markdown
+---
+id: cross-team-sync
+name: 跨团队同步
+cron: "0 17 * * 5"
+notify: slack
+---
+
+每周跨团队协调：
+
+## API 更改
+- 列出本周新/修改的 API
+- 识别破坏性更改
+- 标记受影响的团队
+
+## 共享软件包
+- 检查共享库更新
+- 协调版本升级
+- 规划迁移
+
+## 依赖关系
+- 后端 → 前端依赖
+- 前端 → 后端 API 需求
+- 报告不匹配
+
+## 行动项
+- [ ] 团队同步会议议程
+- [ ] 需要跨团队审查的 PR
+- [ ] 需要协调的即将到来的更改
+
+发布到 #engineering 频道。
+```
+
+---
+
+## 自然语言操作
+
+使用纯语言与您的代码库交互。
+
+### 用例
+
+**问题**：需要了解或修改代码而无需手动查看文件。
+
+**解决方案**：与 ShipMyAgent 聊天以查询、分析和修改代码。
+
+### 实施
+
+#### 设置 Telegram 或 CLI 聊天
+
+**ship.json**:
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
+    }
+  }
+}
+```
+
+#### 常见查询
+
+**1. 代码理解**
+
+```
+你：这个项目中的身份验证是如何工作的？
+
+Agent：[分析代码库]
+
+这个项目使用基于 JWT 的身份验证：
+
+1. **令牌生成** (src/auth/jwt.ts)
+   - 登录时创建令牌
+   - 包含用户 ID 和角色
+
+2. **中间件** (src/auth/middleware.ts)
+   - 在受保护的路由上验证令牌
+   - 将用户附加到请求对象
+
+3. **路由** (src/auth/routes.ts)
+   - POST /auth/login - 生成令牌
+   - POST /auth/refresh - 刷新令牌
+   - POST /auth/logout - 使令牌失效
+
+需要我向你展示令牌生成代码吗？
+```
+
+**2. Bug 调查**
+
+```
+你：为什么登录端点很慢？
+
+Agent：[调查]
+
+我发现了问题！在 src/auth/login.ts:42：
+
+```typescript
+// 问题：同步密码哈希
+const hash = bcrypt.hashSync(password, 10);
+```
+
+这阻塞了事件循环。建议的修复：
+
+```typescript
+// 使用异步版本
+const hash = await bcrypt.hash(password, 10);
+```
+
+这将把响应时间从 ~500ms 减少到 ~50ms。
+
+我应该做这个更改吗？
+```
+
+**3. 重构协助**
+
+```
+你：重构 src/users/service.ts 以使用 async/await
+
+Agent：[分析和重构]
+
+我已经重构了服务：
+
+**之前**：
+```typescript
+function getUser(id) {
+  return db.query('SELECT * FROM users WHERE id = ?', [id])
+    .then(result => result[0]);
+}
+```
+
+**之后**：
+```typescript
+async function getUser(id) {
+  const result = await db.query(
+    'SELECT * FROM users WHERE id = ?',
+    [id]
+  );
+  return result[0];
+}
+```
+
+**好处**：
+- 更好的错误处理
+- 更容易阅读
+- 与现代模式一致
+
+**受影响的文件**：3 个
+**破坏性更改**：无
+
+应用这些更改吗？
+```
+
+**4. 测试生成**
+
+```
+你：为 checkout 函数生成测试
+
+Agent：[创建测试]
+
+这是 checkout() 的综合测试：
+
+```typescript
+describe('checkout()', () => {
+  it('应该处理成功的支付', async () => {
+    const result = await checkout(mockOrder);
+    expect(result.status).toBe('completed');
+  });
+
+  it('应该处理支付失败', async () => {
+    const result = await checkout(failingOrder);
+    expect(result.status).toBe('failed');
+    expect(result.error).toBeDefined();
+  });
+
+  it('应该验证库存', async () => {
+    await expect(checkout(outOfStockOrder))
+      .rejects.toThrow('库存不足');
+  });
+
+  // ... 更多测试
+});
+```
+
+覆盖率：分支的 95%
+运行这些测试？创建测试文件？
+```
+
+### 高级自然语言工作流程
+
+#### 1. 多步骤操作
+
+```
+你：部署用户服务更新
+
+Agent：
+我将帮助部署。这是我的计划：
+
+1. ✅ 审查用户服务中的更改
+2. ⏳ 运行测试
+3. ⏳ 构建 Docker 镜像
+4. ⏳ 标记并推送到注册表
+5. ⏳ 更新 Kubernetes 部署
+
+步骤 4-5 需要批准。
+
+继续执行步骤 1（审查）吗？
+```
+
+#### 2. 探索性分析
+
+```
+你：分析仪表板中的性能瓶颈
+
+Agent：
+[分析仪表板代码...]
+
+**瓶颈分析**
+
+**问题 1：N+1 查询问题**
+位置：src/dashboard/fetchers.ts:15
+
+```typescript
+// 为每个仪表板项目单独加载用户数据
+items.forEach(item => {
+  item.user = await getUser(item.userId);
+});
+```
+
+影响：50 个项目产生 50 次数据库调用。
+
+**修复**：批量加载
+```typescript
+const userIds = items.map(i => i.userId);
+const users = await getUsers(userIds);
+items.forEach(item => {
+  item.user = users.get(item.userId);
+});
+```
+
+将 50 次查询减少到 1 次。
+
+实施这些修复吗？
+```
+
+---
+
+## 最佳实践
+
+### 从简单开始
+
+从基本自动化开始，然后演进：
+
+**第 1 周**：简单的每日任务
+- 每日摘要
+- 依赖检查
+
+**第 2 周**：添加审查
+- PR 审查
+- 代码质量检查
+
+**第 3 周**：高级工作流程
+- 跨团队协调
+- 自动化文档
+
+### 迭代提示
+
+根据结果持续改进：
+
+```markdown
+## 提示版本历史
+
+### v1（初始）
+基本审查提示
+
+### v2（反馈后）
+添加了安全检查
+
+### v3（当前）
+添加了性能分析
+更好的结构化输出
+```
+
+### 监控和调整
+
+跟踪任务效果：
+
+```bash
+# 查看任务统计
+shipmyagent tasks stats
+
+# 任务历史
+shipmyagent tasks history pr-review --last 30
+```
+
+---
+
+## 下一步
+
+- [配置](/docs/configuration) - 设置您的集成
+- [任务](/docs/tasks) - 创建定时自动化
+- [示例](/docs/examples) - 真实世界配置
+- [最佳实践](/docs/best-practices) - 经过验证的模式

@@ -1,0 +1,573 @@
+---
+title: 任务与自动化
+description: 使用 ShipMyAgent 安排和管理自动化任务
+---
+
+# 任务与自动化
+
+利用 ShipMyAgent 内置的任务调度器自动化重复性工作。安排定期维护、代码审查和自定义工作流程。
+
+## 概述
+
+任务在 `.ship/tasks/` 目录中定义为 Markdown 文件，并使用 cron 表达式按计划运行。
+
+```
+.ship/
+└── tasks/
+    ├── daily-report.md
+    ├── code-review.md
+    └── dependency-check.md
+```
+
+---
+
+## 创建任务
+
+### 基本任务结构
+
+```markdown
+---
+id: unique-task-id
+name: 人类可读的名称
+cron: "0 9 * * *"
+notify: telegram
+---
+
+任务提示写在这里。这是发送给 LLM 的内容。
+```
+
+### Frontmatter 字段
+
+| 字段 | 类型 | 必需 | 描述 |
+|------|------|------|------|
+| `id` | string | 是 | 唯一任务标识符 |
+| `name` | string | 是 | 人类可读的任务名称 |
+| `cron` | string | 是 | 调度的 cron 表达式 |
+| `notify` | string/array | 否 | 通知渠道（telegram、slack、console、email）|
+| `enabled` | boolean | 否 | 任务是否激活（默认：true）|
+| `timeout` | number | 否 | 最大执行时间（秒）（默认：300）|
+| `retryOnFailure` | boolean | 否 | 失败时自动重试（默认：false）|
+| `maxRetries` | number | 否 | 最大重试次数（默认：3）|
+
+---
+
+## Cron 表达式
+
+Cron 表达式定义任务何时运行。格式：`分钟 小时 日期 月份 星期`
+
+### Cron 格式
+
+```
+┌───────────── 分钟 (0 - 59)
+│ ┌───────────── 小时 (0 - 23)
+│ │ ┌───────────── 日期 (1 - 31)
+│ │ │ ┌───────────── 月份 (1 - 12)
+│ │ │ │ ┌───────────── 星期 (0 - 7, 0 和 7 = 星期日)
+│ │ │ │ │
+* * * * *
+```
+
+### 常用模式
+
+| 模式 | 描述 |
+|------|------|
+| `* * * * *` | 每分钟 |
+| `0 * * * *` | 每小时 |
+| `0 0 * * *` | 每天午夜 |
+| `0 9 * * *` | 每天早上 9 点 |
+| `0 9,18 * * *` | 每天早上 9 点和下午 6 点 |
+| `0 9 * * 1` | 每周一早上 9 点 |
+| `0 9 * * 1‑5` | 每个工作日早上 9 点 |
+| `*/30 * * * *` | 每 30 分钟 |
+| `0 */2 * * *` | 每 2 小时 |
+| `0 0 1 * *` | 每月第一天 |
+| `0 0 1 1 *` | 每年1月1日 |
+| `0 9,12,18 * * *` | 每天上午9点、中午12点、下午6点 |
+
+### Cron 示例
+
+**每日早晨检查**：
+```markdown
+---
+cron: "0 9 * * *"
+---
+```
+
+**每 6 小时**：
+```markdown
+---
+cron: "0 */6 * * *"
+---
+```
+
+**工作日上午 8:30**：
+```markdown
+---
+cron: "30 8 * * 1-5"
+---
+```
+
+**每月第一个周一**：
+```markdown
+---
+cron: "0 9 1-7 * 1"
+---
+```
+
+**每周日午夜**：
+```markdown
+---
+cron: "0 0 * * 0"
+---
+```
+
+---
+
+## 任务模板
+
+### 代码审查任务
+
+```markdown
+---
+id: pr-review
+name: Pull Request 审查
+cron: "*/30 * * * *"
+notify: telegram
+enabled: true
+---
+
+审查所有开放的拉取请求：
+
+1. **代码质量**
+   - 检查错误或逻辑错误
+   - 验证编码标准
+   - 评估性能影响
+
+2. **测试**
+   - 确保足够的测试覆盖率
+   - 验证测试确实测试了代码
+   - 检查边缘情况
+
+3. **文档**
+   - API 更改已记录？
+   - 提供了示例？
+   - 记录了破坏性更改？
+
+对于每个 PR：
+- 提供摘要
+- 列出任何问题（严重程度：高/中/低）
+- 建议具体改进
+- 批准或请求更改
+
+直接在每个 PR 上发布审查评论。
+```
+
+### 依赖检查任务
+
+```markdown
+---
+id: dependency-check
+name: 依赖安全扫描
+cron: "0 9 * * 1"
+notify: slack
+timeout: 600
+---
+
+检查依赖问题：
+
+1. **过时的软件包**
+   - 列出有可用更新的软件包
+   - 识别主要版本升级
+   - 突出显示已弃用的软件包
+
+2. **安全漏洞**
+   - 运行 `npm audit` 或等效命令
+   - 检查已知 CVE
+   - 评估严重程度级别
+
+3. **许可证合规性**
+   - 验证所有许可证都已批准
+   - 标记任何 GPL 或 AGPL 软件包
+   - 检查署名要求
+
+报告发现：
+- 🟢 一切正常
+- 🟡 有可用更新（非关键）
+- 🟠 安全问题（中等优先级）
+- 🔴 严重漏洞（需要立即采取行动）
+```
+
+### 性能检查任务
+
+```markdown
+---
+id: performance-check
+name: 性能健康检查
+cron: "0 6 * * *"
+notify: console
+---
+
+监控应用性能：
+
+1. **构建大小**
+   - 检查包大小
+   - 与基准比较
+   - 识别大型依赖
+
+2. **加载时间**
+   - 测试初始页面加载
+   - 测量可交互时间
+   - 检查核心 Web 指标
+
+3. **数据库**
+   - 检查查询性能
+   - 识别慢查询
+   - 验证索引
+
+4. **API 端点**
+   - 测试关键端点
+   - 测量响应时间
+   - 检查错误率
+
+生成包含以下内容的性能报告：
+- 当前指标
+- 与上周比较
+- 改进建议
+```
+
+### 文档同步任务
+
+```markdown
+---
+id: doc-sync
+name: 文档同步
+cron: "0 18 * * 5"
+notify: ["telegram", "email"]
+---
+
+保持文档与代码同步：
+
+1. **API 文档**
+   - 检查新/修改的函数
+   - 验证参数文档
+   - 更新示例
+
+2. **README 文件**
+   - 更新设置说明
+   - 验证示例有效
+   - 检查损坏的链接
+
+3. **更新日志**
+   - 审查最近的提交
+   - 对更改进行分类（添加/更改/修复/删除）
+   - 更新 CHANGELOG.md
+
+创建带有文档更新的 PR。
+```
+
+### TODO 清理任务
+
+```markdown
+---
+id: todo-cleanup
+name: TODO 和 FIXME 清理
+cron: "0 9 * * 1"
+notify: telegram
+---
+
+查找和组织 TODO 注释：
+
+1. **扫描代码库**
+   - 搜索 TODO、FIXME、HACK、XXX 注释
+   - 按文件和严重程度分类
+   - 估算所需工作量
+
+2. **确定优先级**
+   - 严重：阻止生产
+   - 高：影响用户体验
+   - 中：代码质量问题
+   - 低：有则更好
+
+3. **生成报告**
+   - TODO 总数
+   - 前 10 个优先级
+   - 建议的 sprint 分配
+
+格式：
+## 🔴 严重 (3)
+- [文件:行] 描述
+
+## 🟡 高 (5)
+- [文件:行] 描述
+
+## 🟢 中 (12)
+- [文件:行] 描述
+```
+
+---
+
+## 任务管理
+
+### 列出所有任务
+
+```bash
+shipmyagent tasks list
+
+# 仅活跃任务
+shipmyagent tasks list --status active
+
+# JSON 格式
+shipmyagent tasks list --format json
+```
+
+### 手动运行任务
+
+```bash
+shipmyagent tasks run <task-id>
+
+# 试运行（显示将发生什么）
+shipmyagent tasks run <task-id> --dry-run
+
+# 带通知
+shipmyagent tasks run <task-id> --notify
+```
+
+### 启用/禁用任务
+
+```bash
+# 启用
+shipmyagent tasks enable <task-id>
+
+# 禁用
+shipmyagent tasks disable <task-id>
+```
+
+### 查看任务历史
+
+```bash
+shipmyagent tasks history <task-id>
+
+# 最近 5 次运行
+shipmyagent tasks history <task-id> --limit 5
+
+# 带日志
+shipmyagent tasks history <task-id> --include-logs
+```
+
+---
+
+## 通知
+
+配置任务结果发送到哪里。
+
+### Telegram 通知
+
+```markdown
+---
+notify: telegram
+---
+```
+
+需要在 `ship.json` 中配置 Telegram 集成。
+
+### Slack 通知
+
+```markdown
+---
+notify: slack
+---
+```
+
+需要配置 Slack webhook。
+
+### 多个渠道
+
+```markdown
+---
+notify: ["telegram", "slack", "email"]
+---
+```
+
+### 仅控制台（无通知）
+
+```markdown
+---
+notify: console
+---
+```
+
+或完全省略 `notify` 字段。
+
+---
+
+## 任务执行上下文
+
+任务运行时可访问：
+
+- **仓库文件**：可以读取仓库中的任何文件
+- **Git 历史**：可以运行 git 命令
+- **Shell 访问**：基于 `permissions.exec_shell` 配置
+- **LLM**：完全访问配置的语言模型
+- **集成**：可以使用 GitHub、Telegram 等
+
+### 示例：在任务中使用 Git
+
+```markdown
+---
+id: commit-summary
+name: 每日提交摘要
+cron: "0 18 * * *"
+---
+
+总结今天的提交：
+
+1. 获取今天的提交：`git log --since="1 day ago" --pretty=format:"%h %s"`
+2. 按作者分组
+3. 识别主要主题
+4. 突出任何破坏性更改
+
+生成包含以下内容的摘要：
+- 提交总数
+- 贡献者
+- 主要更改
+- 任何问题
+```
+
+---
+
+## 高级功能
+
+### 条件执行
+
+基于条件运行任务：
+
+```markdown
+---
+id: conditional-task
+name: 条件任务
+cron: "0 9 * * *"
+condition: "git status --porcelain | grep -q 'M '"
+---
+
+此任务仅在存在修改的文件时运行。
+```
+
+### 任务依赖
+
+链接任务：
+
+```markdown
+---
+id: task-two
+name: 第二个任务
+cron: "0 10 * * *"
+dependsOn: ["task-one"]
+---
+
+这将在 task-one 成功完成后运行。
+```
+
+### 重试逻辑
+
+配置重试行为：
+
+```markdown
+---
+id: flaky-task
+name: 不稳定的外部任务
+cron: "0 */4 * * *"
+retryOnFailure: true
+maxRetries: 3
+retryDelay: 60
+---
+
+如果任务失败，最多重试 3 次。
+重试之间等待 60 秒。
+```
+
+### 任务超时
+
+防止长时间运行的任务：
+
+```markdown
+---
+id: quick-check
+name: 快速健康检查
+cron: "*/15 * * * *"
+timeout: 60
+---
+
+如果任务花费超过 60 秒则失败。
+```
+
+---
+
+## 最佳实践
+
+### 1. 保持任务专注
+
+❌ 不好：做所有事情的单体任务
+
+✅ 良好：单一职责
+
+### 2. 使用适当的频率
+
+❌ 不好：过于频繁（每分钟）
+✅ 良好：合理的频率（每2小时）
+
+### 3. 设置超时
+
+防止任务永远挂起。
+
+### 4. 优雅地处理失败
+
+启用重试并在失败时通知。
+
+### 5. 记录任务目的
+
+在任务中包含描述字段。
+
+---
+
+## 故障排查
+
+### 任务未运行
+
+```bash
+# 检查任务状态
+shipmyagent tasks list
+
+# 验证 cron 表达式
+shipmyagent validate --tasks
+
+# 检查任务日志
+shipmyagent logs --file tasks
+
+# 手动测试
+shipmyagent tasks run <task-id>
+```
+
+### 任务间歇性失败
+
+启用重试并检查错误日志。
+
+### 任务耗时太长
+
+添加超时并使用详细日志运行。
+
+### Cron 表达式问题
+
+使用 cron 验证器：
+
+```bash
+# 测试 cron 表达式
+shipmyagent validate-cron "0 9 * * 1-5"
+```
+
+---
+
+## 下一步
+
+- [配置](/docs/configuration) - 设置权限和集成
+- [示例](/docs/examples) - 查看真实项目中的任务示例
+- [最佳实践](/docs/best-practices) - 学习经过验证的模式

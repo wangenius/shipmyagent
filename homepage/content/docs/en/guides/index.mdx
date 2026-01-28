@@ -1,0 +1,982 @@
+---
+title: Use Case Guides
+description: Step-by-step guides for common ShipMyAgent workflows
+---
+
+# Use Case Guides
+
+Practical, step-by-step guides for implementing ShipMyAgent in real-world scenarios.
+
+## Available Guides
+
+- [Code Review Automation](#code-review-automation) - Automated PR reviews
+- [Repository Maintenance](#repository-maintenance) - Dependency updates, cleanup
+- [Team Collaboration](#team-collaboration) - Multi-team coordination
+- [Natural Language Operations](#natural-language-operations) - Chat-driven development
+
+---
+
+## Code Review Automation
+
+Automate pull request reviews with consistent, thorough feedback.
+
+### Use Case
+
+**Problem**: Manual code reviews are time-consuming and inconsistent.
+
+**Solution**: ShipMyAgent reviews every PR automatically, catching issues before human review.
+
+### Implementation
+
+#### Step 1: Configure PR Review Agent
+
+**ship.json**:
+
+```json
+{
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": ["*.md"],
+      "requiresApproval": false
+    }
+  },
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo"
+    }
+  }
+}
+```
+
+#### Step 2: Create Review Task
+
+**`.ship/tasks/pr-review.md`**:
+
+```markdown
+---
+id: pr-review
+name: Automated PR Review
+cron: "*/30 * * * *"
+notify: ["github", "telegram"]
+---
+
+Review all open pull requests:
+
+## Review Criteria
+
+1. **Code Quality**
+   - Follows project style guide
+   - No obvious bugs
+   - Proper error handling
+   - Performance considerations
+
+2. **Testing**
+   - New tests included
+   - Edge cases covered
+   - Tests actually test the code
+
+3. **Documentation**
+   - API changes documented
+   - Examples updated
+   - Breaking changes noted
+
+## Output Format
+
+For each PR, post a comment:
+
+### Summary
+[One-line overview]
+
+### Issues Found
+- 🔴 Critical: [issue]
+- 🟡 Medium: [issue]
+- 🟢 Minor: [issue]
+
+### Suggestions
+[Specific, actionable improvements]
+
+### Verdict
+[✅ LGTM / ⚠️ Changes Requested / ❌ Needs Work]
+```
+
+#### Step 3: Define Review Standards
+
+**Agent.md** (add section):
+
+```markdown
+## Code Review Standards
+
+### Must Have
+- All new code is tested
+- No console.log() in production code
+- Error handling for async operations
+- TypeScript strict mode compliance
+
+### Nice to Have
+- Performance benchmarks for hot paths
+- Accessibility considerations
+- Internationalization support
+- Documentation for complex logic
+
+### Never Approve
+- Missing tests for critical paths
+- Hardcoded secrets or keys
+- SQL injection vulnerabilities
+- Breaking API changes without migration guide
+```
+
+### Results
+
+**Before**:
+- Manual reviews: 30-45 minutes per PR
+- Inconsistent feedback
+- Issues caught late in process
+
+**After**:
+- Instant automated review
+- Consistent standards
+- Issues caught immediately
+- Human reviewers focus on architecture and design
+
+### Advanced: Context-Aware Reviews
+
+```markdown
+---
+id: pr-review-backend
+name: Backend PR Review
+cron: "*/30 * * * *"
+---
+
+Review backend PRs focusing on:
+- Database query efficiency
+- API endpoint design
+- Authentication/authorization
+- Rate limiting
+- Error responses
+```
+
+```markdown
+---
+id: pr-review-frontend
+name: Frontend PR Review
+cron: "*/30 * * * *"
+---
+
+Review frontend PRs focusing on:
+- Component reusability
+- Performance (rendering, bundle size)
+- Accessibility (WCAG 2.1)
+- Responsive design
+- User experience
+```
+
+---
+
+## Repository Maintenance
+
+Keep your repository healthy with automated maintenance tasks.
+
+### Use Case
+
+**Problem**: Technical debt accumulates, dependencies become outdated, documentation rots.
+
+**Solution**: Scheduled tasks automatically maintain repository health.
+
+### Implementation
+
+#### Daily Dependency Check
+
+**`.ship/tasks/dependency-check.md`**:
+
+```markdown
+---
+id: dependency-check
+name: Daily Dependency Scan
+cron: "0 9 * * *"
+notify: telegram
+---
+
+Check dependency health:
+
+1. **Outdated Packages**
+   ```bash
+   npm outdated
+   ```
+   List packages with updates available
+
+2. **Security Vulnerabilities**
+   ```bash
+   npm audit
+   ```
+   Report any vulnerabilities found
+
+3. **License Compliance**
+   Check for GPL/AGPL licenses
+
+4. **Deprecated Packages**
+   Identify packages with deprecation warnings
+
+Report format:
+## 📦 Dependency Report
+
+### Updates Available
+- [Package]: current → latest (type: major/minor/patch)
+
+### Vulnerabilities
+- 🔴 Critical: [CVE]
+- 🟡 Moderate: [CVE]
+
+### Actions Needed
+- [ ] Update package
+- [ ] Review breaking changes
+- [ ] Update license
+```
+
+#### Weekly TODO Cleanup
+
+**`.ship/tasks/todo-cleanup.md`**:
+
+```markdown
+---
+id: todo-cleanup
+name: Weekly TODO Cleanup
+cron: "0 9 * * 1"
+notify: slack
+---
+
+Find and organize TODOs:
+
+1. Scan codebase:
+   ```bash
+   grep -r "TODO\|FIXME" --include="*.js" --include="*.ts" --include="*.tsx"
+   ```
+
+2. Categorize by severity:
+   - Critical: Blocks production
+   - High: Affects users
+   - Medium: Code quality
+   - Low: Optimization
+
+3. Generate prioritized list
+
+4. Create GitHub issues for high-priority items
+```
+
+#### Monthly Documentation Sync
+
+**`.ship/tasks/doc-sync.md`**:
+
+```markdown
+---
+id: doc-sync
+name: Documentation Sync
+cron: "0 18 * * 1"
+---
+
+Sync documentation with code:
+
+1. **API Changes**
+   - Scan for new/modified public APIs
+   - Update API documentation
+   - Verify examples work
+
+2. **README Updates**
+   - Update setup instructions
+   - Verify quick start example
+   - Check for broken links
+
+3. **Changelog**
+   - Review commits since last sync
+   - Categorize changes
+   - Update CHANGELOG.md
+
+4. **Create PR** with documentation updates
+```
+
+### Maintenance Dashboard
+
+Create a central dashboard task:
+
+**`.ship/tasks/health-check.md`**:
+
+```markdown
+---
+id: health-check
+name: Repository Health Check
+cron: "0 8 * * 1"
+notify: ["slack", "email"]
+---
+
+Comprehensive repository health report:
+
+## Code Quality
+- Test coverage: [run coverage report]
+- Lint issues: [run linter]
+- Type errors: [run type check]
+
+## Dependencies
+- Outdated packages: [count]
+- Vulnerabilities: [count and severity]
+- License issues: [list]
+
+## Documentation
+- API docs coverage: [%]
+- Broken links: [count]
+- Stale examples: [count]
+
+## Performance
+- Bundle size: [size vs baseline]
+- Load time: [if web app]
+- Build time: [duration]
+
+Generate overall health score (A-F).
+```
+
+---
+
+## Team Collaboration
+
+Coordinate work across multiple teams and contributors.
+
+### Use Case
+
+**Problem**: Large teams need coordination, consistent standards, and knowledge sharing.
+
+**Solution**: ShipMyAgent facilitates team collaboration with automated workflows and consistent feedback.
+
+### Implementation
+
+#### Team-Specific Agents
+
+Create multiple agents for different teams:
+
+**Team A (Backend)**:
+
+**Agent.backend.md**:
+
+```markdown
+# Backend Team Agent
+
+You are a backend engineering specialist.
+
+## Focus Areas
+- API design and consistency
+- Database optimization
+- Security and authentication
+- Scalability and performance
+
+## Team Standards
+- RESTful API conventions
+- GraphQL schema best practices
+- Database indexing strategy
+- Caching patterns
+- Error handling standards
+
+## Coordination
+- Tag @backend-team for backend reviews
+- Notify @frontend-team of API changes
+- Document API changes in API.md
+```
+
+**Team B (Frontend)**:
+
+**Agent.frontend.md**:
+
+```markdown
+# Frontend Team Agent
+
+You are a frontend engineering specialist.
+
+## Focus Areas
+- User interface consistency
+- Component reusability
+- Performance optimization
+- Accessibility
+
+## Team Standards
+- Component library usage
+- State management patterns
+- Styling conventions
+- Testing approach (Jest + Testing Library)
+
+## Coordination
+- Tag @frontend-team for frontend reviews
+- Propose API changes to backend team
+- Update Storybook for new components
+```
+
+#### Cross-Team Coordination Task
+
+**`.ship/tasks/cross-team-sync.md`**:
+
+```markdown
+---
+id: cross-team-sync
+name: Cross-Team Sync
+cron: "0 17 * * 5"
+notify: slack
+---
+
+Weekly cross-team coordination:
+
+## API Changes
+- List new/modified APIs this week
+- Identify breaking changes
+- Tag affected teams
+
+## Shared Packages
+- Check for shared library updates
+- Coordinate version bumps
+- Plan migrations
+
+## Dependencies
+- Backend → Frontend dependencies
+- Frontend → Backend API requirements
+- Report mismatches
+
+## Action Items
+- [ ] Team sync meeting agenda
+- [ ] PRs needing cross-team review
+- [ ] Upcoming changes requiring coordination
+
+Post to #engineering channel.
+```
+
+#### Contributor Onboarding
+
+**`.ship/tasks/onboarding.md`**:
+
+```markdown
+---
+id: contributor-onboarding
+name: Contributor Onboarding
+cron: "0 */4 * * *"
+---
+
+Review new contributions:
+
+1. **First-Time Contributors**
+   - Welcome message
+   - Point to CONTRIBUTING.md
+   - Offer help and guidance
+
+2. **New PRs from First-Timers**
+   - Extra thorough review
+   - Educational feedback
+   - Recognition for contributions
+
+3. **Generate Stats**
+   - New contributors this week
+   - Top contributors
+   - Contribution trends
+
+Post to #contributors channel.
+```
+
+### Team Workflow
+
+#### 1. Feature Development Flow
+
+```
+┌─────────────────────────────────────────────────┐
+│ 1. Design Phase                                 │
+│ - Agent reviews design doc                      │
+│ - Checks for consistency                        │
+│ - Suggests improvements                         │
+└─────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────┐
+│ 2. Implementation Phase                         │
+│ - Agent provides code examples                  │
+│ - Reviews incremental commits                   │
+│ - Ensures coding standards                      │
+└─────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────┐
+│ 3. Review Phase                                 │
+│ - Automated PR review                           │
+│ - Cross-team coordination                       │
+│ - Human review focuses on architecture           │
+└─────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────┐
+│ 4. Integration Phase                            │
+│ - Agent verifies integration                    │
+│ - Runs full test suite                         │
+│ - Checks documentation                          │
+└─────────────────────────────────────────────────┘
+```
+
+#### 2. Knowledge Sharing Task
+
+```markdown
+---
+id: knowledge-sharing
+name: Weekly Knowledge Share
+cron: "0 16 * * 5"
+notify: slack
+---
+
+Weekly knowledge sharing:
+
+## Learnings This Week
+1. Interesting bugs solved
+2. New techniques used
+3. Performance wins
+4. Security improvements
+
+## Documentation Updates
+- New patterns documented
+- Architecture decisions recorded
+- Troubleshooting guides updated
+
+## Team Highlights
+- Member of the week
+- Shipping celebrations
+- Learning achievements
+
+Create friendly weekly summary.
+```
+
+---
+
+## Natural Language Operations
+
+Interact with your codebase using plain language.
+
+### Use Case
+
+**Problem**: Need to understand or modify code without diving into files manually.
+
+**Solution**: Chat with ShipMyAgent to query, analyze, and modify code naturally.
+
+### Implementation
+
+#### Setup Telegram or CLI Chat
+
+**ship.json**:
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
+    }
+  }
+}
+```
+
+#### Common Queries
+
+**1. Code Understanding**
+
+```
+You: "How does authentication work in this project?"
+
+Agent: [Analyzes codebase]
+
+This project uses JWT-based authentication:
+
+1. **Token Generation** (src/auth/jwt.ts)
+   - Creates tokens on login
+   - Includes user ID and role
+
+2. **Middleware** (src/auth/middleware.ts)
+   - Verifies tokens on protected routes
+   - Attaches user to request object
+
+3. **Routes** (src/auth/routes.ts)
+   - POST /auth/login - Generate token
+   - POST /auth/refresh - Refresh token
+   - POST /auth/logout - Invalidate token
+
+Want me to show you the token generation code?
+```
+
+**2. Bug Investigation**
+
+```
+You: "Why is the login endpoint slow?"
+
+Agent: [Investigates]
+
+I found the issue! In src/auth/login.ts:42:
+
+```typescript
+// Problem: Synchronous password hashing
+const hash = bcrypt.hashSync(password, 10);
+```
+
+This blocks the event loop. Suggested fix:
+
+```typescript
+// Use async version
+const hash = await bcrypt.hash(password, 10);
+```
+
+This would reduce response time from ~500ms to ~50ms.
+
+Should I make this change?
+```
+
+**3. Refactoring Assistance**
+
+```
+You: "Refactor src/users/service.ts to use async/await"
+
+Agent: [Analyzes and refactors]
+
+I've refactored the service:
+
+**Before**:
+```typescript
+function getUser(id) {
+  return db.query('SELECT * FROM users WHERE id = ?', [id])
+    .then(result => result[0]);
+}
+```
+
+**After**:
+```typescript
+async function getUser(id) {
+  const result = await db.query(
+    'SELECT * FROM users WHERE id = ?',
+    [id]
+  );
+  return result[0];
+}
+```
+
+**Benefits**:
+- Better error handling
+- Easier to read
+- Consistent with modern patterns
+
+**Affected files**: 3
+**Breaking changes**: None
+
+Apply these changes?
+```
+
+**4. Test Generation**
+
+```
+You: "Generate tests for the checkout function"
+
+Agent: [Creates tests]
+
+Here are comprehensive tests for checkout():
+
+```typescript
+describe('checkout()', () => {
+  it('should process successful payment', async () => {
+    const result = await checkout(mockOrder);
+    expect(result.status).toBe('completed');
+  });
+
+  it('should handle payment failure', async () => {
+    const result = await checkout(failingOrder);
+    expect(result.status).toBe('failed');
+    expect(result.error).toBeDefined();
+  });
+
+  it('should validate inventory', async () => {
+    await expect(checkout(outOfStockOrder))
+      .rejects.toThrow('Insufficient inventory');
+  });
+
+  // ... more tests
+});
+```
+
+Coverage: 95% of branches
+Run these tests? Create test file?
+```
+
+**5. Documentation Query**
+
+```
+You: "What's the API for creating a new user?"
+
+Agent: [Searches and summarizes]
+
+**User Creation API**
+
+Endpoint: `POST /api/users`
+
+Request Body:
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword",
+  "name": "John Doe"
+}
+```
+
+Response (201):
+```json
+{
+  "id": "user_123",
+  "email": "user@example.com",
+  "name": "John Doe",
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+**Validation Rules**:
+- Email must be unique
+- Password: min 8 characters
+- Name: required, max 100 chars
+
+**Example**:
+```bash
+curl -X POST https://api.example.com/api/users \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "password": "securepass",
+    "name": "Test User"
+  }'
+```
+
+Need more details? Want to test this endpoint?
+```
+
+### Advanced Natural Language Workflows
+
+#### 1. Multi-Step Operations
+
+```
+You: "Deploy the user service updates"
+
+Agent:
+I'll help with deployment. Here's my plan:
+
+1. ✅ Review changes in user service
+2. ⏳ Run tests
+3. ⏳ Build Docker image
+4. ⏳ Tag and push to registry
+5. ⏳ Update Kubernetes deployment
+
+Approval needed for steps 4-5.
+
+Proceed with step 1 (Review)?
+```
+
+#### 2. Exploratory Analysis
+
+```
+You: "Analyze the performance bottleneck in the dashboard"
+
+Agent:
+[Analyzing dashboard code...]
+
+**Bottleneck Analysis**
+
+**Issue 1: N+1 Query Problem**
+Location: src/dashboard/fetchers.ts:15
+
+```typescript
+// Loads user data for each dashboard item separately
+items.forEach(item => {
+  item.user = await getUser(item.userId);
+});
+```
+
+Impact: For 50 items, makes 50 database calls.
+
+**Fix**: Batch loading
+```typescript
+const userIds = items.map(i => i.userId);
+const users = await getUsers(userIds);
+items.forEach(item => {
+  item.user = users.get(item.userId);
+});
+```
+
+Reduces 50 queries to 1.
+
+**Issue 2: Large Bundle Size**
+- Current: 2.3MB
+- Culprit: lodash (70KB), moment.js (67KB)
+
+**Suggestion**: Replace with
+  - lodash-es (tree-shakeable)
+  - date-fns (smaller)
+
+Estimated improvement: 35% smaller bundle
+
+Implement these fixes?
+```
+
+#### 3. Code Generation
+
+```
+You: "Generate a REST API controller for products"
+
+Agent:
+[Generating controller...]
+
+Here's a complete REST controller:
+
+```typescript
+// src/controllers/products.ts
+import { Request, Response } from 'express';
+import { ProductService } from '../services/product.service';
+
+export class ProductController {
+  constructor(private service = new ProductService()) {}
+
+  async list(req: Request, res: Response) {
+    const { page = 1, limit = 10 } = req.query;
+    const products = await this.service.list({
+      page: Number(page),
+      limit: Number(limit)
+    });
+    res.json(products);
+  }
+
+  async get(req: Request, res: Response) {
+    const { id } = req.params;
+    const product = await this.service.get(id);
+    if (!product) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    res.json(product);
+  }
+
+  async create(req: Request, res: Response) {
+    const product = await this.service.create(req.body);
+    res.status(201).json(product);
+  }
+
+  async update(req: Request, res: Response) {
+    const { id } = req.params;
+    const product = await this.service.update(id, req.body);
+    res.json(product);
+  }
+
+  async delete(req: Request, res: Response) {
+    const { id } = req.params;
+    await this.service.delete(id);
+    res.status(204).send();
+  }
+}
+```
+
+**Routes to add**:
+```typescript
+router.get('/products', controller.list);
+router.get('/products/:id', controller.get);
+router.post('/products', controller.create);
+router.put('/products/:id', controller.update);
+router.delete('/products/:id', controller.delete);
+```
+
+Create this file?
+```
+
+### Prompt Engineering for Better Results
+
+#### Be Specific
+
+❌ Vague:
+```
+"Fix the tests"
+```
+
+✅ Specific:
+```
+"Fix the failing tests in auth.spec.ts.
+The tests are failing because of an async/await issue.
+Make sure all tests pass and add tests for edge cases."
+```
+
+#### Provide Context
+
+❌ No context:
+```
+"Optimize this function"
+```
+
+✅ With context:
+```
+"Optimize the imageUpload function in src/uploads/images.ts.
+It's currently slow for large files (>5MB).
+Consider compression or streaming.
+We need to maintain image quality while improving speed."
+```
+
+#### Specify Constraints
+
+```
+"Add error handling to the API client, but:
+- Don't change the function signatures
+- Keep existing return types
+- Use try/catch not .catch()
+- Log all errors to our logging service"
+```
+
+---
+
+## Best Practices
+
+### Start Simple
+
+Begin with basic automation, then evolve:
+
+**Week 1**: Simple daily tasks
+- Daily summary
+- Dependency check
+
+**Week 2**: Add reviews
+- PR reviews
+- Code quality checks
+
+**Week 3**: Advanced workflows
+- Cross-team coordination
+- Automated documentation
+
+### Iterate on Prompts
+
+Continuously improve based on results:
+
+```markdown
+## Prompt Version History
+
+### v1 (Initial)
+Basic review prompt
+
+### v2 (After feedback)
+Added security checks
+
+### v3 (Current)
+Added performance analysis
+Better structured output
+```
+
+### Monitor and Adjust
+
+Track task effectiveness:
+
+```bash
+# View task statistics
+shipmyagent tasks stats
+
+# History of a task
+shipmyagent tasks history pr-review --last 30
+```
+
+---
+
+## Next Steps
+
+- [Configuration](/docs/configuration) - Set up your integrations
+- [Tasks](/docs/tasks) - Create scheduled automation
+- [Examples](/docs/examples) - Real-world configurations
+- [Best Practices](/docs/best-practices) - Proven patterns

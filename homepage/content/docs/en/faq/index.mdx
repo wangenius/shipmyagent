@@ -1,0 +1,352 @@
+---
+title: Frequently Asked Questions
+description: Common questions about ShipMyAgent
+---
+
+# Frequently Asked Questions
+
+Find answers to the most common questions about ShipMyAgent.
+
+## Quick Navigation
+
+- [General Questions](#general-questions)
+- [Configuration](#configuration-questions)
+- [Integrations](#integration-questions)
+- [Billing & Costs](#billing--costs)
+- [Troubleshooting](#troubleshooting-questions)
+
+---
+
+## General Questions
+
+### What is ShipMyAgent?
+
+ShipMyAgent is an AI-powered development assistant that runs locally in your codebase. It helps automate code reviews, maintenance tasks, and provides natural language interaction with your repository.
+
+### How is it different from GitHub Copilot?
+
+| Feature | ShipMyAgent | GitHub Copilot |
+|---------|-------------|----------------|
+| **Focus** | Autonomous agent | Code completion |
+| **Operation** | Runs scheduled tasks | In-editor suggestions |
+| **Control** | Full configuration | Limited control |
+| **Interaction** | Natural language | Code completion |
+| **Deployment** | Self-hosted | Cloud service |
+
+### Do I need to upload my code?
+
+**No.** ShipMyAgent runs entirely locally. Your code never leaves your machine except when sent to the LLM API for processing.
+
+### What LLM providers are supported?
+
+- ✅ Anthropic (Claude 3.5 Sonnet, Haiku, Opus)
+- ✅ OpenAI (GPT-4o, GPT-4 Turbo)
+- ✅ DeepSeek
+- ✅ Any OpenAI-compatible API
+
+### What are the system requirements?
+
+- **OS**: Windows, macOS, Linux
+- **Node.js**: >= 18.0.0
+- **Memory**: 512MB minimum, 1GB recommended
+- **Disk**: 100MB for installation
+
+### Is ShipMyAgent free?
+
+Yes! ShipMyAgent is open-source and free to use. You only pay for the LLM API calls you make to your chosen provider.
+
+### Can I use it offline?
+
+Partial. The agent needs internet access to communicate with LLM APIs, but all file operations and task scheduling work offline.
+
+---
+
+## Configuration Questions
+
+### How do I change the LLM model?
+
+Edit `ship.json`:
+
+```json
+{
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-haiku-20241022"
+  }
+}
+```
+
+### Can I use multiple LLMs?
+
+Yes, configure fallback models:
+
+```json
+{
+  "llm": {
+    "primary": {
+      "provider": "anthropic",
+      "model": "claude-3-5-sonnet-20241022"
+    },
+    "fallback": [
+      {
+        "provider": "openai",
+        "model": "gpt-4o"
+      }
+    ]
+  }
+}
+```
+
+### How do I set environment variables?
+
+**Option 1: Shell profile** (~/.bashrc or ~/.zshrc):
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+export TELEGRAM_BOT_TOKEN="123456:..."
+```
+
+**Option 2: .env file**:
+```bash
+# Create .env in project root
+ANTHROPIC_API_KEY=sk-ant-...
+TELEGRAM_BOT_TOKEN=123456:...
+```
+
+**Option 3: Direct in ship.json** (not recommended):
+```json
+{
+  "llm": {
+    "apiKey": "sk-ant-..."  // ⚠️ Don't commit this!
+  }
+}
+```
+
+### What permissions should I use?
+
+**For personal projects**:
+```json
+{
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": ["**"],
+      "requiresApproval": false
+    }
+  }
+}
+```
+
+**For production**:
+```json
+{
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": ["src/**", "docs/**"],
+      "requiresApproval": true
+    }
+  }
+}
+```
+
+### How do I restrict access to specific files?
+
+Use glob patterns:
+
+```json
+{
+  "permissions": {
+    "write_repo": {
+      "paths": [
+        "src/**",
+        "tests/**"
+      ],
+      "exclude": [
+        "secrets/**",
+        "*.key"
+      ]
+    }
+  }
+}
+```
+
+---
+
+## Integration Questions
+
+### Do I need to use Telegram?
+
+No. Telegram is optional. You can use ShipMyAgent entirely via CLI without any integrations.
+
+### How do I set up Telegram Bot?
+
+1. Message [@BotFather](https://t.me/BotFather) on Telegram
+2. Send `/newbot` and follow instructions
+3. Copy the HTTP API token
+4. Get your chat ID from [@userinfobot](https://t.me/userinfobot)
+5. Add to `ship.json`:
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "12345678"
+    }
+  }
+}
+```
+
+### Is Discord supported?
+
+Not yet. Discord integration is in development. Follow the [roadmap](/docs/roadmap) for updates.
+
+### Can I integrate with GitHub?
+
+Yes! GitHub integration is available. See [GitHub Integration Guide](/docs/integrations/github).
+
+### How do I receive notifications?
+
+Configure notification channels:
+
+```json
+{
+  "notifications": {
+    "channels": ["telegram", "webhook"],
+    "onError": true,
+    "onTaskComplete": true
+  }
+}
+```
+
+---
+
+## Billing & Costs
+
+### How much does it cost?
+
+ShipMyAgent is **free**. You only pay for LLM API usage.
+
+**Estimated LLM costs** (per 1M tokens):
+- Claude 3.5 Haiku: ~$0.25 input / $1.25 output
+- Claude 3.5 Sonnet: ~$3 input / $15 output
+- GPT-4o: ~$2.50 input / $10 output
+
+**Typical monthly usage**:
+- Light usage: $5-20/month
+- Medium usage: $20-50/month
+- Heavy usage: $50-200/month
+
+### How can I reduce costs?
+
+1. **Use faster models**: Haiku instead of Sonnet
+2. **Optimize prompts**: Keep `Agent.md` concise
+3. **Limit task frequency**: Don't run tasks too often
+4. **Use caching**: Enable response caching
+5. **Set token limits**: Configure `maxTokens`
+
+### Do I need a credit card?
+
+You'll need a payment method with your LLM provider (Anthropic, OpenAI, etc.). ShipMyAgent itself doesn't charge anything.
+
+### Is there a free tier?
+
+Most LLM providers offer free tiers:
+- Anthropic: Free credits for new accounts
+- OpenAI: Free tier available
+- DeepSeek: Very low cost alternatives
+
+---
+
+## Troubleshooting Questions
+
+### Agent won't start?
+
+1. Check Node.js version: `node --version` (need >= 18)
+2. Validate config: `shipmyagent validate`
+3. Check logs: `shipmyagent logs --tail 50`
+4. See [Troubleshooting Guide](/docs/troubleshooting/common-issues)
+
+### Commands not working?
+
+Run diagnostics:
+```bash
+shipmyagent doctor
+```
+
+### Getting permission errors?
+
+Check your `ship.json` permissions:
+```bash
+cat ship.json | jq '.permissions'
+```
+
+See [Permission Errors Guide](/docs/troubleshooting/permission-errors).
+
+### LLM not responding?
+
+1. Test API key: `shipmyagent test-llm`
+2. Check API status page
+3. Verify network connectivity
+4. Check rate limits
+
+### Tasks not running?
+
+```bash
+# List tasks
+shipmyagent tasks list
+
+# Check task logs
+shipmyagent logs --file tasks
+
+# Run manually
+shipmyagent tasks run <task-id>
+```
+
+---
+
+## Advanced Questions
+
+### Can I use custom tools?
+
+Yes! See [Custom Tools Guide](/docs/customization/custom-tools).
+
+### How do I contribute?
+
+Contributions are welcome! See [Contributing Guide](/docs/community/contributing).
+
+### Where can I get help?
+
+- 📖 [Documentation](/docs)
+- 💬 [Discord](https://discord.gg/shipmyagent)
+- 🐙 [GitHub Discussions](https://github.com/wangenius/shipmyagent/discussions)
+- ✉️ [Telegram](https://t.me/shipmyagent)
+
+### Is it safe for production?
+
+Yes, with proper configuration:
+- ✅ Enable approvals for risky operations
+- ✅ Restrict write paths
+- ✅ Use environment variables for secrets
+- ✅ Review and test thoroughly
+
+See [Security Checklist](/docs/best-practices/security-checklist).
+
+---
+
+## Still Have Questions?
+
+1. **Search the docs**: Use the search bar at the top
+2. **Check existing issues**: [GitHub Issues](https://github.com/wangenius/shipmyagent/issues)
+3. **Ask the community**: [Discord](https://discord.gg/shipmyagent)
+4. **Create a new issue**: [GitHub](https://github.com/wangenius/shipmyagent/issues/new)
+
+---
+
+## Related Resources
+
+- [Getting Started](/docs/getting-started)
+- [Configuration](/docs/configuration)
+- [Troubleshooting](/docs/troubleshooting)
+- [Best Practices](/docs/best-practices)

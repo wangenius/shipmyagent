@@ -1,0 +1,644 @@
+---
+title: CLI Commands
+description: Complete reference for ShipMyAgent command-line interface
+---
+
+# CLI Commands
+
+Complete reference for all ShipMyAgent CLI commands.
+
+## Quick Reference
+
+| Command | Description |
+|---------|-------------|
+| `shipmyagent init` | Initialize a new project |
+| `shipmyagent start` | Start the agent server |
+| `shipmyagent stop` | Stop the agent server |
+| `shipmyagent restart` | Restart the agent server |
+| `shipmyagent chat` | Send a message to the agent |
+| `shipmyagent validate` | Validate configuration |
+| `shipmyagent doctor` | Run health diagnostics |
+| `shipmyagent logs` | View agent logs |
+| `shipmyagent tasks` | Manage scheduled tasks |
+| `shipmyagent test` | Test connections and integrations |
+
+---
+
+## Core Commands
+
+### `shipmyagent init`
+
+Initialize ShipMyAgent in your project.
+
+```bash
+shipmyagent init [options]
+```
+
+**Options**:
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--name <name>` | `-n` | Agent name |
+| `--provider <provider>` | `-p` | LLM provider (anthropic, openai, deepseek) |
+| `--model <model>` | `-m` | LLM model name |
+| `--telegram` | `-t` | Enable Telegram integration |
+| `--no-git` | | Skip Git repository check |
+| `--force` | `-f` | Overwrite existing configuration |
+
+**Examples**:
+
+```bash
+# Interactive setup
+shipmyagent init
+
+# Quick setup with defaults
+shipmyagent init --name "my-agent" --provider anthropic
+
+# Force reinitialize
+shipmyagent init --force
+
+# Skip Git check
+shipmyagent init --no-git
+```
+
+---
+
+### `shipmyagent start`
+
+Start the ShipMyAgent server.
+
+```bash
+shipmyagent start [options]
+```
+
+**Options**:
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--port <port>` | `-p` | Server port (default: 3000) |
+| `--host <host>` | `-H` | Server host (default: localhost) |
+| `--daemon` | `-d` | Run as background process |
+| `--log-level <level>` | `-l` | Log level (debug, info, warn, error) |
+| `--verbose` | `-v` | Enable verbose output |
+
+**Examples**:
+
+```bash
+# Start with defaults
+shipmyagent start
+
+# Start on custom port
+shipmyagent start --port 3001
+
+# Run in background
+shipmyagent start --daemon
+
+# Enable debug logging
+shipmyagent start --log-level debug --verbose
+```
+
+---
+
+### `shipmyagent stop`
+
+Stop the running ShipMyAgent server.
+
+```bash
+shipmyagent stop [options]
+```
+
+**Options**:
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--force` | `-f` | Force stop without graceful shutdown |
+
+**Examples**:
+
+```bash
+# Stop gracefully
+shipmyagent stop
+
+# Force stop
+shipmyagent stop --force
+```
+
+---
+
+### `shipmyagent restart`
+
+Restart the ShipMyAgent server.
+
+```bash
+shipmyagent restart [options]
+```
+
+Accepts same options as `shipmyagent start`.
+
+**Examples**:
+
+```bash
+# Restart with current config
+shipmyagent restart
+
+# Restart with debug logging
+shipmyagent restart --log-level debug
+```
+
+---
+
+## Interaction Commands
+
+### `shipmyagent chat`
+
+Send a message to the agent.
+
+```bash
+shipmyagent chat <message> [options]
+```
+
+**Options**:
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--file <path>` | `-f` | Read message from file |
+| `--format <format>` | | Output format (text, json) |
+| `--stream` | `-s` | Stream response in real-time |
+
+**Examples**:
+
+```bash
+# Simple question
+shipmyagent chat "What's the purpose of this project?"
+
+# Multi-line message
+shipmyagent chat "Review the last commit and suggest improvements"
+
+# Read from file
+shipmyagent chat --file prompt.txt
+
+# JSON output
+shipmyagent chat "List all TODOs" --format json
+```
+
+---
+
+## Configuration Commands
+
+### `shipmyagent validate`
+
+Validate configuration files.
+
+```bash
+shipmyagent validate [options]
+```
+
+**Options**:
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--config` | `-c` | Validate config only |
+| `--tasks` | `-t` | Validate tasks only |
+| `--strict` | | Treat warnings as errors |
+
+**Examples**:
+
+```bash
+# Validate all
+shipmyagent validate
+
+# Validate config only
+shipmyagent validate --config
+
+# Strict mode
+shipmyagent validate --strict
+```
+
+---
+
+### `shipmyagent doctor`
+
+Run comprehensive health diagnostics.
+
+```bash
+shipmyagent doctor [options]
+```
+
+**Options**:
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--fix` | | Automatically fix issues |
+| `--output <file>` | `-o` | Save report to file |
+| `--format <format>` | | Report format (text, json, markdown) |
+
+**Examples**:
+
+```bash
+# Run diagnostics
+shipmyagent doctor
+
+# Auto-fix issues
+shipmyagent doctor --fix
+
+# Save report
+shipmyagent doctor --output health-report.json
+```
+
+---
+
+## Task Commands
+
+### `shipmyagent tasks list`
+
+List all scheduled tasks.
+
+```bash
+shipmyagent tasks list [options]
+```
+
+**Options**:
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--format <format>` | | Output format (table, json) |
+| `--status <status>` | | Filter by status (active, disabled, failed) |
+
+**Examples**:
+
+```bash
+# List all tasks
+shipmyagent tasks list
+
+# Active tasks only
+shipmyagent tasks list --status active
+
+# JSON format
+shipmyagent tasks list --format json
+```
+
+---
+
+### `shipmyagent tasks run`
+
+Run a task manually.
+
+```bash
+shipmyagent tasks run <task-id> [options]
+```
+
+**Options**:
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--dry-run` | | Show what would run without executing |
+| `--notify` | `-n` | Send notifications on completion |
+
+**Examples**:
+
+```bash
+# Run specific task
+shipmyagent tasks run daily-report
+
+# Dry run
+shipmyagent tasks run daily-report --dry-run
+
+# With notification
+shipmyagent tasks run daily-report --notify
+```
+
+---
+
+### `shipmyagent tasks enable`
+
+Enable a task.
+
+```bash
+shipmyagent tasks enable <task-id>
+```
+
+**Examples**:
+
+```bash
+shipmyagent tasks enable daily-report
+```
+
+---
+
+### `shipmyagent tasks disable`
+
+Disable a task.
+
+```bash
+shipmyagent tasks disable <task-id>
+```
+
+**Examples**:
+
+```bash
+shipmyagent tasks disable daily-report
+```
+
+---
+
+## Log Commands
+
+### `shipmyagent logs`
+
+View agent logs.
+
+```bash
+shipmyagent logs [options]
+```
+
+**Options**:
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--follow` | `-f` | Follow log output in real-time |
+| `--tail <lines>` | `-n` | Show last N lines (default: 50) |
+| `--file <name>` | | Specific log file (agent, tasks, errors) |
+| `--level <level>` | | Filter by level (debug, info, warn, error) |
+| `--export <file>` | | Export logs to file |
+| `--since <time>` | | Show logs since timestamp |
+
+**Examples**:
+
+```bash
+# View recent logs
+shipmyagent logs
+
+# Follow logs in real-time
+shipmyagent logs --follow
+
+# Last 100 lines
+shipmyagent logs --tail 100
+
+# Errors only
+shipmyagent logs --level error
+
+# Task logs
+shipmyagent logs --file tasks
+
+# Export logs
+shipmyagent logs --export agent-logs.txt
+
+# Logs from last hour
+shipmyagent logs --since "1 hour ago"
+```
+
+---
+
+## Testing Commands
+
+### `shipmyagent test`
+
+Run tests and checks.
+
+```bash
+shipmyagent test [target] [options]
+```
+
+**Targets**:
+
+| Target | Description |
+|--------|-------------|
+| `llm` | Test LLM connection |
+| `integration` | Test specific integration |
+| `permissions` | Test permission configuration |
+| `all` | Run all tests (default) |
+
+**Options**:
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--verbose` | `-v` | Detailed output |
+| `--integration <name>` | `-i` | Test specific integration |
+
+**Examples**:
+
+```bash
+# Test all
+shipmyagent test
+
+# Test LLM
+shipmyagent test llm
+
+# Test LLM with details
+shipmyagent test llm --verbose
+
+# Test Telegram integration
+shipmyagent test --integration telegram
+
+# Test permissions
+shipmyagent test permissions
+```
+
+---
+
+## Utility Commands
+
+### `shipmyagent --version`
+
+Show version information.
+
+```bash
+shipmyagent --version
+shipmyagent -V
+```
+
+**Output**:
+
+```
+ShipMyAgent v1.0.0
+Node.js v18.17.0
+```
+
+---
+
+### `shipmyagent --help`
+
+Show help information.
+
+```bash
+shipmyagent --help
+shipmyagent -h
+
+# Help for specific command
+shipmyagent start --help
+```
+
+---
+
+### `shipmyagent config`
+
+Get or set configuration values.
+
+```bash
+shipmyagent config <key> [value]
+```
+
+**Examples**:
+
+```bash
+# Get value
+shipmyagent config llm.model
+
+# Set value
+shipmyagent config llm.temperature 0.7
+
+# List all config
+shipmyagent config --list
+```
+
+---
+
+### `shipmyagent export`
+
+Export configuration and data.
+
+```bash
+shipmyagent export [options]
+```
+
+**Options**:
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--output <dir>` | `-o` | Output directory |
+| `--include-tasks` | | Include task files |
+| `--include-logs` | | Include log files |
+| `--format <format>` | | Export format (zip, tar) |
+
+**Examples**:
+
+```bash
+# Export config only
+shipmyagent export
+
+# Full export
+shipmyagent export --include-tasks --include-logs
+
+# Export to specific directory
+shipmyagent export --output ./backup
+```
+
+---
+
+### `shipmyagent import`
+
+Import configuration and data.
+
+```bash
+shipmyagent import <file> [options]
+```
+
+**Options**:
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--merge` | `-m` | Merge with existing config |
+| `--force` | | Overwrite existing files |
+
+**Examples**:
+
+```bash
+# Import from file
+shipmyagent import backup.zip
+
+# Merge with existing
+shipmyagent import backup.zip --merge
+```
+
+---
+
+## Advanced Usage
+
+### Piping Commands
+
+```bash
+# Chain commands
+shipmyagent tasks list --format json | jq '.[] | select(.status=="active")'
+
+# Save diagnostic output
+shipmyagent doctor --format json | tee diagnostic.json
+
+# Filter logs
+shipmyagent logs --level error | grep "CRITICAL"
+```
+
+### Environment Variables
+
+Override config with environment variables:
+
+```bash
+# Set log level
+SHIPMYAGENT_LOG_LEVEL=debug shipmyagent start
+
+# Set port
+SHIPMYAGENT_PORT=3001 shipmyagent start
+
+# Set API key
+ANTHROPIC_API_KEY=sk-ant-... shipmyagent test llm
+```
+
+### Background Mode
+
+Run as a background service:
+
+```bash
+# Start in background
+shipmyagent start --daemon
+
+# Check status
+shipmyagent status
+
+# Stop
+shipmyagent stop
+```
+
+### Process Manager (PM2)
+
+Use PM2 for production:
+
+```bash
+# Install PM2
+npm install -g pm2
+
+# Start with PM2
+pm2 start shipmyagent --name "agent" -- start
+
+# Monitor
+pm2 monit
+
+# View logs
+pm2 logs agent
+
+# Restart
+pm2 restart agent
+
+# Stop
+pm2 stop agent
+```
+
+---
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | General error |
+| 2 | Configuration error |
+| 3 | Permission denied |
+| 4 | Network/connection error |
+| 5 | LLM API error |
+| 6 | Task execution failed |
+
+---
+
+## Next Steps
+
+- [Getting Started](/docs/getting-started) - Basic setup
+- [Configuration](/docs/configuration) - Configure your agent
+- [Tasks](/docs/tasks) - Create scheduled tasks

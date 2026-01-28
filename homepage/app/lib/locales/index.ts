@@ -27,24 +27,11 @@ const resources = {
   },
 } as const;
 
-// Get initial language from localStorage
-const getInitialLanguage = (): "en" | "zh" => {
-  if (typeof window !== "undefined") {
-    const savedLang = localStorage.getItem("shipmyagent-lang") as
-      | "en"
-      | "zh"
-      | null;
-    if (savedLang === "en" || savedLang === "zh") {
-      return savedLang;
-    }
-  }
-  return "en";
-};
-
 // Initialize i18n synchronously for SSR
+// Note: Language will be set based on URL path in root.tsx to ensure server/client consistency
 i18n.use(initReactI18next).init({
   resources,
-  lng: getInitialLanguage(),
+  lng: "en", // Default language, will be overridden by URL path
   fallbackLng: "en",
   defaultNS: "common",
   ns: ["common", "hero", "features", "stats"],
@@ -62,14 +49,32 @@ export default i18n;
 // Language setter
 export const setLang = (language: "en" | "zh") => {
   i18n.changeLanguage(language);
-  // Save to localStorage
+  // Save to localStorage for persistence
   if (typeof window !== "undefined") {
     localStorage.setItem("shipmyagent-lang", language);
-  }
-};
+    // Update URL to match language
+    const currentPath = window.location.pathname;
+    const hasLangInPath = /^\/(en|zh)\//.test(currentPath);
 
-// Initialize language from localStorage (call this on client side)
-export const initLang = () => {
-  const savedLang = getInitialLanguage();
-  i18n.changeLanguage(savedLang);
+    if (!hasLangInPath) {
+      // Redirect to language-specific URL
+      if (currentPath.startsWith("/docs")) {
+        const newPath = currentPath.replace("/docs", `/${language}/docs`);
+        window.location.pathname = newPath;
+      }
+    } else {
+      // Switch between languages
+      let newPath = currentPath;
+      if (language === "zh" && currentPath.startsWith("/en")) {
+        newPath = currentPath.replace(/^\/en/, "/zh");
+      } else if (language === "en" && currentPath.startsWith("/zh")) {
+        newPath = currentPath.replace(/^\/zh/, "/en");
+      }
+
+      // Only navigate if path actually changed
+      if (newPath !== currentPath) {
+        window.location.pathname = newPath;
+      }
+    }
+  }
 };

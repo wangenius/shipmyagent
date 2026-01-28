@@ -1,0 +1,644 @@
+---
+title: CLI 命令
+description: ShipMyAgent 命令行界面完整参考
+---
+
+# CLI 命令
+
+所有 ShipMyAgent CLI 命令的完整参考。
+
+## 快速参考
+
+| 命令 | 描述 |
+|------|------|
+| `shipmyagent init` | 初始化新项目 |
+| `shipmyagent start` | 启动 agent 服务器 |
+| `shipmyagent stop` | 停止 agent 服务器 |
+| `shipmyagent restart` | 重启 agent 服务器 |
+| `shipmyagent chat` | 向 agent 发送消息 |
+| `shipmyagent validate` | 验证配置 |
+| `shipmyagent doctor` | 运行健康诊断 |
+| `shipmyagent logs` | 查看 agent 日志 |
+| `shipmyagent tasks` | 管理定时任务 |
+| `shipmyagent test` | 测试连接和集成 |
+
+---
+
+## 核心命令
+
+### `shipmyagent init`
+
+在您的项目中初始化 ShipMyAgent。
+
+```bash
+shipmyagent init [选项]
+```
+
+**选项**：
+
+| 选项 | 简写 | 描述 |
+|------|------|------|
+| `--name <name>` | `-n` | Agent 名称 |
+| `--provider <provider>` | `-p` | LLM 提供商（anthropic、openai、deepseek）|
+| `--model <model>` | `-m` | LLM 模型名称 |
+| `--telegram` | `-t` | 启用 Telegram 集成 |
+| `--no-git` | | 跳过 Git 仓库检查 |
+| `--force` | `-f` | 覆盖现有配置 |
+
+**示例**：
+
+```bash
+# 交互式设置
+shipmyagent init
+
+# 使用默认值快速设置
+shipmyagent init --name "my-agent" --provider anthropic
+
+# 强制重新初始化
+shipmyagent init --force
+
+# 跳过 Git 检查
+shipmyagent init --no-git
+```
+
+---
+
+### `shipmyagent start`
+
+启动 ShipMyAgent 服务器。
+
+```bash
+shipmyagent start [选项]
+```
+
+**选项**：
+
+| 选项 | 简写 | 描述 |
+|------|------|------|
+| `--port <port>` | `-p` | 服务器端口（默认：3000）|
+| `--host <host>` | `-H` | 服务器主机（默认：localhost）|
+| `--daemon` | `-d` | 作为后台进程运行 |
+| `--log-level <level>` | `-l` | 日志级别（debug、info、warn、error）|
+| `--verbose` | `-v` | 启用详细输出 |
+
+**示例**：
+
+```bash
+# 使用默认值启动
+shipmyagent start
+
+# 在自定义端口上启动
+shipmyagent start --port 3001
+
+# 在后台运行
+shipmyagent start --daemon
+
+# 启用调试日志
+shipmyagent start --log-level debug --verbose
+```
+
+---
+
+### `shipmyagent stop`
+
+停止运行中的 ShipMyAgent 服务器。
+
+```bash
+shipmyagent stop [选项]
+```
+
+**选项**：
+
+| 选项 | 简写 | 描述 |
+|------|------|------|
+| `--force` | `-f` | 强制停止，不优雅关闭 |
+
+**示例**：
+
+```bash
+# 优雅停止
+shipmyagent stop
+
+# 强制停止
+shipmyagent stop --force
+```
+
+---
+
+### `shipmyagent restart`
+
+重启 ShipMyAgent 服务器。
+
+```bash
+shipmyagent restart [选项]
+```
+
+接受与 `shipmyagent start` 相同的选项。
+
+**示例**：
+
+```bash
+# 使用当前配置重启
+shipmyagent restart
+
+# 使用调试日志重启
+shipmyagent restart --log-level debug
+```
+
+---
+
+## 交互命令
+
+### `shipmyagent chat`
+
+向 agent 发送消息。
+
+```bash
+shipmyagent chat <消息> [选项]
+```
+
+**选项**：
+
+| 选项 | 简写 | 描述 |
+|------|------|------|
+| `--file <path>` | `-f` | 从文件读取消息 |
+| `--format <format>` | | 输出格式（text、json）|
+| `--stream` | `-s` | 实时流式传输响应 |
+
+**示例**：
+
+```bash
+# 简单问题
+shipmyagent chat "这个项目的目的是什么？"
+
+# 多行消息
+shipmyagent chat "审查最后一次提交并建议改进"
+
+# 从文件读取
+shipmyagent chat --file prompt.txt
+
+# JSON 输出
+shipmyagent chat "列出所有 TODO" --format json
+```
+
+---
+
+## 配置命令
+
+### `shipmyagent validate`
+
+验证配置文件。
+
+```bash
+shipmyagent validate [选项]
+```
+
+**选项**：
+
+| 选项 | 简写 | 描述 |
+|------|------|------|
+| `--config` | `-c` | 仅验证配置 |
+| `--tasks` | `-t` | 仅验证任务 |
+| `--strict` | | 将警告视为错误 |
+
+**示例**：
+
+```bash
+# 验证所有
+shipmyagent validate
+
+# 仅验证配置
+shipmyagent validate --config
+
+# 严格模式
+shipmyagent validate --strict
+```
+
+---
+
+### `shipmyagent doctor`
+
+运行全面的健康诊断。
+
+```bash
+shipmyagent doctor [选项]
+```
+
+**选项**：
+
+| 选项 | 简写 | 描述 |
+|------|------|------|
+| `--fix` | | 自动修复问题 |
+| `--output <file>` | `-o` | 保存报告到文件 |
+| `--format <format>` | | 报告格式（text、json、markdown）|
+
+**示例**：
+
+```bash
+# 运行诊断
+shipmyagent doctor
+
+# 自动修复问题
+shipmyagent doctor --fix
+
+# 保存报告
+shipmyagent doctor --output health-report.json
+```
+
+---
+
+## 任务命令
+
+### `shipmyagent tasks list`
+
+列出所有定时任务。
+
+```bash
+shipmyagent tasks list [选项]
+```
+
+**选项**：
+
+| 选项 | 简写 | 描述 |
+|------|------|------|
+| `--format <format>` | | 输出格式（table、json）|
+| `--status <status>` | | 按状态过滤（active、disabled、failed）|
+
+**示例**：
+
+```bash
+# 列出所有任务
+shipmyagent tasks list
+
+# 仅活跃任务
+shipmyagent tasks list --status active
+
+# JSON 格式
+shipmyagent tasks list --format json
+```
+
+---
+
+### `shipmyagent tasks run`
+
+手动运行任务。
+
+```bash
+shipmyagent tasks run <task-id> [选项]
+```
+
+**选项**：
+
+| 选项 | 简写 | 描述 |
+|------|------|------|
+| `--dry-run` | | 显示将要运行的内容而不执行 |
+| `--notify` | `-n` | 完成时发送通知 |
+
+**示例**：
+
+```bash
+# 运行特定任务
+shipmyagent tasks run daily-report
+
+# 试运行
+shipmyagent tasks run daily-report --dry-run
+
+# 带通知
+shipmyagent tasks run daily-report --notify
+```
+
+---
+
+### `shipmyagent tasks enable`
+
+启用任务。
+
+```bash
+shipmyagent tasks enable <task-id>
+```
+
+**示例**：
+
+```bash
+shipmyagent tasks enable daily-report
+```
+
+---
+
+### `shipmyagent tasks disable`
+
+禁用任务。
+
+```bash
+shipmyagent tasks disable <task-id>
+```
+
+**示例**：
+
+```bash
+shipmyagent tasks disable daily-report
+```
+
+---
+
+## 日志命令
+
+### `shipmyagent logs`
+
+查看 agent 日志。
+
+```bash
+shipmyagent logs [选项]
+```
+
+**选项**：
+
+| 选项 | 简写 | 描述 |
+|------|------|------|
+| `--follow` | `-f` | 实时跟踪日志输出 |
+| `--tail <lines>` | `-n` | 显示最后 N 行（默认：50）|
+| `--file <name>` | | 特定日志文件（agent、tasks、errors）|
+| `--level <level>` | | 按级别过滤（debug、info、warn、error）|
+| `--export <file>` | | 导出日志到文件 |
+| `--since <time>` | | 显示从时间戳开始的日志 |
+
+**示例**：
+
+```bash
+# 查看最近的日志
+shipmyagent logs
+
+# 实时跟踪日志
+shipmyagent logs --follow
+
+# 最后 100 行
+shipmyagent logs --tail 100
+
+# 仅错误
+shipmyagent logs --level error
+
+# 任务日志
+shipmyagent logs --file tasks
+
+# 导出日志
+shipmyagent logs --export agent-logs.txt
+
+# 一小时前的日志
+shipmyagent logs --since "1 hour ago"
+```
+
+---
+
+## 测试命令
+
+### `shipmyagent test`
+
+运行测试和检查。
+
+```bash
+shipmyagent test [目标] [选项]
+```
+
+**目标**：
+
+| 目标 | 描述 |
+|------|------|
+| `llm` | 测试 LLM 连接 |
+| `integration` | 测试特定集成 |
+| `permissions` | 测试权限配置 |
+| `all` | 运行所有测试（默认）|
+
+**选项**：
+
+| 选项 | 简写 | 描述 |
+|------|------|------|
+| `--verbose` | `-v` | 详细输出 |
+| `--integration <name>` | `-i` | 测试特定集成 |
+
+**示例**：
+
+```bash
+# 测试所有
+shipmyagent test
+
+# 测试 LLM
+shipmyagent test llm
+
+# 详细测试 LLM
+shipmyagent test llm --verbose
+
+# 测试 Telegram 集成
+shipmyagent test --integration telegram
+
+# 测试权限
+shipmyagent test permissions
+```
+
+---
+
+## 实用命令
+
+### `shipmyagent --version`
+
+显示版本信息。
+
+```bash
+shipmyagent --version
+shipmyagent -V
+```
+
+**输出**：
+
+```
+ShipMyAgent v1.0.0
+Node.js v18.17.0
+```
+
+---
+
+### `shipmyagent --help`
+
+显示帮助信息。
+
+```bash
+shipmyagent --help
+shipmyagent -h
+
+# 特定命令的帮助
+shipmyagent start --help
+```
+
+---
+
+### `shipmyagent config`
+
+获取或设置配置值。
+
+```bash
+shipmyagent config <key> [value]
+```
+
+**示例**：
+
+```bash
+# 获取值
+shipmyagent config llm.model
+
+# 设置值
+shipmyagent config llm.temperature 0.7
+
+# 列出所有配置
+shipmyagent config --list
+```
+
+---
+
+### `shipmyagent export`
+
+导出配置和数据。
+
+```bash
+shipmyagent export [选项]
+```
+
+**选项**：
+
+| 选项 | 简写 | 描述 |
+|------|------|------|
+| `--output <dir>` | `-o` | 输出目录 |
+| `--include-tasks` | | 包含任务文件 |
+| `--include-logs` | | 包含日志文件 |
+| `--format <format>` | | 导出格式（zip、tar）|
+
+**示例**：
+
+```bash
+# 仅导出配置
+shipmyagent export
+
+# 完整导出
+shipmyagent export --include-tasks --include-logs
+
+# 导出到特定目录
+shipmyagent export --output ./backup
+```
+
+---
+
+### `shipmyagent import`
+
+导入配置和数据。
+
+```bash
+shipmyagent import <file> [选项]
+```
+
+**选项**：
+
+| 选项 | 简写 | 描述 |
+|------|------|------|
+| `--merge` | `-m` | 与现有配置合并 |
+| `--force` | | 覆盖现有文件 |
+
+**示例**：
+
+```bash
+# 从文件导入
+shipmyagent import backup.zip
+
+# 与现有配置合并
+shipmyagent import backup.zip --merge
+```
+
+---
+
+## 高级用法
+
+### 管道命令
+
+```bash
+# 链接命令
+shipmyagent tasks list --format json | jq '.[] | select(.status=="active")'
+
+# 保存诊断输出
+shipmyagent doctor --format json | tee diagnostic.json
+
+# 过滤日志
+shipmyagent logs --level error | grep "CRITICAL"
+```
+
+### 环境变量
+
+使用环境变量覆盖配置：
+
+```bash
+# 设置日志级别
+SHIPMYAGENT_LOG_LEVEL=debug shipmyagent start
+
+# 设置端口
+SHIPMYAGENT_PORT=3001 shipmyagent start
+
+# 设置 API key
+ANTHROPIC_API_KEY=sk-ant-... shipmyagent test llm
+```
+
+### 后台模式
+
+作为后台服务运行：
+
+```bash
+# 在后台启动
+shipmyagent start --daemon
+
+# 检查状态
+shipmyagent status
+
+# 停止
+shipmyagent stop
+```
+
+### 进程管理器 (PM2)
+
+使用 PM2 用于生产：
+
+```bash
+# 安装 PM2
+npm install -g pm2
+
+# 使用 PM2 启动
+pm2 start shipmyagent --name "agent" -- start
+
+# 监控
+pm2 monit
+
+# 查看日志
+pm2 logs agent
+
+# 重启
+pm2 restart agent
+
+# 停止
+pm2 stop agent
+```
+
+---
+
+## 退出代码
+
+| 代码 | 含义 |
+|------|------|
+| 0 | 成功 |
+| 1 | 一般错误 |
+| 2 | 配置错误 |
+| 3 | 权限被拒绝 |
+| 4 | 网络/连接错误 |
+| 5 | LLM API 错误 |
+| 6 | 任务执行失败 |
+
+---
+
+## 下一步
+
+- [快速开始](/docs/getting-started) - 基本设置
+- [配置](/docs/configuration) - 配置您的 agent
+- [任务](/docs/tasks) - 创建定时任务

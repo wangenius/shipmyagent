@@ -1,0 +1,598 @@
+---
+title: Architecture
+description: ShipMyAgent system architecture and design principles
+---
+
+# Architecture
+
+Deep dive into ShipMyAgent's architecture, design decisions, and technical implementation.
+
+## Overview
+
+ShipMyAgent is built as a modular, extensible AI agent system designed for local-first code repository automation.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      User Interface                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │   CLI        │  │   Telegram   │  │   GitHub     │     │
+│  │   Interface  │  │   Bot        │  │   Integration │     │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
+│         │                  │                  │               │
+│         └──────────────────┼──────────────────┘               │
+│                            │                                  │
+│                    ┌───────▼────────┐                         │
+│                    │  Agent Core    │                         │
+│                    │  (Orchestrator) │                         │
+│                    └───────┬────────┘                         │
+│                            │                                  │
+│         ┌──────────────────┼──────────────────┐              │
+│         │                  │                  │              │
+│    ┌────▼────┐      ┌─────▼─────┐     ┌─────▼─────┐          │
+│    │  Task    │      │   LLM     │     │  Tool     │          │
+│    │ Scheduler│      │  Provider │     │  Executor │          │
+│    └─────────┘      └───────────┘     └───────────┘          │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            │
+┌───────────────────────────▼──────────────────────────────┐
+│                   Repository Interface                      │
+│  - File System  - Git Operations  - Shell Commands        │
+└────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Core Components
+
+### 1. Agent Core (Orchestrator)
+
+The central coordinator that manages all agent operations.
+
+**Responsibilities**:
+- Parse and execute user commands
+- Coordinate LLM and tool interactions
+- Manage permission checks
+- Handle task scheduling
+- Route notifications
+
+**Key Design Decisions**:
+- **Stateless**: Each operation is independent
+- **Plugin-based**: Tools and LLM providers are pluggable
+- **Permission-first**: All operations checked against permissions
+
+### 2. LLM Provider Abstraction
+
+Unified interface for multiple LLM providers.
+
+**Supported Providers**:
+- Anthropic (Claude)
+- OpenAI (GPT)
+- DeepSeek
+- Custom/OpenAI-compatible APIs
+
+**Interface**:
+```typescript
+interface LLMProvider {
+  chat(params: ChatParams): Promise<ChatResponse>
+  stream(params: ChatParams): AsyncIterator<ChatChunk>
+  validate(): Promise<boolean>
+  estimateTokens(text: string): number
+}
+```
+
+**Design Benefits**:
+- Easy to add new providers
+- Fallback and load balancing
+- Consistent API regardless of provider
+
+### 3. Tool System
+
+Extensible tool framework for agent capabilities.
+
+**Built-in Tools**:
+- `read_file`: Read repository files
+- `write_file`: Write to files
+- `exec_shell`: Execute shell commands
+- `git_op`: Git operations
+- `search`: Search codebase
+
+**Tool Interface**:
+```typescript
+interface Tool {
+  name: string
+  description: string
+  parameters: ToolParameters
+  execute(params: any, context: Context): Promise<ToolResult>
+  validate(params: any): boolean
+}
+```
+
+### 4. Permission System
+
+Granular access control for security.
+
+**Permission Layers**:
+1. **File System**: Read/write paths, glob patterns
+2. **Shell**: Command whitelist/blacklist
+3. **Network**: API endpoint restrictions
+4. **Human Approval**: Required confirmations
+
+**Design Principles**:
+- **Least Privilege**: Default deny, explicit allow
+- **Audit Trail**: All operations logged
+- **Revocable**: Easy to revoke permissions
+
+---
+
+## Data Flow
+
+### Request Flow
+
+```
+User Request
+    │
+    ▼
+┌─────────────────────────────────┐
+│ 1. Parse Intent                 │
+│    - Extract command             │
+│    - Identify tools needed       │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 2. Permission Check             │
+│    - Validate operation          │
+│    - Check approval required     │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 3. Tool Execution              │
+│    - Run tools (file, shell, etc)│
+│    - Gather context              │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 4. LLM Processing              │
+│    - Construct prompt            │
+│    - Call LLM API                │
+│    - Parse response              │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 5. Result Processing            │
+│    - Format output               │
+│    - Send notifications          │
+│    - Log operations              │
+└────────────┬────────────────────┘
+             │
+             ▼
+         User Response
+```
+
+### Task Execution Flow
+
+```
+Cron Trigger
+    │
+    ▼
+┌─────────────────────────────────┐
+│ 1. Load Task                    │
+│    - Read .ship/tasks/*.md       │
+│    - Parse frontmatter            │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 2. Validate                     │
+│    - Check enabled               │
+│    - Validate cron expression     │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 3. Prepare Context              │
+│    - Gather repo state           │
+│    - Load environment vars       │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 4. Execute Prompt               │
+│    - Send to LLM                 │
+│    - Stream response             │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 5. Handle Result                │
+│    - Parse response              │
+│    - Send notifications          │
+│    - Log result                  │
+│    - Retry if failed             │
+└─────────────────────────────────┘
+```
+
+---
+
+## Security Architecture
+
+### Threat Model
+
+**Potential Threats**:
+1. **Prompt Injection**: Malicious user attempts to bypass restrictions
+2. **Unauthorized Access**: Agent accessing sensitive resources
+3. **Code Execution**: Running malicious shell commands
+4. **Data Exfiltration**: Stealing secrets or sensitive data
+
+### Mitigation Strategies
+
+#### 1. Permission Validation
+
+```typescript
+// Every operation checked
+async function executeTool(tool: Tool, params: any) {
+  // Check permission
+  if (!permissions.canExecute(tool, params)) {
+    throw new PermissionDeniedError(tool.name);
+  }
+
+  // High-risk operations require approval
+  if (permissions.requiresApproval(tool, params)) {
+    const approved = await requestApproval(tool, params);
+    if (!approved) throw new OperationDeniedError();
+  }
+
+  return await tool.execute(params, context);
+}
+```
+
+#### 2. Prompt Sanitization
+
+```typescript
+// Validate user input before sending to LLM
+function sanitizePrompt(userInput: string): string {
+  // Remove or escape potentially dangerous patterns
+  return userInput
+    .replace(/<system>/gi, '')
+    .replace(/<admin>/gi, '')
+    .replace(/ignore.*instructions/gi, '');
+}
+```
+
+#### 3. Sandbox Execution
+
+```typescript
+// Shell commands executed in controlled environment
+async function execShell(command: string) {
+  // Validate against whitelist
+  if (!isCommandAllowed(command)) {
+    throw new Error('Command not allowed');
+  }
+
+  // Execute with timeout
+  const result = await spawn(command, {
+    timeout: 30000,
+    maxBuffer: 1024 * 1024 // 1MB limit
+  });
+
+  return result;
+}
+```
+
+#### 4. Audit Logging
+
+```typescript
+// All sensitive operations logged
+function logOperation(operation: Operation) {
+  auditLog.write({
+    timestamp: Date.now(),
+    operation: operation.type,
+    user: operation.user,
+    params: sanitizeParams(operation.params),
+    result: operation.result,
+    ip: operation.ip
+  });
+}
+```
+
+---
+
+## Performance Considerations
+
+### Optimization Strategies
+
+#### 1. Response Caching
+
+```typescript
+// Cache LLM responses
+const cache = new LRUCache({
+  max: 1000,
+  ttl: 1000 * 60 * 60 // 1 hour
+});
+
+async function llmQuery(prompt: string) {
+  const cacheKey = hash(prompt);
+
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey);
+  }
+
+  const result = await llm.chat(prompt);
+  cache.set(cacheKey, result);
+  return result;
+}
+```
+
+#### 2. Streaming Responses
+
+```typescript
+// Stream LLM responses for better UX
+async function* streamQuery(prompt: string) {
+  const stream = await llm.stream(prompt);
+
+  for await (const chunk of stream) {
+    yield chunk;
+    // Send to user immediately
+  }
+}
+```
+
+#### 3. Parallel Tool Execution
+
+```typescript
+// Execute independent tools in parallel
+const results = await Promise.all([
+  toolA.execute(paramsA),
+  toolB.execute(paramsB),
+  toolC.execute(paramsC)
+]);
+```
+
+#### 4. Resource Pooling
+
+```typescript
+// Reuse connections
+const llmPool = new Pool({
+  max: 10,
+  create: () => new LLMConnection(),
+  destroy: (conn) => conn.close()
+});
+```
+
+### Performance Benchmarks
+
+**Typical Operation Times**:
+
+| Operation | Time | Notes |
+|-----------|------|-------|
+| Simple chat query | 1‑3s | Depends on LLM |
+| Code review (100 LOC) | 5‑15s | Analyzes entire file |
+| File search | \<1s | Uses ripgrep |
+| Shell command | Variable | Depends on command |
+| Task execution | 10‑60s | Complex tasks |
+
+---
+
+## Extensibility
+
+### Plugin System
+
+ShipMyAgent supports custom tools and providers.
+
+#### Custom Tool
+
+```typescript
+// custom-tool.ts
+import { Tool } from '@shipmyagent/sdk';
+
+export class MyCustomTool extends Tool {
+  name = 'my_tool';
+  description = 'Does something custom';
+
+  async execute(params: { input: string }) {
+    // Custom logic
+    return {
+      success: true,
+      data: process(params.input)
+    };
+  }
+}
+
+// Register in ship.json
+{
+  "tools": {
+    "custom": ["./custom-tool.ts"]
+  }
+}
+```
+
+#### Custom LLM Provider
+
+```typescript
+// custom-provider.ts
+import { LLMProvider } from '@shipmyagent/sdk';
+
+export class CustomLLM extends LLMProvider {
+  async chat(params: ChatParams) {
+    // Custom API call
+    const response = await fetch(this.baseUrl, {
+      method: 'POST',
+      body: JSON.stringify(params),
+      headers: this.headers
+    });
+    return await response.json();
+  }
+}
+
+// Configure in ship.json
+{
+  "llm": {
+    "provider": "custom",
+    "implementation": "./custom-provider.ts"
+  }
+}
+```
+
+---
+
+## Configuration Loading
+
+### Configuration Hierarchy
+
+```
+1. ship.json (base configuration)
+       ↓
+2. Environment variables (overrides)
+       ↓
+3. CLI flags (temporary overrides)
+       ↓
+4. Runtime configuration (final state)
+```
+
+### Merge Strategy
+
+```typescript
+function loadConfig(): Config {
+  // 1. Load ship.json
+  const baseConfig = JSON.parse(readFileSync('ship.json'));
+
+  // 2. Apply environment variables
+  const envConfig = loadEnvConfig();
+
+  // 3. Apply CLI flags
+  const cliConfig = loadCliConfig();
+
+  // 4. Merge (later overrides earlier)
+  return mergeConfigs(baseConfig, envConfig, cliConfig);
+}
+```
+
+---
+
+## Error Handling
+
+### Error Categories
+
+1. **User Errors**: Invalid input, permissions
+2. **System Errors**: LLM API failures, network issues
+3. **Task Errors**: Task execution failures
+
+### Error Handling Strategy
+
+```typescript
+async function executeOperation(op: Operation) {
+  try {
+    return await op.execute();
+  } catch (error) {
+    // Classify error
+    if (error instanceof UserError) {
+      return {
+        success: false,
+        error: error.message,
+        suggestion: error.suggestion
+      };
+    }
+
+    if (error instanceof SystemError) {
+      // Log and retry
+      logger.error(error);
+      if (op.retryCount < MAX_RETRIES) {
+        return await retry(op);
+      }
+    }
+
+    // Unexpected error
+    throw error;
+  }
+}
+```
+
+---
+
+## Monitoring & Observability
+
+### Metrics Collected
+
+- **Operation counts**: Tool usage, task runs
+- **Performance**: Response times, LLM latency
+- **Errors**: Failure rates, error types
+- **Resource usage**: Memory, CPU
+
+### Telemetry
+
+```typescript
+// Built-in telemetry
+const telemetry = {
+  trackOperation(name: string, duration: number) {
+    metrics.histogram('operation.duration', duration, ['operation:' + name]);
+  },
+
+  trackError(error: Error) {
+    metrics.increment('errors', 1, ['error:' + error.name]);
+  },
+
+  trackLLMCall(provider: string, model: string, tokens: number) {
+    metrics.histogram('llm.tokens', tokens, ['provider:' + provider, 'model:' + model]);
+  }
+};
+```
+
+### Health Checks
+
+```bash
+# Comprehensive health check
+shipmyagent doctor
+
+# Output:
+✅ Configuration: Valid
+✅ LLM Connection: OK
+✅ File Permissions: OK
+✅ Git Repository: OK
+⚠️  Task Queue: 3 tasks failed
+✅ Integration Status: All connected
+```
+
+---
+
+## Scalability
+
+### Horizontal Scaling
+
+ShipMyAgent is designed for single-repository use. For multiple repositories:
+
+```bash
+# Run multiple instances
+shipmyagent start --project /path/repo1 --port 3000 &
+shipmyagent start --project /path/repo2 --port 3001 &
+shipmyagent start --project /path/repo3 --port 3002 &
+```
+
+### Vertical Scaling
+
+For large repositories:
+
+```json
+{
+  "performance": {
+    "maxConcurrentTasks": 10,
+    "llmPoolSize": 5,
+    "cacheSize": "2GB",
+    "workerThreads": 4
+  }
+}
+```
+
+---
+
+## Next Steps
+
+- [Customization](/docs/customization) - Build custom tools and plugins
+- [API Reference](/docs/reference/api) - Extensibility APIs
+- [Contributing](/docs/community/contributing) - Architecture contribution guide

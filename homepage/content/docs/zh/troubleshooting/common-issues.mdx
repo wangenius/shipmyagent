@@ -1,0 +1,347 @@
+---
+title: 常见问题
+description: 频繁遇到的问题及其解决方案
+---
+
+# 常见问题
+
+本章节涵盖最常见的问题及其解决方案。
+
+## 安装问题
+
+### "Command not found: shipmyagent"
+
+**问题**: 安装后，`shipmyagent` 命令无法识别。
+
+**解决方案**：
+
+1. **检查全局 npm 路径**：
+   ```bash
+   npm config get prefix
+   # 将此路径添加到 PATH 环境变量
+   export PATH=$(npm config get prefix)/bin:$PATH
+   ```
+
+2. **强制重新安装**：
+   ```bash
+   npm uninstall -g shipmyagent
+   npm install -g shipmyagent --force
+   ```
+
+3. **使用 npx（替代方案）**：
+   ```bash
+   npx shipmyagent init
+   npx shipmyagent start
+   ```
+
+### "Node.js 版本过低"
+
+**问题**: ShipMyAgent 需要 Node.js >= 18。
+
+**解决方案**：
+```bash
+# 检查您的版本
+node --version
+
+# 使用 nvm 升级（推荐）
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+nvm install 20
+nvm use 20
+```
+
+## 初始化问题
+
+### "创建文件时权限被拒绝"
+
+**问题**: 无法创建 `Agent.md`、`ship.json` 或 `.ship/` 目录。
+
+**解决方案**：
+
+1. **检查目录权限**：
+   ```bash
+   ls -la  # 应显示您有写入权限
+   ```
+
+2. **使用适当的权限运行**：
+   ```bash
+   # 不要对 npm 全局包使用 sudo
+   # 而是修复 npm 权限
+   mkdir -p ~/.npm-global
+   npm config set prefix '~/.npm-global'
+   echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+   ```
+
+3. **在可写位置初始化**：
+   ```bash
+   cd ~/my-project  # 确保您拥有此目录
+   shipmyagent init
+   ```
+
+### "未检测到 Git 仓库"
+
+**问题**: ShipMyAgent 需要 Git 仓库。
+
+**解决方案**：
+
+1. **初始化 Git**：
+   ```bash
+   git init
+   git add .
+   git commit -m "Initial commit"
+   shipmyagent init
+   ```
+
+2. **跳过 Git 检查（不推荐）**：
+   ```bash
+   shipmyagent init --no-git-check
+   ```
+
+## 启动问题
+
+### "LLM API Key 未配置"
+
+**问题**: `ship.json` 中缺少或 API key 无效。
+
+**解决方案**：
+
+1. **在 ship.json 中添加 API key**：
+   ```json
+   {
+     "llm": {
+       "apiKey": "${ANTHROPIC_API_KEY}"
+     }
+   }
+   ```
+
+2. **设置环境变量**：
+   ```bash
+   export ANTHROPIC_API_KEY="sk-ant-..."
+   # 或添加到 ~/.bashrc 或 ~/.zshrc
+   echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc
+   ```
+
+3. **测试 key**：
+   ```bash
+   shipmyagent test-llm
+   ```
+
+### "端口 3000 已被占用"
+
+**问题**: 默认端口被其他服务占用。
+
+**解决方案**：
+
+1. **查找并终止进程**：
+   ```bash
+   # macOS/Linux
+   lsof -ti:3000 | xargs kill -9
+
+   # 或使用不同端口
+   shipmyagent start --port 3001
+   ```
+
+2. **在 ship.json 中配置**：
+   ```json
+   {
+     "server": {
+       "port": 3001
+     }
+   }
+   ```
+
+### "未找到 Agent.md"
+
+**问题**: 缺少或 `Agent.md` 文件位置错误。
+
+**解决方案**：
+```bash
+# 确保 Agent.md 在项目根目录
+ls Agent.md
+
+# 如果缺失，重新创建
+cat > Agent.md << 'EOF'
+# Agent 角色
+
+你是一个有帮助的 AI 编程助手。
+
+## 目标
+
+- 帮助编写干净、可维护的代码
+- 审查代码变更
+- 回答技术问题
+EOF
+```
+
+## 配置问题
+
+### "无效的 ship.json 格式"
+
+**问题**: `ship.json` 中的 JSON 语法错误。
+
+**解决方案**：
+
+1. **验证 JSON**：
+   ```bash
+   # 使用 jq 验证
+   cat ship.json | jq .
+
+   # 或使用内置验证
+   shipmyagent validate
+   ```
+
+2. **常见 JSON 错误**：
+   - ❌ 尾随逗号：`{"key": "value",}`
+   - ❌ 单引号：`{'key': 'value'}`
+   - ❌ 注释：`{"key": "value"} // comment`
+   - ✅ 正确：`{"key": "value"}`
+
+3. **使用 JSON linter**：
+   添加到 `.vscode/settings.json`：
+   ```json
+   {
+     "json.validate.enable": true
+   }
+   ```
+
+### "环境变量未展开"
+
+**问题**: `ship.json` 中的 `${VAR_NAME}` 未被替换。
+
+**解决方案**：
+```bash
+# 确保变量已导出
+export MY_API_KEY="xxx"
+
+# 验证已设置
+echo $MY_API_KEY
+
+# 重启 agent
+shipmyagent restart
+```
+
+## 任务问题
+
+### "未找到任务文件"
+
+**问题**: `.ship/tasks/` 中定义的任务不存在。
+
+**解决方案**：
+```bash
+# 列出现有任务
+shipmyagent tasks list
+
+# 创建缺失的任务
+cat > .ship/tasks/my-task.md << 'EOF'
+---
+id: my-task
+name: 我的任务
+cron: "0 9 * * *"
+---
+
+这是我的任务描述。
+EOF
+```
+
+### "无效的 cron 表达式"
+
+**问题**: 任务文件中的 Cron 语法错误。
+
+**解决方案**：
+
+1. **使用 cron 验证器**：
+   ```bash
+   # 测试您的 cron 表达式
+   shipmyagent validate-cron "0 9 * * 1-5"
+   ```
+
+2. **常用 cron 模式**：
+   ```markdown
+   # 每小时
+   cron: "0 * * * *"
+
+   # 每天早上 9 点
+   cron: "0 9 * * *"
+
+   # 每周一早上 9 点
+   cron: "0 9 * * 1"
+
+   # 工作日早上 9 点
+   cron: "0 9 * * 1-5"
+   ```
+
+## 集成问题
+
+### "Telegram bot 无响应"
+
+**问题**: Telegram bot 已配置但不响应消息。
+
+**解决方案**：
+
+1. **验证 bot token**：
+   ```bash
+   # 测试 token
+   curl https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getMe
+   ```
+
+2. **检查 chat ID**：
+   ```bash
+   # 获取您的 chat ID
+   curl https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
+   ```
+
+3. **使用调试模式重启**：
+   ```bash
+   shipmyagent start --verbose
+   # 查找 Telegram 连接日志
+   ```
+
+4. **确保配置了 chatId**：
+   ```json
+   {
+     "integrations": {
+       "telegram": {
+         "enabled": true,
+         "botToken": "${TELEGRAM_BOT_TOKEN}",
+         "chatId": "12345678"  // 这是必需的！
+       }
+     }
+   }
+   ```
+
+### "Webhook 超时"
+
+**问题**: 外部 webhook 调用超时。
+
+**解决方案**：
+```json
+{
+  "integrations": {
+    "webhook": {
+      "timeout": 30000,  // 增加超时时间（毫秒）
+      "retryAttempts": 3
+    }
+  }
+}
+```
+
+## 仍有问题？
+
+如果这些解决方案都不起作用：
+
+1. **启用详细日志**：
+   ```bash
+   shipmyagent start --verbose --log-level debug
+   ```
+
+2. **导出诊断信息**：
+   ```bash
+   shipmyagent doctor > diagnostic.txt
+   shipmyagent logs --export > logs.txt
+   ```
+
+3. **创建 issue**，包含：
+   - `diagnostic.txt`
+   - `logs.txt` 的相关部分
+   - 复现步骤
+
+更多详细的调试步骤，请参阅[日志与调试](/docs/troubleshooting/logs-debugging)。

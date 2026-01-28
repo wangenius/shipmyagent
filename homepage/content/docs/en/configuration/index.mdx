@@ -1,0 +1,629 @@
+---
+title: Configuration
+description: Complete reference for ShipMyAgent configuration files
+---
+
+# Configuration
+
+Complete guide to configuring ShipMyAgent via `ship.json` and `Agent.md`.
+
+## Overview
+
+ShipMyAgent uses two main configuration files:
+
+```
+your-project/
+├── ship.json          # Main configuration (LLM, permissions, integrations)
+├── Agent.md           # Agent personality and behavior
+└── .ship/             # Runtime data (logs, cache, tasks)
+```
+
+---
+
+## ship.json
+
+The main configuration file that controls the agent's capabilities and behavior.
+
+### Complete Example
+
+```json
+{
+  "name": "my-agent",
+  "version": "1.0.0",
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "apiKey": "${ANTHROPIC_API_KEY}",
+    "temperature": 0.5,
+    "maxTokens": 4096,
+    "timeout": 30000,
+    "streaming": true
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": ["src/**", "tests/**", "docs/**"],
+      "exclude": ["*.config.js", ".env"],
+      "requiresApproval": true
+    },
+    "exec_shell": {
+      "allow": ["npm test", "npm run lint", "git status"],
+      "requiresApproval": false
+    }
+  },
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
+    },
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo"
+    }
+  },
+  "logging": {
+    "level": "info",
+    "file": ".ship/logs/agent.log",
+    "rotation": {
+      "enabled": true,
+      "maxSize": "10MB",
+      "maxFiles": 10
+    }
+  },
+  "cache": {
+    "enabled": true,
+    "ttl": 3600
+  }
+}
+```
+
+### Configuration Sections
+
+#### name (string, required)
+
+Your agent's name. Used in logs and UI interactions.
+
+```json
+{
+  "name": "code-reviewer"
+}
+```
+
+#### version (string, required)
+
+Configuration schema version.
+
+```json
+{
+  "version": "1.0.0"
+}
+```
+
+#### llm (object, required)
+
+Language Model configuration.
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `provider` | string | Yes | - | LLM provider: `anthropic`, `openai`, `deepseek`, `custom` |
+| `model` | string | Yes | - | Model name (e.g., `claude-3-5-sonnet-20241022`) |
+| `baseUrl` | string | No | Provider default | API endpoint URL |
+| `apiKey` | string | Yes | - | API key (use environment variable!) |
+| `temperature` | number | No | 0.5 | Response randomness (0-1) |
+| `maxTokens` | number | No | 4096 | Maximum response tokens |
+| `timeout` | number | No | 30000 | Request timeout in milliseconds |
+| `streaming` | boolean | No | false | Enable streaming responses |
+
+**Example configurations**:
+
+```json
+// Anthropic (Claude)
+{
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "apiKey": "${ANTHROPIC_API_KEY}"
+  }
+}
+
+// OpenAI (GPT)
+{
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-4o",
+    "baseUrl": "https://api.openai.com/v1",
+    "apiKey": "${OPENAI_API_KEY}"
+  }
+}
+
+// Custom endpoint
+{
+  "llm": {
+    "provider": "custom",
+    "model": "custom-model",
+    "baseUrl": "https://your-api.com/v1",
+    "apiKey": "${CUSTOM_API_KEY}",
+    "headers": {
+      "X-Custom-Header": "value"
+    }
+  }
+}
+```
+
+#### permissions (object, required)
+
+Control what the agent can do.
+
+**read_repo** (boolean)
+
+Allow reading repository files.
+
+```json
+{
+  "permissions": {
+    "read_repo": true
+  }
+}
+```
+
+**write_repo** (object or boolean)
+
+Control file writing permissions.
+
+```json
+{
+  "permissions": {
+    "write_repo": {
+      "paths": ["src/**", "tests/**"],  // Glob patterns
+      "exclude": ["*.key", "secrets/**"],  // Exclude patterns
+      "requiresApproval": true  // Ask before writing
+    }
+  }
+}
+```
+
+**exec_shell** (object)
+
+Control shell command execution.
+
+```json
+{
+  "permissions": {
+    "exec_shell": {
+      "allow": ["npm test", "npm run lint", "git *"],  // Command patterns
+      "requiresApproval": false  // Auto-allow safe commands
+    }
+  }
+}
+```
+
+#### integrations (object)
+
+External service connections.
+
+**Telegram**:
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "123456789",  // Required for security!
+      "updates": {
+        "timeout": 30,
+        "limit": 10
+      }
+    }
+  }
+}
+```
+
+**GitHub**:
+
+```json
+{
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo",
+      "autoMerge": false,
+      "requiredReviews": 1
+    }
+  }
+}
+```
+
+**Slack**:
+
+```json
+{
+  "integrations": {
+    "slack": {
+      "enabled": true,
+      "webhook": "${SLACK_WEBHOOK_URL}",
+      "channel": "#engineering"
+    }
+  }
+}
+```
+
+#### logging (object)
+
+Configure logging behavior.
+
+```json
+{
+  "logging": {
+    "level": "info",  // debug, info, warn, error
+    "file": ".ship/logs/agent.log",
+    "timing": {
+      "enabled": true,
+      "threshold": 1000  // Log operations > 1 second
+    },
+    "rotation": {
+      "enabled": true,
+      "maxSize": "10MB",
+      "maxFiles": 10,
+      "compress": true
+    }
+  }
+}
+```
+
+#### cache (object)
+
+Configure response caching.
+
+```json
+{
+  "cache": {
+    "enabled": true,
+    "fileReads": true,
+    "llmResponses": true,
+    "ttl": 3600  // Time-to-live in seconds
+  }
+}
+```
+
+#### server (object)
+
+Server configuration.
+
+```json
+{
+  "server": {
+    "port": 3000,
+    "host": "localhost"
+  }
+}
+```
+
+---
+
+## Agent.md
+
+Defines the agent's personality, goals, constraints, and behavior. This is the **system prompt** for your LLM.
+
+### Structure
+
+```markdown
+# Agent Role
+
+[Who the agent is and what it does]
+
+## Context
+
+[Project background, tech stack, conventions]
+
+## Goals
+
+[Primary objectives and success criteria]
+
+## Constraints
+
+[What the agent should NOT do]
+
+## Guidelines
+
+[How to approach tasks]
+
+## Examples
+
+[Illustrative examples of desired behavior]
+```
+
+### Best Practices
+
+#### 1. Define Clear Role
+
+```markdown
+# Agent Role
+
+You are a senior frontend engineer specializing in React performance optimization.
+```
+
+#### 2. Provide Rich Context
+
+```markdown
+## Context
+
+This project uses:
+- **Framework**: React 18 with TypeScript
+- **Styling**: Tailwind CSS
+- **State**: Redux Toolkit
+- **Testing**: Jest + Testing Library
+- **CI/CD**: GitHub Actions
+
+Code conventions:
+- Use functional components with hooks
+- Prefer composition over inheritance
+- Write tests for all new components
+- Follow ESLint rules strictly
+```
+
+#### 3. Set Specific Goals
+
+```markdown
+## Goals
+
+1. **Code Quality**: Ensure clean, maintainable code
+2. **Performance**: Optimize for Core Web Vitals
+3. **Testing**: Maintain >80% test coverage
+4. **Documentation**: Keep docs in sync with code
+
+For each review:
+- Identify performance bottlenecks
+- Suggest specific improvements
+- Provide code examples when helpful
+- Explain the "why" behind suggestions
+```
+
+#### 4. Define Constraints
+
+```markdown
+## Constraints
+
+**Never do**:
+- Modify files outside src/ and tests/
+- Change package.json without approval
+- Use `any` type in TypeScript
+- Disable ESLint rules
+
+**Always**:
+- Maintain backward compatibility
+- Write tests for new features
+- Update documentation
+- Follow semantic versioning
+```
+
+#### 5. Include Examples
+
+```markdown
+## Examples
+
+### Code Review
+
+**Input**: A React component with prop drilling
+
+**Good Response**:
+```typescript
+I noticed this component passes data through 3 levels of props.
+Consider using React Context or a state management library instead.
+
+Example:
+const MyContext = createContext(contextValue);
+
+// In parent
+<MyContext.Provider value={data}>
+  <Child />
+</MyContext.Provider>
+
+// In descendant
+const data = useContext(MyContext);
+```
+
+This improves:
+- Maintainability
+- Performance (fewer re-renders)
+- Developer experience
+```
+
+### Agent Templates
+
+#### Code Review Agent
+
+```markdown
+# Code Review Agent
+
+You are a thorough code reviewer focused on quality, security, and maintainability.
+
+## Review Criteria
+
+1. **Correctness**: Does the code do what it intends?
+2. **Security**: Any vulnerabilities or sensitive data exposure?
+3. **Performance**: Any obvious bottlenecks or inefficiencies?
+4. **Style**: Consistent with project conventions?
+5. **Testing**: Adequate coverage for new code?
+
+## Response Format
+
+For each review:
+
+## Summary
+[One sentence overview]
+
+## Issues Found
+- [Severity] [File:Line]: [Description]
+
+## Suggestions
+[Specific, actionable improvements]
+
+## Approval
+[✅ Approve | ⚠️ Request Changes | ❌ Reject]
+```
+
+#### Documentation Agent
+
+```markdown
+# Documentation Specialist
+
+You maintain accurate, up-to-date documentation for this project.
+
+## Responsibilities
+
+1. Review all code changes for documentation needs
+2. Update API documentation
+3. Ensure examples work
+4. Maintain consistency
+
+## Style Guidelines
+
+- Use clear, simple language
+- Provide code examples
+- Include error scenarios
+- Link related concepts
+
+## When to Update Docs
+
+- New API or function added
+- Behavior changes
+- Deprecations introduced
+- New features released
+```
+
+---
+
+## Environment Variables
+
+Store sensitive data in environment variables, never in `ship.json`.
+
+### Setup
+
+**Option 1: Shell profile** (~/.bashrc, ~/.zshrc):
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+export OPENAI_API_KEY="sk-..."
+export TELEGRAM_BOT_TOKEN="123456:..."
+export GITHUB_TOKEN="ghp_..."
+```
+
+**Option 2: .env file** (add to .gitignore):
+
+```bash
+# .env
+ANTHROPIC_API_KEY=sk-ant-...
+TELEGRAM_BOT_TOKEN=123456:...
+```
+
+**Option 3: System environment**:
+
+```bash
+# Linux/Mac
+/etc/environment
+
+# Windows
+System Properties → Environment Variables
+```
+
+### Reference in ship.json
+
+```json
+{
+  "llm": {
+    "apiKey": "${ANTHROPIC_API_KEY}"  // References environment variable
+  },
+  "integrations": {
+    "telegram": {
+      "botToken": "${TELEGRAM_BOT_TOKEN}"
+    }
+  }
+}
+```
+
+### Common Environment Variables
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `ANTHROPIC_API_KEY` | Anthropic Claude API | `sk-ant-...` |
+| `OPENAI_API_KEY` | OpenAI GPT API | `sk-...` |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token | `123456:ABC...` |
+| `TELEGRAM_CHAT_ID` | Telegram chat ID | `123456789` |
+| `GITHUB_TOKEN` | GitHub personal access token | `ghp_...` |
+| `SLACK_WEBHOOK_URL` | Slack incoming webhook | `https://hooks.slack.com/...` |
+| `SHIPMYAGENT_LOG_LEVEL` | Override log level | `debug` |
+
+---
+
+## Validation
+
+Validate your configuration:
+
+```bash
+# Check configuration syntax
+shipmyagent validate
+
+# Test LLM connection
+shipmyagent test-llm
+
+# Full diagnostic
+shipmyagent doctor
+
+# Test specific integration
+shipmyagent test --integration telegram
+```
+
+### Common Errors
+
+**Syntax error in ship.json**:
+
+```bash
+✗ Invalid JSON at line 15
+```
+
+**Solution**: Use `jq` to validate:
+
+```bash
+cat ship.json | jq .
+```
+
+**Missing environment variable**:
+
+```bash
+✗ ANTHROPIC_API_KEY not set
+```
+
+**Solution**:
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+**Invalid permission path**:
+
+```bash
+✗ Invalid glob pattern: src/**/*.js
+```
+
+**Solution**: Use valid glob syntax:
+
+```json
+{
+  "paths": ["src/**/*.js"]  // Correct
+}
+```
+
+---
+
+## Next Steps
+
+- [Getting Started](/docs/getting-started) - Initial setup guide
+- [Tasks](/docs/tasks) - Create automated workflows
+- [Integrations](/docs/integrations) - Connect external services
+- [Best Practices](/docs/best-practices) - Security and optimization

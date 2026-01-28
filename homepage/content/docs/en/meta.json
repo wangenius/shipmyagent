@@ -1,4 +1,19 @@
 {
   "title": "Documentation",
-  "pages": ["index", "---Guide---", "guide"]
+  "pages": [
+    "index",
+    "guide",
+    "getting-started",
+    "guides",
+    "configuration",
+    "tasks",
+    "integrations",
+    "architecture",
+    "best-practices",
+    "examples",
+    "faq",
+    "troubleshooting",
+    "reference",
+    "community"
+  ]
 }

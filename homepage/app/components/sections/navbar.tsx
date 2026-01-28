@@ -7,9 +7,19 @@ import {
   IconBrandGithub,
   IconBrandX,
   IconLanguage,
+  IconCode,
+  IconBriefcase,
+  IconTools,
+  IconBuildingStore,
+  IconArrowRight,
+  IconHelp,
+  IconMap2,
+  IconMessageCircle,
+  IconBrandDiscord,
+  IconUsers,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { setLang, initLang } from "@/lib/locales";
+import { setLang } from "@/lib/locales";
 
 import { product } from "@/lib/product";
 import { Button } from "@/components/ui/button";
@@ -31,9 +41,6 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    // Initialize language from localStorage
-    initLang();
-
     const onScroll = () => {
       setScrolled(window.scrollY > 0);
     };
@@ -65,7 +72,7 @@ export function Navbar() {
         <nav className="hidden md:flex items-center gap-1">
           {/* Docs - Simple Link */}
           <Link
-            to={i18n.language === "zh" ? "/zh/docs" : "/docs"}
+            to={i18n.language === "zh" ? "/zh/docs" : "/en/docs"}
             className="text-sm font-medium px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
           >
             Docs
@@ -81,89 +88,183 @@ export function Navbar() {
 
           {/* Resources Menu */}
           <Popover>
-            <PopoverTrigger>
-              <button className="cursor-pointer text-sm font-medium px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground">
-                Resources
-              </button>
+            <PopoverTrigger className="cursor-pointer text-sm font-medium px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent/50 outline-none transition-colors">
+              Resources
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-48 p-1">
-              <Link
-                to="/resources/examples"
-                className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
-              >
-                Examples
-              </Link>
-              <Link
-                to="/resources/use-cases"
-                className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
-              >
-                Use Cases
-              </Link>
-              <Link
-                to="/resources/skills"
-                className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
-              >
-                Skills
-              </Link>
-              <Link
-                to="/resources/marketplace"
-                className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
-              >
-                Agent Marketplace
-              </Link>
-              <div className="my-1 border-t" />
-              <Link
-                to="/resources"
-                className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
-              >
-                View All Resources
-              </Link>
+            <PopoverContent align="start" className="w-80 p-2">
+              <div className="grid gap-1">
+                <Link
+                  to="/resources/examples"
+                  className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
+                    <IconCode className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium leading-none mb-1">
+                      Examples
+                    </div>
+                    <div className="text-xs text-muted-foreground line-clamp-1">
+                      Explore example projects and starters
+                    </div>
+                  </div>
+                </Link>
+                <Link
+                  to="/resources/use-cases"
+                  className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
+                    <IconBriefcase className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium leading-none mb-1">
+                      Use Cases
+                    </div>
+                    <div className="text-xs text-muted-foreground line-clamp-1">
+                      Real-world applications and scenarios
+                    </div>
+                  </div>
+                </Link>
+                <Link
+                  to="/resources/skills"
+                  className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
+                    <IconTools className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium leading-none mb-1">
+                      Skills
+                    </div>
+                    <div className="text-xs text-muted-foreground line-clamp-1">
+                      Extend capabilities with new skills
+                    </div>
+                  </div>
+                </Link>
+                <Link
+                  to="/resources/marketplace"
+                  className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
+                    <IconBuildingStore className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium leading-none mb-1">
+                      Agent Marketplace
+                    </div>
+                    <div className="text-xs text-muted-foreground line-clamp-1">
+                      Discover and share community agents
+                    </div>
+                  </div>
+                </Link>
+                <div className="my-1 border-t border-border/50" />
+                <Link
+                  to="/resources"
+                  className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
+                    <IconArrowRight className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium leading-none text-muted-foreground group-hover:text-foreground transition-colors">
+                      View All Resources
+                    </div>
+                  </div>
+                </Link>
+              </div>
             </PopoverContent>
           </Popover>
 
           {/* Community Menu */}
           <Popover>
-            <PopoverTrigger>
-              <button className="cursor-pointer text-sm font-medium px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground">
-                Community
-              </button>
+            <PopoverTrigger className="cursor-pointer text-sm font-medium px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent/50 outline-none transition-colors">
+              Community
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-48 p-1">
-              <Link
-                to="/community/faq"
-                className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
-              >
-                FAQ
-              </Link>
-              <Link
-                to="/community/roadmap"
-                className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
-              >
-                Roadmap
-              </Link>
-              <a
-                href="https://github.com/wangenius/shipmyagent/discussions"
-                target="_blank"
-                rel="noreferrer"
-                className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
-              >
-                Discussions
-              </a>
-              <a
-                href="https://discord.gg/shipmyagent"
-                target="_blank"
-                rel="noreferrer"
-                className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
-              >
-                Discord
-              </a>
-              <div className="my-1 border-t" />
-              <Link
-                to="/community"
-                className="block px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
-              >
-                Join Community
-              </Link>
+            <PopoverContent align="start" className="w-80 p-2">
+              <div className="grid gap-1">
+                <Link
+                  to="/community/faq"
+                  className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
+                    <IconHelp className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium leading-none mb-1">
+                      FAQ
+                    </div>
+                    <div className="text-xs text-muted-foreground line-clamp-1">
+                      Frequently asked questions
+                    </div>
+                  </div>
+                </Link>
+                <Link
+                  to="/community/roadmap"
+                  className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
+                    <IconMap2 className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium leading-none mb-1">
+                      Roadmap
+                    </div>
+                    <div className="text-xs text-muted-foreground line-clamp-1">
+                      See what we are building next
+                    </div>
+                  </div>
+                </Link>
+                <a
+                  href="https://github.com/wangenius/shipmyagent/discussions"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
+                    <IconMessageCircle className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium leading-none mb-1">
+                      Discussions
+                    </div>
+                    <div className="text-xs text-muted-foreground line-clamp-1">
+                      Join the conversation on GitHub
+                    </div>
+                  </div>
+                </a>
+                <a
+                  href="https://discord.gg/shipmyagent"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
+                    <IconBrandDiscord className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium leading-none mb-1">
+                      Discord
+                    </div>
+                    <div className="text-xs text-muted-foreground line-clamp-1">
+                      Chat with the community
+                    </div>
+                  </div>
+                </a>
+                <div className="my-1 border-t border-border/50" />
+                <Link
+                  to="/community"
+                  className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
+                    <IconUsers className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium leading-none text-muted-foreground group-hover:text-foreground transition-colors">
+                      Join Community
+                    </div>
+                  </div>
+                </Link>
+              </div>
             </PopoverContent>
           </Popover>
         </nav>
@@ -194,10 +295,8 @@ export function Navbar() {
           {/* Language Switcher Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger>
-              <Button variant="ghost" size="icon">
-                <IconLanguage className="size-4" />
-                <span className="sr-only">Switch Language</span>
-              </Button>
+              <IconLanguage className="size-4" />
+              <span className="sr-only">Switch Language</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => handleLanguageChange("en")}>
@@ -231,7 +330,7 @@ export function Navbar() {
           <div className="container px-4 py-4 space-y-4">
             {/* Docs Link */}
             <Link
-              to={i18n.language === "zh" ? "/zh/docs" : "/docs"}
+              to={i18n.language === "zh" ? "/zh/docs" : "/en/docs"}
               className="block text-sm font-medium hover:underline"
               onClick={() => setMobileMenuOpen(false)}
             >

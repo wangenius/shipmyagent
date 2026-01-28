@@ -1,0 +1,629 @@
+---
+title: 配置
+description: ShipMyAgent 配置文件完整参考
+---
+
+# 配置
+
+通过 `ship.json` 和 `Agent.md` 配置 ShipMyAgent 的完整指南。
+
+## 概述
+
+ShipMyAgent 使用两个主要配置文件：
+
+```
+your-project/
+├── ship.json          # 主配置（LLM、权限、集成）
+├── Agent.md           # Agent 个性和行为
+└── .ship/             # 运行时数据（日志、缓存、任务）
+```
+
+---
+
+## ship.json
+
+控制 agent 能力和行为的主配置文件。
+
+### 完整示例
+
+```json
+{
+  "name": "my-agent",
+  "version": "1.0.0",
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "apiKey": "${ANTHROPIC_API_KEY}",
+    "temperature": 0.5,
+    "maxTokens": 4096,
+    "timeout": 30000,
+    "streaming": true
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": ["src/**", "tests/**", "docs/**"],
+      "exclude": ["*.config.js", ".env"],
+      "requiresApproval": true
+    },
+    "exec_shell": {
+      "allow": ["npm test", "npm run lint", "git status"],
+      "requiresApproval": false
+    }
+  },
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
+    },
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo"
+    }
+  },
+  "logging": {
+    "level": "info",
+    "file": ".ship/logs/agent.log",
+    "rotation": {
+      "enabled": true,
+      "maxSize": "10MB",
+      "maxFiles": 10
+    }
+  },
+  "cache": {
+    "enabled": true,
+    "ttl": 3600
+  }
+}
+```
+
+### 配置部分
+
+#### name (string, 必需)
+
+您的 agent 名称。用于日志和 UI 交互。
+
+```json
+{
+  "name": "code-reviewer"
+}
+```
+
+#### version (string, 必需)
+
+配置模式版本。
+
+```json
+{
+  "version": "1.0.0"
+}
+```
+
+#### llm (object, 必需)
+
+语言模型配置。
+
+| 字段 | 类型 | 必需 | 默认值 | 描述 |
+|------|------|------|--------|------|
+| `provider` | string | 是 | - | LLM 提供商：`anthropic`、`openai`、`deepseek`、`custom` |
+| `model` | string | 是 | - | 模型名称（例如 `claude-3-5-sonnet-20241022`）|
+| `baseUrl` | string | 否 | 提供商默认 | API 端点 URL |
+| `apiKey` | string | 是 | - | API key（使用环境变量！）|
+| `temperature` | number | 否 | 0.5 | 响应随机性（0-1）|
+| `maxTokens` | number | 否 | 4096 | 最大响应 token 数 |
+| `timeout` | number | 否 | 30000 | 请求超时（毫秒）|
+| `streaming` | boolean | 否 | false | 启用流式响应 |
+
+**配置示例**：
+
+```json
+// Anthropic (Claude)
+{
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "apiKey": "${ANTHROPIC_API_KEY}"
+  }
+}
+
+// OpenAI (GPT)
+{
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-4o",
+    "baseUrl": "https://api.openai.com/v1",
+    "apiKey": "${OPENAI_API_KEY}"
+  }
+}
+
+// 自定义端点
+{
+  "llm": {
+    "provider": "custom",
+    "model": "custom-model",
+    "baseUrl": "https://your-api.com/v1",
+    "apiKey": "${CUSTOM_API_KEY}",
+    "headers": {
+      "X-Custom-Header": "value"
+    }
+  }
+}
+```
+
+#### permissions (object, 必需)
+
+控制 agent 可以做什么。
+
+**read_repo** (boolean)
+
+允许读取仓库文件。
+
+```json
+{
+  "permissions": {
+    "read_repo": true
+  }
+}
+```
+
+**write_repo** (object or boolean)
+
+控制文件写入权限。
+
+```json
+{
+  "permissions": {
+    "write_repo": {
+      "paths": ["src/**", "tests/**"],  // Glob 模式
+      "exclude": ["*.key", "secrets/**"],  // 排除模式
+      "requiresApproval": true  // 写入前询问
+    }
+  }
+}
+```
+
+**exec_shell** (object)
+
+控制 shell 命令执行。
+
+```json
+{
+  "permissions": {
+    "exec_shell": {
+      "allow": ["npm test", "npm run lint", "git *"],  // 命令模式
+      "requiresApproval": false  // 自动允许安全命令
+    }
+  }
+}
+```
+
+#### integrations (object)
+
+外部服务连接。
+
+**Telegram**:
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "123456789",  // 安全所必需！
+      "updates": {
+        "timeout": 30,
+        "limit": 10
+      }
+    }
+  }
+}
+```
+
+**GitHub**:
+
+```json
+{
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo",
+      "autoMerge": false,
+      "requiredReviews": 1
+    }
+  }
+}
+```
+
+**Slack**:
+
+```json
+{
+  "integrations": {
+    "slack": {
+      "enabled": true,
+      "webhook": "${SLACK_WEBHOOK_URL}",
+      "channel": "#engineering"
+    }
+  }
+}
+```
+
+#### logging (object)
+
+配置日志行为。
+
+```json
+{
+  "logging": {
+    "level": "info",  // debug、info、warn、error
+    "file": ".ship/logs/agent.log",
+    "timing": {
+      "enabled": true,
+      "threshold": 1000  // 记录超过 1 秒的操作
+    },
+    "rotation": {
+      "enabled": true,
+      "maxSize": "10MB",
+      "maxFiles": 10,
+      "compress": true
+    }
+  }
+}
+```
+
+#### cache (object)
+
+配置响应缓存。
+
+```json
+{
+  "cache": {
+    "enabled": true,
+    "fileReads": true,
+    "llmResponses": true,
+    "ttl": 3600  // 生存时间（秒）
+  }
+}
+```
+
+#### server (object)
+
+服务器配置。
+
+```json
+{
+  "server": {
+    "port": 3000,
+    "host": "localhost"
+  }
+}
+```
+
+---
+
+## Agent.md
+
+定义 agent 的个性、目标、约束和行为。这是您 LLM 的**系统提示**。
+
+### 结构
+
+```markdown
+# Agent 角色
+
+[agent 是谁以及它做什么]
+
+## 上下文
+
+[项目背景、技术栈、约定]
+
+## 目标
+
+[主要目标和成功标准]
+
+## 约束
+
+[agent 不应该做什么]
+
+## 指南
+
+[如何处理任务]
+
+## 示例
+
+[所需行为的说明性示例]
+```
+
+### 最佳实践
+
+#### 1. 定义清晰的角色
+
+```markdown
+# Agent 角色
+
+你是一位专注于 React 性能优化的一级前端工程师。
+```
+
+#### 2. 提供丰富的上下文
+
+```markdown
+## 上下文
+
+本项目使用：
+- **框架**：React 18 with TypeScript
+- **样式**：Tailwind CSS
+- **状态**：Redux Toolkit
+- **测试**：Jest + Testing Library
+- **CI/CD**：GitHub Actions
+
+代码约定：
+- 使用带 hooks 的函数组件
+- 优先使用组合而不是继承
+- 为所有新组件编写测试
+- 严格遵循 ESLint 规则
+```
+
+#### 3. 设定具体目标
+
+```markdown
+## 目标
+
+1. **代码质量**：确保干净、可维护的代码
+2. **性能**：针对核心 Web 指标进行优化
+3. **测试**：保持 >80% 的测试覆盖率
+4. **文档**：保持文档与代码同步
+
+每次审查：
+- 识别性能瓶颈
+- 建议具体的改进
+- 有帮助时提供代码示例
+- 解释建议背后的"原因"
+```
+
+#### 4. 定义约束
+
+```markdown
+## 约束
+
+**绝不**：
+- 修改 src/ 和 tests/ 之外的文件
+- 未经批准更改 package.json
+- 在 TypeScript 中使用 `any` 类型
+- 禁用 ESLint 规则
+
+**始终**：
+- 保持向后兼容
+- 为新功能编写测试
+- 更新文档
+- 遵循语义化版本控制
+```
+
+#### 5. 包含示例
+
+```markdown
+## 示例
+
+### 代码审查
+
+**输入**：一个通过 props 传递数据的 React 组件
+
+**良好响应**：
+```typescript
+我注意到这个组件通过 3 层 props 传递数据。
+考虑改用 React Context 或状态管理库。
+
+示例：
+const MyContext = createContext(contextValue);
+
+// 在父组件中
+<MyContext.Provider value={data}>
+  <Child />
+</MyContext.Provider>
+
+// 在后代组件中
+const data = useContext(MyContext);
+```
+
+这改善了：
+- 可维护性
+- 性能（更少的重新渲染）
+- 开发体验
+```
+
+### Agent 模板
+
+#### 代码审查 Agent
+
+```markdown
+# 代码审查 Agent
+
+你是一位专注于质量、安全性和可维护性的彻底代码审查员。
+
+## 审查标准
+
+1. **正确性**：代码是否按预期工作？
+2. **安全性**：任何漏洞或敏感数据泄露？
+3. **性能**：任何明显的瓶颈或低效？
+4. **风格**：与项目约定一致？
+5. **测试**：新代码的覆盖率足够？
+
+## 响应格式
+
+每次审查：
+
+## 摘要
+[一句话概述]
+
+## 发现的问题
+- [严重程度] [文件:行]：[描述]
+
+## 建议
+[具体的、可操作的改进]
+
+## 批准
+[✅ 批准 | ⚠️ 请求更改 | ❌ 拒绝]
+```
+
+#### 文档 Agent
+
+```markdown
+# 文档专员
+
+你维护本项目的准确、最新的文档。
+
+## 职责
+
+1. 审查所有代码更改的文档需求
+2. 更新 API 文档
+3. 确保示例有效
+4. 保持一致性
+
+## 风格指南
+
+- 使用清晰、简单的语言
+- 提供代码示例
+- 包含错误场景
+- 链接相关概念
+
+## 何时更新文档
+
+- 添加了新 API 或函数
+- 行为更改
+- 引入弃用
+- 发布新功能
+```
+
+---
+
+## 环境变量
+
+将敏感数据存储在环境变量中，永远不要存储在 `ship.json` 中。
+
+### 设置
+
+**选项 1：Shell 配置文件** (~/.bashrc、~/.zshrc)：
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+export OPENAI_API_KEY="sk-..."
+export TELEGRAM_BOT_TOKEN="123456:..."
+export GITHUB_TOKEN="ghp_..."
+```
+
+**选项 2：.env 文件**（添加到 .gitignore）：
+
+```bash
+# .env
+ANTHROPIC_API_KEY=sk-ant-...
+TELEGRAM_BOT_TOKEN=123456:...
+```
+
+**选项 3：系统环境**：
+
+```bash
+# Linux/Mac
+/etc/environment
+
+# Windows
+系统属性 → 环境变量
+```
+
+### 在 ship.json 中引用
+
+```json
+{
+  "llm": {
+    "apiKey": "${ANTHROPIC_API_KEY}"  // 引用环境变量
+  },
+  "integrations": {
+    "telegram": {
+      "botToken": "${TELEGRAM_BOT_TOKEN}"
+    }
+  }
+}
+```
+
+### 常用环境变量
+
+| 变量 | 用途 | 示例 |
+|------|------|------|
+| `ANTHROPIC_API_KEY` | Anthropic Claude API | `sk-ant-...` |
+| `OPENAI_API_KEY` | OpenAI GPT API | `sk-...` |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token | `123456:ABC...` |
+| `TELEGRAM_CHAT_ID` | Telegram chat ID | `123456789` |
+| `GITHUB_TOKEN` | GitHub personal access token | `ghp_...` |
+| `SLACK_WEBHOOK_URL` | Slack incoming webhook | `https://hooks.slack.com/...` |
+| `SHIPMYAGENT_LOG_LEVEL` | 覆盖日志级别 | `debug` |
+
+---
+
+## 验证
+
+验证您的配置：
+
+```bash
+# 检查配置语法
+shipmyagent validate
+
+# 测试 LLM 连接
+shipmyagent test-llm
+
+# 完整诊断
+shipmyagent doctor
+
+# 测试特定集成
+shipmyagent test --integration telegram
+```
+
+### 常见错误
+
+**ship.json 中的语法错误**：
+
+```bash
+✗ 第 15 行 JSON 无效
+```
+
+**解决方案**：使用 `jq` 验证：
+
+```bash
+cat ship.json | jq .
+```
+
+**缺少环境变量**：
+
+```bash
+✗ 未设置 ANTHROPIC_API_KEY
+```
+
+**解决方案**：
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+**无效的权限路径**：
+
+```bash
+✗ 无效的 glob 模式：src/**/*.js
+```
+
+**解决方案**：使用有效的 glob 语法：
+
+```json
+{
+  "paths": ["src/**/*.js"]  // 正确
+}
+```
+
+---
+
+## 下一步
+
+- [快速开始](/docs/getting-started) - 初始设置指南
+- [任务](/docs/tasks) - 创建自动化工作流程
+- [集成](/docs/integrations) - 连接外部服务
+- [最佳实践](/docs/best-practices) - 安全和优化

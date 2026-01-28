@@ -10,6 +10,7 @@ import {
 import { RootProvider } from "fumadocs-ui/provider/react-router";
 import { I18nextProvider } from "react-i18next";
 import { defineI18nUI } from "fumadocs-ui/i18n";
+import { useEffect } from "react";
 
 import type { Route } from "./+types/root";
 import "./app.css";
@@ -53,7 +54,8 @@ export const links: Route.LinksFunction = () => [
 
 export const meta: Route.MetaFunction = () => {
   return [
-    { charset: "utf-8" },
+    { title: "ShipMyAgent - Transform Your Repository into an AI Agent" },
+    { charSet: "utf-8" },
     { name: "viewport", content: "width=device-width, initial-scale=1" },
     {
       name: "description",
@@ -111,6 +113,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
   if (path.includes("/zh/") || path.endsWith("/zh")) {
     lang = "zh";
   }
+
+  // Sync i18n language with URL path (only on client side)
+  useEffect(() => {
+    if (typeof window !== "undefined" && i18next.language !== lang) {
+      i18next.changeLanguage(lang);
+    }
+  }, [lang]);
 
   return (
     <html lang={lang} suppressHydrationWarning>

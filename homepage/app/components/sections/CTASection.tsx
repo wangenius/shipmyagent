@@ -29,12 +29,6 @@ export const CTASection: FC = () => {
               <Link to="/docs">{t("common:readDocs")}</Link>
             </Button>
           </div>
-          <div className="text-xs uppercase tracking-widest text-muted-foreground mt-8">
-            <span className="font-semibold text-foreground">Open Source</span>{" "}
-            on GitHub
-            <span className="mx-3">·</span>
-            Self-hostable
-          </div>
         </div>
       </div>
     </section>

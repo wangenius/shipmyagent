@@ -1,4 +1,20 @@
 {
   "title": "文档",
-  "pages": ["index", "---指南---", "guide"]
+  "pages": [
+    "index",
+    "guide",
+    "getting-started",
+    "guides",
+    "configuration",
+    "customization",
+    "tasks",
+    "integrations",
+    "architecture",
+    "best-practices",
+    "examples",
+    "faq",
+    "troubleshooting",
+    "reference",
+    "community"
+  ]
 }

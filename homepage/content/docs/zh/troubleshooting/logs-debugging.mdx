@@ -1,0 +1,363 @@
+---
+title: 日志与调试
+description: 理解和使用 ShipMyAgent 日志
+---
+
+# 日志与调试
+
+有效的调试从理解日志开始。本指南向您展示如何访问、解释和使用 ShipMyAgent 日志。
+
+## 日志位置
+
+日志存储在项目的 `.ship/` 目录中：
+
+```
+.ship/
+├── logs/
+│   ├── agent.log          # 主 agent 日志
+│   ├── tasks.log          # 定时任务日志
+│   ├── errors.log         # 仅错误日志
+│   └── integration/       # 集成特定日志
+│       ├── telegram.log
+│       └── github.log
+└── cache/                 # 临时缓存数据
+```
+
+## 查看日志
+
+### CLI 命令
+
+```bash
+# 实时查看日志（跟踪模式）
+shipmyagent logs --follow
+
+# 查看最近 50 行
+shipmyagent logs --tail 50
+
+# 查看特定日志文件
+shipmyagent logs --file tasks
+
+# 导出日志
+shipmyagent logs --export > my-logs.txt
+
+# 按日志级别过滤
+shipmyagent logs --level error
+```
+
+### 直接文件访问
+
+```bash
+# 查看 agent 日志
+tail -f .ship/logs/agent.log
+
+# 查看最近的错误
+tail -50 .ship/logs/errors.log
+
+# 搜索特定错误
+grep "ERROR" .ship/logs/agent.log
+
+# 查找 HTTP 请求
+grep "POST\|GET" .ship/logs/agent.log
+```
+
+## 日志级别
+
+ShipMyAgent 使用标准日志级别：
+
+| 级别 | 描述 | 示例 |
+|------|------|------|
+| **ERROR** | 阻止操作的错误 | API 失败、权限错误 |
+| **WARN** | 不阻止操作的警告 | 弃用的配置、重试尝试 |
+| **INFO** | 一般信息 | Agent 已启动、任务完成 |
+| **DEBUG** | 详细诊断信息 | 函数调用、变量值 |
+
+### 设置日志级别
+
+```bash
+# 通过 CLI 设置
+shipmyagent start --log-level debug
+
+# 在 ship.json 中设置
+{
+  "logging": {
+    "level": "debug",
+    "file": ".ship/logs/agent.log"
+  }
+}
+```
+
+## 解释日志消息
+
+### 日志格式
+
+每个日志条目遵循以下格式：
+
+```
+[2024-01-15 14:30:45] [INFO] [AGENT] Agent 启动成功
+│                        │      │       │
+│                        │      │       └─ 组件 (AGENT, TASK, TELEGRAM)
+│                        │      └─ 级别 (INFO, WARN, ERROR, DEBUG)
+│                        └─ 时间戳
+└─ 日期和时间
+```
+
+### 常见日志模式
+
+#### 1. 成功启动
+
+```
+[2024-01-15 14:30:45] [INFO] [AGENT] 正在启动 ShipMyAgent v1.0.0
+[2024-01-15 14:30:45] [INFO] [CONFIG] 正在从 /path/to/ship.json 加载配置
+[2024-01-15 14:30:45] [INFO] [LLM] 已连接到 Anthropic API
+[2024-01-15 14:30:46] [INFO] [TELEGRAM] Telegram bot 已连接 (@my_bot)
+[2024-01-15 14:30:46] [INFO] [AGENT] Agent 启动成功
+```
+
+#### 2. LLM API 错误
+
+```
+[2024-01-15 14:35:10] [ERROR] [LLM] API 请求失败：401 Unauthorized
+[2024-01-15 14:35:10] [ERROR] [LLM] 请检查 ship.json 中的 API key
+[2024-01-15 14:35:10] [DEBUG] [LLM] 响应：{"error":{"message":"invalid credentials"}}
+```
+
+#### 3. 权限错误
+
+```
+[2024-01-15 14:40:22] [WARN] [PERMISSION] 文件写入访问被拒绝：secret.key
+[2024-01-15 14:40:22] [INFO] [PERMISSION] 正在通过 Telegram 请求批准
+[2024-01-15 14:40:25] [INFO] [PERMISSION] 收到来自用户：123456 的批准
+[2024-01-15 14:40:25] [INFO] [FILE] 成功写入 secret.key
+```
+
+#### 4. 任务执行
+
+```
+[2024-01-15 18:00:00] [INFO] [TASK] 正在执行任务：daily-report
+[2024-01-15 18:00:01] [INFO] [TASK] 任务已开始：daily-report
+[2024-01-15 18:00:15] [INFO] [LLM] 正在发送提示到 LLM（256 tokens）
+[2024-01-15 18:00:22] [INFO] [TASK] 任务成功完成
+[2024-01-15 18:00:22] [INFO] [NOTIFY] 已发送结果到 Telegram
+```
+
+## 调试模式
+
+### 启用详细日志
+
+```bash
+# 使用详细输出启动
+shipmyagent start --verbose
+
+# 启用调试日志
+shipmyagent start --log-level debug
+
+# 同时启用两者
+shipmyagent start --verbose --log-level debug
+```
+
+### 调试输出示例
+
+```
+[DEBUG] [HTTP] 收到请求：POST /api/chat
+[DEBUG] [HTTP] 请求体：{"message":"hello"}
+[DEBUG] [LLM] 正在构造提示...
+[DEBUG] [LLM] 提示："你是一个有帮助的助手..."
+[DEBUG] [LLM] 正在发送到 API：https://api.anthropic.com/v1/messages
+[DEBUG] [HTTP] 响应状态：200
+[DEBUG] [LLM] 响应：{"content":"你好！我能帮你什么？"}
+[DEBUG] [HTTP] 正在发送响应：200
+```
+
+## 常见调试场景
+
+### 场景 1：Agent 无法启动
+
+```bash
+# 1. 检查错误日志
+shipmyagent logs --level error
+
+# 2. 查找配置问题
+grep "CONFIG" .ship/logs/agent.log
+
+# 3. 测试 LLM 连接
+shipmyagent test-llm
+
+# 4. 验证配置
+shipmyagent validate
+```
+
+### 场景 2：任务未运行
+
+```bash
+# 1. 检查任务调度器状态
+shipmyagent tasks list
+
+# 2. 查看任务日志
+shipmyagent logs --file tasks
+
+# 3. 验证 cron 表达式
+cat .ship/tasks/my-task.md | grep cron
+
+# 4. 手动测试任务
+shipmyagent tasks run my-task
+```
+
+### 场景 3：Telegram 无响应
+
+```bash
+# 1. 检查 Telegram 日志
+tail -f .ship/logs/integration/telegram.log
+
+# 2. 验证连接
+grep "TELEGRAM" .ship/logs/agent.log
+
+# 3. 测试 Telegram API
+curl https://api.telegram.org/bot<BOT_TOKEN>/getMe
+```
+
+### 场景 4：性能缓慢
+
+```bash
+# 1. 检查错误
+shipmyagent logs --level error
+
+# 2. 查找慢操作
+grep "slow\|timeout" .ship/logs/agent.log
+
+# 3. 监控 LLM 响应时间
+grep "LLM response time" .ship/logs/agent.log
+
+# 4. 检查系统资源
+top | grep shipmyagent
+```
+
+## 日志轮转
+
+日志会自动轮转以防止磁盘空间问题：
+
+```json
+{
+  "logging": {
+    "rotation": {
+      "enabled": true,
+      "maxSize": "10MB",
+      "maxFiles": 10,
+      "compress": true
+    }
+  }
+}
+```
+
+**配置说明**：
+- `maxSize`：轮转前每个日志文件的最大大小
+- `maxFiles`：要保留的备份文件数量
+- `compress`：使用 gzip 压缩轮转的日志
+
+## 导出日志以供支持
+
+寻求帮助时，导出相关日志：
+
+```bash
+# 导出所有日志
+shipmyagent logs --export --all > full-logs.txt
+
+# 仅导出错误
+shipmyagent logs --level error --export > errors-only.txt
+
+# 导出带上下文（前/后行）
+shipmyagent logs --context 5 --export > logs-with-context.txt
+
+# 创建诊断包
+shipmyagent doctor --export > diagnostic-bundle.zip
+```
+
+## 日志分析工具
+
+### 使用 grep 进行分析
+
+```bash
+# 按类型统计错误
+grep "ERROR" .ship/logs/agent.log | cut -d']' -f3 | sort | uniq -c
+
+# 查找慢操作
+grep "ms\|timeout" .ship/logs/agent.log
+
+# 跟踪 LLM API 调用
+grep "LLM" .ship/logs/agent.log | grep "response time"
+
+# 监控特定错误
+grep -i "permission denied\|401\|403" .ship/logs/agent.log
+```
+
+### 使用 jq 处理 JSON 日志
+
+如果日志是 JSON 格式：
+
+```bash
+# 提取特定字段
+jq '.timestamp, .level, .message' .ship/logs/agent.log
+
+# 按级别过滤
+jq 'select(.level == "ERROR")' .ship/logs/agent.log
+
+# 按组件统计
+jq '.component' .ship/logs/agent.log | sort | uniq -c
+```
+
+## 日志问题故障排查
+
+### 日志未出现
+
+**问题**：日志文件为空或缺失。
+
+**解决方案**：
+
+1. **检查权限**：
+   ```bash
+   ls -la .ship/logs/
+   chmod 755 .ship/logs/
+   ```
+
+2. **重启 agent**：
+   ```bash
+   shipmyagent restart
+   ```
+
+3. **验证日志配置**：
+   ```bash
+   cat ship.json | grep logging
+   ```
+
+### 日志增长过大
+
+**问题**：日志文件占用过多磁盘空间。
+
+**解决方案**：
+
+1. **启用轮转**（见上文）
+2. **手动清理旧日志**：
+   ```bash
+   rm .ship/logs/*.log.*
+   ```
+3. **降低日志级别**：
+   ```json
+   {
+     "logging": {
+       "level": "warn"  // 仅记录警告和错误
+     }
+   }
+   ```
+
+## 最佳实践
+
+1. **定期审查**：每周检查日志以发现重复问题
+2. **设置警报**：使用日志监控工具监控关键错误
+3. **归档日志**：保留旧日志以供合规或分析
+4. **清理**：定期删除旧的轮转日志
+5. **记录模式**：记录常见日志模式以供快速参考
+
+## 下一步
+
+- [常见问题](/docs/troubleshooting/common-issues) - 频繁问题的解决方案
+- [性能问题](/docs/troubleshooting/performance-issues) - 优化速度
+- [权限错误](/docs/troubleshooting/permission-errors) - 访问控制调试

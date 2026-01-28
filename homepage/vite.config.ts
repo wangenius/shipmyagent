@@ -7,6 +7,7 @@ import { defineConfig } from "vite";
 import path from "path";
 
 export default defineConfig({
+  base: "/",
   plugins: [tailwindcss(), mdx(MdxConfig), reactRouter(), tsconfigPaths()],
   resolve: {
     alias: {

@@ -1,0 +1,761 @@
+---
+title: Best Practices
+description: Guidelines for using ShipMyAgent effectively and securely
+---
+
+# Best Practices
+
+Follow these guidelines to use ShipMyAgent effectively, securely, and maintainably.
+
+## Overview
+
+This section covers:
+
+- [Prompt Writing](#prompt-writing) - How to write effective prompts
+- [Security Checklist](#security-checklist) - Essential security practices
+- [Team Onboarding](#team-onboarding) - Get your team started
+- [Anti-Patterns](#anti-patterns) - Common mistakes to avoid
+
+---
+
+## Prompt Writing
+
+Writing effective prompts is key to getting good results from ShipMyAgent.
+
+### Core Principles
+
+1. **Be Specific** - Clear instructions reduce ambiguity
+2. **Provide Context** - Include relevant project information
+3. **Set Constraints** - Define what the agent should NOT do
+4. **Use Examples** - Show desired output format
+5. **Iterate** - Refine prompts based on results
+
+### Writing Effective Agent.md
+
+**Good Agent.md Structure**:
+
+```markdown
+# Role
+
+You are a senior frontend engineer specializing in React performance optimization.
+
+## Context
+
+This project uses:
+- React 18 with TypeScript
+- Tailwind CSS for styling
+- Redux Toolkit for state management
+
+## Goals
+
+- Review all code changes for performance issues
+- Suggest optimizations for component rendering
+- Ensure consistent code style across the project
+
+## Constraints
+
+- Never modify files outside src/ directory
+- Always preserve existing test coverage
+- Don't change API contracts without approval
+- Use TypeScript strict mode - no `any` types allowed
+
+## Output Format
+
+When reviewing code:
+1. Summarize the change in 1-2 sentences
+2. List any issues found (severity: HIGH/MEDIUM/LOW)
+3. Provide specific suggestions for improvement
+4. Include code examples for complex issues
+
+## Examples
+
+If reviewing a React component:
+
+**Input**: A new component using `useEffect` for data fetching
+
+**Good Output**:
+```
+This component fetches user data on mount.
+
+Issues:
+- MEDIUM: Missing loading state
+- LOW: No error handling for failed requests
+
+Suggestion: Add useState for loading/error states
+```
+```
+
+### Tips for Better Prompts
+
+#### 1. Use the "5 Ws"
+
+- **Who** - What is the agent's role?
+- **What** - What should it accomplish?
+- **Where** - Where should it operate (file paths)?
+- **When** - When should it take action (triggers)?
+- **Why** - Why is this important (context)?
+
+#### 2. Be Explicit About Format
+
+```markdown
+## Response Format
+
+Always respond in this structure:
+
+## Summary
+[Brief 1-2 sentence summary]
+
+## Changes
+- [File 1]: [Description]
+- [File 2]: [Description]
+
+## Risks
+- [Risk 1]: [Mitigation]
+```
+
+#### 3. Provide Negative Examples
+
+```markdown
+## Don't Do
+
+❌ Don't use `any` type
+❌ Don't ignore TypeScript errors
+❌ Don't modify tests without explicit request
+
+## Instead Do
+
+✅ Use proper TypeScript types
+✅ Fix type errors before submitting
+✅ Keep tests synced with code changes
+```
+
+#### 4. Set Clear Boundaries
+
+```markdown
+## Out of Scope
+
+Do not attempt to:
+- Modify package.json dependencies
+- Change deployment configuration
+- Alter database schema
+- Rewrite entire modules (refactor only)
+
+These require explicit human approval.
+```
+
+### Task-Specific Prompt Patterns
+
+#### Code Review Tasks
+
+```markdown
+---
+id: pr-review
+name: PR Review Agent
+---
+
+Review this pull request focusing on:
+1. **Security**: Any vulnerabilities or sensitive data exposure
+2. **Performance**: Potential bottlenecks or inefficient code
+3. **Maintainability**: Code complexity and readability
+4. **Testing**: Adequate test coverage
+
+For each issue, specify:
+- File and line number
+- Severity (CRITICAL/HIGH/MEDIUM/LOW)
+- Recommended fix
+- Code example if applicable
+```
+
+#### Maintenance Tasks
+
+```markdown
+---
+id: dependency-check
+name: Dependency Health Check
+cron: "0 9 * * 1"
+---
+
+Check for:
+1. Outdated dependencies (> 30 days old)
+2. Known security vulnerabilities
+3. Deprecated packages
+4. Better alternatives to current packages
+
+Report format:
+## 🔴 Critical Updates
+[Package]: [Current] → [Latest] - [Reason]
+
+## ⚠️ Recommended Updates
+[Package]: [Current] → [Latest]
+
+## ✅ All Good
+If no issues found, confirm everything is up to date.
+```
+
+#### Documentation Tasks
+
+```markdown
+---
+id: doc-sync
+name: Documentation Sync
+cron: "0 18 * * 5"
+---
+
+Ensure documentation is in sync with code:
+
+1. Check if new APIs/features are documented
+2. Verify examples in docs work with current code
+3. Update changelog if needed
+4. Flag any deprecated features still in docs
+
+Output:
+- Files to update
+- Missing documentation
+- Inconsistencies found
+```
+
+---
+
+## Security Checklist
+
+Essential security practices when using ShipMyAgent.
+
+### ✅ Always Do
+
+#### 1. Use Environment Variables for Secrets
+
+```bash
+# .env (add to .gitignore!)
+ANTHROPIC_API_KEY=sk-ant-...
+TELEGRAM_BOT_TOKEN=123456:...
+DATABASE_URL=postgres://...
+```
+
+```json
+// ship.json
+{
+  "llm": {
+    "apiKey": "${ANTHROPIC_API_KEY}"  // ✅ Good
+  }
+}
+```
+
+#### 2. Restrict File Access
+
+```json
+{
+  "permissions": {
+    "write_repo": {
+      "paths": ["src/**", "docs/**"],
+      "exclude": [
+        ".env",
+        "*.key",
+        "secrets/**",
+        "config/prod/**"
+      ]
+    }
+  }
+}
+```
+
+#### 3. Enable Approval for Risky Operations
+
+```json
+{
+  "permissions": {
+    "write_repo": {
+      "paths": ["**"],
+      "requiresApproval": true  // ✅ Require approval
+    },
+    "exec_shell": {
+      "allow": ["npm deploy"],
+      "requiresApproval": true  // ✅ Critical!
+    }
+  }
+}
+```
+
+#### 4. Validate User Input
+
+```markdown
+# Agent.md
+
+## Security Rules
+
+- Never execute commands with user input without sanitization
+- Validate file paths before reading/writing
+- Reject operations on sensitive files (.env, .key, etc.)
+- Escalate suspicious requests to human approval
+```
+
+#### 5. Audit Regularly
+
+```bash
+# Monthly security audit
+shipmyagent audit --permissions
+shipmyagent audit --tasks
+shipmyagent audit --logs --level error
+```
+
+### ❌ Never Do
+
+#### 1. Hardcode Secrets
+
+```json
+// ❌ NEVER do this
+{
+  "llm": {
+    "apiKey": "sk-ant-1234567890abcdef"
+  }
+}
+```
+
+#### 2. Allow Unrestricted Shell Access
+
+```json
+// ❌ DANGEROUS!
+{
+  "permissions": {
+    "exec_shell": {
+      "allow": ["*"]  // Allows ANY command!
+    }
+  }
+}
+```
+
+#### 3. Disable All Permissions
+
+```json
+// ❌ Don't give unlimited access
+{
+  "permissions": {
+    "write_repo": {
+      "paths": ["**"],
+      "requiresApproval": false,  // Auto-approves everything!
+      "exclude": []
+    }
+  }
+}
+```
+
+#### 4. Ignore Error Logs
+
+```bash
+# ❌ Don't ignore errors
+shipmyagent logs --level error  # Review these regularly!
+```
+
+### Security Monitoring
+
+Set up security alerts:
+
+```json
+{
+  "monitoring": {
+    "alerts": {
+      "unusualActivity": {
+        "enabled": true,
+        "notify": ["telegram", "email"]
+      },
+      "failedApprovals": {
+        "threshold": 3,
+        "action": "lockdown"
+      },
+      "suspiciousCommands": {
+        "patterns": ["rm -rf", "sudo", "chmod 777"],
+        "action": "block_and_notify"
+      }
+    }
+  }
+}
+```
+
+---
+
+## Team Onboarding
+
+Get your team up to speed with ShipMyAgent.
+
+### Phase 1: Setup (Week 1)
+
+#### Day 1-2: Pilot with Core Team
+
+1. **Select pilot team members** (2-3 developers)
+2. **Install ShipMyAgent** in a test project
+3. **Configure basic permissions**
+4. **Run initial tasks** and review results
+
+```markdown
+## Pilot Team Checklist
+
+- [ ] Install ShipMyAgent
+- [ ] Configure LLM API key
+- [ ] Create initial Agent.md
+- [ ] Set up Telegram (optional)
+- [ ] Run test task
+- [ ] Review and adjust prompts
+```
+
+#### Day 3-5: Iterate and Document
+
+1. **Refine Agent.md** based on pilot feedback
+2. **Document common tasks**
+3. **Create team-specific guidelines**
+4. **Set up shared resources**
+
+### Phase 2: Rollout (Week 2-3)
+
+#### Training Sessions
+
+**Session 1: Introduction** (30 min)
+
+```markdown
+## Agenda: What is ShipMyAgent?
+
+1. Overview and demo (10 min)
+2. Key features and benefits (5 min)
+3. Security and permissions (5 min)
+4. Q&A (10 min)
+
+## Handouts
+- Quick start guide
+- Security best practices
+- Team guidelines
+```
+
+**Session 2: Hands-on** (60 min)
+
+```markdown
+## Agenda: Getting Started
+
+1. Install and setup (15 min)
+2. Write your first Agent.md (15 min)
+3. Create and run a task (15 min)
+4. Review and troubleshoot (15 min)
+
+## Prerequisites
+- Node.js >= 18 installed
+- LLM API key ready
+- Test project cloned
+```
+
+#### Team Guidelines
+
+Create shared guidelines document:
+
+```markdown
+# Team ShipMyAgent Guidelines
+
+## When to Use
+
+✅ Good for:
+- Code reviews before PRs
+- Routine maintenance tasks
+- Documentation updates
+- Test generation
+
+❌ Not for:
+- Emergency fixes (use manual review)
+- Complex refactors (require human design)
+- Breaking changes (need team discussion)
+
+## Permissions Policy
+
+- All team members: Read access
+- Senior devs: Write access (with approval)
+- Tech leads: Full access (with approval for deploys)
+
+## Approval Workflow
+
+1. Agent proposes change
+2. Notification sent to Telegram
+3. Reviewer approves/rejects
+4. Agent executes or revises
+
+## Review Schedule
+
+- Weekly: Review task performance
+- Monthly: Update prompts and permissions
+- Quarterly: Full security audit
+```
+
+### Phase 3: Optimization (Week 4+)
+
+#### Collect Metrics
+
+```bash
+# Track team usage
+shipmyagent metrics --team
+
+# Generate monthly report
+shipmyagent report --month > monthly-report.txt
+```
+
+#### Metrics to Track
+
+| Metric | Target | Action if Low |
+|--------|--------|---------------|
+| **Task Success Rate** | > 90% | Review prompts |
+| **Approval Rate** | < 30% | Adjust permissions |
+| **Time Saved** | > 5 hrs/week | Expand usage |
+| **Team Satisfaction** | > 4/5 | Gather feedback |
+
+#### Continuous Improvement
+
+1. **Weekly Retrospective** (15 min)
+   - What worked well?
+   - What needs improvement?
+   - Action items for next week
+
+2. **Share Success Stories**
+   ```markdown
+   ## Team Wins 🎉
+
+   ### Week 2: Automated Code Reviews
+   - Saved 8 hours of review time
+   - Caught 3 critical bugs
+   - Team satisfaction: 4.5/5
+
+   ### Week 3: Documentation Sync
+   - Auto-updated 50+ docs pages
+   - Reduced doc debt by 40%
+   ```
+
+3. **Update Prompts Regularly**
+   ```bash
+   # Schedule prompt review
+   shipmyagent prompts review --team
+
+   # A/B test new prompts
+   shipmyagent prompts test --variant-b
+   ```
+
+---
+
+## Anti-Patterns
+
+Common mistakes and how to avoid them.
+
+### ❌ Anti-Pattern 1: Over-Permissive Configuration
+
+**Problem**:
+```json
+{
+  "permissions": {
+    "write_repo": {
+      "paths": ["**"],
+      "requiresApproval": false
+    },
+    "exec_shell": {
+      "allow": ["*"]
+    }
+  }
+}
+```
+
+**Why It's Bad**:
+- Agent can modify any file without review
+- Can execute any command
+- High risk of accidental damage
+
+**✅ Better Approach**:
+```json
+{
+  "permissions": {
+    "write_repo": {
+      "paths": ["src/**", "tests/**"],
+      "exclude": ["*.config.js", ".env"],
+      "requiresApproval": true
+    },
+    "exec_shell": {
+      "allow": ["npm test", "npm run lint"],
+      "requiresApproval": true
+    }
+  }
+}
+```
+
+### ❌ Anti-Pattern 2: Vague Prompts
+
+**Problem**:
+```markdown
+# Agent.md
+
+You are a helpful assistant. Help me with my code.
+```
+
+**Why It's Bad**:
+- No clear role or focus
+- No constraints or boundaries
+- Unpredictable behavior
+- Poor quality outputs
+
+**✅ Better Approach**:
+```markdown
+# Agent.md
+
+You are a senior React engineer specializing in performance optimization.
+
+## Scope
+- Review React component code
+- Identify performance bottlenecks
+- Suggest optimization strategies
+
+## Constraints
+- Only analyze files in src/
+- Don't suggest rewrites
+- Provide testable recommendations
+```
+
+### ❌ Anti-Pattern 3: Ignoring Errors
+
+**Problem**:
+```bash
+# Just ignoring error logs
+shipmyagent logs --level error  # ✗ Never reviewed
+```
+
+**Why It's Bad**:
+- Silent failures accumulate
+- Security issues go unnoticed
+- Performance degrades over time
+- Tasks stop working silently
+
+**✅ Better Approach**:
+```bash
+# Regular log reviews
+shipmyagent logs --level error --tail 100
+
+# Set up alerts
+{
+  "monitoring": {
+    "alerts": {
+      "onError": {
+        "notify": ["telegram"],
+        "threshold": 1
+      }
+    }
+  }
+}
+```
+
+### ❌ Anti-Pattern 4: Task Overload
+
+**Problem**:
+```markdown
+# Too many frequent tasks
+---
+cron: "*/5 * * * *"  # Every 5 minutes
+---
+---
+cron: "*/10 * * * *"  # Every 10 minutes
+---
+---
+cron: "0 * * * *"  # Every hour
+---
+```
+
+**Why It's Bad**:
+- High LLM API costs
+- System performance degradation
+- Notification fatigue
+- Diminishing returns
+
+**✅ Better Approach**:
+```markdown
+# Balanced task schedule
+---
+cron: "0 9 * * *"  # Daily morning check
+---
+---
+cron: "0 18 * * *"  # Daily evening summary
+---
+---
+cron: "0 9 * * 1"  # Weekly deep dive
+---
+```
+
+### ❌ Anti-Pattern 5: One-Size-Fits-All
+
+**Problem**:
+```markdown
+# Using same Agent.md for everything
+```
+
+**Why It's Bad**:
+- Lack of specialization
+- Poor performance on specific tasks
+- Conflicting instructions
+
+**✅ Better Approach**:
+```markdown
+# Agent.md - General purpose
+# Agent.code-review.md - Specialized for reviews
+# Agent.docs.md - Specialized for documentation
+# Agent.tests.md - Specialized for testing
+```
+
+### ❌ Anti-Pattern 6: No Version Control
+
+**Problem**:
+```
+.ship/
+├── tasks/
+│   └── task.md  # ✗ Not tracked
+├── cache/       # ✗ Accumulates indefinitely
+```
+
+**Why It's Bad**:
+- Can't revert bad changes
+- No history of prompt evolution
+- Lost work when cache cleared
+
+**✅ Better Approach**:
+```bash
+# .gitignore
+.ship/cache/
+.ship/logs/*.log
+.ship/tmp/
+
+# .gitinclude
+.ship/tasks/
+Agent.md
+ship.json.example
+```
+
+### ❌ Anti-Pattern 7: Trusting Blindly
+
+**Problem**:
+```json
+{
+  "permissions": {
+    "requiresApproval": false  # Blind trust
+  }
+}
+```
+
+**Why It's Bad**:
+- No human oversight
+- Errors propagate automatically
+- Security vulnerabilities
+- Loss of control
+
+**✅ Better Approach**:
+```json
+{
+  "permissions": {
+    "write_repo": {
+      "requiresApproval": true,  // Human in the loop
+      "approvalChannels": ["telegram", "slack"]
+    }
+  }
+}
+```
+
+---
+
+## Next Steps
+
+- [Configuration](/docs/configuration) - Detailed setup guide
+- [Examples](/docs/examples) - Real-world setups
+- [Troubleshooting](/docs/troubleshooting) - Problem-solving guide

@@ -1,0 +1,363 @@
+---
+title: Logs & Debugging
+description: Understanding and using ShipMyAgent logs
+---
+
+# Logs & Debugging
+
+Effective debugging starts with understanding logs. This guide shows you how to access, interpret, and use ShipMyAgent logs.
+
+## Log Locations
+
+Logs are stored in the `.ship/` directory of your project:
+
+```
+.ship/
+├── logs/
+│   ├── agent.log          # Main agent logs
+│   ├── tasks.log          # Scheduled task logs
+│   ├── errors.log         # Error-only logs
+│   └── integration/       # Integration-specific logs
+│       ├── telegram.log
+│       └── github.log
+└── cache/                 # Temporary cached data
+```
+
+## Viewing Logs
+
+### CLI Commands
+
+```bash
+# View real-time logs (follow mode)
+shipmyagent logs --follow
+
+# View last 50 lines
+shipmyagent logs --tail 50
+
+# View specific log file
+shipmyagent logs --file tasks
+
+# Export logs
+shipmyagent logs --export > my-logs.txt
+
+# Filter by log level
+shipmyagent logs --level error
+```
+
+### Direct File Access
+
+```bash
+# View agent logs
+tail -f .ship/logs/agent.log
+
+# View recent errors
+tail -50 .ship/logs/errors.log
+
+# Search for specific errors
+grep "ERROR" .ship/logs/agent.log
+
+# Find HTTP requests
+grep "POST\|GET" .ship/logs/agent.log
+```
+
+## Log Levels
+
+ShipMyAgent uses standard log levels:
+
+| Level | Description | Example |
+|-------|-------------|---------|
+| **ERROR** | Errors that prevent operation | API failures, permission errors |
+| **WARN** | Warnings that don't stop operation | Deprecated config, retry attempts |
+| **INFO** | General information | Agent started, task completed |
+| **DEBUG** | Detailed diagnostic info | Function calls, variable values |
+
+### Setting Log Level
+
+```bash
+# Set via CLI
+shipmyagent start --log-level debug
+
+# Set in ship.json
+{
+  "logging": {
+    "level": "debug",
+    "file": ".ship/logs/agent.log"
+  }
+}
+```
+
+## Interpreting Log Messages
+
+### Log Format
+
+Each log entry follows this format:
+
+```
+[2024-01-15 14:30:45] [INFO] [AGENT] Agent started successfully
+│                        │      │       │
+│                        │      │       └─ Component (AGENT, TASK, TELEGRAM)
+│                        │      └─ Level (INFO, WARN, ERROR, DEBUG)
+│                        └─ Timestamp
+└─ Date and time
+```
+
+### Common Log Patterns
+
+#### 1. Successful Startup
+
+```
+[2024-01-15 14:30:45] [INFO] [AGENT] Starting ShipMyAgent v1.0.0
+[2024-01-15 14:30:45] [INFO] [CONFIG] Loading config from /path/to/ship.json
+[2024-01-15 14:30:45] [INFO] [LLM] Connected to Anthropic API
+[2024-01-15 14:30:46] [INFO] [TELEGRAM] Telegram bot connected (@my_bot)
+[2024-01-15 14:30:46] [INFO] [AGENT] Agent started successfully
+```
+
+#### 2. LLM API Error
+
+```
+[2024-01-15 14:35:10] [ERROR] [LLM] API request failed: 401 Unauthorized
+[2024-01-15 14:35:10] [ERROR] [LLM] Check your API key in ship.json
+[2024-01-15 14:35:10] [DEBUG] [LLM] Response: {"error":{"message":"invalid credentials"}}
+```
+
+#### 3. Permission Error
+
+```
+[2024-01-15 14:40:22] [WARN] [PERMISSION] Write access denied for file: secret.key
+[2024-01-15 14:40:22] [INFO] [PERMISSION] Requesting approval via Telegram
+[2024-01-15 14:40:25] [INFO] [PERMISSION] Approval received from user:123456
+[2024-01-15 14:40:25] [INFO] [FILE] Successfully wrote to secret.key
+```
+
+#### 4. Task Execution
+
+```
+[2024-01-15 18:00:00] [INFO] [TASK] Executing task: daily-report
+[2024-01-15 18:00:01] [INFO] [TASK] Task started: daily-report
+[2024-01-15 18:00:15] [INFO] [LLM] Sending prompt to LLM (256 tokens)
+[2024-01-15 18:00:22] [INFO] [TASK] Task completed successfully
+[2024-01-15 18:00:22] [INFO] [NOTIFY] Sent result to Telegram
+```
+
+## Debugging Mode
+
+### Enable Verbose Logging
+
+```bash
+# Start with verbose output
+shipmyagent start --verbose
+
+# Enable debug logging
+shipmyagent start --log-level debug
+
+# Combine both
+shipmyagent start --verbose --log-level debug
+```
+
+### Debug Output Example
+
+```
+[DEBUG] [HTTP] Incoming request: POST /api/chat
+[DEBUG] [HTTP] Request body: {"message":"hello"}
+[DEBUG] [LLM] Constructing prompt...
+[DEBUG] [LLM] Prompt: "You are a helpful assistant..."
+[DEBUG] [LLM] Sending to API: https://api.anthropic.com/v1/messages
+[DEBUG] [HTTP] Response status: 200
+[DEBUG] [LLM] Response: {"content":"Hello! How can I help?"}
+[DEBUG] [HTTP] Sending response: 200
+```
+
+## Common Debugging Scenarios
+
+### Scenario 1: Agent Won't Start
+
+```bash
+# 1. Check logs for errors
+shipmyagent logs --level error
+
+# 2. Look for configuration issues
+grep "CONFIG" .ship/logs/agent.log
+
+# 3. Test LLM connection
+shipmyagent test-llm
+
+# 4. Validate configuration
+shipmyagent validate
+```
+
+### Scenario 2: Task Not Running
+
+```bash
+# 1. Check task scheduler status
+shipmyagent tasks list
+
+# 2. View task logs
+shipmyagent logs --file tasks
+
+# 3. Verify cron expression
+cat .ship/tasks/my-task.md | grep cron
+
+# 4. Test task manually
+shipmyagent tasks run my-task
+```
+
+### Scenario 3: Telegram Not Responding
+
+```bash
+# 1. Check Telegram logs
+tail -f .ship/logs/integration/telegram.log
+
+# 2. Verify connection
+grep "TELEGRAM" .ship/logs/agent.log
+
+# 3. Test Telegram API
+curl https://api.telegram.org/bot<BOT_TOKEN>/getMe
+```
+
+### Scenario 4: Slow Performance
+
+```bash
+# 1. Check for errors
+shipmyagent logs --level error
+
+# 2. Look for slow operations
+grep "slow\|timeout" .ship/logs/agent.log
+
+# 3. Monitor LLM response times
+grep "LLM response time" .ship/logs/agent.log
+
+# 4. Check system resources
+top | grep shipmyagent
+```
+
+## Log Rotation
+
+Logs are automatically rotated to prevent disk space issues:
+
+```json
+{
+  "logging": {
+    "rotation": {
+      "enabled": true,
+      "maxSize": "10MB",
+      "maxFiles": 10,
+      "compress": true
+    }
+  }
+}
+```
+
+**Configuration**:
+- `maxSize`: Maximum size of each log file before rotation
+- `maxFiles`: Number of backup files to keep
+- `compress`: Compress rotated logs with gzip
+
+## Exporting Logs for Support
+
+When asking for help, export relevant logs:
+
+```bash
+# Export all logs
+shipmyagent logs --export --all > full-logs.txt
+
+# Export only errors
+shipmyagent logs --level error --export > errors-only.txt
+
+# Export with context (lines before/after)
+shipmyagent logs --context 5 --export > logs-with-context.txt
+
+# Create diagnostic bundle
+shipmyagent doctor --export > diagnostic-bundle.zip
+```
+
+## Log Analysis Tools
+
+### Using grep for Analysis
+
+```bash
+# Count errors by type
+grep "ERROR" .ship/logs/agent.log | cut -d']' -f3 | sort | uniq -c
+
+# Find slow operations
+grep "ms\|timeout" .ship/logs/agent.log
+
+# Track LLM API calls
+grep "LLM" .ship/logs/agent.log | grep "response time"
+
+# Monitor for specific errors
+grep -i "permission denied\|401\|403" .ship/logs/agent.log
+```
+
+### Using jq for JSON Logs
+
+If logs are in JSON format:
+
+```bash
+# Extract specific fields
+jq '.timestamp, .level, .message' .ship/logs/agent.log
+
+# Filter by level
+jq 'select(.level == "ERROR")' .ship/logs/agent.log
+
+# Count by component
+jq '.component' .ship/logs/agent.log | sort | uniq -c
+```
+
+## Troubleshooting Log Issues
+
+### Logs Not Appearing
+
+**Problem**: Log files are empty or missing.
+
+**Solutions**:
+
+1. **Check permissions**:
+   ```bash
+   ls -la .ship/logs/
+   chmod 755 .ship/logs/
+   ```
+
+2. **Restart agent**:
+   ```bash
+   shipmyagent restart
+   ```
+
+3. **Verify log configuration**:
+   ```bash
+   cat ship.json | grep logging
+   ```
+
+### Logs Growing Too Large
+
+**Problem**: Log files consuming too much disk space.
+
+**Solutions**:
+
+1. **Enable rotation** (see above)
+2. **Clean old logs manually**:
+   ```bash
+   rm .ship/logs/*.log.*
+   ```
+3. **Reduce log level**:
+   ```json
+   {
+     "logging": {
+       "level": "warn"  // Only log warnings and errors
+     }
+   }
+   ```
+
+## Best Practices
+
+1. **Regular Review**: Check logs weekly for recurring issues
+2. **Set Up Alerts**: Use log monitoring tools for critical errors
+3. **Archive Logs**: Keep old logs for compliance or analysis
+4. **Clean Up**: Regularly remove old rotated logs
+5. **Document Patterns**: Note common log patterns for quick reference
+
+## Next Steps
+
+- [Common Issues](/docs/troubleshooting/common-issues) - Solutions to frequent problems
+- [Performance Issues](/docs/troubleshooting/performance-issues) - Optimizing speed
+- [Permission Errors](/docs/troubleshooting/permission-errors) - Access control debugging

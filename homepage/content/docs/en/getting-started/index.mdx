@@ -1,0 +1,542 @@
+---
+title: Getting Started
+description: Complete guide to setting up ShipMyAgent
+---
+
+# Getting Started
+
+Get ShipMyAgent up and running in minutes. This guide covers everything from installation to your first autonomous agent.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- **Node.js** >= 18.0.0 installed
+- **A code repository** (Git initialized)
+- **An LLM API key** (Anthropic, OpenAI, or compatible)
+- **Basic terminal knowledge**
+
+:::info
+Don't have an LLM API key? Get free credits from [Anthropic](https://console.anthropic.com/) or [OpenAI](https://platform.openai.com/).
+:::
+
+---
+
+## Installation
+
+### Option 1: Global Install (Recommended)
+
+Install ShipMyAgent globally for use in any project:
+
+```bash
+npm install -g shipmyagent
+```
+
+Verify installation:
+
+```bash
+shipmyagent --version
+```
+
+### Option 2: Using npx (No Install)
+
+Use ShipMyAgent without installing:
+
+```bash
+npx shipmyagent <command>
+```
+
+### Option 3: Project Local
+
+Install as a dev dependency in your project:
+
+```bash
+npm install --save-dev shipmyagent
+```
+
+Then use with `npx` or add to package.json scripts:
+
+```json
+{
+  "scripts": {
+    "agent": "shipmyagent",
+    "agent:start": "shipmyagent start"
+  }
+}
+```
+
+### Troubleshooting Installation
+
+**"Command not found" after install?**
+
+Add npm global bin to your PATH:
+
+```bash
+# Find npm bin path
+npm config get prefix
+
+# Add to PATH (macOS/Linux)
+export PATH=$(npm config get prefix)/bin:$PATH
+
+# Add to ~/.bashrc or ~/.zshrc for persistence
+echo 'export PATH=$(npm config get prefix)/bin:$PATH' >> ~/.bashrc
+```
+
+**Permission errors?**
+
+Don't use sudo with npm. Instead:
+
+```bash
+# Fix npm permissions
+mkdir -p ~/.npm-global
+npm config set prefix '~/.npm-global'
+echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+```
+
+---
+
+## Quick Start (5 Minutes)
+
+
+
+### Step 1: Initialize Your Project
+
+Navigate to your project directory and run:
+
+```bash
+cd /path/to/your/project
+shipmyagent init
+```
+
+The interactive setup will ask:
+
+1. **Agent Name**: Give your agent a name (e.g., "my-assistant")
+2. **LLM Provider**: Choose your provider (Anthropic recommended)
+3. **Model Selection**: Pick a model (Claude 3.5 Sonnet recommended for coding)
+4. **Telegram Integration**: Optionally enable Telegram bot
+
+This creates:
+
+```
+your-project/
+├── Agent.md           # Agent's system prompt
+├── ship.json          # Configuration file
+└── .ship/             # Agent data directory
+    ├── tasks/         # Scheduled tasks
+    ├── logs/          # Operation logs
+    └── cache/         # Cached data
+```
+
+### Step 2: Configure Your API Key
+
+Open `ship.json` and add your API key:
+
+```json
+{
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "apiKey": "${ANTHROPIC_API_KEY}"
+  }
+}
+```
+
+**Set the environment variable**:
+
+```bash
+# Temporary (current session)
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Permanent (add to ~/.bashrc or ~/.zshrc)
+echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc
+source ~/.bashrc
+```
+
+:::warning
+Never commit `ship.json` with hardcoded API keys! Always use environment variables.
+:::
+
+### Step 3: Test the Connection
+
+Verify your API key works:
+
+```bash
+shipmyagent test-llm
+```
+
+You should see:
+
+```
+✅ LLM connection successful
+Provider: Anthropic
+Model: claude-3-5-sonnet-20241022
+Response time: 245ms
+```
+
+### Step 4: Customize Your Agent
+
+Edit `Agent.md` to define your agent's role:
+
+```markdown
+# Agent Role
+
+You are a senior full-stack developer specializing in React and Node.js.
+
+## Goals
+
+- Write clean, maintainable code
+- Follow best practices and design patterns
+- Ensure test coverage for new features
+- Review code for security issues
+
+## Context
+
+This project uses:
+- React 18 with TypeScript
+- Node.js backend with Express
+- PostgreSQL database
+- Tailwind CSS for styling
+
+## Constraints
+
+- Never modify package.json without approval
+- All new code must include tests
+- Follow existing code style
+- Don't refactor without explicit request
+```
+
+### Step 5: Start the Agent
+
+Launch your agent:
+
+```bash
+shipmyagent start
+```
+
+Output:
+
+```
+🚀 Starting ShipMyAgent
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100%
+
+✅ Configuration loaded
+✅ LLM connection established
+✅ Agent initialized: my-assistant
+✅ Task scheduler started
+✅ Server running on http://localhost:3000
+
+🤖 Your agent is now online!
+💬 Chat via Telegram (if configured)
+📋 View tasks: shipmyagent tasks list
+📊 View logs: shipmyagent logs
+```
+
+
+---
+
+## Your First Interaction
+
+### Via CLI
+
+Ask your agent a question:
+
+```bash
+shipmyagent chat "What's the purpose of this project?"
+```
+
+### Via Telegram (if configured)
+
+Simply send a message to your bot:
+
+```
+Hey, can you review the recent changes?
+```
+
+The agent will analyze your repository and respond.
+
+---
+
+## Verification Checklist
+
+Ensure everything is working:
+
+- [ ] `shipmyagent --version` shows correct version
+- [ ] `shipmyagent init` created configuration files
+- [ ] `shipmyagent test-llm` shows successful connection
+- [ ] `shipmyagent start` launches without errors
+- [ ] Agent responds to questions (CLI or Telegram)
+- [ ] Logs are being written: `shipmyagent logs --tail 10`
+
+Run the full diagnostic:
+
+```bash
+shipmyagent doctor
+```
+
+This checks:
+- ✅ Node.js version
+- ✅ Configuration validity
+- ✅ LLM connectivity
+- ✅ File permissions
+- ✅ Integration status
+
+---
+
+## What's Next?
+
+### Recommended Reading
+
+1. **[Configuration Guide](/docs/configuration)** - Customize your setup
+   - Learn all `ship.json` options
+   - Master `Agent.md` writing
+   - Set up permissions and security
+
+2. **[Creating Tasks](/docs/tasks)** - Automate your workflow
+   - Schedule recurring maintenance
+   - Set up code review automation
+   - Configure notifications
+
+3. **[Integrations](/docs/integrations)** - Connect your tools
+   - Set up Telegram bot
+   - Configure GitHub integration
+   - Use webhooks
+
+### Quick Wins
+
+**Set up automated code reviews**:
+
+Create `.ship/tasks/pr-review.md`:
+
+```markdown
+---
+id: pr-review
+name: Pull Request Review
+cron: "*/30 * * * *"
+---
+
+Review open pull requests for:
+- Code quality issues
+- Test coverage
+- Security vulnerabilities
+- Performance concerns
+
+Post findings as comments on each PR.
+```
+
+**Create daily summary**:
+
+Create `.ship/tasks/daily-summary.md`:
+
+```markdown
+---
+id: daily-summary
+name: Daily Summary
+cron: "0 18 * * *"
+notify: telegram
+---
+
+Summarize today's work:
+1. Files modified
+2. Commits made
+3. Issues found
+4. Recommendations for tomorrow
+```
+
+### Common Next Steps
+
+
+**Configure permissions** for your use case:
+
+```json
+{
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": ["src/**", "tests/**"],
+      "requiresApproval": true
+    },
+    "exec_shell": {
+      "allow": ["npm test", "npm run lint"],
+      "requiresApproval": false
+    }
+  }
+}
+```
+
+**Set up integrations** to match your workflow:
+
+- [Telegram](/docs/integrations/telegram) - Mobile notifications and chat
+- [GitHub](/docs/integrations/github) - PR automation
+- [Slack](/docs/integrations/slack) - Team notifications
+
+**Create your first tasks** to automate common work:
+
+```bash
+# Generate task templates
+shipmyagent generate task code-review
+shipmyagent generate task dependency-check
+shipmyagent generate task performance-scan
+```
+
+**Join the community**:
+
+- [Discord](https://discord.gg/shipmyagent) - Real-time chat
+- [GitHub Discussions](https://github.com/wangenius/shipmyagent/discussions) - Q&A
+- [Twitter](https://twitter.com/shipmyagent) - Updates
+
+
+
+---
+
+## Advanced Setup
+
+### Custom Configuration
+
+For non-standard setups:
+
+**Custom LLM endpoint**:
+
+```json
+{
+  "llm": {
+    "provider": "custom",
+    "baseUrl": "https://your-api.com/v1",
+    "apiKey": "${CUSTOM_API_KEY}",
+    "headers": {
+      "X-Custom-Header": "value"
+    }
+  }
+}
+```
+
+**Multiple LLMs with fallback**:
+
+```json
+{
+  "llm": {
+    "primary": {
+      "provider": "anthropic",
+      "model": "claude-3-5-sonnet-20241022"
+    },
+    "fallback": [
+      {
+        "provider": "openai",
+        "model": "gpt-4o"
+      }
+    ]
+  }
+}
+```
+
+### Production Deployment
+
+Running ShipMyAgent in production:
+
+**Use a process manager**:
+
+```bash
+# Install PM2 globally
+npm install -g pm2
+
+# Start with PM2
+pm2 start shipmyagent --name "agent" -- start
+
+# Configure auto-restart
+pm2 startup
+pm2 save
+```
+
+**Docker setup**:
+
+```dockerfile
+FROM node:18-alpine
+
+RUN npm install -g shipmyagent
+
+WORKDIR /app
+COPY . .
+
+# Set environment variables
+ENV ANTHROPIC_API_KEY=""
+
+CMD ["shipmyagent", "start"]
+```
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  agent:
+    build: .
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+    restart: unless-stopped
+```
+
+---
+
+## Troubleshooting
+
+**Issue**: Agent won't start
+
+```bash
+# Check configuration
+shipmyagent validate
+
+# View logs
+shipmyagent logs --tail 50
+
+# Run diagnostics
+shipmyagent doctor
+```
+
+**Issue**: API connection fails
+
+```bash
+# Test LLM connection
+shipmyagent test-llm --verbose
+
+# Check API key
+echo $ANTHROPIC_API_KEY
+
+# Test network
+curl https://api.anthropic.com/v1/messages
+```
+
+**Issue**: Permissions errors
+
+```bash
+# Check file permissions
+ls -la .ship/
+
+# Fix permissions
+chmod -R 755 .ship/
+
+# Verify config ownership
+ls -l ship.json Agent.md
+```
+
+For more help, see the [Troubleshooting Guide](/docs/troubleshooting).
+
+---
+
+## Glossary
+
+- **Agent**: The AI assistant that manages your repository
+- **Task**: A scheduled job that runs automatically (via cron)
+- **Prompt**: Instructions given to the LLM (in Agent.md or tasks)
+- **Integration**: External service connection (Telegram, GitHub, etc.)
+- **Permission**: Rules controlling what the agent can do
+- **Approval**: Human confirmation required for sensitive operations
+
+---
+
+## Next Steps
+
+- [Configuration](/docs/configuration) - Deep dive into settings
+- [Tasks](/docs/tasks) - Create automated workflows
+- [Examples](/docs/examples) - Real-world configurations
+- [Best Practices](/docs/best-practices) - Proven patterns

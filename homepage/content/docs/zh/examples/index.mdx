@@ -1,0 +1,721 @@
+---
+title: 示例
+description: 真实的 ShipMyAgent 配置和用例
+---
+
+# 示例
+
+从不同项目类型和用例的真实 ShipMyAgent 设置中学习。
+
+## 可用示例
+
+- [个人博客](#个人博客) - 维护博客的独立开发者
+- [开源项目](#开源项目) - 社区驱动项目
+- [创业 MVP](#创业-mvp) - 快速发展的创业项目
+- [企业级单体仓库](#企业级单体仓库) - 大型组织
+
+---
+
+## 个人博客
+
+**用例**：偶尔更新内容和改进技术的独立开发者维护的个人博客。
+
+### 项目结构
+
+```
+my-blog/
+├── content/           # 博客文章（Markdown）
+├── src/
+│   ├── components/    # React 组件
+│   └── pages/         # 页面组件
+├── public/            # 静态资产
+└── package.json
+```
+
+### 配置
+
+**ship.json**:
+
+```json
+{
+  "name": "blog-assistant",
+  "version": "1.0.0",
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-haiku-20241022",
+    "temperature": 0.5,
+    "maxTokens": 2048,
+    "apiKey": "${ANTHROPIC_API_KEY}"
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": [
+        "content/**",
+        "src/**",
+        "*.md"
+      ],
+      "requiresApproval": false
+    },
+    "exec_shell": {
+      "allow": [
+        "npm run build",
+        "npm run lint",
+        "npm run test"
+      ],
+      "requiresApproval": false
+    }
+  },
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
+    }
+  }
+}
+```
+
+**Agent.md**:
+
+```markdown
+# 个人博客助手
+
+你是维护我的个人博客的有用助手。
+
+## 上下文
+
+- 技术栈：Next.js 14、React 18、TypeScript、Tailwind CSS
+- 博客文章以 Markdown 格式写在 `content/` 目录中
+- 专注于性能、SEO 和可访问性
+
+## 职责
+
+1. **内容管理**
+   - 校对新博客文章
+   - 检查损坏的链接
+   - 更新前言（标签、日期、SEO 元数据）
+   - 建议相关文章
+
+2. **代码质量**
+   - 审查新代码的性能问题
+   - 确保响应式设计
+   - 检查可访问性（a11y）
+   - 优化图片和资产
+
+3. **SEO 与性能**
+   - 验证元标签
+   - 检查 Lighthouse 分数
+   - 优化核心 Web 指标
+   - 生成站点地图更新
+
+## 指南
+
+- 保持代码简单和可维护
+- 优先考虑性能而不是花哨的功能
+- 始终考虑移动用户
+- 编写清晰的提交消息
+
+## 何时需要批准
+
+在以下操作前询问：
+- 删除内容或文件
+- 重大重构
+- 更改部署配置
+```
+
+### 任务
+
+**`.ship/tasks/content-review.md`**:
+
+```markdown
+---
+id: content-review
+name: 每周内容审查
+cron: "0 18 * * 5"
+---
+
+审查博客：
+
+1. **损坏的链接**
+   - 检查所有内部链接
+   - 验证外部链接
+   - 更新或删除死链接
+
+2. **内容质量**
+   - 检查拼写和语法
+   - 验证前言一致性
+   - 确保正确分类
+
+3. **SEO 检查**
+   - 缺失的元描述
+   - 重复内容
+   - 标题标签问题
+
+在 Telegram 中报告发现的问题：
+- 发现的问题数量
+- 需要优先修复的
+- 建议的操作
+```
+
+**`.ship/tasks/performance-check.md`**:
+
+```markdown
+---
+id: performance-check
+name: 性能检查
+cron: "0 9 * * 1"
+---
+
+运行性能检查：
+
+1. 构建网站：`npm run build`
+2. 检查包大小
+3. 运行 Lighthouse CI
+4. 分析核心 Web 指标
+
+报告：
+- 性能分数
+- 主要优化机会
+- 与上次检查相比的任何回归
+```
+
+### 使用模式
+
+**日常交互**：
+
+```bash
+# 检查问题
+"审查我最新的博客文章"
+
+# 修复拼写错误
+"修复 content/next-post.md 中的语法"
+
+# 更新元数据
+"为新的 React 文章添加 SEO 标签"
+
+# 性能帮助
+"优化图片以提高 Web 性能"
+```
+
+**典型工作流程**：
+
+1. 在 Markdown 中撰写博客文章
+2. 要求 agent 审查："审查我的新文章"
+3. Agent 检查问题并建议修复
+4. 通过 Telegram 批准更改
+5. 有信心地部署
+
+---
+
+## 开源项目
+
+**用例**：具有多个贡献者、PR 审查和 issue 分类处理的社区驱动项目。
+
+### 项目结构
+
+```
+open-source-project/
+├── src/
+├── tests/
+├── docs/
+├── .github/
+│   └── workflows/
+├── CONTRIBUTING.md
+└── package.json
+```
+
+### 配置
+
+**ship.json**:
+
+```json
+{
+  "name": "oss-maintainer",
+  "version": "1.0.0",
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "temperature": 0.3,
+    "apiKey": "${ANTHROPIC_API_KEY}"
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": [
+        "src/**",
+        "tests/**",
+        "docs/**",
+        "*.md"
+      ],
+      "requiresApproval": true
+    },
+    "exec_shell": {
+      "allow": [
+        "npm test",
+        "npm run lint",
+        "npm run format:check"
+      ],
+      "requiresApproval": false
+    }
+  },
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo"
+    },
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
+    }
+  }
+}
+```
+
+**Agent.md**:
+
+```markdown
+# 开源维护者
+
+你是开源项目的维护者助手。
+
+## 项目上下文
+
+- 语言：TypeScript
+- 框架：React
+- 测试：Jest + Testing Library
+- CI/CD：GitHub Actions
+
+## 主要职责
+
+1. **Pull Request 审查**
+   - 审查代码变更
+   - 检查测试覆盖率
+   - 验证文档更新
+   - 确保风格一致
+
+2. **Issue 分类**
+   - 对新问题进行分类
+   - 按优先级和类型标记
+   - 识别适合新手的问题
+   - 建议受托人
+
+3. **社区支持**
+   - 回答常见问题
+   - 指导贡献者
+   - 审查文档
+   - 更新 FAQ
+
+## 审查标准
+
+**代码质量**：
+- 遵循项目风格指南
+- 足够的测试覆盖率
+- 没有未经讨论的破坏性更改
+- 已解决性能问题
+
+**文档**：
+- API 更改已记录
+- 提供了示例
+- 提供了迁移指南
+- 更新了变更日志
+
+## 贡献指南
+
+- 友好且建设性
+- 解释反馈理由
+- 帮助贡献者改进
+- 认可良好贡献
+- 保持讨论专业
+```
+
+### 任务
+
+**`.ship/tasks/pr-review.md`**:
+
+```markdown
+---
+id: pr-review
+name: 自动化 PR 审查
+cron: "*/30 * * * *"
+---
+
+审查开放的拉取请求：
+
+对于每个 PR：
+1. **代码质量**
+   - 检查错误或问题
+   - 验证测试覆盖率
+   - 确保风格一致
+
+2. **文档**
+   - API 文档已更新？
+   - 提供了示例？
+   - 记录了破坏性更改？
+
+3. **测试**
+   - 所有测试通过？
+   - 包含新测试？
+   - 覆盖边缘情况？
+
+在 PR 上发布评论，包括：
+- 整体评估
+- 具体问题（如果有）
+- 改进建议
+- 批准或请求更改
+```
+
+**`.ship/tasks/issue-triage.md`**:
+
+```markdown
+---
+id: issue-triage
+name: Issue 分类
+cron: "0 */2 * * *"
+---
+
+处理新问题：
+
+1. **分类**
+   - 错误报告
+   - 功能请求
+   - 文档
+   - 问题
+
+2. **标记**
+   - priority: critical/high/medium/low
+   - type: bug/feature/enhancement/docs
+   - good-first-issue（如果合适）
+   - help-wanted（如果社区可以帮助）
+
+3. **评估**
+   - 可重现？（对于错误）
+   - 需求明确？（对于功能）
+   - 信息完整？
+
+4. **响应**
+   - 请求缺失信息
+   - 确认错误报告
+   - 讨论功能请求
+   - 指向文档
+```
+
+### 使用模式
+
+**每日工作流程**：
+
+```bash
+# 审查传入的 PR
+"审查开放的 PR"
+
+# 分类新问题
+"对新问题进行分类"
+
+# 帮助贡献者
+"为新人建议适合入门的问题"
+
+# 更新文档
+"为最近的 API 更改更新文档"
+```
+
+**社区参与**：
+
+```bash
+# 回答问题
+"贡献者如何开始？"
+
+# 认可贡献
+"感谢贡献者 PR #123"
+
+# 指导改进
+"为 PR #456 建议改进"
+```
+
+---
+
+## 创业 MVP
+
+**用例**：快速迭代、频繁部署和小团队的快速发展的创业公司。
+
+### 配置
+
+**ship.json**:
+
+```json
+{
+  "name": "startup-agent",
+  "version": "1.0.0",
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "temperature": 0.4,
+    "maxTokens": 4096,
+    "apiKey": "${ANTHROPIC_API_KEY}"
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": [
+        "backend/src/**",
+        "frontend/src/**",
+        "shared/**"
+      ],
+      "requiresApproval": true
+    },
+    "exec_shell": {
+      "allow": [
+        "npm run test",
+        "npm run lint",
+        "npm run build",
+        "docker-compose *"
+      ],
+      "requiresApproval": true
+    }
+  },
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "autoMerge": false
+    },
+    "slack": {
+      "enabled": true,
+      "webhook": "${SLACK_WEBHOOK}",
+      "channel": "#engineering"
+    }
+  }
+}
+```
+
+**Agent.md**:
+
+```markdown
+# 创业开发助手
+
+你是快速发展的创业团队的一员。速度和质量都很重要。
+
+## 技术栈
+
+**后端**：Node.js、Express、PostgreSQL、Redis
+**前端**：React、TypeScript、Tailwind
+**基础设施**：Docker、AWS
+
+## 优先级
+
+1. **速度**：不要阻止功能
+2. **质量**：尽早发现错误
+3. **简单**：避免过度工程化
+4. **迭代**：快速反馈循环
+
+## 开发原则
+
+- "先让它工作，然后让它正确"
+- 如果可能，每天发布
+- 测试关键路径
+- 边做边记录
+- 删除死代码
+
+## 何时要彻底
+
+✅ 花时间在：
+- 面向用户的功能
+- 支付处理
+- 数据安全
+- API 契约
+
+⚡ 快速行动：
+- 内部工具
+- 管理面板
+- 一次性脚本
+- 原型功能
+```
+
+### 任务
+
+**`.ship/tasks/pre-deploy-check.md`**:
+
+```markdown
+---
+id: pre-deploy-check
+name: 部署前检查清单
+cron: "0 8-18 * * 1-5"
+---
+
+每次部署前：
+
+1. **测试**
+   - 所有测试通过？
+   - 覆盖率可接受？
+
+2. **迁移检查**
+   - 数据库迁移准备好？
+   - 回滚计划已记录？
+
+3. **性能**
+   - 没有明显的回归
+   - 关键端点快速
+
+4. **监控**
+   - 警报已配置？
+   - 仪表板准备好？
+
+在 Slack 中报告：
+✅ 准备部署
+⚠️ 关注点：[列出问题]
+❌ 阻塞者：[列出阻塞者]
+```
+
+### 使用模式
+
+**每日站会**：
+
+```bash
+# 什么阻止了部署？
+"检查部署准备情况"
+
+# Bug 分类
+"优先处理昨晚的新错误"
+
+# 快速帮助
+"在我合并之前审查我的 PR"
+```
+
+---
+
+## 企业级单体仓库
+
+**用例**：具有多个团队、共享包和严格治理的大型组织。
+
+### 配置
+
+**ship.json**:
+
+```json
+{
+  "name": "enterprise-agent",
+  "version": "1.0.0",
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "temperature": 0.2,
+    "apiKey": "${ANTHROPIC_API_KEY}",
+    "fallback": [
+      {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "apiKey": "${OPENAI_API_KEY}"
+      }
+    ]
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": {
+        "teams/backend": ["packages/backend-core/**", "apps/*/api/**"],
+        "teams/frontend": ["packages/frontend-shared/**", "apps/web/**"],
+        "teams/platform": ["tools/**", "packages/*/infra/**"]
+      },
+      "requiresApproval": true
+    }
+  },
+  "governance": {
+    "complianceChecks": true,
+    "auditLog": true,
+    "dataClassification": true
+  }
+}
+```
+
+**Agent.md**:
+
+```markdown
+# 企业开发助手
+
+您协助大型企业组织中的多个团队。
+
+## 组织结构
+
+- **后端团队**：核心服务、API
+- **前端团队**：Web 应用、共享 UI
+- **平台团队**：基础设施、工具
+
+## 企业要求
+
+### 合规
+- 所有更改必须可审计
+- 记录敏感数据处理
+- 对有风险的更改进行安全审查
+- 隐私影响评估
+
+### 质量标准
+- 强制代码审查
+- 测试覆盖率 > 80%
+- 满足性能基准
+- 可访问性标准（WCAG 2.1）
+```
+
+### 任务
+
+**`.ship/tasks/compliance-check.md`**:
+
+```markdown
+---
+id: compliance-check
+name: 合规检查
+cron: "0 6 * * *"
+---
+
+每日合规扫描：
+
+1. **安全**
+   - 没有硬编码的密钥
+   - 依赖项是最新的
+   - 没有易受攻击的包
+   - 适当的访问控制
+
+2. **数据隐私**
+   - PII 正确处理
+   - 遵循数据保留
+   - 记录同意
+   - 就位加密
+
+立即向 #eng-critical 报告违规行为。
+```
+
+### 使用模式
+
+**架构审查**：
+
+```bash
+# RFC 评估
+"审查新功能 X 的 RFC"
+
+# 影响分析
+"此更改会影响哪些团队？"
+
+# 标准执行
+"这是否遵循我们的 API 指南？"
+```
+
+**跨团队协调**：
+
+```bash
+# 破坏性更改检查
+"此 API 更改会破坏前端团队吗？"
+
+# 共享包更新
+"消费包中需要更新什么？"
+
+# 依赖对齐
+"所有团队都使用相同的 React 版本吗？"
+```
+
+---
+
+## 下一步
+
+- [快速开始](/docs/getting-started) - 设置您的第一个 agent
+- [配置](/docs/configuration) - 自定义您的设置
+- [最佳实践](/docs/best-practices) - 学习经过验证的模式

@@ -12,6 +12,9 @@ export function meta() {
   const description = product.description;
 
   return [
+    // Essential meta tags (required, not inherited from parent)
+    { charSet: "utf-8" },
+    { name: "viewport", content: "width=device-width, initial-scale=1" },
     { title },
     {
       name: "description",

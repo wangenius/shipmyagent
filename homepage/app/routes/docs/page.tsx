@@ -11,7 +11,6 @@ import {
 } from "fumadocs-ui/page";
 import { getMDXComponents } from "@/components/docs/mdx-components";
 import browserCollections from "fumadocs-mdx:collections/browser";
-import { i18n } from "@/lib/i18n";
 
 export async function loader({ params, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
@@ -20,10 +19,14 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     url.pathname.startsWith("/zh/") || url.pathname === "/zh" ? "zh" : "en";
 
   const slugs = rawPath.split("/").filter((v) => v.length > 0);
+  // Remove 'en' or 'zh' prefix from slugs if present
+  const langIndex = slugs.findIndex(s => s === 'en' || s === 'zh');
+  const cleanSlugs = langIndex >= 0 ? slugs.slice(langIndex + 1) : slugs;
+
   // source.getPage automatically handles the 'en'/'zh' folder mapping because of parser: 'dir'
   // We just need to give it the relative slug (layout path) and the lang.
 
-  const page = source.getPage(slugs, lang);
+  const page = source.getPage(cleanSlugs, lang);
   if (!page) throw new Response("Not found", { status: 404 });
 
   return {
@@ -42,6 +45,9 @@ export function meta({ loaderData }: Route.MetaArgs) {
   const url = `${baseUrl}${loaderData.path}`;
 
   return [
+    // Essential meta tags (these are required and not inherited from parent)
+    { charSet: "utf-8" },
+    { name: "viewport", content: "width=device-width, initial-scale=1" },
     { title },
     {
       name: "description",

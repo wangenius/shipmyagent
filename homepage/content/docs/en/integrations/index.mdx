@@ -1,0 +1,621 @@
+---
+title: Integrations
+description: Connect ShipMyAgent with external services and tools
+---
+
+# Integrations
+
+Extend ShipMyAgent by integrating with external services like GitHub, Slack, Discord, and custom webhooks.
+
+## Overview
+
+Integrations allow ShipMyAgent to:
+- Receive notifications and commands
+- Send automated updates
+- Interact with external APIs
+- Trigger workflows in other tools
+
+## Available Integrations
+
+- [Telegram](#telegram) - Chat and notifications
+- [GitHub](#github) - PR automation and issue management
+- [Slack](#slack) - Team notifications
+- [Discord](#discord) - Community engagement
+- [Webhook](#webhook) - Custom integrations
+
+---
+
+## Telegram
+
+Chat with your agent and receive notifications on Telegram.
+
+### Setup
+
+#### 1. Create a Bot
+
+1. Open Telegram and search for [@BotFather](https://t.me/BotFather)
+2. Send `/newbot` command
+3. Follow the prompts to set name and username
+4. Copy the **HTTP API Token**
+
+#### 2. Get Your Chat ID
+
+1. Search for [@userinfobot](https://t.me/userinfobot) on Telegram
+2. Send any message
+3. Copy your numeric **User ID**
+
+For groups:
+1. Add your bot to the group
+2. Send a message in the group
+3. Visit: `https://api.telegram.org/bot<BOT_TOKEN>/getUpdates`
+4. Find the `chat.id` value
+
+#### 3. Configure in ship.json
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
+    }
+  }
+}
+```
+
+### Features
+
+#### Chat Commands
+
+```
+/start - Start interaction
+/status - Check agent status
+/tasks - List scheduled tasks
+/help - Show available commands
+```
+
+#### Approval Workflow
+
+When the agent needs approval for sensitive operations:
+
+```
+🔔 Approval Required
+
+Operation: Write to src/config.js
+Changes: +5 lines, -2 lines
+
+Reply with:
+✅ approve - Allow operation
+❌ reject - Deny operation
+📝 modify - Suggest changes
+```
+
+#### Notification Types
+
+- Task completion results
+- Error alerts
+- Approval requests
+- Daily summaries
+
+### Advanced Configuration
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}",
+      "webhookUrl": "https://your-server.com/webhook/telegram",
+      "updates": {
+        "timeout": 30,
+        "limit": 10,
+        "allowedUpdates": ["message"]
+      }
+    }
+  }
+}
+```
+
+### Security Best Practices
+
+:::warning
+Always configure `chatId` to prevent unauthorized access!
+:::
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "123456789"  // Required!
+    }
+  }
+}
+```
+
+---
+
+## GitHub
+
+Automate pull requests, issues, and repository management.
+
+### Setup
+
+#### 1. Create Personal Access Token
+
+1. Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
+2. Generate new token (classic)
+3. Select scopes:
+   - `repo` (Full control of private repositories)
+   - `public_repo` (Access public repositories)
+4. Copy the token
+
+#### 2. Configure in ship.json
+
+```json
+{
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo"
+    }
+  }
+}
+```
+
+### Features
+
+#### Automated PR Reviews
+
+```markdown
+---
+id: pr-review
+name: PR Review Bot
+cron: "*/30 * * * *"
+notify: ["telegram", "github"]
+---
+
+Review all open pull requests and post comments.
+```
+
+#### Issue Triage
+
+```markdown
+---
+id: issue-triage
+name: Issue Triage
+cron: "0 */2 * * *"
+---
+
+Categorize new issues and apply labels.
+```
+
+#### CI/CD Integration
+
+```json
+{
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo",
+      "actions": {
+        "onPR": {
+          "review": true,
+          "comment": true,
+          "autoMerge": false
+        },
+        "onIssue": {
+          "label": true,
+          "assign": true
+        }
+      }
+    }
+  }
+}
+```
+
+### GitHub Actions Integration
+
+Create workflow file: `.github/workflows/agent-review.yml`
+
+```yaml
+name: Agent Review
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  agent-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run Agent Review
+        run: shipmyagent tasks run pr-review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+### Webhook Configuration
+
+```json
+{
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "webhook": {
+        "url": "https://your-server.com/api/github/webhook",
+        "secret": "${GITHUB_WEBHOOK_SECRET}",
+        "events": ["pull_request", "issues", "push"]
+      }
+    }
+  }
+}
+```
+
+---
+
+## Slack
+
+Send notifications and updates to your Slack workspace.
+
+### Setup
+
+#### 1. Create Incoming Webhook
+
+1. Go to https://api.slack.com/apps
+2. Create a new app → "From scratch"
+3. Enable "Incoming Webhooks"
+4. Click "Add New Webhook to Workspace"
+5. Select channel and copy the **Webhook URL**
+
+#### 2. Configure in ship.json
+
+```json
+{
+  "integrations": {
+    "slack": {
+      "enabled": true,
+      "webhook": "${SLACK_WEBHOOK_URL}",
+      "channel": "#engineering",
+      "username": "ShipMyAgent",
+      "icon": ":robot_face:"
+    }
+  }
+}
+```
+
+### Message Format
+
+Customize how messages appear:
+
+```json
+{
+  "integrations": {
+    "slack": {
+      "enabled": true,
+      "webhook": "${SLACK_WEBHOOK_URL}",
+      "messageFormat": {
+        "username": "Code Agent",
+        "iconEmoji": ":robot_face:",
+        "attachments": true,
+        "mrkdwn": true
+      }
+    }
+  }
+}
+```
+
+### Notification Types
+
+```markdown
+---
+notify: ["slack", "telegram"]
+---
+
+Results sent to both Slack and Telegram.
+```
+
+---
+
+## Discord
+
+Engage with your community on Discord.
+
+### Setup
+
+#### 1. Create Discord Application
+
+1. Go to https://discord.com/developers/applications
+2. Create "New Application"
+3. Go to "Bot" section → Create Bot
+4. Copy the **Token**
+
+#### 2. Enable Privileged Intents
+
+- Message Content Intent
+- Server Members Intent
+
+#### 3. Invite Bot to Server
+
+1. Go to "OAuth2" → "URL Generator"
+2. Select scopes: `bot`
+3. Select bot permissions:
+   - Send Messages
+   - Read Message History
+   - Add Reactions
+4. Copy the URL and open in browser
+5. Add bot to your server
+
+#### 4. Configure in ship.json
+
+```json
+{
+  "integrations": {
+    "discord": {
+      "enabled": true,
+      "token": "${DISCORD_BOT_TOKEN}",
+      "guildId": "${DISCORD_GUILD_ID}",
+      "channelIds": {
+        "notifications": "123456789",
+        "commands": "987654321"
+      }
+    }
+  }
+}
+```
+
+### Discord Commands
+
+```
+!agent <message> - Send message to agent
+!status - Check agent status
+!help - Show help
+```
+
+---
+
+## Webhook
+
+Generic webhook support for custom integrations.
+
+### Configuration
+
+```json
+{
+  "integrations": {
+    "webhook": {
+      "enabled": true,
+      "url": "https://your-server.com/webhook",
+      "method": "POST",
+      "headers": {
+        "Authorization": "Bearer ${WEBHOOK_TOKEN}",
+        "Content-Type": "application/json"
+      },
+      "timeout": 5000,
+      "retryAttempts": 3,
+      "retryDelay": 1000
+    }
+  }
+}
+```
+
+### Webhook Payload
+
+ShipMyAgent sends JSON payloads:
+
+```json
+{
+  "event": "task.completed",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "task": {
+    "id": "daily-report",
+    "name": "Daily Report"
+  },
+  "result": {
+    "status": "success",
+    "output": "Task completed successfully...",
+    "duration": 45000
+  }
+}
+```
+
+### Event Types
+
+| Event | Description |
+|-------|-------------|
+| `task.started` | Task began execution |
+| `task.completed` | Task finished successfully |
+| `task.failed` | Task failed |
+| `approval.requested` | Approval needed |
+| `approval.granted` | Approval given |
+| `approval.denied` | Approval rejected |
+
+### Custom Webhook Handler
+
+Example Node.js handler:
+
+```javascript
+const express = require('express');
+const app = express();
+
+app.use(express.json());
+
+app.post('/webhook', (req, res) => {
+  const { event, task, result } = req.body;
+
+  switch (event) {
+    case 'task.completed':
+      console.log(`Task ${task.name} completed`);
+      // Custom logic here
+      break;
+    case 'approval.requested':
+      // Send notification to your system
+      break;
+  }
+
+  res.status(200).send('OK');
+});
+
+app.listen(3000);
+```
+
+---
+
+## Multiple Integrations
+
+Use multiple integrations together:
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
+    },
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo"
+    },
+    "slack": {
+      "enabled": true,
+      "webhook": "${SLACK_WEBHOOK_URL}",
+      "channel": "#alerts"
+    }
+  }
+}
+```
+
+### Notification Routing
+
+Route different notifications to different channels:
+
+```json
+{
+  "notifications": {
+    "channels": {
+      "alerts": ["telegram", "slack"],
+      "reports": ["slack", "email"],
+      "approvals": ["telegram"]
+    },
+    "rules": {
+      "critical": ["telegram", "slack", "email"],
+      "warning": ["slack"],
+      "info": ["telegram"]
+    }
+  }
+}
+```
+
+---
+
+## Testing Integrations
+
+Test each integration:
+
+```bash
+# Test Telegram
+shipmyagent test --integration telegram
+
+# Test GitHub
+shipmyagent test --integration github
+
+# Test Slack
+shipmyagent test --integration slack
+
+# Test all integrations
+shipmyagent test --integration all
+```
+
+---
+
+## Troubleshooting
+
+### Telegram Not Responding
+
+1. **Verify bot token**:
+   ```bash
+   curl https://api.telegram.org/bot<TOKEN>/getMe
+   ```
+
+2. **Check chat ID**:
+   ```bash
+   curl https://api.telegram.org/bot<TOKEN>/getUpdates
+   ```
+
+3. **Restart agent**:
+   ```bash
+   shipmyagent restart
+   ```
+
+### GitHub Integration Issues
+
+1. **Token scope**: Ensure token has required scopes
+2. **Repository access**: Token must have access to the repo
+3. **Rate limiting**: GitHub has API rate limits
+
+### Webhook Failures
+
+1. **Check URL accessibility**:
+   ```bash
+   curl -X POST https://your-webhook-url -d '{"test":true}'
+   ```
+
+2. **Verify authentication**:
+   ```bash
+   curl -H "Authorization: Bearer $TOKEN" https://your-webhook-url
+   ```
+
+3. **Review logs**:
+   ```bash
+   shipmyagent logs --level error | grep webhook
+   ```
+
+---
+
+## Security Considerations
+
+### Protect API Keys
+
+```bash
+# ✅ Good - Environment variables
+export GITHUB_TOKEN="ghp_..."
+export TELEGRAM_BOT_TOKEN="123456:..."
+
+# ❌ Bad - Hardcoded
+{
+  "token": "ghp_1234567890"
+}
+```
+
+### Restrict Bot Permissions
+
+- Only grant necessary permissions
+- Use specific `chatId` for Telegram
+- Use scoped GitHub tokens
+- Set webhook secrets
+
+### Monitor Usage
+
+```bash
+# Check integration usage
+shipmyagent stats --integrations
+
+# Audit integration access
+shipmyagent audit --integrations
+```
+
+---
+
+## Next Steps
+
+- [Configuration](/docs/configuration) - Integration setup details
+- [Tasks](/docs/tasks) - Automate with integrations
+- [Best Practices](/docs/best-practices) - Security guidelines

@@ -15,7 +15,8 @@ export const docs = defineDocs({
 
 export default defineConfig({
   mdxOptions: {
-    remarkPlugins: [
+    remarkPlugins: (v) => [
+      ...v,
       remarkDirective,
       remarkDirectiveAdmonition,
       remarkMath,
@@ -23,7 +24,7 @@ export default defineConfig({
       remarkHeading,
       remarkMdxMermaid,
     ],
-    rehypePlugins: (v) => [rehypeKatex, ...v],
+    rehypePlugins: (v) => [[rehypeKatex, { strict: false }], ...v],
     remarkImageOptions: {
       placeholder: "none",
     },

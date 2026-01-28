@@ -1,0 +1,86 @@
+---
+title: 故障排查
+description: 解决常见问题并调试您的 ShipMyAgent 设置
+---
+
+# 故障排查
+
+本章节帮助您诊断和解决使用 ShipMyAgent 时的常见问题。
+
+## 快速诊断流程
+
+```
+开始 → 检查 Agent 状态 → 出了什么问题？
+  ├─ Agent 无法启动？→ [常见问题](/docs/troubleshooting/common-issues)
+  ├─ 运行时出错？→ [日志与调试](/docs/troubleshooting/logs-debugging)
+  ├─ 性能缓慢？→ [性能问题](/docs/troubleshooting/performance-issues)
+  └─ 权限被拒绝？→ [权限错误](/docs/troubleshooting/permission-errors)
+```
+
+## 获取帮助
+
+如果您在这里找不到解决方案：
+
+1. **启用调试模式**：
+   ```bash
+   shipmyagent start --verbose
+   ```
+
+2. **检查日志**：
+   ```bash
+   # 查看最近的日志
+   shipmyagent logs --tail 50
+
+   # 导出日志以供分享
+   shipmyagent logs --export > agent-logs.txt
+   ```
+
+3. **搜索现有问题**：
+   - [GitHub Issues](https://github.com/wangenius/shipmyagent/issues)
+   - [Discussions](https://github.com/wangenius/shipmyagent/discussions)
+
+4. **询问社区**：
+   - [Discord 服务器](https://discord.gg/shipmyagent)
+   - [Telegram 社区](https://t.me/shipmyagent)
+
+5. **创建错误报告**：
+   请包含：
+   - ShipMyAgent 版本 (`shipmyagent --version`)
+   - 操作系统和 Node.js 版本 (`node --version`)
+   - 错误消息和日志
+   - 最小复现步骤
+
+## 常见错误代码
+
+| 错误代码 | 描述 | 快速修复 |
+|---------|------|---------|
+| `E001` | LLM API Key 缺失 | 检查 `ship.json` 配置 |
+| `E002` | 权限被拒绝 | 检查 `permissions` 配置 |
+| `E003` | 任务执行失败 | 检查 `.ship/logs/` 中的任务日志 |
+| `E004` | Telegram 连接失败 | 验证 bot token 和 chat ID |
+| `E005` | 文件写入被阻止 | 在 Telegram 中批准操作 |
+
+## 诊断命令
+
+```bash
+# 检查系统健康
+shipmyagent doctor
+
+# 验证配置
+shipmyagent validate
+
+# 测试 LLM 连接
+shipmyagent test-llm
+
+# 列出活跃任务
+shipmyagent tasks list
+```
+
+## 下一步
+
+选择故障排查主题：
+
+- [常见问题](/docs/troubleshooting/common-issues) - 安装、启动和配置问题
+- [日志与调试](/docs/troubleshooting/logs-debugging) - 理解和使用日志
+- [性能问题](/docs/troubleshooting/performance-issues) - 速度和资源优化
+- [权限错误](/docs/troubleshooting/permission-errors) - 访问和权限问题

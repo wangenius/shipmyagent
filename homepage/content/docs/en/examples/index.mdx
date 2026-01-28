@@ -1,0 +1,996 @@
+---
+title: Examples
+description: Real-world ShipMyAgent configurations and use cases
+---
+
+
+# Examples
+
+Learn from real-world ShipMyAgent setups for different project types and use cases.
+
+:::info
+  These examples are starting points. Customize them based on your specific needs and workflows.
+:::
+
+## Available Examples
+
+- [Personal Blog](#personal-blog) - Solo developer maintaining a blog
+- [Open Source Project](#open-source-project) - Community-driven project
+- [Startup MVP](#startup-mvp) - Fast-moving startup project
+- [Enterprise Monorepo](#enterprise-monorepo) - Large-scale organization
+
+---
+
+## Personal Blog
+
+**Use Case**: Solo developer maintaining a personal blog with occasional content updates and technical improvements.
+
+### Project Structure
+
+```
+my-blog/
+├── content/           # Blog posts (Markdown)
+├── src/
+│   ├── components/    # React components
+│   └── pages/         # Page components
+├── public/            # Static assets
+└── package.json
+```
+
+### Configuration
+
+**ship.json**:
+
+```json
+{
+  "name": "blog-assistant",
+  "version": "1.0.0",
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-haiku-20241022",
+    "temperature": 0.5,
+    "maxTokens": 2048,
+    "apiKey": "${ANTHROPIC_API_KEY}"
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": [
+        "content/**",
+        "src/**",
+        "*.md"
+      ],
+      "requiresApproval": false
+    },
+    "exec_shell": {
+      "allow": [
+        "npm run build",
+        "npm run lint",
+        "npm run test"
+      ],
+      "requiresApproval": false
+    }
+  },
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
+    }
+  }
+}
+```
+
+**Agent.md**:
+
+```markdown
+# Personal Blog Assistant
+
+You are a helpful assistant for maintaining my personal blog.
+
+## Context
+
+- Tech stack: Next.js 14, React 18, TypeScript, Tailwind CSS
+- Blog posts are written in Markdown in the `content/` directory
+- Focus on performance, SEO, and accessibility
+
+## Responsibilities
+
+1. **Content Management**
+   - Proofread new blog posts
+   - Check for broken links
+   - Update frontmatter (tags, dates, SEO metadata)
+   - Suggest related posts
+
+2. **Code Quality**
+   - Review new code for performance issues
+   - Ensure responsive design
+   - Check accessibility (a11y)
+   - Optimize images and assets
+
+3. **SEO & Performance**
+   - Validate meta tags
+   - Check Lighthouse scores
+   - Optimize Core Web Vitals
+   - Generate sitemap updates
+
+## Guidelines
+
+- Keep code simple and maintainable
+- Prefer performance over fancy features
+- Always consider mobile users
+- Write clear commit messages
+
+## When You Need Approval
+
+Ask before:
+- Deleting content or files
+- Major refactors
+- Changing deployment configuration
+```
+
+### Tasks
+
+**`.ship/tasks/content-review.md`**:
+
+```markdown
+---
+id: content-review
+name: Weekly Content Review
+cron: "0 18 * * 5"
+---
+
+Review the blog for:
+
+1. **Broken Links**
+   - Check all internal links
+   - Verify external links
+   - Update or remove dead links
+
+2. **Content Quality**
+   - Check for typos and grammar
+   - Validate frontmatter consistency
+   - Ensure proper categorization
+
+3. **SEO Check**
+   - Missing meta descriptions
+   - Duplicate content
+   - Title tag issues
+
+Report findings in Telegram with:
+- Number of issues found
+- Top priority fixes
+- Recommended actions
+```
+
+**`.ship/tasks/performance-check.md`**:
+
+```markdown
+---
+id: performance-check
+name: Performance Check
+cron: "0 9 * * 1"
+---
+
+Run performance checks:
+
+1. Build the site: `npm run build`
+2. Check bundle size
+3. Run Lighthouse CI
+4. Analyze Core Web Vitals
+
+Report:
+- Performance score
+- Main optimization opportunities
+- Any regressions from last check
+```
+
+### Usage Patterns
+
+**Daily Interactions**:
+
+```bash
+# Check for issues
+"Review my latest blog post"
+
+# Fix typos
+"Fix grammar in content/next-post.md"
+
+# Update metadata
+"Add SEO tags to new React post"
+
+# Performance help
+"Optimize images for web performance"
+```
+
+**Typical Workflow**:
+
+1. Write blog post in Markdown
+2. Ask agent to review: "Review my new post"
+3. Agent checks for issues and suggests fixes
+4. Approve changes via Telegram
+5. Deploy with confidence
+
+---
+
+## Open Source Project
+
+**Use Case**: Community-driven project with multiple contributors, PR reviews, and issue triaging.
+
+### Project Structure
+
+```
+open-source-project/
+├── src/
+├── tests/
+├── docs/
+├── .github/
+│   └── workflows/
+├── CONTRIBUTING.md
+└── package.json
+```
+
+### Configuration
+
+**ship.json**:
+
+```json
+{
+  "name": "oss-maintainer",
+  "version": "1.0.0",
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "temperature": 0.3,
+    "apiKey": "${ANTHROPIC_API_KEY}"
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": [
+        "src/**",
+        "tests/**",
+        "docs/**",
+        "*.md"
+      ],
+      "requiresApproval": true
+    },
+    "exec_shell": {
+      "allow": [
+        "npm test",
+        "npm run lint",
+        "npm run format:check"
+      ],
+      "requiresApproval": false
+    }
+  },
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo"
+    },
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
+    }
+  }
+}
+```
+
+**Agent.md**:
+
+```markdown
+# Open Source Maintainer
+
+You are a maintainer assistant for an open source project.
+
+## Project Context
+
+- Language: TypeScript
+- Framework: React
+- Testing: Jest + Testing Library
+- CI/CD: GitHub Actions
+
+## Primary Responsibilities
+
+1. **Pull Request Reviews**
+   - Review code changes
+   - Check test coverage
+   - Verify documentation updates
+   - Ensure style consistency
+
+2. **Issue Triage**
+   - Categorize new issues
+   - Label by priority and type
+   - Identify good first issues
+   - Suggest assignees
+
+3. **Community Support**
+   - Answer common questions
+   - Guide contributors
+   - Review documentation
+   - Update FAQs
+
+## Review Criteria
+
+**Code Quality**:
+- Follows project style guide
+- Adequate test coverage
+- No breaking changes without discussion
+- Performance considerations addressed
+
+**Documentation**:
+- API changes documented
+- Examples updated
+- Migration guides provided
+- Changelog updated
+
+## Contribution Guidelines
+
+- Be friendly and constructive
+- Explain reasoning for feedback
+- Help contributors improve
+- Recognize good contributions
+- Keep discussions professional
+```
+
+### Tasks
+
+**`.ship/tasks/pr-review.md`**:
+
+```markdown
+---
+id: pr-review
+name: Automated PR Review
+cron: "*/30 * * * *"
+---
+
+Review open pull requests:
+
+For each PR:
+1. **Code Quality**
+   - Check for bugs or issues
+   - Verify test coverage
+   - Ensure style consistency
+
+2. **Documentation**
+   - API docs updated?
+   - Examples provided?
+   - Breaking changes noted?
+
+3. **Tests**
+   - All tests passing?
+   - New tests included?
+   - Edge cases covered?
+
+Post review as comment on PR with:
+- Overall assessment
+- Specific issues (if any)
+- Suggestions for improvement
+- Approval or request changes
+```
+
+**`.ship/tasks/issue-triage.md`**:
+
+```markdown
+---
+id: issue-triage
+name: Issue Triage
+cron: "0 */2 * * *"
+---
+
+Process new issues:
+
+1. **Categorize**
+   - Bug report
+   - Feature request
+   - Documentation
+   - Question
+
+2. **Label**
+   - priority: critical/high/medium/low
+   - type: bug/feature/enhancement/docs
+   - good-first-issue (if appropriate)
+   - help-wanted (if community can help)
+
+3. **Assess**
+   - Reproducible? (for bugs)
+   - Clear requirements? (for features)
+   - Information complete?
+
+4. **Respond**
+   - Request missing info
+   - Confirm bug reports
+   - Discuss feature requests
+   - Point to documentation
+```
+
+**`.ship/tasks/docs-sync.md`**:
+
+```markdown
+---
+id: docs-sync
+name: Documentation Sync
+cron: "0 18 * * 5"
+---
+
+Ensure documentation is current:
+
+1. **Check for API Changes**
+   - New functions documented?
+   - Changed signatures updated?
+   - Deprecated items marked?
+
+2. **Verify Examples**
+   - Code examples work?
+   - Screenshots up to date?
+   - Links valid?
+
+3. **Consistency**
+   - Terminology consistent
+   - Style guide followed
+   - No duplicate content
+
+Create PR for any documentation updates needed.
+```
+
+### Usage Patterns
+
+**Daily Workflow**:
+
+```bash
+# Review incoming PRs
+"Review open PRs"
+
+# Triage new issues
+"Categorize new issues"
+
+# Help contributors
+"Suggest good first issues for newcomers"
+
+# Update docs
+"Update docs for recent API changes"
+```
+
+**Community Engagement**:
+
+```bash
+# Answer questions
+"How do contributors get started?"
+
+# Recognize contributions
+"Thank contributor for PR #123"
+
+# Guide improvements
+"Suggest improvements to PR #456"
+```
+
+---
+
+## Startup MVP
+
+**Use Case**: Fast-moving startup with rapid iteration, frequent deployments, and small team.
+
+### Project Structure
+
+```
+startup-mvp/
+├── backend/
+│   ├── src/
+│   └── tests/
+├── frontend/
+│   ├── src/
+│   └── tests/
+├── shared/
+│   └── types/
+├── docker/
+└── docker-compose.yml
+```
+
+### Configuration
+
+**ship.json**:
+
+```json
+{
+  "name": "startup-agent",
+  "version": "1.0.0",
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "temperature": 0.4,
+    "maxTokens": 4096,
+    "apiKey": "${ANTHROPIC_API_KEY}"
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": [
+        "backend/src/**",
+        "frontend/src/**",
+        "shared/**"
+      ],
+      "requiresApproval": true
+    },
+    "exec_shell": {
+      "allow": [
+        "npm run test",
+        "npm run lint",
+        "npm run build",
+        "docker-compose *"
+      ],
+      "requiresApproval": true
+    }
+  },
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "autoMerge": false
+    },
+    "slack": {
+      "enabled": true,
+      "webhook": "${SLACK_WEBHOOK}",
+      "channel": "#engineering"
+    }
+  }
+}
+```
+
+**Agent.md**:
+
+```markdown
+# Startup Development Assistant
+
+You are part of a fast-moving startup team. Speed and quality are both important.
+
+## Tech Stack
+
+**Backend**: Node.js, Express, PostgreSQL, Redis
+**Frontend**: React, TypeScript, Tailwind
+**Infrastructure**: Docker, AWS
+
+## Priorities
+
+1. **Speed**: Don't block features
+2. **Quality**: Catch bugs early
+3. **Simplicity**: Avoid over-engineering
+4. **Iteration**: Quick feedback loops
+
+## Development Principles
+
+- "Make it work, then make it right"
+- Ship daily if possible
+- Test critical paths
+- Document as you go
+- Delete dead code
+
+## When to Be Thorough
+
+✅ Spend time on:
+- User-facing features
+- Payment processing
+- Data security
+- API contracts
+
+⚡ Move fast on:
+- Internal tools
+- Admin panels
+- One-off scripts
+- Prototype features
+
+## Deployment
+
+- Deploy multiple times per day
+- Feature flags for risky changes
+- Rollback plan for each deployment
+- Monitor after deployment
+```
+
+### Tasks
+
+**`.ship/tasks/pre-deploy-check.md`**:
+
+```markdown
+---
+id: pre-deploy-check
+name: Pre-Deploy Checklist
+cron: "0 8-18 * * 1-5"
+---
+
+Before each deployment:
+
+1. **Tests**
+   - All tests passing?
+   - Coverage acceptable?
+
+2. **Migration Check**
+   - Database migrations ready?
+   - Rollback plan documented?
+
+3. **Performance**
+   - No obvious regressions
+   - Critical endpoints fast
+
+4. **Monitoring**
+   - Alerts configured?
+   - Dashboards ready?
+
+Report in Slack:
+✅ Ready to deploy
+⚠️ Concerns: [list issues]
+❌ Blockers: [list blockers]
+```
+
+**`.ship/tasks/bug-triage.md`**:
+
+```markdown
+---
+id: bug-triage
+name: Bug Triage
+cron: "0 10,15 * * 1-5"
+---
+
+Review and prioritize bugs:
+
+1. **Categorize**
+   - Critical: Payment, data loss, security
+   - High: User-facing, affects many
+   - Medium: Edge cases, minor impact
+   - Low: Nice to have
+
+2. **Assess**
+   - Reproducible?
+   - Frequency?
+   - Workaround available?
+
+3. **Action**
+   - Immediate fix (critical)
+   - Next sprint (high)
+   - Backlog (medium/low)
+   - Monitor (unconfirmed)
+
+Post prioritized list to Slack.
+```
+
+**`.ship/tasks/tech-debt-monitor.md`**:
+
+```markdown
+---
+id: tech-debt-monitor
+name: Technical Debt Monitor
+cron: "0 17 * * 5"
+---
+
+Weekly technical debt review:
+
+1. **Identify Debt**
+   - TODO/FIXME comments
+   - Code complexity issues
+   - Missing tests
+   - Performance bottlenecks
+
+2. **Prioritize**
+   - Impact on velocity?
+   - Risk to stability?
+   - User-facing?
+
+3. **Plan**
+   - Allocate 20% time each sprint
+   - Tackle highest impact first
+   - Document decisions
+
+Report:
+- Top 5 tech debt items
+- Recommended allocation
+- Quick wins vs. big refactors
+```
+
+### Usage Patterns
+
+**Daily Standup**:
+
+```bash
+# What's blocking deployment?
+"Check deployment readiness"
+
+# Bug triage
+"Prioritize new bugs from last night"
+
+# Quick help
+"Review my PR before I merge"
+```
+
+**Weekly Planning**:
+
+```bash
+# Technical debt
+"What tech debt should we tackle this sprint?"
+
+# Sprint review
+"Summarize what we shipped this week"
+
+# Next sprint
+"What's the risk level for planned features?"
+```
+
+---
+
+## Enterprise Monorepo
+
+**Use Case**: Large organization with multiple teams, shared packages, and strict governance.
+
+### Project Structure
+
+```
+monorepo/
+├── packages/
+│   ├── backend-core/
+│   ├── frontend-shared/
+│   ├── api-client/
+│   └── ui-components/
+├── apps/
+│   ├── web-app/
+│   ├── admin-portal/
+│   └── mobile-api/
+├── tools/
+└── docs/
+```
+
+### Configuration
+
+**ship.json**:
+
+```json
+{
+  "name": "enterprise-agent",
+  "version": "1.0.0",
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "temperature": 0.2,
+    "apiKey": "${ANTHROPIC_API_KEY}",
+    "fallback": [
+      {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "apiKey": "${OPENAI_API_KEY}"
+      }
+    ]
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": {
+        "teams/backend": ["packages/backend-core/**", "apps/*/api/**"],
+        "teams/frontend": ["packages/frontend-shared/**", "apps/web/**"],
+        "teams/platform": ["tools/**", "packages/*/infra/**"]
+      },
+      "requiresApproval": true,
+      "approvers": {
+        "teams/backend": ["@backend-lead"],
+        "teams/frontend": ["@frontend-lead"],
+        "teams/platform": ["@platform-lead"]
+      }
+    },
+    "exec_shell": {
+      "allow": ["npm run test:*", "npm run build:*"],
+      "requiresApproval": true
+    }
+  },
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "requiredReviews": 2
+    },
+    "slack": {
+      "enabled": true,
+      "webhook": "${SLACK_WEBHOOK}",
+      "channels": {
+        "default": "#eng-notifications",
+        "urgent": "#eng-critical"
+      }
+    }
+  },
+  "governance": {
+    "complianceChecks": true,
+    "auditLog": true,
+    "dataClassification": true
+  }
+}
+```
+
+**Agent.md**:
+
+```markdown
+# Enterprise Development Assistant
+
+You assist multiple teams in a large enterprise organization.
+
+## Organizational Structure
+
+- **Backend Team**: Core services, APIs
+- **Frontend Team**: Web apps, shared UI
+- **Platform Team**: Infrastructure, tooling
+
+## Enterprise Requirements
+
+### Compliance
+- All changes must be auditable
+- Sensitive data handling documented
+- Security reviews for risky changes
+- Privacy impact assessments
+
+### Quality Standards
+- Code review mandatory
+- Test coverage > 80%
+- Performance benchmarks met
+- Accessibility standards (WCAG 2.1)
+
+### Documentation
+- API documentation current
+- Architecture decisions recorded (ADRs)
+- Runbooks maintained
+- Onboarding docs updated
+
+## Cross-Team Coordination
+
+### Breaking Changes
+- Must be discussed with affected teams
+- Migration path provided
+- Deprecation period: 3 months minimum
+- Communication to all stakeholders
+
+### Shared Packages
+- Versioning follows semantic versioning
+- Changes proposed as RFC
+- Impact analysis before merge
+- Migration guides provided
+
+## Security & Privacy
+
+- Never expose credentials
+- Classify data (public/internal/confidential)
+- Follow security best practices
+- Report security concerns immediately
+
+## Approval Workflow
+
+1. **Standard Changes**: Team lead approval
+2. **Cross-Team**: All affected team leads
+3. **Breaking Changes**: Architecture board
+4. **Security Issues**: Security team + team leads
+```
+
+### Tasks
+
+**`.ship/tasks/compliance-check.md`**:
+
+```markdown
+---
+id: compliance-check
+name: Compliance Check
+cron: "0 6 * * *"
+---
+
+Daily compliance scan:
+
+1. **Security**
+   - No hardcoded secrets
+   - Dependencies up to date
+   - No vulnerable packages
+   - Proper access controls
+
+2. **Data Privacy**
+   - PII properly handled
+   - Data retention followed
+   - Consent documented
+   - Encryption in place
+
+3. **Audit Trail**
+   - All changes attributed
+   - Approvals documented
+   - Decisions recorded
+
+Report violations to #eng-critical immediately.
+```
+
+**`.ship/tasks/dependency-scan.md`**:
+
+```markdown
+---
+id: dependency-scan
+name: Enterprise Dependency Scan
+cron: "0 8 * * 1"
+---
+
+Comprehensive dependency analysis:
+
+1. **Security Vulnerabilities**
+   - Scan all packages/
+   - Check for CVEs
+   - Assess risk level
+
+2. **License Compliance**
+   - All licenses approved
+   - No GPL in production
+   - Attribution documented
+
+3. **Version Alignment**
+   - Shared versions across packages
+   - Update plan for mismatches
+   - Breaking change analysis
+
+Generate report for:
+- Security team
+- Architecture board
+- Team leads
+```
+
+**`.ship/tasks/api-contract-check.md`**:
+
+```markdown
+---
+id: api-contract-check
+name: API Contract Validation
+cron: "0 12 * * 1-5"
+---
+
+Validate API contracts:
+
+1. **Backend**
+   - OpenAPI spec current
+   - Breaking changes documented
+   - Version compatibility
+
+2. **Frontend**
+   - Client types match
+   - Error handling proper
+   - Deprecated endpoints removed
+
+3. **Integration**
+   - Contract tests passing
+   - Mock data aligned
+   - Documentation synced
+
+Flag any contract violations.
+```
+
+### Usage Patterns
+
+**Architecture Reviews**:
+
+```bash
+# RFC evaluation
+"Review RFC for new feature X"
+
+# Impact analysis
+"What teams are affected by this change?"
+
+# Standards enforcement
+"Does this follow our API guidelines?"
+```
+
+**Cross-Team Coordination**:
+
+```bash
+# Breaking change check
+"Will this API change break frontend teams?"
+
+# Shared package updates
+"What needs updating in consuming packages?"
+
+# Dependency alignment
+"Are all teams using the same React version?"
+```
+
+---
+
+## Next Steps
+
+- [Getting Started](/docs/getting-started) - Set up your first agent
+- [Configuration](/docs/configuration) - Customize your setup
+- [Best Practices](/docs/best-practices) - Learn proven patterns

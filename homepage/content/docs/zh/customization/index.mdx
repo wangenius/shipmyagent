@@ -1,0 +1,480 @@
+---
+title: 自定义和插件
+description: 扩展 ShipMyAgent 功能
+---
+
+# 自定义和插件
+
+高级自定义和插件开发指南。
+
+## 概述
+
+ShipMyAgent 设计为可扩展的，允许您创建自定义工具、LLM 提供商和插件。
+
+---
+
+## 自定义工具
+
+### 创建工具
+
+```typescript
+import { Tool } from '@shipmyagent/core';
+
+interface ToolParams {
+  input: string;
+  options?: Record<string, any>;
+}
+
+interface ToolResult {
+  success: boolean;
+  data?: any;
+  error?: string;
+}
+
+export class CustomTool extends Tool {
+  name = 'custom_tool';
+  description = 'Does something custom';
+
+  // Validate parameters
+  validate(params: ToolParams): boolean {
+    return params.input && params.input.length > 0;
+  }
+
+  // Execute tool
+  async execute(params: ToolParams): Promise<ToolResult> {
+    try {
+      const result = await this.process(params.input);
+      return {
+        success: true,
+        data: result
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  // Custom logic
+  private async process(input: string): Promise<any> {
+    // Your implementation
+    return processData(input);
+  }
+}
+```
+
+### 注册工具
+
+**方法 1：通过配置**
+
+```json
+{
+  "tools": {
+    "custom": ["./tools/my-tool.ts"]
+  }
+}
+```
+
+**方法 2：通过代码**
+
+```typescript
+import { Agent } from '@shipmyagent/core';
+
+const agent = new Agent(config);
+
+// Register tool
+agent.registerTool(new MyCustomTool());
+
+// Use tool
+const result = await agent.executeTool('my_custom_tool', {
+  input: 'data'
+});
+```
+
+---
+
+## LLM 提供商
+
+### 自定义提供商
+
+```typescript
+import { LLMProvider } from '@shipmyagent/core';
+
+export class CustomLLM extends LLMProvider {
+  name = 'custom';
+
+  constructor(private config: CustomConfig) {
+    super();
+  }
+
+  async chat(params: ChatParams): Promise<ChatResponse> {
+    const response = await fetch(this.config.endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.config.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: this.config.model,
+        messages: params.messages,
+        temperature: params.temperature || 0.7
+      })
+    });
+
+    return await response.json();
+  }
+
+  async *stream(params: ChatParams): AsyncIterator<ChatChunk> {
+    // Implement streaming
+  }
+
+  async validate(): Promise<boolean> {
+    // Validate credentials
+    const response = await fetch(`${this.config.endpoint}/test`, {
+      headers: { 'Authorization': `Bearer ${this.config.apiKey}` }
+    });
+    return response.ok;
+  }
+}
+```
+
+### 配置提供商
+
+```json
+{
+  "llm": {
+    "provider": "custom",
+    "implementation": "./llm/custom-provider.ts",
+    "apiKey": "${CUSTOM_API_KEY}",
+    "model": "custom-model"
+  }
+}
+```
+
+---
+
+## 任务扩展
+
+### 自定义任务类
+
+```typescript
+import { Task } from '@shipmyagent/core';
+
+export class DailyReportTask extends Task {
+  id = 'daily-report';
+  name = '每日报告';
+  cron = '0 18 * * *';
+
+  async execute(context: TaskContext): Promise<TaskResult> {
+    // 获取今天的提交
+    const commits = await context.git.log({
+      since: '1 day ago'
+    });
+
+    // 生成报告
+    const prompt = `生成今天的提交报告：${JSON.stringify(commits)}`;
+
+    const response = await context.llm.chat({ messages: [{ role: 'user', content: prompt }] });
+
+    return {
+      success: true,
+      output: response.content
+    };
+  }
+}
+```
+
+### 任务钩子
+
+```typescript
+class CustomTask extends Task {
+  // 执行前
+  async beforeExecute(context: TaskContext): Promise<void> {
+    console.log('Task starting...');
+  }
+
+  // 执行后
+  async afterExecute(context: TaskContext, result: TaskResult): Promise<void> {
+    console.log('Task completed:', result);
+  }
+
+  // 出错时
+  async onError(context: TaskContext, error: Error): Promise<void> {
+    console.error('Task error:', error);
+  }
+}
+```
+
+---
+
+## 插件开发
+
+### 插件结构
+
+```typescript
+// my-plugin/index.ts
+import { Plugin, Agent } from '@shipmyagent/core';
+
+export default class MyPlugin extends Plugin {
+  name = 'my-plugin';
+  version = '1.0.0';
+  author = 'Your Name';
+
+  dependencies = ['other-plugin'];
+
+  async onLoad(agent: Agent): Promise<void> {
+    // 初始化插件
+    this.logger.info('Loading plugin...');
+
+    // 注册工具
+    agent.registerTool(new PluginTool());
+
+    // 注册中间件
+    agent.use(this.middleware.bind(this));
+
+    // 监听事件
+    agent.on('task.completed', this.onTaskCompleted);
+  }
+
+  async onUnload(agent: Agent): Promise<void> {
+    this.logger.info('Unloading plugin...');
+  }
+
+  private middleware(ctx: any, next: any) {
+    // 前置处理
+    ctx.pluginData = { myPlugin: 'data' };
+    return next();
+  }
+
+  private onTaskCompleted(task: any, result: any) {
+    this.logger.info(`Task ${task.id} completed`);
+  }
+}
+```
+
+### 插件配置
+
+```json
+{
+  "plugins": {
+    "my-plugin": {
+      "enabled": true,
+      "config": {
+        "option": "value"
+      }
+    }
+  }
+}
+```
+
+---
+
+## 中间件
+
+### 创建中间件
+
+```typescript
+import { Middleware } from '@shipmyagent/core';
+
+export const loggingMiddleware: Middleware = async (ctx, next) => {
+  const startTime = Date.now();
+
+  // 记录请求
+  console.log('[Request]', ctx.operation);
+
+  // 执行下一个中间件
+  const result = await next();
+
+  // 记录响应
+  console.log('[Response]', {
+    duration: Date.now() - startTime,
+    result
+  });
+
+  return result;
+};
+```
+
+### 应用中间件
+
+```typescript
+import { Agent } from '@shipmyagent/core';
+
+const agent = new Agent(config);
+
+// 应用中间件
+agent.use(loggingMiddleware);
+agent.use(authMiddleware);
+agent.use(cacheMiddleware);
+```
+
+---
+
+## 高级主题
+
+### 状态管理
+
+```typescript
+import { StateManager } from '@shipmyagent/core';
+
+const state = new StateManager();
+
+// 设置状态
+state.set('last_review', Date.now());
+
+// 获取状态
+const lastReview = state.get('last_review');
+
+// 订阅状态变化
+state.subscribe('last_review', (value) => {
+  console.log('Last review updated:', value);
+});
+```
+
+### 缓存策略
+
+```typescript
+import { Cache } from '@shipmyagent/core';
+
+const cache = new Cache({
+  ttl: 3600,  // 1 hour
+  maxSize: 1000
+});
+
+// 缓存结果
+async function expensiveOperation(input: string) {
+  const cacheKey = hash(input);
+
+  if (await cache.has(cacheKey)) {
+    return await cache.get(cacheKey);
+  }
+
+  const result = await compute(input);
+  await cache.set(cacheKey, result);
+  return result;
+}
+```
+
+### 批处理
+
+```typescript
+import { BatchProcessor } from '@shipmyagent/core';
+
+const batch = new BatchProcessor({
+  maxBatchSize: 100,
+  maxWaitTime: 5000
+});
+
+// 批量处理
+async function processFiles(files: string[]) {
+  return await batch.process(files, async (file) => {
+    return await agent.analyzeFile(file);
+  });
+}
+```
+
+---
+
+## 最佳实践
+
+### 工具开发
+
+1. **验证输入**：始终验证用户输入
+2. **错误处理**：提供清晰的错误消息
+3. **性能**：避免长时间运行的操作
+4. **文档化**：为工具编写清晰的描述
+
+### 提供商开发
+
+1. **流式支持**：尽可能实现流式响应
+2. **重试逻辑**：处理网络失败
+3. **令牌估算**：帮助用户预测成本
+4. **模型支持**：支持多种模型
+
+### 任务开发
+
+1. **幂等性**：任务应该是幂等的
+2. **超时**：设置合理的超时
+3. **重试**：对失败实现重试
+4. **通知**：发送状态通知
+
+---
+
+## 测试
+
+### 单元测试
+
+```typescript
+import { Tool } from '@shipmyagent/core';
+
+describe('MyTool', () => {
+  it('should validate input correctly', () => {
+    const tool = new MyTool();
+    expect(tool.validate({ input: 'test' })).toBe(true);
+    expect(tool.validate({ input: '' })).toBe(false);
+  });
+
+  it('should execute successfully', async () => {
+    const tool = new MyTool();
+    const result = await tool.execute({ input: 'test' });
+    expect(result.success).toBe(true);
+  });
+});
+```
+
+### 集成测试
+
+```typescript
+import { Agent } from '@shipmyagent/core';
+
+describe('Agent Integration', () => {
+  it('should chat with agent', async () => {
+    const agent = new Agent({
+      llm: new MockLLMProvider(),
+      tools: [new MyTool()]
+    });
+
+    const response = await agent.chat('Hello');
+    expect(response.content).toBeDefined();
+  });
+});
+```
+
+---
+
+## 部署
+
+### 打包插件
+
+```bash
+# 构建插件
+pnpm build:plugin
+
+# 发布到 npm
+npm publish
+```
+
+### 使用插件
+
+```bash
+# 安装插件
+npm install @shipmyagent/my-plugin
+
+# 在 ship.json 中启用
+{
+  "plugins": {
+    "my-plugin": {
+      "enabled": true
+    }
+  }
+}
+```
+
+---
+
+## 参考资源
+
+- [API Reference](/docs/reference/api) - 完整 API 文档
+- [Architecture](/docs/architecture) - 系统架构
+- [Contributing](/docs/community/contributing) - 贡献指南

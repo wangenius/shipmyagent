@@ -1,0 +1,86 @@
+---
+title: Troubleshooting
+description: Solve common problems and debug your ShipMyAgent setup
+---
+
+# Troubleshooting
+
+This section helps you diagnose and resolve common issues when using ShipMyAgent.
+
+## Quick Diagnosis Flowchart
+
+```
+Start → Check Agent Status → What's the problem?
+  ├─ Agent won't start? → [Common Issues](/docs/troubleshooting/common-issues)
+  ├─ Errors during operation? → [Logs & Debugging](/docs/troubleshooting/logs-debugging)
+  ├─ Slow performance? → [Performance Issues](/docs/troubleshooting/performance-issues)
+  └─ Permission denied? → [Permission Errors](/docs/troubleshooting/permission-errors)
+```
+
+## Getting Help
+
+If you can't find a solution here:
+
+1. **Enable Debug Mode**:
+   ```bash
+   shipmyagent start --verbose
+   ```
+
+2. **Check Logs**:
+   ```bash
+   # View recent logs
+   shipmyagent logs --tail 50
+
+   # Export logs for sharing
+   shipmyagent logs --export > agent-logs.txt
+   ```
+
+3. **Search Existing Issues**:
+   - [GitHub Issues](https://github.com/wangenius/shipmyagent/issues)
+   - [Discussions](https://github.com/wangenius/shipmyagent/discussions)
+
+4. **Ask the Community**:
+   - [Discord Server](https://discord.gg/shipmyagent)
+   - [Telegram Community](https://t.me/shipmyagent)
+
+5. **Create a Bug Report**:
+   Include:
+   - ShipMyAgent version (`shipmyagent --version`)
+   - OS and Node.js version (`node --version`)
+   - Error messages and logs
+   - Minimal reproduction steps
+
+## Common Error Messages
+
+| Error Code | Description | Quick Fix |
+|------------|-------------|-----------|
+| `E001` | LLM API Key missing | Check `ship.json` configuration |
+| `E002` | Permission denied | Review `permissions` section |
+| `E003` | Task execution failed | Check task logs in `.ship/logs/` |
+| `E004` | Telegram connection failed | Verify bot token and chat ID |
+| `E005` | File write blocked | Approve operation in Telegram |
+
+## Diagnostic Commands
+
+```bash
+# Check system health
+shipmyagent doctor
+
+# Validate configuration
+shipmyagent validate
+
+# Test LLM connection
+shipmyagent test-llm
+
+# List active tasks
+shipmyagent tasks list
+```
+
+## Next Steps
+
+Choose a troubleshooting topic:
+
+- [Common Issues](/docs/troubleshooting/common-issues) - Installation, startup, and configuration problems
+- [Logs & Debugging](/docs/troubleshooting/logs-debugging) - Understanding and using logs
+- [Performance Issues](/docs/troubleshooting/performance-issues) - Speed and resource optimization
+- [Permission Errors](/docs/troubleshooting/permission-errors) - Access and permission problems

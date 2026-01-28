@@ -1,0 +1,524 @@
+---
+title: Performance Issues
+description: Diagnosing and resolving slow performance
+---
+
+# Performance Issues
+
+Is your ShipMyAgent running slowly? This guide helps you identify bottlenecks and optimize performance.
+
+## Common Performance Bottlenecks
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    Request Flow                     │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  User → Agent → Tool Execution → LLM API → Response │
+│   ↓        ↓          ↓            ↓         ↓      │
+│  Latency │  File I/O │ Network     │ Model    │     │
+│          │  DB Ops   │ Timeout     │ Speed    │     │
+└─────────────────────────────────────────────────────┘
+```
+
+## Diagnostic Commands
+
+```bash
+# Check system health
+shipmyagent doctor
+
+# View performance metrics
+shipmyagent metrics
+
+# Benchmark LLM response time
+shipmyagent benchmark
+
+# Profile current operations
+shipmyagent profile
+```
+
+## Measuring Performance
+
+### 1. Response Time Breakdown
+
+Enable timing logs to see where time is spent:
+
+```json
+{
+  "logging": {
+    "level": "info",
+    "timing": {
+      "enabled": true,
+      "threshold": 1000  // Log operations > 1 second
+    }
+  }
+}
+```
+
+**Example output**:
+```
+[INFO] [TIMING] Tool execution: read_file (245ms)
+[INFO] [TIMING] LLM request: completion (3,421ms)
+[INFO] [TIMING] File write: update (89ms)
+[INFO] [TIMING] Total request: 3,755ms
+```
+
+### 2. LLM Response Time
+
+Track LLM API performance:
+
+```bash
+# View average response times
+shipmyagent logs | grep "LLM response time" | tail -20
+
+# Calculate average
+shipmyagent logs | grep "LLM response time" | awk '{print $NF}' | awk '{sum+=$1; count++} END {print sum/count "ms"}'
+```
+
+### 3. Memory Usage
+
+Monitor memory consumption:
+
+```bash
+# Check current usage
+ps aux | grep shipmyagent
+
+# Continuous monitoring
+watch -n 5 'ps aux | grep shipmyagent'
+
+# Memory profile
+shipmyagent profile --memory
+```
+
+## Optimization Strategies
+
+### 1. LLM Optimization
+
+#### Use Faster Models
+
+For quick operations, use faster models:
+
+```json
+{
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-haiku-20241022",  // Faster than Sonnet
+    "baseUrl": "https://api.anthropic.com/v1"
+  }
+}
+```
+
+**Model Speed Comparison** (approximate):
+- Haiku: ~200-300ms first token
+- Sonnet: ~400-600ms first token
+- Opus: ~800-1000ms first token
+
+#### Reduce Token Usage
+
+Optimize prompts to reduce tokens:
+
+```markdown
+# ❌ Verbose (inefficient)
+You are a highly intelligent and capable AI assistant designed to help developers...
+
+# ✅ Concise (efficient)
+Expert coding assistant. Focus on clean, maintainable code.
+```
+
+#### Enable Streaming
+
+Stream responses for faster perceived performance:
+
+```json
+{
+  "llm": {
+    "streaming": true
+  }
+}
+```
+
+#### Configure Timeouts
+
+Set appropriate timeouts:
+
+```json
+{
+  "llm": {
+    "timeout": 30000,      // 30 seconds
+    "maxRetries": 2,
+    "retryDelay": 1000
+  }
+}
+```
+
+### 2. File System Optimization
+
+#### Limit File Access
+
+Restrict file operations to specific directories:
+
+```json
+{
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": ["src/**", "docs/**"],  // Only these dirs
+      "requiresApproval": false
+    }
+  }
+}
+```
+
+#### Use Git Operations
+
+For large repositories, use Git commands instead of file reads:
+
+```markdown
+# Instead of: "Read all files in src/"
+Use: "git diff HEAD~1" to see recent changes
+```
+
+#### Cache File Reads
+
+Enable caching for frequently accessed files:
+
+```json
+{
+  "cache": {
+    "enabled": true,
+    "fileReads": true,
+    "ttl": 300  // 5 minutes
+  }
+}
+```
+
+### 3. Task Scheduling Optimization
+
+#### Adjust Task Frequency
+
+Don't run tasks too frequently:
+
+```markdown
+---
+cron: "*/5 * * * *"  # Every 5 minutes (frequent)
+---
+
+# Better: Every 30 minutes
+---
+cron: "*/30 * * * *"
+---
+```
+
+#### Use Smart Cron Schedules
+
+Schedule tasks during off-peak hours:
+
+```markdown
+# Heavy tasks at night
+---
+cron: "0 2 * * *"  # 2 AM daily
+---
+
+# Light tasks during work hours
+---
+cron: "0 */4 9-17 * * *"  # Every 4 hours, 9 AM - 5 PM
+---
+```
+
+#### Batch Similar Operations
+
+Combine related tasks:
+
+```markdown
+---
+id: combined-maintenance
+name: Combined Daily Maintenance
+cron: "0 18 * * *"
+---
+
+1. Check for TODOs
+2. Review recent commits
+3. Update dependencies
+4. Generate summary
+```
+
+### 4. Network Optimization
+
+#### Use Closer API Endpoints
+
+Choose geographically close API endpoints:
+
+```json
+{
+  "llm": {
+    "provider": "anthropic",
+    "baseUrl": "https://api.anthropic.com/v1"  // Default US
+    // Or regional endpoint if available
+  }
+}
+```
+
+#### Enable HTTP Keep-Alive
+
+Maintain persistent connections:
+
+```json
+{
+  "http": {
+    "keepAlive": true,
+    "maxSockets": 50,
+    "keepAliveTimeout": 30000
+  }
+}
+```
+
+#### Compress Requests
+
+Enable compression for large payloads:
+
+```json
+{
+  "http": {
+    "compression": true,
+    "minBodySize": 1024  // Compress if > 1KB
+  }
+}
+```
+
+### 5. Integration Optimization
+
+#### Telegram Optimization
+
+Reduce unnecessary Telegram updates:
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}",
+      "updates": {
+        "timeout": 30,         // Polling timeout
+        "limit": 10,           // Max updates per poll
+        "allowedUpdates": ["message"]  // Only messages
+      }
+    }
+  }
+}
+```
+
+#### Webhook Optimization
+
+Optimize webhook delivery:
+
+```json
+{
+  "integrations": {
+    "webhook": {
+      "enabled": true,
+      "url": "https://your-server.com/webhook",
+      "timeout": 5000,
+      "retryAttempts": 3,
+      "retryDelay": 1000,
+      "batch": {
+        "enabled": true,
+        "maxSize": 100,
+        "maxWait": 5000  // 5 seconds
+      }
+    }
+  }
+}
+```
+
+## Performance Monitoring
+
+### Real-Time Monitoring
+
+```bash
+# Monitor agent performance
+shipmyagent monitor
+
+# Output example:
+┌─────────────────────────────────────┐
+│ ShipMyAgent Monitor                 │
+├─────────────────────────────────────┤
+│ CPU: 12%                            │
+│ Memory: 245MB / 512MB               │
+│ Active Tasks: 3                     │
+│ LLM Avg Response: 1.2s              │
+│ Uptime: 2d 4h 32m                   │
+└─────────────────────────────────────┘
+```
+
+### Performance Metrics
+
+Key metrics to track:
+
+| Metric | Good | Warning | Critical |
+|--------|------|---------|----------|
+| **LLM Response Time** | < 2s | 2-5s | > 5s |
+| **Memory Usage** | < 500MB | 500MB-1GB | > 1GB |
+| **CPU Usage** | < 20% | 20-50% | > 50% |
+| **Task Queue** | 0-5 | 5-10 | > 10 |
+| **Error Rate** | < 1% | 1‑5% | > 5% |
+
+### Set Up Alerts
+
+Configure performance alerts:
+
+```json
+{
+  "monitoring": {
+    "enabled": true,
+    "alerts": {
+      "llmTimeout": {
+        "threshold": 5000,  // 5 seconds
+        "action": "notify"
+      },
+      "highMemory": {
+        "threshold": 1000000000,  // 1GB in bytes
+        "action": "notify"
+      },
+      "taskFailure": {
+        "threshold": 3,  // 3 consecutive failures
+        "action": "restart"
+      }
+    }
+  }
+}
+```
+
+## Troubleshooting Slow Performance
+
+### Problem: LLM Responses Are Slow
+
+**Diagnosis**:
+```bash
+# Test LLM connection speed
+shipmyagent test-llm --benchmark
+
+# Check network latency
+ping api.anthropic.com
+```
+
+**Solutions**:
+1. Switch to faster model (Haiku)
+2. Reduce prompt complexity
+3. Check network connectivity
+4. Try alternative API endpoint
+
+### Problem: High Memory Usage
+
+**Diagnosis**:
+```bash
+# Check memory profile
+shipmyagent profile --memory
+
+# Identify large caches
+du -sh .ship/cache/*
+```
+
+**Solutions**:
+1. Clear cache: `shipmyagent cache clear`
+2. Reduce cache size in config
+3. Disable unnecessary features
+4. Restart agent periodically
+
+### Problem: Tasks Running Slowly
+
+**Diagnosis**:
+```bash
+# Check task execution time
+shipmyagent tasks list --timing
+
+# View task logs
+shipmyagent logs --file tasks | grep "execution time"
+```
+
+**Solutions**:
+1. Optimize task prompts
+2. Break complex tasks into smaller ones
+3. Adjust cron schedule
+4. Use more efficient tool calls
+
+### Problem: Frequent Timeouts
+
+**Diagnosis**:
+```bash
+# Check timeout errors
+shipmyagent logs | grep -i timeout
+
+# Test network stability
+ping -c 100 api.anthropic.com
+```
+
+**Solutions**:
+1. Increase timeout values
+2. Enable retries with backoff
+3. Use network optimization
+4. Consider API rate limiting
+
+## Performance Checklist
+
+Use this checklist to optimize your setup:
+
+- [ ] Using fastest appropriate model
+- [ ] Prompts are concise and focused
+- [ ] File access limited to necessary directories
+- [ ] Cache enabled for frequently accessed data
+- [ ] Tasks scheduled optimally
+- [ ] HTTP keep-alive enabled
+- [ ] Compression enabled for large payloads
+- [ ] Timeouts configured appropriately
+- [ ] Monitoring and alerts set up
+- [ ] Regular cache cleanup scheduled
+
+## Performance Tuning Example
+
+Here's a complete optimized configuration:
+
+```json
+{
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-haiku-20241022",
+    "temperature": 0.3,
+    "maxTokens": 2048,
+    "timeout": 30000,
+    "streaming": true
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": ["src/**", "tests/**"],
+      "requiresApproval": false
+    },
+    "exec_shell": {
+      "allow": ["npm test", "npm run lint"],
+      "requiresApproval": false
+    }
+  },
+  "cache": {
+    "enabled": true,
+    "fileReads": true,
+    "llmResponses": true,
+    "ttl": 600
+  },
+  "http": {
+    "keepAlive": true,
+    "compression": true,
+    "timeout": 30000
+  },
+  "monitoring": {
+    "enabled": true,
+    "metrics": true
+  }
+}
+```
+
+## Next Steps
+
+- [Common Issues](/docs/troubleshooting/common-issues) - General troubleshooting
+- [Logs & Debugging](/docs/troubleshooting/logs-debugging) - Understanding logs
+- [Permission Errors](/docs/troubleshooting/permission-errors) - Access control issues

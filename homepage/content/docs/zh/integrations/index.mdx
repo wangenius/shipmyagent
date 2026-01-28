@@ -1,0 +1,410 @@
+---
+title: 集成
+description: 将 ShipMyAgent 与外部服务和工具连接
+---
+
+# 集成
+
+通过集成 GitHub、Slack、Discord 和自定义 webhook 等外部服务来扩展 ShipMyAgent。
+
+## 概述
+
+集成允许 ShipMyAgent：
+- 接收通知和命令
+- 发送自动更新
+- 与外部 API 交互
+- 触发其他工具中的工作流程
+
+## 可用集成
+
+- [Telegram](#telegram) - 聊天和通知
+- [GitHub](#github) - PR 自动化和 issue 管理
+- [Slack](#slack) - 团队通知
+- [Discord](#discord) - 社区参与
+- [Webhook](#webhook) - 自定义集成
+
+---
+
+## Telegram
+
+在 Telegram 上与您的 agent 聊天并接收通知。
+
+### 设置
+
+#### 1. 创建 Bot
+
+1. 打开 Telegram 并搜索 [@BotFather](https://t.me/BotFather)
+2. 发送 `/newbot` 命令
+3. 按照提示设置名称和用户名
+4. 复制 **HTTP API Token**
+
+#### 2. 获取您的 Chat ID
+
+1. 在 Telegram 上搜索 [@userinfobot](https://t.me/userinfobot)
+2. 发送任何消息
+3. 复制您的数字 **User ID**
+
+对于群组：
+1. 将您的 bot 添加到群组
+2. 在群组中发送消息
+3. 访问：`https://api.telegram.org/bot<BOT_TOKEN>/getUpdates`
+4. 找到 `chat.id` 值
+
+#### 3. 在 ship.json 中配置
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
+    }
+  }
+}
+```
+
+### 功能
+
+#### 聊天命令
+
+```
+/start - 开始交互
+/status - 检查 agent 状态
+/tasks - 列出定时任务
+/help - 显示可用命令
+```
+
+#### 批准工作流程
+
+当 agent 需要对敏感操作的批准时：
+
+```
+🔔 需要批准
+
+操作：写入 src/config.js
+更改：+5 行，-2 行
+
+回复：
+✅ approve - 允许操作
+❌ reject - 拒绝操作
+📝 modify - 建议更改
+```
+
+---
+
+## GitHub
+
+自动化拉取请求、问题和仓库管理。
+
+### 设置
+
+#### 1. 创建个人访问令牌
+
+1. 转到 GitHub 设置 → 开发者设置 → 个人访问令牌 → 令牌（经典）
+2. 生成新令牌（经典）
+3. 选择范围：
+   - `repo`（完全控制私有仓库）
+   - `public_repo`（访问公共仓库）
+4. 复制令牌
+
+#### 2. 在 ship.json 中配置
+
+```json
+{
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo"
+    }
+  }
+}
+```
+
+### 功能
+
+#### 自动化 PR 审查
+
+```markdown
+---
+id: pr-review
+name: PR 审查 Bot
+cron: "*/30 * * * *"
+notify: ["telegram", "github"]
+---
+
+审查所有开放的拉取请求并发布评论。
+```
+
+#### Issue 分类
+
+```markdown
+---
+id: issue-triage
+name: Issue 分类
+cron: "0 */2 * * *"
+---
+
+对新问题进行分类并应用标签。
+```
+
+### GitHub Actions 集成
+
+创建工作流文件：`.github/workflows/agent-review.yml`
+
+```yaml
+name: Agent 审查
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  agent-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: 运行 Agent 审查
+        run: shipmyagent tasks run pr-review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+---
+
+## Slack
+
+向您的 Slack 工作区发送通知和更新。
+
+### 设置
+
+#### 1. 创建传入 Webhook
+
+1. 转到 https://api.slack.com/apps
+2. 创建新应用 → "从零开始"
+3. 启用"传入 Webhooks"
+4. 点击"添加新 Webhook 到工作区"
+5. 选择频道并复制 **Webhook URL**
+
+#### 2. 在 ship.json 中配置
+
+```json
+{
+  "integrations": {
+    "slack": {
+      "enabled": true,
+      "webhook": "${SLACK_WEBHOOK_URL}",
+      "channel": "#engineering",
+      "username": "ShipMyAgent",
+      "icon": ":robot_face:"
+    }
+  }
+}
+```
+
+---
+
+## Discord
+
+在 Discord 上与您的社区互动。
+
+### 设置
+
+#### 1. 创建 Discord 应用程序
+
+1. 转到 https://discord.com/developers/applications
+2. 创建"新应用程序"
+3. 转到"Bot"部分 → 创建 Bot
+4. 复制 **Token**
+
+#### 2. 启用特权意图
+
+- 消息内容意图
+- 服务器成员意图
+
+#### 3. 邀请 Bot 到服务器
+
+1. 转到"OAuth2" → "URL 生成器"
+2. 选择范围：`bot`
+3. 选择 bot 权限：
+   - 发送消息
+   - 读取消息历史
+   - 添加反应
+4. 复制 URL 并在浏览器中打开
+5. 将 bot 添加到您的服务器
+
+#### 4. 在 ship.json 中配置
+
+```json
+{
+  "integrations": {
+    "discord": {
+      "enabled": true,
+      "token": "${DISCORD_BOT_TOKEN}",
+      "guildId": "${DISCORD_GUILD_ID}",
+      "channelIds": {
+        "notifications": "123456789",
+        "commands": "987654321"
+      }
+    }
+  }
+}
+```
+
+---
+
+## Webhook
+
+用于自定义集成的通用 webhook 支持。
+
+### 配置
+
+```json
+{
+  "integrations": {
+    "webhook": {
+      "enabled": true,
+      "url": "https://your-server.com/webhook",
+      "method": "POST",
+      "headers": {
+        "Authorization": "Bearer ${WEBHOOK_TOKEN}",
+        "Content-Type": "application/json"
+      },
+      "timeout": 5000,
+      "retryAttempts": 3,
+      "retryDelay": 1000
+    }
+  }
+}
+```
+
+### Webhook 负载
+
+ShipMyAgent 发送 JSON 负载：
+
+```json
+{
+  "event": "task.completed",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "task": {
+    "id": "daily-report",
+    "name": "每日报告"
+  },
+  "result": {
+    "status": "success",
+    "output": "任务成功完成...",
+    "duration": 45000
+  }
+}
+```
+
+### 事件类型
+
+| 事件 | 描述 |
+|------|------|
+| `task.started` | 任务开始执行 |
+| `task.completed` | 任务成功完成 |
+| `task.failed` | 任务失败 |
+| `approval.requested` | 需要批准 |
+| `approval.granted` | 批准已授予 |
+| `approval.denied` | 批准被拒绝 |
+
+---
+
+## 多个集成
+
+一起使用多个集成：
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
+    },
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo"
+    },
+    "slack": {
+      "enabled": true,
+      "webhook": "${SLACK_WEBHOOK_URL}",
+      "channel": "#alerts"
+    }
+  }
+}
+```
+
+---
+
+## 测试集成
+
+测试每个集成：
+
+```bash
+# 测试 Telegram
+shipmyagent test --integration telegram
+
+# 测试 GitHub
+shipmyagent test --integration github
+
+# 测试所有集成
+shipmyagent test --integration all
+```
+
+---
+
+## 故障排查
+
+### Telegram 无响应
+
+1. **验证 bot token**
+2. **检查 chat ID**
+3. **重启 agent**
+
+### GitHub 集成问题
+
+1. **Token 范围**：确保令牌具有所需范围
+2. **仓库访问**：令牌必须有权访问仓库
+3. **速率限制**：GitHub 有 API 速率限制
+
+### Webhook 失败
+
+1. **检查 URL 可访问性**
+2. **验证身份验证**
+3. **查看日志**
+
+---
+
+## 安全考虑
+
+### 保护 API Key
+
+```bash
+# ✅ 良好 - 环境变量
+export GITHUB_TOKEN="ghp_..."
+export TELEGRAM_BOT_TOKEN="123456:..."
+
+# ❌ 不好 - 硬编码
+{
+  "token": "ghp_1234567890"
+}
+```
+
+### 限制 Bot 权限
+
+- 仅授予必要的权限
+- 为 Telegram 使用特定的 `chatId`
+- 使用有范围的 GitHub 令牌
+- 设置 webhook 密钥
+
+---
+
+## 下一步
+
+- [配置](/docs/configuration) - 集成设置详细信息
+- [任务](/docs/tasks) - 使用集成自动化
+- [最佳实践](/docs/best-practices) - 安全指南

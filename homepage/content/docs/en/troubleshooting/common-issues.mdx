@@ -1,0 +1,347 @@
+---
+title: Common Issues
+description: Solutions to frequently encountered problems
+---
+
+# Common Issues
+
+This section covers the most frequently encountered problems and their solutions.
+
+## Installation Issues
+
+### "Command not found: shipmyagent"
+
+**Problem**: After installing, the `shipmyagent` command is not recognized.
+
+**Solutions**:
+
+1. **Check global npm path**:
+   ```bash
+   npm config get prefix
+   # Add this path to your PATH environment variable
+   export PATH=$(npm config get prefix)/bin:$PATH
+   ```
+
+2. **Reinstall with force**:
+   ```bash
+   npm uninstall -g shipmyagent
+   npm install -g shipmyagent --force
+   ```
+
+3. **Use npx (alternative)**:
+   ```bash
+   npx shipmyagent init
+   npx shipmyagent start
+   ```
+
+### "Node.js version too old"
+
+**Problem**: ShipMyAgent requires Node.js >= 18.
+
+**Solution**:
+```bash
+# Check your version
+node --version
+
+# Upgrade using nvm (recommended)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+nvm install 20
+nvm use 20
+```
+
+## Initialization Issues
+
+### "Permission denied when creating files"
+
+**Problem**: Cannot create `Agent.md`, `ship.json`, or `.ship/` directory.
+
+**Solutions**:
+
+1. **Check directory permissions**:
+   ```bash
+   ls -la  # Should show you have write permissions
+   ```
+
+2. **Run with appropriate permissions**:
+   ```bash
+   # Don't use sudo with npm global packages
+   # Instead, fix npm permissions
+   mkdir -p ~/.npm-global
+   npm config set prefix '~/.npm-global'
+   echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+   ```
+
+3. **Initialize in a writable location**:
+   ```bash
+   cd ~/my-project  # Ensure you own this directory
+   shipmyagent init
+   ```
+
+### "Git repository not detected"
+
+**Problem**: ShipMyAgent requires a Git repository.
+
+**Solutions**:
+
+1. **Initialize Git**:
+   ```bash
+   git init
+   git add .
+   git commit -m "Initial commit"
+   shipmyagent init
+   ```
+
+2. **Skip Git check (not recommended)**:
+   ```bash
+   shipmyagent init --no-git-check
+   ```
+
+## Startup Issues
+
+### "LLM API Key not configured"
+
+**Problem**: Missing or invalid API key in `ship.json`.
+
+**Solutions**:
+
+1. **Add API key to ship.json**:
+   ```json
+   {
+     "llm": {
+       "apiKey": "${ANTHROPIC_API_KEY}"
+     }
+   }
+   ```
+
+2. **Set environment variable**:
+   ```bash
+   export ANTHROPIC_API_KEY="sk-ant-..."
+   # Or add to ~/.bashrc or ~/.zshrc
+   echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc
+   ```
+
+3. **Test the key**:
+   ```bash
+   shipmyagent test-llm
+   ```
+
+### "Port 3000 already in use"
+
+**Problem**: The default port is occupied by another service.
+
+**Solutions**:
+
+1. **Find and kill the process**:
+   ```bash
+   # macOS/Linux
+   lsof -ti:3000 | xargs kill -9
+
+   # Or use a different port
+   shipmyagent start --port 3001
+   ```
+
+2. **Configure in ship.json**:
+   ```json
+   {
+     "server": {
+       "port": 3001
+     }
+   }
+   ```
+
+### "Agent.md not found"
+
+**Problem**: Missing or misplaced `Agent.md` file.
+
+**Solution**:
+```bash
+# Ensure Agent.md is in the project root
+ls Agent.md
+
+# If missing, recreate it
+cat > Agent.md << 'EOF'
+# Agent Role
+
+You are a helpful AI coding assistant.
+
+## Goals
+
+- Help write clean, maintainable code
+- Review code changes
+- Answer technical questions
+EOF
+```
+
+## Configuration Issues
+
+### "Invalid ship.json format"
+
+**Problem**: JSON syntax error in `ship.json`.
+
+**Solutions**:
+
+1. **Validate JSON**:
+   ```bash
+   # Use jq to validate
+   cat ship.json | jq .
+
+   # Or use built-in validation
+   shipmyagent validate
+   ```
+
+2. **Common JSON mistakes**:
+   - ❌ Trailing commas: `{"key": "value",}`
+   - ❌ Single quotes: `{'key': 'value'}`
+   - ❌ Comments: `{"key": "value"} // comment`
+   - ✅ Correct: `{"key": "value"}`
+
+3. **Use a JSON linter**:
+   Add to your `.vscode/settings.json`:
+   ```json
+   {
+     "json.validate.enable": true
+   }
+   ```
+
+### "Environment variable not expanded"
+
+**Problem**: `${VAR_NAME}` in `ship.json` is not being replaced.
+
+**Solution**:
+```bash
+# Ensure the variable is exported
+export MY_API_KEY="xxx"
+
+# Verify it's set
+echo $MY_API_KEY
+
+# Restart the agent
+shipmyagent restart
+```
+
+## Task Issues
+
+### "Task file not found"
+
+**Problem**: Task defined in `.ship/tasks/` doesn't exist.
+
+**Solution**:
+```bash
+# List existing tasks
+shipmyagent tasks list
+
+# Create missing task
+cat > .ship/tasks/my-task.md << 'EOF'
+---
+id: my-task
+name: My Task
+cron: "0 9 * * *"
+---
+
+This is my task description.
+EOF
+```
+
+### "Invalid cron expression"
+
+**Problem**: Cron syntax error in task file.
+
+**Solution**:
+
+1. **Use cron validator**:
+   ```bash
+   # Test your cron expression
+   shipmyagent validate-cron "0 9 * * 1-5"
+   ```
+
+2. **Common cron patterns**:
+   ```markdown
+   # Every hour
+   cron: "0 * * * *"
+
+   # Every day at 9 AM
+   cron: "0 9 * * *"
+
+   # Every Monday at 9 AM
+   cron: "0 9 * * 1"
+
+   # Every weekday at 9 AM
+   cron: "0 9 * * 1-5"
+   ```
+
+## Integration Issues
+
+### "Telegram bot not responding"
+
+**Problem**: Telegram bot configured but not responding to messages.
+
+**Solutions**:
+
+1. **Verify bot token**:
+   ```bash
+   # Test the token
+   curl https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getMe
+   ```
+
+2. **Check chat ID**:
+   ```bash
+   # Get your chat ID
+   curl https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
+   ```
+
+3. **Restart with debug mode**:
+   ```bash
+   shipmyagent start --verbose
+   # Look for Telegram connection logs
+   ```
+
+4. **Ensure chatId is configured**:
+   ```json
+   {
+     "integrations": {
+       "telegram": {
+         "enabled": true,
+         "botToken": "${TELEGRAM_BOT_TOKEN}",
+         "chatId": "12345678"  // This is required!
+       }
+     }
+   }
+   ```
+
+### "Webhook timeout"
+
+**Problem**: External webhook calls are timing out.
+
+**Solution**:
+```json
+{
+  "integrations": {
+    "webhook": {
+      "timeout": 30000,  // Increase timeout (ms)
+      "retryAttempts": 3
+    }
+  }
+}
+```
+
+## Still Having Issues?
+
+If none of these solutions work:
+
+1. **Enable verbose logging**:
+   ```bash
+   shipmyagent start --verbose --log-level debug
+   ```
+
+2. **Export diagnostic info**:
+   ```bash
+   shipmyagent doctor > diagnostic.txt
+   shipmyagent logs --export > logs.txt
+   ```
+
+3. **Create an issue** with:
+   - `diagnostic.txt`
+   - Relevant parts of `logs.txt`
+   - Steps to reproduce
+
+See [Logs & Debugging](/docs/troubleshooting/logs-debugging) for more detailed debugging steps.
