@@ -8,6 +8,7 @@ import { createToolExecutor } from '../runtime/tools.js';
 import { createAgentRuntime, AgentContext } from '../runtime/agent.js';
 import { createServer, ServerContext } from '../server/index.js';
 import { createTelegramBot } from '../integrations/telegram.js';
+import { createFeishuBot } from '../integrations/feishu.js';
 import { getAgentMdPath, getShipJsonPath, getProjectRoot, ShipConfig } from '../utils.js';
 
 interface StartOptions {
@@ -108,6 +109,36 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
     );
   }
 
+  // 创建飞书 Bot（如果已启用）
+  let feishuBot = null;
+  if (shipConfig.integrations?.feishu?.enabled) {
+    logger.info('飞书集成已启用');
+
+    // 从环境变量或配置中读取飞书配置
+    const feishuConfig = {
+      enabled: true,
+      appId: shipConfig.integrations.feishu.appId || process.env.FEISHU_APP_ID || '',
+      appSecret: shipConfig.integrations.feishu.appSecret || process.env.FEISHU_APP_SECRET || '',
+      domain: shipConfig.integrations.feishu.domain || 'https://open.feishu.cn',
+    };
+
+    // 替换环境变量占位符
+    if (feishuConfig.appId.startsWith('${') && feishuConfig.appId.endsWith('}')) {
+      const envVar = feishuConfig.appId.slice(2, -1);
+      feishuConfig.appId = process.env[envVar] || '';
+    }
+    if (feishuConfig.appSecret.startsWith('${') && feishuConfig.appSecret.endsWith('}')) {
+      const envVar = feishuConfig.appSecret.slice(2, -1);
+      feishuConfig.appSecret = process.env[envVar] || '';
+    }
+
+    feishuBot = await createFeishuBot(
+      projectRoot,
+      feishuConfig,
+      logger
+    );
+  }
+
   // 处理进程信号
   let isShuttingDown = false;
   const shutdown = async (signal: string) => {
@@ -119,6 +150,11 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
     // 停止 Telegram Bot
     if (telegramBot) {
       await telegramBot.stop();
+    }
+
+    // 停止飞书 Bot
+    if (feishuBot) {
+      await feishuBot.stop();
     }
 
     // 停止服务器
@@ -143,6 +179,11 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
   // 启动 Telegram Bot
   if (telegramBot) {
     await telegramBot.start();
+  }
+
+  // 启动飞书 Bot
+  if (feishuBot) {
+    await feishuBot.start();
   }
 
   logger.info('=== ShipMyAgent 启动完成 ===');

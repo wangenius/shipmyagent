@@ -39,6 +39,9 @@ export interface ShipConfig {
         };
         feishu?: {
             enabled: boolean;
+            appId?: string;
+            appSecret?: string;
+            domain?: string;
         };
     };
 }

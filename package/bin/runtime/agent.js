@@ -32,8 +32,18 @@ export class AgentRuntime {
     async initialize() {
         try {
             await this.logger.log('info', 'Initializing Agent Runtime with ToolLoopAgent (v6)');
+            await this.logger.log('info', `Agent.md content length: ${this.context.agentMd?.length || 0} chars`);
             const { provider, apiKey, baseUrl, model, topP, frequencyPenalty, presencePenalty } = this.context.config.llm;
-            const resolvedApiKey = apiKey || process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
+            // 解析 API Key，支持环境变量占位符
+            let resolvedApiKey = apiKey;
+            if (apiKey && apiKey.startsWith('${') && apiKey.endsWith('}')) {
+                const envVar = apiKey.slice(2, -1);
+                resolvedApiKey = process.env[envVar];
+            }
+            // 如果没有配置，尝试从常见环境变量中获取
+            if (!resolvedApiKey) {
+                resolvedApiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.API_KEY;
+            }
             if (!resolvedApiKey) {
                 await this.logger.log('warn', 'No API Key configured, will use simulation mode');
                 return;
@@ -534,6 +544,7 @@ export class AgentRuntime {
         const toolCalls = [];
         // Read Agent.md as system prompt
         const systemPrompt = this.context.agentMd;
+        await this.logger.log('debug', `Using system prompt (Agent.md): ${systemPrompt?.substring(0, 100)}...`);
         // Build full prompt with context
         let fullPrompt = instructions;
         if (context?.taskDescription) {
@@ -557,19 +568,36 @@ export class AgentRuntime {
                 await this.logger.log('info', `Resuming from checkpoint: ${context.taskId}`);
             }
             // Execute with ToolLoopAgent (v6 API: generate method)
+            await this.logger.log('debug', `Calling agent.generate with system prompt length: ${systemPrompt?.length || 0}`);
             const result = await this.agent.generate({
                 prompt,
                 system: systemPrompt,
                 // v6 feature: Checkpoints for resuming after approval
                 checkpoint: context?.taskId ? this.getCheckpoint(context.taskId) : undefined,
             });
+            // Debug: Log the raw result structure
+            await this.logger.log('debug', `Raw result structure: ${JSON.stringify({
+                hasSteps: !!result.steps,
+                stepsLength: result.steps?.length,
+                firstStepKeys: result.steps?.[0] ? Object.keys(result.steps[0]) : [],
+                hasText: !!result.text,
+            })}`);
             // Extract tool calls from result
             if (result.steps) {
                 for (const step of result.steps) {
-                    toolCalls.push({
-                        tool: step.toolName || 'unknown',
-                        input: step.args || {},
+                    // AI SDK v6 step structure: { type, toolCallId, toolName, args, result }
+                    const toolName = step.toolName || step.name || 'unknown';
+                    const toolCall = {
+                        tool: toolName,
+                        input: step.args || step.arguments || {},
                         output: JSON.stringify(step.result || {}),
+                    };
+                    toolCalls.push(toolCall);
+                    // Log each tool call
+                    await this.logger.log('debug', `Tool called: ${toolName}`, {
+                        type: step.type,
+                        args: step.args || step.arguments,
+                        result: typeof step.result === 'object' ? JSON.stringify(step.result).substring(0, 200) : step.result,
                     });
                 }
             }
@@ -577,8 +605,11 @@ export class AgentRuntime {
             await this.logger.log('info', `Agent execution completed`, {
                 duration,
                 steps: result.steps?.length || 0,
+                toolNames: result.steps?.map((s) => s.toolName || s.name || 'unknown').join(', ') || 'none',
                 context: context?.source,
             });
+            // Log final response
+            await this.logger.log('debug', `Agent response: ${result.text?.substring(0, 200)}...`);
             return {
                 success: true,
                 output: result.text || 'Execution completed',
