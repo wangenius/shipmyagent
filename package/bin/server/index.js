@@ -2,12 +2,16 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import http from 'node:http';
+import fs from 'fs-extra';
+import path from 'path';
 export class AgentServer {
     app;
     context;
     server = null;
+    projectRoot;
     constructor(context) {
         this.context = context;
+        this.projectRoot = context.projectRoot;
         this.app = new Hono();
         // 中间件
         this.app.use('*', logger());
@@ -20,6 +24,40 @@ export class AgentServer {
         this.setupRoutes();
     }
     setupRoutes() {
+        // 静态文件服务 (前端页面)
+        this.app.get('/', async (c) => {
+            const indexPath = path.join(this.projectRoot, 'public', 'index.html');
+            if (await fs.pathExists(indexPath)) {
+                const content = await fs.readFile(indexPath, 'utf-8');
+                return c.body(content, 200, {
+                    'Content-Type': 'text/html; charset=utf-8',
+                    'Cache-Control': 'no-cache',
+                });
+            }
+            return c.text('ShipMyAgent Agent Server', 200);
+        });
+        this.app.get('/styles.css', async (c) => {
+            const cssPath = path.join(this.projectRoot, 'public', 'styles.css');
+            if (await fs.pathExists(cssPath)) {
+                const content = await fs.readFile(cssPath, 'utf-8');
+                return c.body(content, 200, {
+                    'Content-Type': 'text/css; charset=utf-8',
+                    'Cache-Control': 'no-cache',
+                });
+            }
+            return c.text('Not Found', 404);
+        });
+        this.app.get('/app.js', async (c) => {
+            const jsPath = path.join(this.projectRoot, 'public', 'app.js');
+            if (await fs.pathExists(jsPath)) {
+                const content = await fs.readFile(jsPath, 'utf-8');
+                return c.body(content, 200, {
+                    'Content-Type': 'application/javascript; charset=utf-8',
+                    'Cache-Control': 'no-cache',
+                });
+            }
+            return c.text('Not Found', 404);
+        });
         // 健康检查
         this.app.get('/health', (c) => {
             return c.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -59,7 +97,16 @@ export class AgentServer {
         this.app.post('/api/approvals/:id/:action', async (c) => {
             const approvalId = c.req.param('id');
             const action = c.req.param('action');
-            const body = await c.req.json();
+            let body = {};
+            try {
+                const text = await c.req.text();
+                if (text) {
+                    body = JSON.parse(text);
+                }
+            }
+            catch {
+                // JSON 解析失败，使用空 body
+            }
             const response = body.response || '';
             let success = false;
             if (action === 'approve') {

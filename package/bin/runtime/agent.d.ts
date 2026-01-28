@@ -1,3 +1,10 @@
+#!/usr/bin/env node
+/**
+ * ShipMyAgent - Agent Runtime with Human-in-the-loop Support
+ *
+ * Uses ai-sdk v6 ToolLoopAgent for advanced tool calling and
+ * built-in support for human-in-the-loop workflows.
+ */
 import { ShipConfig } from '../utils.js';
 export interface AgentContext {
     projectRoot: string;
@@ -28,15 +35,6 @@ export interface AgentInput {
         userId?: string;
     };
 }
-export interface ToolDefinition {
-    name: string;
-    description: string;
-    parameters: {
-        type: 'object';
-        properties: Record<string, unknown>;
-        required?: string[];
-    };
-}
 export interface ApprovalRequest {
     id: string;
     timestamp: string;
@@ -48,96 +46,50 @@ export interface ApprovalRequest {
     approvedBy?: string;
     approvedAt?: string;
 }
-declare class PermissionEngine {
-    private context;
-    constructor(context: AgentContext);
-    /**
-     * 检查是否允许执行某个操作
-     */
-    canPerform(action: string, data?: Record<string, unknown>): {
-        allowed: boolean;
-        requiresApproval: boolean;
-        reason?: string;
-    };
-    /**
-     * 创建审批请求
-     */
-    createApproval(type: 'write_repo' | 'exec_shell' | 'other', description: string, tool: string, input: Record<string, unknown>): Promise<ApprovalRequest>;
-    /**
-     * 获取待审批请求
-     */
-    getPendingApprovals(): Promise<ApprovalRequest[]>;
-    /**
-     * 审批操作
-     */
-    approve(approvalId: string, approvedBy: string): Promise<boolean>;
-    /**
-     * 拒绝操作
-     */
-    reject(approvalId: string, rejectedBy: string): Promise<boolean>;
-}
-export declare class AgentTools {
-    private context;
-    private permissionEngine;
-    private logger;
-    constructor(context: AgentContext);
-    /**
-     * 获取所有工具定义
-     */
-    getToolDefinitions(): ToolDefinition[];
-    /**
-     * 执行工具调用
-     */
-    executeTool(toolName: string, args: Record<string, unknown>): Promise<{
-        success: boolean;
-        result: unknown;
-        error?: string;
-        pendingApproval?: ApprovalRequest;
-    }>;
-    private toolReadFile;
-    private toolListFiles;
-    private toolSearchFiles;
-    private toolWriteFile;
-    private toolDeleteFile;
-    private toolExecShell;
-    private toolGetStatus;
-    private toolGetTasks;
-    private toolGetPendingApprovals;
-    private toolApprove;
-    private toolCreateDiff;
-}
+/**
+ * ToolLoopAgent-based Agent Runtime with Human-in-the-loop support
+ */
 export declare class AgentRuntime {
     private context;
-    private tools;
-    private permissionEngine;
     private initialized;
     private logger;
+    private permissionEngine;
+    private agent;
     constructor(context: AgentContext);
     /**
-     * 初始化 Agent
+     * Initialize the Agent with ToolLoopAgent
      */
     initialize(): Promise<void>;
     /**
-     * 运行 Agent
+     * Check if a tool call requires approval
+     */
+    private checkToolCallApproval;
+    /**
+     * Create v6-style tools with permission checks and approval workflow
+     */
+    private createToolsV6;
+    /**
+     * Generate a diff between original and modified content
+     */
+    private generateDiff;
+    /**
+     * Run the agent with the given instructions
      */
     run(input: AgentInput): Promise<AgentResult>;
     /**
-     * 使用 AI SDK 运行真实 Agent
+     * Run with ToolLoopAgent (v6)
      */
-    private runWithAI;
+    private runWithToolLoopAgent;
     /**
-     * 创建 AI 工具定义
+     * Check if a checkpoint exists for the given task
      */
-    private createAITools;
+    private hasCheckpoint;
     /**
-     * 执行已审批的操作
+     * Get checkpoint data for resuming
      */
-    executeApproved(approvalId: string): Promise<{
-        success: boolean;
-        result: unknown;
-    }>;
+    private getCheckpoint;
     /**
-     * 模拟模式（当 AI 不可用时）
+     * Simulation mode for when AI is not available
      */
     private runSimulated;
     private generateStatusResponse;
@@ -145,23 +97,21 @@ export declare class AgentRuntime {
     private generateScanResponse;
     private generateApprovalsResponse;
     /**
-     * 获取工具实例
+     * Execute an approved operation (called after approval)
      */
-    getTools(): AgentTools;
+    executeApproved(approvalId: string): Promise<{
+        success: boolean;
+        result: unknown;
+    }>;
     /**
-     * 获取权限引擎实例
+     * Execute a tool directly (for approved operations)
      */
-    getPermissionEngine(): PermissionEngine;
+    private executeTool;
     /**
-     * 获取配置
-     */
-    getConfig(): ShipConfig;
-    /**
-     * 检查是否已初始化
+     * Check if agent is initialized
      */
     isInitialized(): boolean;
 }
 export declare function createAgentRuntime(context: AgentContext): AgentRuntime;
 export declare function createAgentRuntimeFromPath(projectRoot: string): AgentRuntime;
-export {};
 //# sourceMappingURL=agent.d.ts.map

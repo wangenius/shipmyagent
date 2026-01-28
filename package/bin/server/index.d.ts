@@ -20,6 +20,7 @@ export declare class AgentServer {
     private app;
     private context;
     private server;
+    private projectRoot;
     constructor(context: ServerContext);
     private setupRoutes;
     start(options: StartOptions): Promise<void>;

@@ -49,6 +49,13 @@ export declare class PermissionEngine {
     rejectRequest(requestId: string, response: string): Promise<boolean>;
     getPendingApprovals(): ApprovalRequest[];
     getApprovalRequest(id: string): ApprovalRequest | undefined;
+    /**
+     * 等待审批结果
+     * @param requestId 审批请求 ID
+     * @param timeoutSeconds 超时时间（秒）
+     * @returns 审批结果: approved | rejected | timeout
+     */
+    waitForApproval(requestId: string, timeoutSeconds?: number): Promise<'approved' | 'rejected' | 'timeout'>;
     getConfig(): PermissionConfig;
 }
 export declare function createPermissionEngine(projectRoot: string): PermissionEngine;
