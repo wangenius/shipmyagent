@@ -89,14 +89,14 @@ export class AgentRuntime {
   }
 
   /**
-   * Initialize the Agent with ToolLoopAgent
+   * Initialize the Agent with generateText (legacy AI SDK)
    */
   async initialize(): Promise<void> {
     try {
-      await this.logger.log('info', 'Initializing Agent Runtime with ToolLoopAgent (v6)');
+      await this.logger.log('info', 'Initializing Agent Runtime with generateText (legacy AI SDK)');
       await this.logger.log('info', `Agent.md content length: ${this.context.agentMd?.length || 0} chars`);
 
-      const { provider, apiKey, baseUrl, model, topP, frequencyPenalty, presencePenalty } = this.context.config.llm;
+      const { provider, apiKey, baseUrl, model } = this.context.config.llm;
 
       // 解析 API Key，支持环境变量占位符
       let resolvedApiKey = apiKey;
@@ -115,12 +115,9 @@ export class AgentRuntime {
         return;
       }
 
-      // Import ai-sdk v6 modules
+      // Import ai-sdk modules
       try {
-        const { ToolLoopAgent, tool } = await import('ai');
-        
         // Create provider instance
-        // Note: ToolLoopAgent does NOT accept baseURL/apiKey directly; those belong to the provider.
         let providerInstance: any;
         if (provider === 'anthropic') {
           const anthropicMod = await import('@ai-sdk/anthropic');
@@ -134,7 +131,7 @@ export class AgentRuntime {
 
           providerInstance = createAnthropic({ apiKey: resolvedApiKey });
         } else if (provider === 'custom') {
-          // OpenAI-compatible provider with custom baseURL (recommended for OpenAI-compatible gateways)
+          // OpenAI-compatible provider with custom baseURL
           const compatMod = await import('@ai-sdk/openai-compatible');
           const createOpenAICompatible = (compatMod as any).createOpenAICompatible;
 
@@ -148,7 +145,7 @@ export class AgentRuntime {
             baseURL: baseUrl || 'https://api.openai.com/v1',
           });
         } else {
-          // Standard OpenAI provider (works with OpenAI and some compatible endpoints)
+          // Standard OpenAI provider
           const openaiMod = await import('@ai-sdk/openai');
           const createOpenAI =
             (openaiMod as any).createOpenAI ??
@@ -164,83 +161,13 @@ export class AgentRuntime {
           });
         }
 
-        // Create tools (without built-in approval checks - handled by onToolCall)
-        const tools = await this.createToolsV6();
+        // Store model instance
+        this.agent = providerInstance(model);
 
-        // Initialize ToolLoopAgent with onToolCall for approval workflow
-        // Note: Using type assertion as onToolCall may not be in types yet
-        let modelInstance;
-        try {
-          // Create model instance - this may fail if API doesn't support v2 specification
-          modelInstance = providerInstance(model) as any;
-        } catch (modelError: any) {
-          // Check if it's a version compatibility error
-          if (modelError?.message?.includes('Unsupported model version') || 
-              modelError?.message?.includes('specification version')) {
-            const errorMsg = `模型规范版本不兼容: ${modelError.message}\n\n` +
-              `你的 API (${baseUrl}) 返回的是 v1 规范，但 AI SDK 6 需要 v2 规范。\n` +
-              `解决方案：\n` +
-              `1. 联系 API 提供商确认是否支持 v2 规范\n` +
-              `2. 检查 API 文档是否有兼容性配置\n` +
-              `3. 尝试使用不同的模型名称格式`;
-            await this.logger.log('error', errorMsg);
-            throw new Error(errorMsg);
-          }
-          throw modelError;
-        }
-
-        this.agent = new ToolLoopAgent({
-          model: modelInstance,
-          tools,
-          stopWhen: ({ steps }: { steps: unknown[] }) => steps.length >= 20,
-          // Use onToolCall to handle tool call approval before execution
-          // @ts-ignore - onToolCall may not be in types yet but is supported in v6
-          onToolCall: async ({ toolCall }: { toolCall: { toolName: string; args: Record<string, unknown> } }) => {
-            const { toolName, args } = toolCall;
-            
-            // Check if this tool call requires approval
-            const approvalCheck = await this.checkToolCallApproval({ toolName, args });
-            
-            if (!approvalCheck.requiresApproval) {
-              // No approval needed, allow execution
-              return;
-            }
-            
-            // Approval required - wait for approval
-            if (!approvalCheck.approvalId) {
-              throw new Error(`Approval required but no approval ID generated for ${toolName}`);
-            }
-            
-            await this.logger.log('info', `Tool call requires approval: ${toolName}`, {
-              approvalId: approvalCheck.approvalId,
-              type: approvalCheck.type,
-            });
-            
-            // Wait for approval (with timeout)
-            const approvalResult = await this.permissionEngine.waitForApproval(
-              approvalCheck.approvalId,
-              300 // 5 minutes timeout
-            );
-            
-            if (approvalResult === 'rejected') {
-              throw new Error(`Tool call rejected: ${approvalCheck.message || toolName}`);
-            }
-            
-            if (approvalResult === 'timeout') {
-              throw new Error(`Approval timeout for tool call: ${toolName}`);
-            }
-            
-            // Approval granted, allow execution
-            await this.logger.log('info', `Tool call approved: ${toolName}`, {
-              approvalId: approvalCheck.approvalId,
-            });
-          },
-        } as any);
-
-        await this.logger.log('info', 'Agent Runtime initialized with ToolLoopAgent v6');
+        await this.logger.log('info', 'Agent Runtime initialized with legacy AI SDK');
         this.initialized = true;
       } catch (importError) {
-        await this.logger.log('warn', `ai-sdk v6 import failed: ${String(importError)}, using simulation mode`);
+        await this.logger.log('warn', `ai-sdk import failed: ${String(importError)}, using simulation mode`);
       }
     } catch (error) {
       await this.logger.log('error', 'Agent Runtime initialization failed', { error: String(error) });
@@ -304,15 +231,12 @@ export class AgentRuntime {
   }
 
   /**
-   * Create v6-style tools with permission checks and approval workflow
+   * Create legacy-style tools with permission checks and approval workflow
    */
-  private async createToolsV6(): Promise<Record<string, any>> {
-    const { tool } = await import('ai');
-
-    // Type assertion needed as AI SDK v6 tool types may not be fully compatible
+  private async createTools(): Promise<Record<string, any>> {
     return {
       // File reading tool
-      read_file: (tool as any)({
+      read_file: {
         description: 'Read file content from the repository',
         parameters: z.object({
           path: z.string().describe('File path to read'),
@@ -345,36 +269,36 @@ export class AgentRuntime {
             path: filePath,
           };
         },
-      }),
+      },
 
-      // File writing tool (approval handled by onToolCall)
-      write_file: (tool as any)({
+      // File writing tool
+      write_file: {
         description: 'Create or modify a file',
         parameters: z.object({
           path: z.string().describe('File path to write'),
           content: z.string().describe('File content'),
         }),
         execute: async ({ path: filePath, content }: { path: string; content: string }) => {
-          // Approval already handled in onToolCall, just execute
+          // Approval already handled in tool loop, just execute
           await fs.ensureDir(path.dirname(filePath));
           await fs.writeFile(filePath, content);
           await this.logger.log('info', `Wrote file: ${filePath}`);
-          
+
           return {
             success: true,
             message: `File written: ${filePath}`,
           };
         },
-      }),
+      },
 
-      // File deletion (approval handled by onToolCall)
-      delete_file: (tool as any)({
+      // File deletion
+      delete_file: {
         description: 'Delete a file or directory',
         parameters: z.object({
           path: z.string().describe('File or directory path to delete'),
         }),
         execute: async ({ path: filePath }: { path: string }) => {
-          // Approval already handled in onToolCall, just execute
+          // Approval already handled in tool loop, just execute
           if (!fs.existsSync(filePath)) {
             return {
               success: false,
@@ -384,29 +308,31 @@ export class AgentRuntime {
 
           await fs.remove(filePath);
           await this.logger.log('info', `Deleted file: ${filePath}`);
-          
+
           return {
             success: true,
             message: `File deleted: ${filePath}`,
           };
         },
-      }),
+      },
 
-      // Shell execution (approval handled by onToolCall)
-      exec_shell: (tool as any)({
+      // Shell execution
+      exec_shell: {
         description: 'Execute a shell command',
         parameters: z.object({
           command: z.string().describe('Command to execute'),
           timeout: z.number().optional().default(30000),
         }),
         execute: async ({ command, timeout = 30000 }: { command: string; timeout?: number }) => {
-          // Approval already handled in onToolCall, just execute
+          // Approval already handled in tool loop, just execute
           try {
             const { execa } = await import('execa');
-            const result = await execa(command, [], {
+            // Use shell mode to execute the full command string
+            const result = await execa(command, {
               cwd: this.context.projectRoot,
               timeout,
               reject: false,
+              shell: true, // 使用 shell 模式执行完整命令
             });
 
             await this.logger.log('info', `Executed command: ${command}`, {
@@ -428,10 +354,10 @@ export class AgentRuntime {
             };
           }
         },
-      }),
+      },
 
       // File listing tool
-      list_files: (tool as any)({
+      list_files: {
         description: 'List files in a directory',
         parameters: z.object({
           path: z.string().describe('Directory path'),
@@ -453,16 +379,16 @@ export class AgentRuntime {
           });
 
           await this.logger.log('debug', `Listed files: ${dirPath}`, { count: files.length });
-          
+
           return {
             success: true,
             files,
           };
         },
-      }),
+      },
 
       // File search tool
-      search_files: (tool as any)({
+      search_files: {
         description: 'Search for text in files',
         parameters: z.object({
           pattern: z.string().describe('Search pattern'),
@@ -504,22 +430,22 @@ export class AgentRuntime {
           }
 
           await this.logger.log('debug', `Searched files: ${pattern}`, { count: results.length });
-          
+
           return {
             success: true,
             results,
           };
         },
-      }),
+      },
 
       // Status check tool
-      get_status: (tool as any)({
+      get_status: {
         description: 'Get agent and project status',
         parameters: z.object({}),
         execute: async () => {
           const { config } = this.context;
           const pendingApprovals = this.permissionEngine.getPendingApprovals();
-          
+
           return {
             success: true,
             name: config.name,
@@ -539,15 +465,15 @@ export class AgentRuntime {
             projectRoot: this.context.projectRoot,
           };
         },
-      }),
+      },
 
       // Task management tools
-      get_tasks: (tool as any)({
+      get_tasks: {
         description: 'Get list of tasks',
         parameters: z.object({}),
         execute: async () => {
           const tasksDir = path.join(this.context.projectRoot, '.ship', 'tasks');
-          
+
           if (!fs.existsSync(tasksDir)) {
             return { success: true, tasks: [] };
           }
@@ -566,10 +492,10 @@ export class AgentRuntime {
 
           return { success: true, tasks };
         },
-      }),
+      },
 
       // Approval management tools
-      get_pending_approvals: (tool as any)({
+      get_pending_approvals: {
         description: 'Get pending approval requests',
         parameters: z.object({}),
         execute: async () => {
@@ -586,9 +512,9 @@ export class AgentRuntime {
             })),
           };
         },
-      }),
+      },
 
-      approve: (tool as any)({
+      approve: {
         description: 'Approve or reject a pending request',
         parameters: z.object({
           approvalId: z.string().describe('Approval request ID'),
@@ -610,10 +536,10 @@ export class AgentRuntime {
             };
           }
         },
-      }),
+      },
 
-      // Create diff tool (approval handled by onToolCall)
-      create_diff: (tool as any)({
+      // Create diff tool
+      create_diff: {
         description: 'Create a diff and request approval for file changes',
         parameters: z.object({
           filePath: z.string().describe('File path'),
@@ -621,18 +547,18 @@ export class AgentRuntime {
           modified: z.string().describe('Modified content'),
         }),
         execute: async ({ filePath, original, modified }: { filePath: string; original: string; modified: string }) => {
-          // Approval already handled in onToolCall, just execute
+          // Approval already handled in tool loop, just execute
           await fs.ensureDir(path.dirname(filePath));
           await fs.writeFile(filePath, modified);
           await this.logger.log('info', `Modified file: ${filePath}`);
-          
+
           return {
             success: true,
             message: `File modified: ${filePath}`,
             diff: this.generateDiff(original, modified),
           };
         },
-      }),
+      },
     };
   }
 
@@ -681,9 +607,9 @@ export class AgentRuntime {
       fullPrompt = `${context.taskDescription}\n\n${instructions}`;
     }
 
-    // If initialized with ToolLoopAgent, use it
+    // If initialized with model, use generateText with tool loop
     if (this.initialized && this.agent) {
-      return this.runWithToolLoopAgent(fullPrompt, systemPrompt, startTime, context);
+      return this.runWithGenerateText(fullPrompt, systemPrompt, startTime, context);
     }
 
     // Otherwise use simulation mode
@@ -691,9 +617,9 @@ export class AgentRuntime {
   }
 
   /**
-   * Run with ToolLoopAgent (v6)
+   * Run with generateText and manual tool loop (legacy AI SDK)
    */
-  private async runWithToolLoopAgent(
+  private async runWithGenerateText(
     prompt: string,
     systemPrompt: string,
     startTime: number,
@@ -702,64 +628,186 @@ export class AgentRuntime {
     const toolCalls: AgentResult['toolCalls'] = [];
 
     try {
-      // Check if we have pending approvals to resume
-      if (context?.taskId && this.hasCheckpoint(context.taskId)) {
-        await this.logger.log('info', `Resuming from checkpoint: ${context.taskId}`);
+      // Import generateText from AI SDK
+      const { generateText } = await import('ai');
+
+      // Get tools
+      const tools = await this.createTools();
+
+      // Convert tools to AI SDK format
+      const aiTools: Record<string, any> = {};
+      for (const [name, tool] of Object.entries(tools)) {
+        aiTools[name] = {
+          description: tool.description,
+          parameters: tool.parameters,
+        };
       }
 
-      // Execute with ToolLoopAgent (v6 API: generate method)
-      await this.logger.log('debug', `Calling agent.generate with system prompt length: ${systemPrompt?.length || 0}`);
-      const result = await this.agent.generate({
-        prompt,
-        system: systemPrompt,
+      await this.logger.log('debug', `Calling generateText with system prompt length: ${systemPrompt?.length || 0}`);
 
-        // v6 feature: Checkpoints for resuming after approval
-        checkpoint: context?.taskId ? this.getCheckpoint(context.taskId) : undefined,
-      });
+      // Manual tool loop (max 20 iterations)
+      let currentPrompt = prompt;
+      let conversationHistory: Array<{ role: string; content: string }> = [];
+      const maxIterations = 20;
 
-      // Debug: Log the raw result structure
-      await this.logger.log('debug', `Raw result structure: ${JSON.stringify({
-        hasSteps: !!result.steps,
-        stepsLength: result.steps?.length,
-        firstStepKeys: result.steps?.[0] ? Object.keys(result.steps[0]) : [],
-        hasText: !!result.text,
-      })}`);
+      for (let iteration = 0; iteration < maxIterations; iteration++) {
+        // Call generateText
+        const result = await generateText({
+          model: this.agent,
+          system: systemPrompt,
+          prompt: currentPrompt,
+          tools: aiTools,
+        });
 
-      // Extract tool calls from result
-      if (result.steps) {
-        for (const step of result.steps) {
-          // AI SDK v6 step structure: { type, toolCallId, toolName, args, result }
-          const toolName = step.toolName || step.name || 'unknown';
-          const toolCall = {
-            tool: toolName,
-            input: step.args || step.arguments || {},
-            output: JSON.stringify(step.result || {}),
-          };
-          toolCalls.push(toolCall);
+        await this.logger.log('debug', `Iteration ${iteration + 1}: ${JSON.stringify({
+          hasText: !!result.text,
+          hasToolCalls: !!result.toolCalls && result.toolCalls.length > 0,
+          toolCallsCount: result.toolCalls?.length || 0,
+          text: result.text?.substring(0, 100),
+        })}`);
 
-          // Log each tool call
-          await this.logger.log('debug', `Tool called: ${toolName}`, {
-            type: step.type,
-            args: step.args || step.arguments,
-            result: typeof step.result === 'object' ? JSON.stringify(step.result).substring(0, 200) : step.result,
-          });
+        // Log raw tool calls structure
+        if (result.toolCalls && result.toolCalls.length > 0) {
+          await this.logger.log('debug', `Raw toolCalls: ${JSON.stringify(result.toolCalls)}`);
         }
+
+        // If no tool calls, we're done
+        if (!result.toolCalls || result.toolCalls.length === 0) {
+          const duration = Date.now() - startTime;
+          await this.logger.log('info', `Agent execution completed`, {
+            duration,
+            iterations: iteration + 1,
+            toolCallsTotal: toolCalls.length,
+            context: context?.source,
+          });
+
+          await this.logger.log('debug', `Agent response: ${result.text?.substring(0, 200)}...`);
+
+          return {
+            success: true,
+            output: result.text || 'Execution completed',
+            toolCalls,
+          };
+        }
+
+        // Process tool calls with approval workflow
+        const toolResults: Array<{ toolCallId: string; result: any }> = [];
+
+        for (const toolCall of result.toolCalls) {
+          const toolCallId = (toolCall as any).toolCallId;
+          const toolName = (toolCall as any).toolName;
+          // AI SDK uses 'input' field for tool arguments, not 'args'
+          const args = (toolCall as any).args || (toolCall as any).input;
+
+          await this.logger.log('debug', `Tool call raw data: ${JSON.stringify({
+            toolCallId,
+            toolName,
+            args,
+            fullToolCall: toolCall,
+          })}`);
+
+          await this.logger.log('debug', `Tool call: ${toolName}`, { args });
+
+          // Check if this tool call requires approval
+          const approvalCheck = await this.checkToolCallApproval({ toolName, args });
+
+          if (approvalCheck.requiresApproval) {
+            if (!approvalCheck.approvalId) {
+              throw new Error(`Approval required but no approval ID generated for ${toolName}`);
+            }
+
+            await this.logger.log('info', `Tool call requires approval: ${toolName}`, {
+              approvalId: approvalCheck.approvalId,
+              type: approvalCheck.type,
+            });
+
+            // Wait for approval (with timeout)
+            const approvalResult = await this.permissionEngine.waitForApproval(
+              approvalCheck.approvalId,
+              300 // 5 minutes timeout
+            );
+
+            if (approvalResult === 'rejected') {
+              throw new Error(`Tool call rejected: ${approvalCheck.message || toolName}`);
+            }
+
+            if (approvalResult === 'timeout') {
+              throw new Error(`Approval timeout for tool call: ${toolName}`);
+            }
+
+            await this.logger.log('info', `Tool call approved: ${toolName}`, {
+              approvalId: approvalCheck.approvalId,
+            });
+          }
+
+          // Execute the tool
+          const tool = tools[toolName];
+          if (!tool || typeof tool.execute !== 'function') {
+            toolResults.push({
+              toolCallId,
+              result: { success: false, error: `Unknown tool: ${toolName}` },
+            });
+            continue;
+          }
+
+          try {
+            // Ensure args is an object, default to empty object if undefined
+            const toolArgs = args || {};
+
+            await this.logger.log('debug', `Executing tool: ${toolName}`, { args: toolArgs });
+
+            const toolResult = await tool.execute(toolArgs);
+            toolResults.push({
+              toolCallId,
+              result: toolResult,
+            });
+
+            // Log tool call
+            toolCalls.push({
+              tool: toolName,
+              input: toolArgs,
+              output: JSON.stringify(toolResult),
+            });
+
+            await this.logger.log('debug', `Tool executed: ${toolName}`, {
+              result: typeof toolResult === 'object' ? JSON.stringify(toolResult).substring(0, 200) : toolResult,
+            });
+          } catch (error) {
+            const errorResult = { success: false, error: String(error) };
+            toolResults.push({
+              toolCallId,
+              result: errorResult,
+            });
+
+            toolCalls.push({
+              tool: toolName,
+              input: args || {},
+              output: JSON.stringify(errorResult),
+            });
+
+            await this.logger.log('error', `Tool execution failed: ${toolName}`, { error: String(error) });
+          }
+        }
+
+        // Build next prompt with tool results
+        const toolResultsText = toolResults.map(tr =>
+          `Tool ${tr.toolCallId} result: ${JSON.stringify(tr.result)}`
+        ).join('\n');
+
+        currentPrompt = `Previous response: ${result.text || ''}\n\nTool results:\n${toolResultsText}\n\nContinue based on these results.`;
       }
 
+      // Max iterations reached
       const duration = Date.now() - startTime;
-      await this.logger.log('info', `Agent execution completed`, {
+      await this.logger.log('warn', `Agent execution stopped: max iterations reached`, {
         duration,
-        steps: result.steps?.length || 0,
-        toolNames: result.steps?.map((s: any) => s.toolName || s.name || 'unknown').join(', ') || 'none',
-        context: context?.source,
+        iterations: maxIterations,
+        toolCallsTotal: toolCalls.length,
       });
-
-      // Log final response
-      await this.logger.log('debug', `Agent response: ${result.text?.substring(0, 200)}...`);
 
       return {
         success: true,
-        output: result.text || 'Execution completed',
+        output: 'Execution stopped: maximum iterations reached',
         toolCalls,
       };
     } catch (error) {
@@ -772,26 +820,6 @@ export class AgentRuntime {
     }
   }
 
-  /**
-   * Check if a checkpoint exists for the given task
-   */
-  private hasCheckpoint(taskId: string): boolean {
-    const checkpointDir = path.join(this.context.projectRoot, '.ship', '.cache', 'checkpoints');
-    return fs.existsSync(path.join(checkpointDir, `${taskId}.json`));
-  }
-
-  /**
-   * Get checkpoint data for resuming
-   */
-  private getCheckpoint(taskId: string): any {
-    const checkpointDir = path.join(this.context.projectRoot, '.ship', '.cache', 'checkpoints');
-    const checkpointFile = path.join(checkpointDir, `${taskId}.json`);
-    
-    if (fs.existsSync(checkpointFile)) {
-      return fs.readJsonSync(checkpointFile);
-    }
-    return undefined;
-  }
 
   /**
    * Simulation mode for when AI is not available
@@ -916,18 +944,15 @@ No pending approval requests.`;
     toolName: string,
     args: Record<string, unknown>
   ): Promise<{ success: boolean; result: unknown }> {
-    const tools = await this.createToolsV6();
+    const tools = await this.createTools();
     const tool = tools[toolName as keyof typeof tools];
-    
+
     if (!tool || typeof tool.execute !== 'function') {
       return { success: false, result: `Unknown tool: ${toolName}` };
     }
 
     try {
-      // Tool execute method expects the args object directly
-      // The execute function signature matches what we defined in createToolsV6
-      const executeFn = tool.execute as (args: Record<string, unknown>) => Promise<unknown>;
-      const result = await executeFn(args);
+      const result = await tool.execute(args);
       return { success: true, result };
     } catch (error) {
       return { success: false, result: String(error) };
@@ -1026,7 +1051,7 @@ You are the maintainer agent of this repository.
     permissions: {
       read_repo: true,
       write_repo: { requiresApproval: true },
-      exec_shell: { requiresApproval: true },
+      exec_shell: { allow: [], requiresApproval: false },
     },
     integrations: {
       telegram: { enabled: false },

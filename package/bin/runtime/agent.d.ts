@@ -57,7 +57,7 @@ export declare class AgentRuntime {
     private agent;
     constructor(context: AgentContext);
     /**
-     * Initialize the Agent with ToolLoopAgent
+     * Initialize the Agent with generateText (legacy AI SDK)
      */
     initialize(): Promise<void>;
     /**
@@ -65,9 +65,9 @@ export declare class AgentRuntime {
      */
     private checkToolCallApproval;
     /**
-     * Create v6-style tools with permission checks and approval workflow
+     * Create legacy-style tools with permission checks and approval workflow
      */
-    private createToolsV6;
+    private createTools;
     /**
      * Generate a diff between original and modified content
      */
@@ -77,17 +77,9 @@ export declare class AgentRuntime {
      */
     run(input: AgentInput): Promise<AgentResult>;
     /**
-     * Run with ToolLoopAgent (v6)
+     * Run with generateText and manual tool loop (legacy AI SDK)
      */
-    private runWithToolLoopAgent;
-    /**
-     * Check if a checkpoint exists for the given task
-     */
-    private hasCheckpoint;
-    /**
-     * Get checkpoint data for resuming
-     */
-    private getCheckpoint;
+    private runWithGenerateText;
     /**
      * Simulation mode for when AI is not available
      */

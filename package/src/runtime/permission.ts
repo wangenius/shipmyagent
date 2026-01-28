@@ -326,7 +326,7 @@ export function createPermissionEngine(projectRoot: string): PermissionEngine {
   let config: PermissionConfig = {
     read_repo: true,
     write_repo: { requiresApproval: true },
-    exec_shell: { requiresApproval: true },
+    exec_shell: { allow: [], requiresApproval: false },
   };
 
   if (fs.existsSync(shipJsonPath)) {
