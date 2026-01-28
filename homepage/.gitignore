@@ -47,3 +47,4 @@ supabase
 
 .vscode
 .backup
+.pnpm-lock.yaml
