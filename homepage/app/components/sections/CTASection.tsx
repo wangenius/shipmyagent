@@ -8,52 +8,32 @@ const GITHUB_URL = "https://github.com/wangenius/ShipMyAgent";
 export const CTASection: FC = () => {
   const { t } = useTranslation();
   return (
-    <section className="py-24 md:py-32 lg:py-40 bg-[#fff] relative">
-      {/* Thick horizontal rule */}
-      <div className="h-1 bg-black" />
-
-      <div className="mx-auto w-full max-w-6xl px-6 md:px-8 lg:px-12 pt-24 md:pt-32">
-        <div className="grid grid-cols-12 gap-8">
-          {/* Content */}
-          <div className="col-span-12 lg:col-span-8">
-            {/* Decorative element */}
-            <div className="flex items-center gap-4 mb-12">
-              <div className="h-2 w-16 md:w-24 bg-black" />
-              <div className="size-3 border-2 border-black" />
-            </div>
-
-            <h2 className="text-5xl md:text-6xl lg:text-8xl font-normal leading-[0.85] text-black mb-8">
-              Ship Your
-              <br />
-              <span className="italic">Repo</span>
+    <section className="py-12 md:py-24 lg:py-32 bg-muted">
+      <div className="container mx-auto px-4 md:px-6">
+        <div className="flex flex-col items-center justify-center space-y-4 text-center">
+          <div className="space-y-2">
+            <h2 className="text-3xl font-bold tracking-tighter md:text-4xl/tight">
+              Ship Your <span className="italic">Repo</span>
             </h2>
-
-            <p className="text-lg md:text-xl text-[#525252] mb-12 max-w-lg leading-relaxed">
+            <p className="max-w-[600px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
               {t("hero:subtitle")}
             </p>
-
-            <div className="flex flex-col sm:flex-row items-start gap-4 mb-12">
-              <Button asChild>
-                <Link to={GITHUB_URL} target="_blank">
-                  {t("common:getStarted")}
-                </Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link to="/docs">{t("common:readDocs")}</Link>
-              </Button>
-            </div>
-
-            {/* Platform availability */}
-            <div className="text-xs uppercase tracking-[0.2em] text-[#525252]">
-              <span className="text-black">Open Source</span> on GitHub
-              <span className="mx-3">·</span>
-              Self-hostable
-            </div>
           </div>
-
-          {/* Decorative vertical element */}
-          <div className="hidden lg:flex col-span-4 items-end justify-end">
-            <div className="w-px h-64 bg-black" />
+          <div className="flex flex-col gap-2 min-[400px]:flex-row">
+            <Button size="lg">
+              <Link to={GITHUB_URL} target="_blank">
+                {t("common:getStarted")}
+              </Link>
+            </Button>
+            <Button variant="outline" size="lg">
+              <Link to="/docs">{t("common:readDocs")}</Link>
+            </Button>
+          </div>
+          <div className="text-xs uppercase tracking-widest text-muted-foreground mt-8">
+            <span className="font-semibold text-foreground">Open Source</span>{" "}
+            on GitHub
+            <span className="mx-3">·</span>
+            Self-hostable
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import type { FC } from "react";
 import { Link } from "react-router";
-import { GithubIcon } from "lucide-react";
+import { IconBrandGithub } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { product } from "@/lib/product";
 
@@ -9,46 +9,38 @@ export const Footer: FC = () => {
   const { t } = useTranslation();
 
   return (
-    <footer className="py-16 md:py-24 bg-black text-white">
-      {/* Thick horizontal rule - inverted */}
-      <div className="h-1 bg-white" />
-
-      <div className="mx-auto w-full max-w-6xl px-6 md:px-8 lg:px-12 pt-16 md:pt-24">
-        <div className="grid grid-cols-12 gap-8 md:gap-12">
+    <footer className="py-12 md:py-16 bg-muted text-muted-foreground border-t">
+      <div className="container mx-auto px-4 md:px-6">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
           {/* Brand */}
-          <div className="col-span-12 md:col-span-4 lg:col-span-3">
-            <Link to="/" className="inline-block mb-6">
-              <span
-                className="text-2xl md:text-3xl font-normal"
-                style={{ fontFamily: "var(--font-serif)" }}
-              >
+          <div className="md:col-span-1">
+            <Link to="/" className="inline-block mb-4">
+              <span className="text-lg font-bold text-foreground">
                 {product.productName}
               </span>
             </Link>
-            <p className="text-sm text-[#A3A3A3] leading-relaxed mb-6">
-              {t("hero:subtitle")}
-            </p>
+            <p className="text-sm leading-relaxed mb-4">{t("hero:subtitle")}</p>
             <Link
               to="https://github.com/wangenius/shipmyagent"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-sm text-[#A3A3A3] hover:text-[#fff] transition-colors duration-100"
+              className="inline-flex items-center gap-2 text-sm hover:text-foreground transition-colors"
             >
-              <GithubIcon size={16} strokeWidth={1.5} />
+              <IconBrandGithub size={16} />
               <span>GitHub</span>
             </Link>
           </div>
 
           {/* Links */}
-          <div className="col-span-6 md:col-span-4 lg:col-span-2 lg:col-start-6">
-            <h4 className="text-xs uppercase tracking-[0.2em] mb-6 text-[#fff]">
+          <div className="md:col-start-3">
+            <h4 className="text-sm font-medium mb-4 text-foreground">
               Product
             </h4>
-            <ul className="space-y-3">
+            <ul className="space-y-3 text-sm">
               <li>
                 <Link
-                  to="/" // features are on homepage
-                  className="text-sm text-[#A3A3A3] hover:text-[#fff] transition-colors duration-100"
+                  to="/"
+                  className="hover:text-foreground transition-colors"
                 >
                   Features
                 </Link>
@@ -56,7 +48,7 @@ export const Footer: FC = () => {
               <li>
                 <Link
                   to="/docs"
-                  className="text-sm text-[#A3A3A3] hover:text-[#fff] transition-colors duration-100"
+                  className="hover:text-foreground transition-colors"
                 >
                   Documentation
                 </Link>
@@ -65,7 +57,7 @@ export const Footer: FC = () => {
                 <Link
                   to="https://github.com/wangenius/shipmyagent/releases"
                   target="_blank"
-                  className="text-sm text-[#A3A3A3] hover:text-[#fff] transition-colors duration-100"
+                  className="hover:text-foreground transition-colors"
                 >
                   Releases
                 </Link>
@@ -73,16 +65,16 @@ export const Footer: FC = () => {
             </ul>
           </div>
 
-          <div className="col-span-6 md:col-span-4 lg:col-span-2">
-            <h4 className="text-xs uppercase tracking-[0.2em] mb-6 text-[#fff]">
+          <div>
+            <h4 className="text-sm font-medium mb-4 text-foreground">
               Resources
             </h4>
-            <ul className="space-y-3">
+            <ul className="space-y-3 text-sm">
               <li>
                 <Link
                   to="https://github.com/wangenius/shipmyagent"
                   target="_blank"
-                  className="text-sm text-[#A3A3A3] hover:text-[#fff] transition-colors duration-100"
+                  className="hover:text-foreground transition-colors"
                 >
                   GitHub
                 </Link>
@@ -91,16 +83,16 @@ export const Footer: FC = () => {
                 <Link
                   to="https://github.com/wangenius/shipmyagent/issues"
                   target="_blank"
-                  className="text-sm text-[#A3A3A3] hover:text-[#fff] transition-colors duration-100"
+                  className="hover:text-foreground transition-colors"
                 >
                   Issues
                 </Link>
               </li>
               <li>
                 <Link
-                  to="https://twitter.com/shipmyagent" // Assuming from README links
+                  to="https://twitter.com/shipmyagent"
                   target="_blank"
-                  className="text-sm text-[#A3A3A3] hover:text-[#fff] transition-colors duration-100"
+                  className="hover:text-foreground transition-colors"
                 >
                   Twitter
                 </Link>
@@ -110,16 +102,12 @@ export const Footer: FC = () => {
         </div>
 
         {/* Bottom bar */}
-        <div className="mt-16 md:mt-24 pt-8 border-t border-[#333]">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <p className="text-xs text-[#A3A3A3] uppercase tracking-[0.15em]">
-              © {currentYear} {product.productName}. Open source under MIT
-              License.
-            </p>
-            <p className="text-xs text-[#A3A3A3] uppercase tracking-[0.15em]">
-              Made with intent
-            </p>
-          </div>
+        <div className="mt-8 pt-8 border-t flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-sm">
+          <p>
+            © {currentYear} {product.productName}. Open source under MIT
+            License.
+          </p>
+          <p>Made with intent</p>
         </div>
       </div>
     </footer>

@@ -1,76 +1,66 @@
+import { useState } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { product } from "@/lib/product";
-
-const GITHUB_URL = "https://github.com/wangenius/ShipMyAgent";
+import { IconCheck, IconCopy, IconTerminal2 } from "@tabler/icons-react";
 
 export function HeroSection() {
   const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
+  const copyCommand = () => {
+    navigator.clipboard.writeText("npm i -g shipmyagent");
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
-    <section className="relative min-h-[90vh] flex flex-col justify-center pattern-lines">
-      <div className="mx-auto w-full max-w-6xl px-6 md:px-8 lg:px-12">
-        <div className="py-20 md:py-32 lg:py-40">
-          {/* Decorative element: thick rule with small bordered square */}
-          <div className="flex items-center gap-4 mb-12">
-            <div className="h-2 w-16 md:w-24 bg-black" />
-            <div className="size-3 border-2 border-black" />
-          </div>
-
-          {/* Oversized headline - typography as graphics */}
-          <h1 className="text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-normal tracking-tighter leading-[0.85] text-black mb-8">
-            <span className="block">{t("hero:title")}</span>
-            <span className="block italic">{t("hero:titleItalic")}</span>
-            <span className="block">{t("hero:titleEnd")}</span>
+    <section className="relative flex flex-col justify-center py-20 md:py-32 lg:py-40">
+      <div className="container mx-auto px-4 md:px-6">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <Badge variant="outline" className="mb-4">
+            {t("common:version")} {product.version}
+          </Badge>
+          <h1 className="text-3xl font-bold tracking-tighter sm:text-5xl md:text-6xl lg:text-7xl">
+            {t("hero:title")} <br className="hidden sm:inline" />
+            <span className="text-primary italic">
+              {t("hero:titleItalic")}
+            </span>{" "}
+            {t("hero:titleEnd")}
           </h1>
-
-          {/* Subheadline */}
-          <p className="text-lg md:text-xl lg:text-2xl leading-relaxed text-[#525252] max-w-xl mb-12">
+          <p className="max-w-[700px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
             {t("hero:subtitle")}
           </p>
-
-          {/* Version tag */}
-          <div className="mb-10">
-            <span className="inline-block text-xs font-medium uppercase tracking-[0.25em] text-[#525252] border-b border-black pb-1">
-              {t("common:version")} {product.version}
-            </span>
-          </div>
-
-          {/* CTA buttons */}
-          <div className="flex flex-col sm:flex-row items-start gap-4 mb-16">
-            <Button asChild>
-              <Link to={GITHUB_URL} target="_blank" rel="noopener noreferrer">
-                {t("common:getStarted")}
-              </Link>
+          <div className="flex flex-col gap-4 min-[400px]:flex-row items-center">
+            <Button
+              variant="outline"
+              className="group h-10 gap-3 font-mono text-sm px-4"
+              onClick={copyCommand}
+            >
+              <IconTerminal2 className="h-4 w-4 text-muted-foreground" />
+              <span>npm i -g shipmyagent</span>
+              <div className="ml-2 pl-2 border-l border-border flex items-center">
+                {copied ? (
+                  <IconCheck className="h-4 w-4 text-green-500" />
+                ) : (
+                  <IconCopy className="h-4 w-4 text-muted-foreground transition-opacity group-hover:text-foreground" />
+                )}
+              </div>
             </Button>
-            <Button asChild variant="outline">
+            <Button size="lg">
               <Link to="/docs">{t("common:documentation")}</Link>
             </Button>
           </div>
-
-          {/* Feature tags with editorial styling */}
-          <div className="flex flex-wrap gap-x-8 gap-y-3">
+          <div className="flex flex-wrap justify-center gap-2 mt-8">
             {[t("hero:tag1"), t("hero:tag2"), t("hero:tag3")].map((tag, i) => (
-              <span
-                key={i}
-                className="text-xs font-medium uppercase tracking-[0.25em] text-black"
-              >
+              <Badge key={i} variant="secondary">
                 {tag}
-              </span>
+              </Badge>
             ))}
           </div>
         </div>
-      </div>
-
-      {/* Vertical text decoration */}
-      <div className="hidden lg:block absolute right-12 top-1/2 -translate-y-1/2">
-        <span
-          className="writing-mode-vertical text-[10px] uppercase tracking-[0.3em] text-[#525252] rotate-180"
-          style={{ writingMode: "vertical-rl" }}
-        >
-          {t("hero:verticalText")}
-        </span>
       </div>
     </section>
   );
