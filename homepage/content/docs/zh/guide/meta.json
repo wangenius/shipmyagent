@@ -1,0 +1,10 @@
+{
+  "title": "使用指南",
+  "pages": [
+    "introduction",
+    "getting-started",
+    "configuration",
+    "tasks",
+    "integrations"
+  ]
+}

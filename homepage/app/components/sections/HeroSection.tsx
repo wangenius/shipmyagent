@@ -14,12 +14,12 @@ export function HeroSection() {
         <div className="py-20 md:py-32 lg:py-40">
           {/* Decorative element: thick rule with small bordered square */}
           <div className="flex items-center gap-4 mb-12">
-            <div className="h-2 w-16 md:w-24 bg-[#000]" />
-            <div className="size-3 border-2 border-[#000]" />
+            <div className="h-2 w-16 md:w-24 bg-black" />
+            <div className="size-3 border-2 border-black" />
           </div>
 
           {/* Oversized headline - typography as graphics */}
-          <h1 className="text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-normal tracking-tighter leading-[0.85] text-[#000] mb-8">
+          <h1 className="text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-normal tracking-tighter leading-[0.85] text-black mb-8">
             <span className="block">{t("hero:title")}</span>
             <span className="block italic">{t("hero:titleItalic")}</span>
             <span className="block">{t("hero:titleEnd")}</span>
@@ -32,7 +32,7 @@ export function HeroSection() {
 
           {/* Version tag */}
           <div className="mb-10">
-            <span className="inline-block text-xs font-medium uppercase tracking-[0.25em] text-[#525252] border-b border-[#000] pb-1">
+            <span className="inline-block text-xs font-medium uppercase tracking-[0.25em] text-[#525252] border-b border-black pb-1">
               {t("common:version")} {product.version}
             </span>
           </div>
@@ -54,7 +54,7 @@ export function HeroSection() {
             {[t("hero:tag1"), t("hero:tag2"), t("hero:tag3")].map((tag, i) => (
               <span
                 key={i}
-                className="text-xs font-medium uppercase tracking-[0.25em] text-[#000]"
+                className="text-xs font-medium uppercase tracking-[0.25em] text-black"
               >
                 {tag}
               </span>

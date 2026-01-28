@@ -1,0 +1,10 @@
+{
+  "title": "Guide",
+  "pages": [
+    "introduction",
+    "getting-started",
+    "configuration",
+    "tasks",
+    "integrations"
+  ]
+}

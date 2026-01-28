@@ -11,7 +11,10 @@ export default [
   route("features", "routes/features.tsx"),
 
   // Docs routes with layout
-  layout("routes/docs/layout.tsx", [route("docs/*", "routes/docs/page.tsx")]),
+  layout("routes/docs/layout.tsx", [
+    route("docs/*", "routes/docs/page.tsx"),
+    route("zh/docs/*", "routes/docs/page.tsx"),
+  ]),
 
   route("api/search", "routes/docs/search.ts"),
 ] satisfies RouteConfig;

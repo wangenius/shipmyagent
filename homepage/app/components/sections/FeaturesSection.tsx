@@ -40,7 +40,7 @@ export const FeaturesSection: FC = () => {
   return (
     <section className="py-24 md:py-32 lg:py-40 bg-[#fff] pattern-grid">
       {/* Thick horizontal rule */}
-      <div className="h-1 bg-[#000]" />
+      <div className="h-1 bg-black" />
 
       <div className="mx-auto w-full max-w-6xl px-6 md:px-8 lg:px-12 pt-24 md:pt-32">
         {/* Section Header */}
@@ -52,7 +52,7 @@ export const FeaturesSection: FC = () => {
               </span>
               <div className="h-px flex-1 bg-[#E5E5E5]" />
             </div>
-            <h2 className="text-5xl md:text-6xl lg:text-7xl font-normal leading-[0.9] text-[#000] mb-6">
+            <h2 className="text-5xl md:text-6xl lg:text-7xl font-normal leading-[0.9] text-black mb-6">
               {t("features:title")}
               <br />
               <span className="italic">{t("features:titleItalic")}</span>
@@ -64,11 +64,11 @@ export const FeaturesSection: FC = () => {
         </div>
 
         {/* Features Grid with hover inversion */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border-t border-l border-[#000]">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border-t border-l border-black">
           {features.map((feature, i) => (
             <div
               key={i}
-              className="group p-8 md:p-12 border-b border-r border-[#000] bg-[#fff] hover:bg-[#000] transition-colors duration-100"
+              className="group p-8 md:p-12 border-b border-r border-black bg-[#fff] hover:bg-black transition-colors duration-100"
             >
               {/* Number */}
               <div className="text-xs font-mono tracking-widest text-[#525252] group-hover:text-[#A3A3A3] mb-6 transition-colors duration-100">
@@ -76,15 +76,15 @@ export const FeaturesSection: FC = () => {
               </div>
 
               {/* Icon */}
-              <div className="mb-6 inline-flex items-center justify-center p-3 border border-[#000] group-hover:border-[#fff] transition-colors duration-100">
+              <div className="mb-6 inline-flex items-center justify-center p-3 border border-black group-hover:border-[#fff] transition-colors duration-100">
                 <feature.icon
-                  className="size-6 text-[#000] group-hover:text-[#fff] transition-colors duration-100"
+                  className="size-6 text-black group-hover:text-[#fff] transition-colors duration-100"
                   strokeWidth={1.5}
                 />
               </div>
 
               {/* Title */}
-              <h3 className="text-2xl md:text-3xl mb-4 text-[#000] group-hover:text-[#fff] transition-colors duration-100">
+              <h3 className="text-2xl md:text-3xl mb-4 text-black group-hover:text-[#fff] transition-colors duration-100">
                 {t(feature.titleKey as any)}
               </h3>
 

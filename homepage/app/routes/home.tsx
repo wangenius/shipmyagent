@@ -7,23 +7,96 @@ import { Navbar } from "@/components/sections/navbar";
 import { product } from "@/lib/product";
 
 export function meta() {
+  const baseUrl = product.homepage || "https://shipmyagent.com";
+  const title = `${product.productName} — Transform Your Repository into an AI Agent`;
+  const description = product.description;
+
   return [
-    { title: `${product.productName} — AI Agent Deployment Platform` },
+    { title },
     {
       name: "description",
-      content: product.description,
+      content: description,
+    },
+    {
+      name: "keywords",
+      content:
+        "AI agent, GitHub, repository, automation, developer tools, AI assistant, code automation, agent runtime, conversational AI",
     },
     {
       property: "og:title",
-      content: `${product.productName} — AI Agent Deployment Platform`,
+      content: title,
     },
     {
       property: "og:description",
-      content: product.description,
+      content: description,
     },
     {
       property: "og:type",
       content: "website",
+    },
+    {
+      property: "og:url",
+      content: baseUrl,
+    },
+    {
+      property: "og:image",
+      content: `${baseUrl}/og-image.png`,
+    },
+    {
+      property: "og:image:alt",
+      content: "ShipMyAgent - Transform Your Repository into an AI Agent",
+    },
+    {
+      name: "twitter:card",
+      content: "summary_large_image",
+    },
+    {
+      name: "twitter:url",
+      content: baseUrl,
+    },
+    {
+      name: "twitter:title",
+      content: title,
+    },
+    {
+      name: "twitter:description",
+      content: description,
+    },
+    {
+      name: "twitter:image",
+      content: `${baseUrl}/twitter-image.png`,
+    },
+    {
+      name: "twitter:image:alt",
+      content: "ShipMyAgent - Transform Your Repository into an AI Agent",
+    },
+    {
+      tagName: "link",
+      rel: "canonical",
+      href: baseUrl,
+    },
+    {
+      tagName: "script",
+      type: "application/ld+json",
+      innerHTML: JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        name: product.productName,
+        description: description,
+        url: baseUrl,
+        applicationCategory: "DeveloperApplication",
+        operatingSystem: "Web",
+        offers: {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "USD",
+        },
+        creator: {
+          "@type": "Organization",
+          name: "ShipMyAgent",
+          url: baseUrl,
+        },
+      }),
     },
   ];
 }

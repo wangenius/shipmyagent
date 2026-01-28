@@ -4,6 +4,9 @@ import { source } from "@/lib/source";
 
 const server = createFromSource(source, {
   language: "english",
+  localeMap: {
+    zh: "english",
+  },
 });
 
 export async function loader({ request }: Route.LoaderArgs) {

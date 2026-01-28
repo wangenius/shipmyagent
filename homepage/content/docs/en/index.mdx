@@ -1,0 +1,36 @@
+---
+title: Introduction
+description: Welcome to ShipMyAgent
+---
+
+# What is ShipMyAgent?
+
+ShipMyAgent is a tool that allows you to quickly transform any code repository into an **Agentic Workspace**.
+
+With simple configuration, you can let an AI maintainer:
+
+- 🛡️ **Auto Code Review**: Automatically check code quality before PR submission.
+- 🧹 **Clear Technical Debt**: Scan TODOs in the codebase and automatically generate fix proposals.
+- 🤖 **Automate Routine Tasks**: Run maintenance tasks via Cron Jobs.
+- 💬 **Natural Language Interaction**: Chat directly with your codebase via tools like Telegram.
+
+## Core Features
+
+- **Local First**: Runs directly in your local codebase, no need to upload code to third-party servers.
+- **Simple Configuration**: Define agent persona via `Agent.md`, configure permissions and tools via `ship.json`.
+- **Model Agnostic**: Supports Claude 3.5 Sonnet, GPT-4o, DeepSeek, etc., and supports switching.
+- **Task Scheduling**: Built-in Cron scheduler to execute complex maintenance tasks periodically.
+- **Human-AI Collaboration**: Designed primarily to assist developers, all high-risk operations require human approval.
+
+## How it Works?
+
+ShipMyAgent runs a lightweight Agent Server in your project. It connects the LLM and your codebase via MCP (Model Context Protocol) or a built-in toolset.
+
+1. **Init**: Run `shipmyagent init` in the project root to generate config files.
+2. **Config**: Edit `Agent.md` to tell the AI what it should do.
+3. **Start**: Run `shipmyagent start` to launch the service.
+
+## Next Steps
+
+- [Quick Start](/docs/en/guide/getting-started) - Launch your first Agent in 5 minutes.
+- [Configuration](/docs/en/guide/configuration) - Learn how to customize LLM and permissions.

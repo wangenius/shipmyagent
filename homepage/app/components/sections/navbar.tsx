@@ -41,7 +41,7 @@ export function Navbar() {
       <div className="mx-auto w-full max-w-6xl px-6 md:px-8 lg:px-12 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-3 group">
-          <div className="size-6 border-2 border-black group-hover:bg-black transition-colors duration-100" />
+          <img src="/icon.png" alt="Logo" className="size-8" />
           <span
             className="text-lg font-normal tracking-tight text-black"
             style={{ fontFamily: "var(--font-serif)" }}
@@ -59,7 +59,7 @@ export function Navbar() {
             {t("features:sectionLabel")}
           </Link>
           <Link
-            to="/docs"
+            to={i18n.language === "zh" ? "/zh/docs" : "/docs"}
             className="text-xs font-medium uppercase tracking-[0.2em] text-[#525252] hover:text-black transition-colors duration-100"
           >
             {t("common:documentation")}
@@ -114,7 +114,7 @@ export function Navbar() {
               {t("features:sectionLabel")}
             </Link>
             <Link
-              to="/docs"
+              to={i18n.language === "zh" ? "/zh/docs" : "/docs"}
               className="block text-sm uppercase tracking-[0.15em] text-black"
               onClick={() => setMobileMenuOpen(false)}
             >

@@ -1,0 +1,71 @@
+---
+title: Quick Start
+description: Launch your ShipMyAgent in 5 minutes
+---
+
+# Quick Start
+
+## 1. Installation
+
+First, install the `shipmyagent` command-line tool globally. Ensure your Node.js version is >= 18.
+
+```bash
+npm install -g shipmyagent
+```
+
+## 2. Initialize Project
+
+Go to the root directory of the code repository you want to deploy the Agent to, and run the initialization command:
+
+```bash
+cd /path/to/your/project
+shipmyagent init
+```
+
+The interactive guide will ask for the following information:
+
+- **Agent Name**: Give your Agent a name.
+- **LLM Model**: Select the model you want to use (Recommended `Claude 3.5 Sonnet` for the best coding experience).
+- **Telegram Integration**: Whether to enable Telegram Bot (Optional).
+
+After initialization, it will create in your directory:
+
+- `Agent.md`: System prompt template.
+- `ship.json`: Configuration file.
+- `.ship/`: Hidden directory for storing tasks, logs, and cache.
+
+## 3. Configure LLM
+
+Open `ship.json` and you need to fill in the API Key. It is recommended to use environment variables, or fill it in directly (be careful not to commit the file containing the Key to Git).
+
+```json
+{
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "apiKey": "sk-ant-..." // Replace with your API Key
+  }
+}
+```
+
+## 4. Start Agent
+
+After configuration, start the Agent Server:
+
+```bash
+shipmyagent start
+```
+
+You will see output similar to the following:
+
+```
+🚀 Starting ShipMyAgent: /path/to/project
+=== ShipMyAgent Started ===
+...
+Task Scheduler Initialized
+Telegram Integration Enabled
+```
+
+Now, your Agent is online and starting to run according to the configuration!
+If Telegram is enabled, you can send a message directly to the Bot: "Help me check the recently modified code".

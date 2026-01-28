@@ -1,0 +1,54 @@
+---
+title: Introduction
+description: Understand the core concepts of ShipMyAgent
+---
+
+# Core Concepts
+
+Before using ShipMyAgent, understanding these core concepts will help you better configure and use your Agent.
+
+## 1. Agent Runtime
+
+Agent Runtime is the core engine of ShipMyAgent. It is responsible for:
+
+- Loading the System Prompt from `Agent.md`.
+- Managing the LLM's context window.
+- Distributing and executing Tool Calls.
+- Handling file system read/write permissions.
+
+## 2. Configuration Files
+
+ShipMyAgent uses two main files to define the Agent's behavior:
+
+### Agent.md
+
+This is the Agent's "Brain". Here you use natural language to define the Agent's role, goals, constraints, and behavior guidelines.
+For example, you can tell the Agent: "You are a strict code reviewer, focusing specifically on TypeScript type safety."
+
+### ship.json
+
+This is the Agent's "Body". It defines the Agent's capability boundaries, including:
+
+- **LLM Configuration**: Which model to use (Claude, GPT, DeepSeek).
+- **Permissions**: Which files the Agent can read, whether it allows writing, and whether it allows executing Shell commands.
+- **Integrations**: Whether to enable external interfaces like Telegram Bot.
+
+## 3. Tasks
+
+Tasks are the automation units of ShipMyAgent. They are stored in the `.ship/tasks/` directory.
+Each task is a Markdown file containing:
+
+- **Metadata**: Task ID, Cron schedule expression.
+- **Task Description**: A natural language description telling the Agent what operation to perform periodically.
+
+For example, you can create a task: "Scan TODOs in the codebase every morning at 9 AM and generate a report."
+
+## 4. Permissions System
+
+For security reasons, ShipMyAgent is designed with a strict permission system.
+
+- **Read**: Allowed to read project files by default.
+- **Write**: Writing to files usually requires human approval (configurable in `ship.json`).
+- **Exec**: Executing Shell commands is prohibited by default, or requires strict approval.
+
+When the Agent attempts to perform a sensitive operation, the system will pause and request your approval (CLI interaction or Telegram message).

@@ -1,0 +1,54 @@
+---
+title: 核心概念
+description: 了解 ShipMyAgent 的核心概念
+---
+
+# 核心概念
+
+在使用 ShipMyAgent 之前，了解以下几个核心概念有助于你更好地配置和使用你的 Agent。
+
+## 1. Agent Runtime
+
+Agent Runtime 是 ShipMyAgent 的核心引擎。它负责：
+
+- 加载 `Agent.md` 中的系统提示词（System Prompt）。
+- 管理 LLM 的上下文窗口。
+- 分发和执行工具调用（Tool Calls）。
+- 处理文件系统的读写权限。
+
+## 2. 配置文件
+
+ShipMyAgent 使用两个主要文件来定义 Agent 的行为：
+
+### Agent.md
+
+这是 Agent 的"大脑"。你在这里使用自然语言定义 Agent 的角色、目标、约束和行为准则。
+例如，你可以告诉 Agent："你是一个严格的代码审查员，特别关注 TypeScript 类型安全"。
+
+### ship.json
+
+这是 Agent 的"身体"。它定义了 Agent 的能力边界，包括：
+
+- **LLM 配置**：使用什么模型（Claude, GPT, DeepSeek）。
+- **权限控制**：Agent 可以读取哪些文件，是否允许写入，是否允许执行 Shell 命令。
+- **集成**：是否启用 Telegram Bot 等外部接口。
+
+## 3. 任务 (Tasks)
+
+任务是 ShipMyAgent 的自动化单元。它们存储在 `.ship/tasks/` 目录下。
+每个任务是一个 Markdown 文件，包含：
+
+- **元数据**：任务 ID、Cron 调度表达式。
+- **任务描述**：告诉 Agent 定时执行什么操作的自然语言描述。
+
+例如，你可以创建一个任务："每天早上 9 点扫描代码库中的 TODO 并生成报告"。
+
+## 4. 权限系统 (Permissions)
+
+为了安全起见，ShipMyAgent 设计了严格的权限系统。
+
+- **Read**: 默认允许读取项目文件。
+- **Write**: 写入文件通常需要人工审批（可在 `ship.json` 中配置）。
+- **Exec**: 执行 Shell 命令默认禁止，或需严格审批。
+
+当 Agent 尝试执行敏感操作时，系统会暂停并请求你的批准（CLI 交互或 Telegram 消息）。

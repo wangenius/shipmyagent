@@ -1,0 +1,103 @@
+---
+title: 配置详解
+description: 深入了解 ship.json 和 Agent.md 配置
+---
+
+# 配置详解
+
+## ship.json
+
+`ship.json` 是 ShipMyAgent 的主配置文件，控制着 Agent 的能力和行为边界。
+
+### 完整示例
+
+```json
+{
+  "name": "my-agent",
+  "version": "1.0.0",
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "apiKey": "${ANTHROPIC_API_KEY}", // 支持环境变量
+    "temperature": 0.5,
+    "maxTokens": 4096
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": ["src/**", "docs/**"], // 限制写入路径
+      "requiresApproval": true // 写入前是否需要审批
+    },
+    "exec_shell": {
+      "allow": ["npm test", "npm run lint"], // 允许执行的命令白名单
+      "requiresApproval": true
+    }
+  },
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}" // 仅允许特定用户/群组交互
+    }
+  }
+}
+```
+
+### 字段说明
+
+#### `llm` (语言模型)
+
+- **provider**: `anthropic`, `openai`, `deepseek`, `custom`.
+- **model**: 具体模型名称。
+- **apiKey**: 建议使用 `${ENV_VAR}` 引用环境变量，避免泄露。
+
+#### `permissions` (权限)
+
+ShipMyAgent 遵循"最小权限原则"。
+
+- **read_repo**: 是否允许读取仓库文件。
+- **write_repo**:
+  - **paths**: Glob 模式数组，限制 Agent 只能修改特定目录。
+  - **requiresApproval**: 强烈建议设为 `true`。设为 `false` 则 Agent 可自主修改文件（慎用）。
+- **exec_shell**:
+  - **allow**: 允许执行的命令列表或模式。
+  - **requiresApproval**: 执行前是否需确认。
+
+## Agent.md
+
+`Agent.md` 是系统提示词（System Prompt）的载体。它决定了 Agent 的"性格"和"职业操守"。
+
+### 编写技巧
+
+#### 1. 定义角色
+
+```markdown
+# Agent Role
+
+你是一个资深的前端架构师，专注于 React 性能优化。
+```
+
+#### 2. 设定目标 (Goals)
+
+```markdown
+## Goals
+
+- 审查所有新提交的组件代码。
+- 确保没有引入多余的重渲染。
+- 保持组件代码简洁、可复用。
+```
+
+#### 3. 设定约束 (Constraints)
+
+```markdown
+## Constraints
+
+- 永远不要修改 `package.json` 中的依赖版本。
+- 所有的 CSS 样式必须使用 Tailwind 类名，禁止写内联样式。
+- 修改代码前必须先解释原因。
+```
+
+#### 4. 提供上下文
+
+你可以将重要的项目规范、代码风格指南直接写在 `Agent.md` 中，Agent 会在每次对话时都谨记这些规则。

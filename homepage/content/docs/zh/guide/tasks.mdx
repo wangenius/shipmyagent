@@ -1,0 +1,79 @@
+---
+title: 自动化任务
+description: 使用 Cron Job 安排 AI 自动执行维护任务
+---
+
+# 自动化任务
+
+ShipMyAgent 内置了一个轻量级的任务调度器，允许你通过 Markdown 文件定义周期性任务。
+
+## 任务位置
+
+所有任务文件都存放在项目的 `.ship/tasks/` 目录下。
+
+## 创建任务
+
+创建一个新的 Markdown 文件，例如 `.ship/tasks/daily-report.md`：
+
+```markdown
+---
+id: daily-report
+name: 每日进度日报
+cron: "0 18 * * *" # 每天下午 6 点执行
+notify: telegram # 执行结果发送到 Telegram
+---
+
+请扫描今天（过去 24 小时）所有修改过的文件。
+总结这些修改的主要内容，并生成一份简报。
+如果有发现潜在的 Bug 或代码风格问题，请重点标出。
+```
+
+### Frontmatter 属性
+
+- **id**: 任务唯一标识符。
+- **name**: 任务显示名称。
+- **cron**:标准的 Cron 表达式。
+  - `* * * * *` (分 时 日 月 周)
+  - 示例: `"0 9 * * 1-5"` (周一至周五早上 9 点)
+- **notify**: 任务完成后通知的渠道 (目前支持 `telegram` 或 `console`)。
+
+### 任务内容
+
+Markdown 正文部分就是传给 Agent 的 Prompt。
+当 Cron 触发时，系统会创建一个新的对话线程，将这里的 Prompt 发送给 Agent，并将 Agent 的响应通过 `notify` 指定的渠道发送给你。
+
+## 常见用例
+
+### 1. 自动 Code Review
+
+定期扫描最近的代码变更进行审查。
+
+```markdown
+---
+cron: "0 */4 * * *" # 每4小时
+---
+
+检查过去 4 小时内修改的代码，寻找可能的内存泄漏或未处理的 Promise。
+```
+
+### 2. 清理 TODO
+
+```markdown
+---
+cron: "0 9 * * 1" # 每周一早上9点
+---
+
+全局搜索代码中的 `TODO` 和 `FIXME` 注释。
+整理出一份列表，并根据上下文评估这些 TODO 的优先级。
+```
+
+### 3. 生成发布日志
+
+```markdown
+---
+cron: "0 20 * * 5" # 每周五晚上8点
+---
+
+读取最近一周的 git commit log。
+生成一份格式良好的 Changelog，供周报使用。
+```

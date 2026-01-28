@@ -10,12 +10,20 @@ import {
   DocsDescription,
 } from "fumadocs-ui/page";
 import { getMDXComponents } from "@/components/docs/mdx-components";
-import browserCollections from 'fumadocs-mdx:collections/browser';
+import browserCollections from "fumadocs-mdx:collections/browser";
+import { i18n } from "@/lib/i18n";
 
-export async function loader({ params }: Route.LoaderArgs) {
-  const slugs =
-    params["*"]?.split("/").filter((v: string) => v.length > 0) ?? [];
-  const page = source.getPage(slugs);
+export async function loader({ params, request }: Route.LoaderArgs) {
+  const url = new URL(request.url);
+  const rawPath = params["*"] ?? "";
+  const lang =
+    url.pathname.startsWith("/zh/") || url.pathname === "/zh" ? "zh" : "en";
+
+  const slugs = rawPath.split("/").filter((v) => v.length > 0);
+  // source.getPage automatically handles the 'en'/'zh' folder mapping because of parser: 'dir'
+  // We just need to give it the relative slug (layout path) and the lang.
+
+  const page = source.getPage(slugs, lang);
   if (!page) throw new Response("Not found", { status: 404 });
 
   return {
@@ -27,15 +35,83 @@ export async function loader({ params }: Route.LoaderArgs) {
 
 export function meta({ loaderData }: Route.MetaArgs) {
   if (!loaderData) return [];
+
+  const baseUrl = "https://shipmyagent.com";
+  const title = `${loaderData.title} — ShipMyAgent Docs`;
+  const description = loaderData.description || "ShipMyAgent Documentation";
+  const url = `${baseUrl}${loaderData.path}`;
+
   return [
-    { title: loaderData.title },
-    { name: "description", content: loaderData.description },
+    { title },
+    {
+      name: "description",
+      content: description,
+    },
+    {
+      name: "keywords",
+      content: "ShipMyAgent, documentation, AI agent, GitHub, tutorial, guide",
+    },
+    {
+      property: "og:title",
+      content: title,
+    },
+    {
+      property: "og:description",
+      content: description,
+    },
+    {
+      property: "og:type",
+      content: "website",
+    },
+    {
+      property: "og:url",
+      content: url,
+    },
+    {
+      property: "og:image",
+      content: `${baseUrl}/og-image.png`,
+    },
+    {
+      property: "og:site_name",
+      content: "ShipMyAgent",
+    },
+    {
+      name: "twitter:card",
+      content: "summary",
+    },
+    {
+      name: "twitter:url",
+      content: url,
+    },
+    {
+      name: "twitter:title",
+      content: title,
+    },
+    {
+      name: "twitter:description",
+      content: description,
+    },
+    {
+      name: "twitter:image",
+      content: `${baseUrl}/twitter-image.png`,
+    },
+    {
+      tagName: "link",
+      rel: "canonical",
+      href: url,
+    },
   ];
 }
 
 const clientLoader = browserCollections.docs.createClientLoader({
   id: "docs",
-  component: ({ default: Mdx, frontmatter }: { default: ComponentType<{ components?: MDXComponents }>; frontmatter: { title?: string; description?: string } }) => (
+  component: ({
+    default: Mdx,
+    frontmatter,
+  }: {
+    default: ComponentType<{ components?: MDXComponents }>;
+    frontmatter: { title?: string; description?: string };
+  }) => (
     <DocsPage>
       <DocsTitle>{frontmatter.title}</DocsTitle>
       <DocsDescription>{frontmatter.description}</DocsDescription>

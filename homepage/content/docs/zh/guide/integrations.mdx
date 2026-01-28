@@ -1,0 +1,63 @@
+---
+title: 集成配置
+description: 连接 Telegram 等外部服务
+---
+
+# 集成配置
+
+ShipMyAgent 支持集成即时通讯软件，让你随时随地与你的 Agent 保持联系。
+
+## Telegram Bot
+
+目前最完善的集成是 Telegram。通过 Telegram，你可以：
+
+- 随时向 Agent 提问。
+- 接收任务执行结果的通知。
+- 审批敏感操作（如文件写入）。
+
+### 设置步骤
+
+1. **创建 Bot**
+   - 在 Telegram 中搜索 `@BotFather`。
+   - 发送 `/newbot` 命令。
+   - 按照提示设置 Bot 的名称和用户名。
+   - 获取 **HTTP API Token**。
+
+2. **获取 Chat ID**
+   - 在 Telegram 中搜索 `@userinfobot` (或类似的 ID 获取 Bot)。
+   - 发送任意消息，获取你的数字 User ID。
+   - 或者，如果你想在群组中使用，将 Bot 拉入群组，然后获取群组 ID。
+
+3. **配置 ship.json**
+
+编辑 `ship.json` 的 `integrations.telegram` 部分：
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
+      "chatId": "12345678" // 你的 User ID
+    }
+  }
+}
+```
+
+> 🔒 **安全提示**：配置 `chatId` 非常重要。如果不配置，任何知道你 Bot 用户名的人都可以与你的本地代码库交互！配置特定的 `chatId` 后，Bot 将只响应来自该 ID 的消息。
+
+4. **重启服务**
+   运行 `shipmyagent start` 重启服务。
+
+### 使用方法
+
+- **直接对话**：发送消息即可与 Agent 对话。
+- **命令**：
+  - `/status`: 查看 Agent 当前状态。
+  - `/tasks`: 查看已计划的任务。
+
+## 即将推出的集成
+
+- **Discord**: 正在开发中。
+- **Slack**: 计划中。
+- **Feishu/Lark**: 计划中。

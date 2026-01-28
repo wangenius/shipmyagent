@@ -1,0 +1,103 @@
+---
+title: Configuration
+description: Deep dive into ship.json and Agent.md configuration
+---
+
+# Configuration
+
+## ship.json
+
+`ship.json` is the main configuration file for ShipMyAgent, controlling the Agent's capabilities and behavior boundaries.
+
+### Complete Example
+
+```json
+{
+  "name": "my-agent",
+  "version": "1.0.0",
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "apiKey": "${ANTHROPIC_API_KEY}", // Supports environment variables
+    "temperature": 0.5,
+    "maxTokens": 4096
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": ["src/**", "docs/**"], // Restrict write paths
+      "requiresApproval": true // Whether approval is required before writing
+    },
+    "exec_shell": {
+      "allow": ["npm test", "npm run lint"], // Whitelist of allowed commands
+      "requiresApproval": true
+    }
+  },
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}" // Only allow interaction from specific users/groups
+    }
+  }
+}
+```
+
+### Field Explanation
+
+#### `llm` (Language Model)
+
+- **provider**: `anthropic`, `openai`, `deepseek`, `custom`.
+- **model**: Specific model name.
+- **apiKey**: Recommended to use `${ENV_VAR}` to reference environment variables to avoid leakage.
+
+#### `permissions`
+
+ShipMyAgent follows the "Least Privilege Principle".
+
+- **read_repo**: Whether to allow reading repository files.
+- **write_repo**:
+  - **paths**: Array of Glob patterns, restricting the Agent to modify only specific directories.
+  - **requiresApproval**: Strongly recommended to set to `true`. If set to `false`, the Agent can modify files autonomously (use with caution).
+- **exec_shell**:
+  - **allow**: List or patterns of allowed commands.
+  - **requiresApproval**: Whether confirmation is required before execution.
+
+## Agent.md
+
+`Agent.md` is the carrier of the System Prompt. It determines the Agent's "Personality" and "Professional Ethics".
+
+### Writing Tips
+
+#### 1. Define Role
+
+```markdown
+# Agent Role
+
+You are a senior frontend architect, focusing on React performance optimization.
+```
+
+#### 2. Set Goals
+
+```markdown
+## Goals
+
+- Review all new component code submissions.
+- Ensure no unnecessary re-renders are introduced.
+- Keep component code concise and reusable.
+```
+
+#### 3. Set Constraints
+
+```markdown
+## Constraints
+
+- Never modify dependency versions in `package.json`.
+- All CSS styles must use Tailwind class names, inline styles are prohibited.
+- You must explain the reason before modifying code.
+```
+
+#### 4. Provide Context
+
+You can write important project specifications and code style guides directly in `Agent.md`, and the Agent will bear these rules in mind during every conversation.

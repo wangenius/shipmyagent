@@ -1,0 +1,79 @@
+---
+title: Automated Tasks
+description: Schedule AI to automatically execute maintenance tasks using Cron Jobs
+---
+
+# Automated Tasks
+
+ShipMyAgent has a built-in lightweight task scheduler that allows you to define periodic tasks using Markdown files.
+
+## Task Location
+
+All task files are stored in the `.ship/tasks/` directory of the project.
+
+## Creating a Task
+
+Create a new Markdown file, for example `.ship/tasks/daily-report.md`:
+
+```markdown
+---
+id: daily-report
+name: Daily Progress Report
+cron: "0 18 * * *" # Execute daily at 6 PM
+notify: telegram # Send execution results to Telegram
+---
+
+Please scan all files modified today (past 24 hours).
+Summarize the main content of these modifications and generate a brief report.
+If distinct Bugs or code style issues are found, please highlight them.
+```
+
+### Frontmatter Properties
+
+- **id**: Unique task identifier.
+- **name**: Task display name.
+- **cron**: Standard Cron expression.
+  - `* * * * *` (Minute Hour Day Month Week)
+  - Example: `"0 9 * * 1-5"` (Monday to Friday at 9 AM)
+- **notify**: Channel to notify after task completion (currently supports `telegram` or `console`).
+
+### Task Content
+
+The Markdown body part is the Prompt passed to the Agent.
+When Cron triggers, the system will create a new conversation thread, send the Prompt here to the Agent, and send the Agent's response to you via the channel specified in `notify`.
+
+## Common Use Cases
+
+### 1. Automated Code Review
+
+Periodically scan recent code changes for review.
+
+```markdown
+---
+cron: "0 */4 * * *" # Every 4 hours
+---
+
+Check code modified in the past 4 hours, looking for potential memory leaks or unhandled Promises.
+```
+
+### 2. Clean TODOs
+
+```markdown
+---
+cron: "0 9 * * 1" # Every Monday at 9 AM
+---
+
+Globally search for `TODO` and `FIXME` comments in the code.
+Organize a list and evaluate the priority of these TODOs based on context.
+```
+
+### 3. Generate Changelog
+
+```markdown
+---
+cron: "0 20 * * 5" # Every Friday at 8 PM
+---
+
+Read the git commit log for the past week.
+Generate a well-formatted Changelog for use in the weekly report.
+```

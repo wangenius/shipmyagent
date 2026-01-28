@@ -1,0 +1,36 @@
+---
+title: 简介
+description: 欢迎使用 ShipMyAgent
+---
+
+# 什么是 ShipMyAgent？
+
+ShipMyAgent 是一个让你可以快速将任意代码仓库转变为**Agentic Workspace**（智能体工作区）的工具。
+
+通过简单的配置，你可以让 AI 维护者：
+
+- 🛡️ **自动审查代码**：在 PR 提交前自动检查代码质量。
+- 🧹 **清理技术债务**：扫描代码库中的 TODO 并自动生成修复方案。
+- 🤖 **自动化日常任务**：通过 Cron Job 定时运行维护任务。
+- 💬 **自然语言交互**：通过 Telegram 等聊天工具直接与你的代码库对话。
+
+## 核心特性
+
+- **本地优先**：直接在你的本地代码库中运行，无需上传代码到第三方服务器。
+- **简单配置**：通过 `Agent.md` 定义智能体的人设，通过 `ship.json` 配置权限和工具。
+- **模型无关**：支持 Claude 3.5 Sonnet, GPT-4o, DeepSeek 等多种模型，支持切换。
+- **任务调度**：内置 Cron 调度器，支持定时执行复杂的维护任务。
+- **人机协作**：主要设计用于辅助开发者，所有高风险操作均需人工审批。
+
+## 它是如何工作的？
+
+ShipMyAgent 在你的项目中运行一个轻量级的 Agent Server。它通过 MCP (Model Context Protocol) 或内置工具集连接 LLM 和你的代码库。
+
+1. **Init**: 在项目根目录运行 `shipmyagent init` 生成配置文件。
+2. **Config**: 编辑 `Agent.md` 告诉 AI 它应该做什么。
+3. **Start**: 运行 `shipmyagent start` 启动服务。
+
+## 下一步
+
+- [快速开始](/docs/zh/guide/getting-started) - 5分钟内启动你的第一个 Agent。
+- [配置详解](/docs/zh/guide/configuration) - 了解如何自定义 LLM 和权限。

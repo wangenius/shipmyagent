@@ -5,20 +5,20 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium uppercase tracking-widest transition-all duration-100 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:outline focus-visible:outline-3 focus-visible:outline-[#000] focus-visible:outline-offset-3",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium uppercase tracking-widest transition-all duration-100 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:outline focus-visible:outline-3 focus-visible:outline-black focus-visible:outline-offset-3",
   {
     variants: {
       variant: {
         default:
-          "bg-[#000] text-[#fff] border-none hover:bg-[#fff] hover:text-[#000] hover:outline hover:outline-2 hover:outline-[#000]",
+          "bg-black text-[#fff] border-none hover:bg-[#fff] hover:text-black hover:outline hover:outline-2 hover:outline-black",
         destructive:
-          "bg-[#000] text-[#fff] hover:bg-[#fff] hover:text-[#000] hover:outline hover:outline-2 hover:outline-[#000]",
+          "bg-black text-[#fff] hover:bg-[#fff] hover:text-black hover:outline hover:outline-2 hover:outline-black",
         outline:
-          "border-2 border-[#000] bg-transparent text-[#000] hover:bg-[#000] hover:text-[#fff]",
+          "border-2 border-black bg-transparent text-black hover:bg-black hover:text-[#fff]",
         secondary:
-          "bg-[#F5F5F5] text-[#000] border border-[#E5E5E5] hover:bg-[#000] hover:text-[#fff] hover:border-[#000]",
-        ghost: "hover:bg-[#F5F5F5] hover:text-[#000]",
-        link: "text-[#000] underline-offset-4 hover:underline",
+          "bg-[#F5F5F5] text-black border border-[#E5E5E5] hover:bg-black hover:text-[#fff] hover:border-black",
+        ghost: "hover:bg-[#F5F5F5] hover:text-black",
+        link: "text-black underline-offset-4 hover:underline",
       },
       size: {
         default: "h-12 px-8 py-4",
@@ -31,7 +31,7 @@ const buttonVariants = cva(
       variant: "default",
       size: "default",
     },
-  }
+  },
 );
 
 function Button({
