@@ -1,0 +1,12 @@
+@url = http://localhost:3000
+
+GET {{url}}/health
+
+###
+
+POST {{url}}/api/execute
+Content-Type: application/json
+
+{
+    "instructions":"你好"
+}

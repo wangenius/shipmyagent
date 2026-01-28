@@ -7,6 +7,7 @@ import { createTaskExecutor } from '../runtime/task-executor.js';
 import { createToolExecutor } from '../runtime/tools.js';
 import { createAgentRuntime, AgentContext } from '../runtime/agent.js';
 import { createServer, ServerContext } from '../server/index.js';
+import { createInteractiveServer } from '../server/interactive.js';
 import { createTelegramBot } from '../integrations/telegram.js';
 import { createFeishuBot } from '../integrations/feishu.js';
 import { getAgentMdPath, getShipJsonPath, getProjectRoot, ShipConfig } from '../utils.js';
@@ -14,6 +15,8 @@ import { getAgentMdPath, getShipJsonPath, getProjectRoot, ShipConfig } from '../
 interface StartOptions {
   port: number;
   host: string;
+  interactiveWeb?: boolean;
+  interactivePort?: number;
 }
 
 export async function startCommand(cwd: string = '.', options: StartOptions): Promise<void> {
@@ -139,6 +142,15 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
     );
   }
 
+  // 创建交互式 Web 服务器（如果已启用）
+  let interactiveServer = null;
+  if (options.interactiveWeb) {
+    logger.info('交互式 Web 界面已启用');
+    interactiveServer = createInteractiveServer({
+      agentApiUrl: `http://${options.host}:${options.port}`,
+    });
+  }
+
   // 处理进程信号
   let isShuttingDown = false;
   const shutdown = async (signal: string) => {
@@ -155,6 +167,11 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
     // 停止飞书 Bot
     if (feishuBot) {
       await feishuBot.stop();
+    }
+
+    // 停止交互式 Web 服务器
+    if (interactiveServer) {
+      await interactiveServer.stop();
     }
 
     // 停止服务器
@@ -175,6 +192,14 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
     port: options.port,
     host: options.host,
   });
+
+  // 启动交互式 Web 服务器（如果已启用）
+  if (interactiveServer) {
+    await interactiveServer.start({
+      port: options.interactivePort || 3001,
+      host: options.host,
+    });
+  }
 
   // 启动 Telegram Bot
   if (telegramBot) {

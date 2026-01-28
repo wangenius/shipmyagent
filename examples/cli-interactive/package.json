@@ -1,0 +1,19 @@
+{
+  "name": "@shipmyagent/example-cli-interactive",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Interactive CLI example using @clack/prompts with ShipMyAgent runtime",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "bun run src/index.ts",
+    "cli": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

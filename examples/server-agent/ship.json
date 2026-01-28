@@ -1,0 +1,38 @@
+{
+  "name": "server-agent",
+  "version": "1.0.0",
+  "llm": {
+    "provider": "kimi",
+    "model": "kimi-k2-0905-preview",
+    "baseUrl": "https://api.moonshot.cn/v1",
+    "apiKey": "sk-SaWATfh4Ldn8xXmIid0XCsDzHPhCgraj2k9oYFCjgQny3XTf",
+    "temperature": 0.7
+  },
+  "permissions": {
+    "read_repo": true,
+    "write_repo": {
+      "paths": [
+        "src/**",
+        "**/*.md"
+      ],
+      "requiresApproval": true
+    },
+    "exec_shell": {
+      "allow": [
+        "npm test",
+        "pnpm test",
+        "bun test"
+      ],
+      "requiresApproval": true
+    }
+  },
+  "integrations": {
+    "telegram": {
+      "enabled": true
+    },
+    "feishu": {
+      "enabled": false,
+      "domain": "https://open.feishu.cn"
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@shipmyagent/example-server-agent",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Server agent example using ShipMyAgent runtime",
+  "scripts": {
+    "start": "shipmyagent start",
+    "dev": "shipmyagent start -p 3000"
+  },
+  "dependencies": {
+    "shipmyagent": "workspace:*"
+  }
+}
