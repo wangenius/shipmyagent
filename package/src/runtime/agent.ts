@@ -95,7 +95,7 @@ export class AgentRuntime {
     try {
       await this.logger.log('info', 'Initializing Agent Runtime with ToolLoopAgent (v6)');
 
-      const { provider, apiKey, baseUrl, model } = this.context.config.llm;
+      const { provider, apiKey, baseUrl, model, topP, frequencyPenalty, presencePenalty } = this.context.config.llm;
       const resolvedApiKey = apiKey || process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
       
       if (!resolvedApiKey) {
@@ -108,13 +108,44 @@ export class AgentRuntime {
         const { ToolLoopAgent, tool } = await import('ai');
         
         // Create provider instance
-        let providerInstance;
+        // Note: ToolLoopAgent does NOT accept baseURL/apiKey directly; those belong to the provider.
+        let providerInstance: any;
         if (provider === 'anthropic') {
-          const { createAnthropic } = await import('@ai-sdk/anthropic');
+          const anthropicMod = await import('@ai-sdk/anthropic');
+          const createAnthropic =
+            (anthropicMod as any).createAnthropic ??
+            (anthropicMod as any).anthropic;
+
+          if (typeof createAnthropic !== 'function') {
+            throw new Error('Failed to load Anthropic provider from @ai-sdk/anthropic');
+          }
+
           providerInstance = createAnthropic({ apiKey: resolvedApiKey });
+        } else if (provider === 'custom') {
+          // OpenAI-compatible provider with custom baseURL (recommended for OpenAI-compatible gateways)
+          const compatMod = await import('@ai-sdk/openai-compatible');
+          const createOpenAICompatible = (compatMod as any).createOpenAICompatible;
+
+          if (typeof createOpenAICompatible !== 'function') {
+            throw new Error('Failed to load OpenAI-compatible provider from @ai-sdk/openai-compatible');
+          }
+
+          providerInstance = createOpenAICompatible({
+            name: 'custom',
+            apiKey: resolvedApiKey,
+            baseURL: baseUrl || 'https://api.openai.com/v1',
+          });
         } else {
-          // For OpenAI-compatible APIs (including custom providers)
-          const { createOpenAI } = await import('@ai-sdk/openai');
+          // Standard OpenAI provider (works with OpenAI and some compatible endpoints)
+          const openaiMod = await import('@ai-sdk/openai');
+          const createOpenAI =
+            (openaiMod as any).createOpenAI ??
+            (openaiMod as any).openai;
+
+          if (typeof createOpenAI !== 'function') {
+            throw new Error('Failed to load OpenAI provider from @ai-sdk/openai');
+          }
+
           providerInstance = createOpenAI({
             apiKey: resolvedApiKey,
             baseURL: baseUrl || 'https://api.openai.com/v1',
