@@ -15,7 +15,7 @@ export const CTASection: FC = () => {
             <h2 className="text-3xl font-bold tracking-tighter md:text-4xl/tight">
               Ship Your <span className="italic">Repo</span>
             </h2>
-            <p className="max-w-[600px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+            <p className="max-w-150 text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
               {t("hero:subtitle")}
             </p>
           </div>

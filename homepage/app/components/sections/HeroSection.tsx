@@ -30,7 +30,7 @@ export function HeroSection() {
             </span>{" "}
             {t("hero:titleEnd")}
           </h1>
-          <p className="max-w-[700px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+          <p className="max-w-175 text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
             {t("hero:subtitle")}
           </p>
           <div className="flex flex-col gap-4 min-[400px]:flex-row items-center">

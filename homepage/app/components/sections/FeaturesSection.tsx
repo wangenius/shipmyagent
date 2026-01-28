@@ -50,7 +50,7 @@ export const FeaturesSection: FC = () => {
                 {t("features:titleItalic")}
               </span>
             </h2>
-            <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+            <p className="max-w-225 text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
               {t("features:description")}
             </p>
           </div>
