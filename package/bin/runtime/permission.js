@@ -9,11 +9,11 @@ export class PermissionEngine {
     constructor(config, projectRoot) {
         this.config = config;
         this.projectRoot = projectRoot;
-        // 从文件系统加载已有的审批请求
+        // Load existing approval requests from filesystem
         this.loadApprovalsFromDisk();
     }
     /**
-     * 从文件系统加载待审批请求到内存
+     * Load pending approval requests from filesystem to memory
      */
     async loadApprovalsFromDisk() {
         const approvalsDir = getApprovalsDirPath(this.projectRoot);
@@ -27,103 +27,103 @@ export class PermissionEngine {
                 const filePath = path.join(approvalsDir, file);
                 try {
                     const request = await fs.readJson(filePath);
-                    // 只加载 pending 状态的请求
+                    // Only load pending requests
                     if (request.status === 'pending') {
                         this.approvalRequests.set(request.id, request);
                     }
                 }
                 catch (readError) {
-                    console.warn(`⚠️ 读取审批文件失败: ${filePath}`);
+                    console.warn(`⚠️ Failed to read approval file: ${filePath}`);
                 }
             }
         }
         catch (error) {
-            console.warn(`⚠️ 加载审批请求目录失败: ${approvalsDir}`);
+            console.warn(`⚠️ Failed to load approvals directory: ${approvalsDir}`);
         }
     }
     async checkReadRepo(filePath) {
         const paths = this.config.read_repo;
         if (paths === true) {
-            return { allowed: true, reason: '读权限已启用', requiresApproval: false };
+            return { allowed: true, reason: 'Read permission enabled', requiresApproval: false };
         }
         if (paths === false) {
-            return { allowed: false, reason: '读权限已禁用', requiresApproval: false };
+            return { allowed: false, reason: 'Read permission disabled', requiresApproval: false };
         }
-        // 检查路径是否匹配
+        // Check if path matches
         if (paths.paths && paths.paths.length > 0) {
             const isAllowed = paths.paths.some(pattern => this.matchPattern(pattern, filePath));
             return {
                 allowed: isAllowed,
-                reason: isAllowed ? '路径匹配' : '路径不匹配',
+                reason: isAllowed ? 'Path matches' : 'Path does not match',
                 requiresApproval: false,
             };
         }
-        return { allowed: true, reason: '默认允许', requiresApproval: false };
+        return { allowed: true, reason: 'Default allow', requiresApproval: false };
     }
     async checkWriteRepo(filePath, content) {
         const writeConfig = this.config.write_repo;
         if (!writeConfig) {
-            return { allowed: false, reason: '写权限未配置', requiresApproval: true };
+            return { allowed: false, reason: 'Write permission not configured', requiresApproval: true };
         }
-        // 检查路径是否匹配
+        // Check if path matches
         if (writeConfig.paths && writeConfig.paths.length > 0) {
             const isAllowed = writeConfig.paths.some(pattern => this.matchPattern(pattern, filePath));
             if (!isAllowed) {
                 return {
                     allowed: false,
-                    reason: '路径不在允许列表中',
+                    reason: 'Path not in allow list',
                     requiresApproval: writeConfig.requiresApproval,
                 };
             }
         }
-        // 如果需要审批，创建审批请求
+        // If approval required, create approval request
         if (writeConfig.requiresApproval) {
             const diff = await this.generateFileDiff(filePath, content);
-            const request = await this.createApprovalRequest('write_repo', '修改文件', {
+            const request = await this.createApprovalRequest('write_repo', 'Modify file', {
                 filePath,
                 content: diff,
             });
             return {
                 allowed: false,
-                reason: '写操作需要审批',
+                reason: 'Write operation requires approval',
                 requiresApproval: true,
                 approvalId: request.id,
             };
         }
-        return { allowed: true, reason: '写权限已允许', requiresApproval: false };
+        return { allowed: true, reason: 'Write permission allowed', requiresApproval: false };
     }
     async checkExecShell(command) {
         const execConfig = this.config.exec_shell;
         if (!execConfig) {
-            return { allowed: false, reason: 'Shell 执行权限未配置', requiresApproval: true };
+            return { allowed: false, reason: 'Shell execution permission not configured', requiresApproval: true };
         }
-        // 检查命令是否在允许列表中
+        // Check if command is in allow list
         if (execConfig.allow && execConfig.allow.length > 0) {
             const isAllowed = execConfig.allow.some(cmd => command.startsWith(cmd.split(' ')[0] || ''));
             if (!isAllowed) {
                 return {
                     allowed: false,
-                    reason: '命令不在允许列表中',
+                    reason: 'Command not in allow list',
                     requiresApproval: execConfig.requiresApproval,
                 };
             }
         }
-        // 如果需要审批，创建审批请求
+        // If approval required, create approval request
         if (execConfig.requiresApproval) {
-            const request = await this.createApprovalRequest('exec_shell', '执行 Shell 命令', {
+            const request = await this.createApprovalRequest('exec_shell', 'Execute shell command', {
                 command,
             });
             return {
                 allowed: false,
-                reason: 'Shell 执行需要审批',
+                reason: 'Shell execution requires approval',
                 requiresApproval: true,
                 approvalId: request.id,
             };
         }
-        return { allowed: true, reason: 'Shell 执行权限已允许', requiresApproval: false };
+        return { allowed: true, reason: 'Shell execution permission allowed', requiresApproval: false };
     }
     matchPattern(pattern, filePath) {
-        // 简单的 glob 模式匹配
+        // Simple glob pattern matching
         if (pattern.endsWith('/**')) {
             const prefix = pattern.slice(0, -3);
             return filePath.startsWith(prefix) || filePath.includes(prefix + '/');
@@ -135,11 +135,11 @@ export class PermissionEngine {
     }
     async generateFileDiff(filePath, newContent) {
         if (!fs.existsSync(filePath)) {
-            return `新文件: ${filePath}\n\n${newContent}`;
+            return `New file: ${filePath}\n\n${newContent}`;
         }
         const oldContent = await fs.readFile(filePath, 'utf-8');
         const changes = diffLines(oldContent, newContent);
-        let diff = `文件: ${filePath}\n\n`;
+        let diff = `File: ${filePath}\n\n`;
         for (const change of changes) {
             if (change.added) {
                 diff += `+ ${change.value.trimEnd()}\n`;
@@ -160,7 +160,7 @@ export class PermissionEngine {
             createdAt: getTimestamp(),
         };
         this.approvalRequests.set(request.id, request);
-        // 保存到文件系统
+        // Save to filesystem
         const approvalsDir = getApprovalsDirPath(this.projectRoot);
         const filePath = path.join(approvalsDir, `${request.id}.json`);
         await fs.writeJson(filePath, request, { spaces: 2 });
@@ -174,7 +174,7 @@ export class PermissionEngine {
         request.status = 'approved';
         request.response = response;
         request.respondedAt = getTimestamp();
-        // 更新文件系统
+        // Update filesystem
         const approvalsDir = getApprovalsDirPath(this.projectRoot);
         const filePath = path.join(approvalsDir, `${requestId}.json`);
         await fs.writeJson(filePath, request, { spaces: 2 });
@@ -188,7 +188,7 @@ export class PermissionEngine {
         request.status = 'rejected';
         request.response = response;
         request.respondedAt = getTimestamp();
-        // 更新文件系统
+        // Update filesystem
         const approvalsDir = getApprovalsDirPath(this.projectRoot);
         const filePath = path.join(approvalsDir, `${requestId}.json`);
         await fs.writeJson(filePath, request, { spaces: 2 });
@@ -201,10 +201,10 @@ export class PermissionEngine {
         return this.approvalRequests.get(id);
     }
     /**
-     * 等待审批结果
-     * @param requestId 审批请求 ID
-     * @param timeoutSeconds 超时时间（秒）
-     * @returns 审批结果: approved | rejected | timeout
+     * Wait for approval result
+     * @param requestId Approval request ID
+     * @param timeoutSeconds Timeout in seconds
+     * @returns Approval result: approved | rejected | timeout
      */
     async waitForApproval(requestId, timeoutSeconds = 300) {
         const startTime = Date.now();
@@ -212,7 +212,7 @@ export class PermissionEngine {
         while (Date.now() - startTime < timeoutMs) {
             const request = this.approvalRequests.get(requestId);
             if (!request) {
-                // 可能已被加载，重新尝试从磁盘读取
+                // May have been loaded, retry reading from disk
                 await this.loadApprovalsFromDisk();
                 continue;
             }
@@ -222,7 +222,7 @@ export class PermissionEngine {
             if (request.status === 'rejected') {
                 return 'rejected';
             }
-            // 等待 1 秒后重试
+            // Wait 1 second before retry
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
         return 'timeout';
@@ -244,7 +244,7 @@ export function createPermissionEngine(projectRoot) {
             config = { ...config, ...shipConfig.permissions };
         }
         catch (error) {
-            console.warn('⚠️ 读取 ship.json 失败，使用默认权限配置');
+            console.warn('⚠️ Failed to read ship.json, using default permission config');
         }
     }
     return new PermissionEngine(config, projectRoot);

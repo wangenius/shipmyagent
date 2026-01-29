@@ -92,32 +92,32 @@ export class TelegramBot {
     this.sessions.set(sessionKey, agentRuntime);
     this.resetSessionTimeout(sessionKey);
 
-    this.logger.debug(`创建新会话: ${sessionKey}`);
+    this.logger.debug(`Created new session: ${sessionKey}`);
     return agentRuntime;
   }
 
   /**
-   * 重置会话超时
+   * Reset session timeout
    */
   private resetSessionTimeout(sessionKey: string): void {
-    // 清除旧的超时
+    // Clear old timeout
     const oldTimeout = this.sessionTimeouts.get(sessionKey);
     if (oldTimeout) {
       clearTimeout(oldTimeout);
     }
 
-    // 设置新的超时
+    // Set new timeout
     const timeout = setTimeout(() => {
       this.sessions.delete(sessionKey);
       this.sessionTimeouts.delete(sessionKey);
-      this.logger.debug(`会话超时清理: ${sessionKey}`);
+      this.logger.debug(`Session timeout cleanup: ${sessionKey}`);
     }, this.SESSION_TIMEOUT);
 
     this.sessionTimeouts.set(sessionKey, timeout);
   }
 
   /**
-   * 清除会话
+   * Clear session
    */
   clearSession(userId: number): void {
     const sessionKey = `telegram:${userId}`;
@@ -133,31 +133,31 @@ export class TelegramBot {
         this.sessionTimeouts.delete(sessionKey);
       }
 
-      this.logger.info(`已清除会话: ${sessionKey}`);
+      this.logger.info(`Cleared session: ${sessionKey}`);
     }
   }
 
   async start(): Promise<void> {
     if (!this.botToken) {
-      this.logger.warn('Telegram Bot Token 未配置，跳过启动');
+      this.logger.warn('Telegram Bot Token not configured, skipping startup');
       return;
     }
 
     this.isRunning = true;
-    this.logger.info('🤖 Telegram Bot 启动中...');
+    this.logger.info('🤖 Starting Telegram Bot...');
 
-    // 获取 bot 信息
+    // Get bot info
     try {
       const me = await this.sendRequest('getMe', {});
-      this.logger.info(`Bot 用户名: @${(me as { username: string }).username}`);
+      this.logger.info(`Bot username: @${(me as { username: string }).username}`);
     } catch (error) {
-      this.logger.error('获取 Bot 信息失败', { error: String(error) });
+      this.logger.error('Failed to get Bot info', { error: String(error) });
       return;
     }
 
-    // 开始轮询
+    // Start polling
     this.pollingInterval = setInterval(() => this.pollUpdates(), 1000);
-    this.logger.info('Telegram Bot 已启动');
+    this.logger.info('Telegram Bot started');
   }
 
   private async pollUpdates(): Promise<void> {
@@ -181,18 +181,18 @@ export class TelegramBot {
       // 使用 Promise.allSettled 确保单个消息失败不影响其他消息
       const results = await Promise.allSettled(tasks);
 
-      // 记录失败的消息
+      // Log failed messages
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
-          this.logger.error(`处理消息失败 (update_id: ${updates[index].update_id})`, {
+          this.logger.error(`Failed to process message (update_id: ${updates[index].update_id})`, {
             error: String(result.reason)
           });
         }
       });
     } catch (error) {
-      // 轮询超时是正常的
+      // Polling timeout is normal
       if (!(error as Error).message.includes('timeout')) {
-        this.logger.error('Telegram 轮询错误', { error: String(error) });
+        this.logger.error('Telegram polling error', { error: String(error) });
       }
     }
   }
@@ -225,11 +225,11 @@ export class TelegramBot {
     const chatId = message.chat.id.toString();
     const text = message.text;
 
-    // 检查是否是命令
+    // Check if it's a command
     if (text.startsWith('/')) {
       await this.handleCommand(chatId, text, message.from);
     } else {
-      // 普通消息，执行指令
+      // Regular message, execute instruction
       await this.executeAndReply(chatId, text);
     }
   }
@@ -240,44 +240,44 @@ export class TelegramBot {
     from?: { id: number; username?: string }
   ): Promise<void> {
     const username = from?.username || 'Unknown';
-    this.logger.info(`收到命令: ${command} (${username})`);
+    this.logger.info(`Received command: ${command} (${username})`);
 
     switch (command.toLowerCase()) {
       case '/start':
       case '/help':
         await this.sendMessage(chatId, `🤖 ShipMyAgent Bot
 
-可用命令:
-- /status - 查看 Agent 状态
-- /tasks - 查看任务列表
-- /logs - 查看最近日志
-- /clear - 清除对话历史
-- /approve <id> - 审批通过
-- /reject <id> - 审批拒绝
-- <任意消息> - 执行指令`);
+Available commands:
+- /status - View agent status
+- /tasks - View task list
+- /logs - View recent logs
+- /clear - Clear conversation history
+- /approve <id> - Approve request
+- /reject <id> - Reject request
+- <any message> - Execute instruction`);
         break;
 
       case '/status':
-        await this.sendMessage(chatId, '📊 Agent 状态: 运行中\n任务数: 0\n待审批: 0');
+        await this.sendMessage(chatId, '📊 Agent status: Running\nTasks: 0\nPending approvals: 0');
         break;
 
       case '/tasks':
-        await this.sendMessage(chatId, '📋 任务列表\n暂无任务');
+        await this.sendMessage(chatId, '📋 Task list\nNo tasks');
         break;
 
       case '/logs':
-        await this.sendMessage(chatId, '📝 日志\n暂无日志');
+        await this.sendMessage(chatId, '📝 Logs\nNo logs');
         break;
 
       case '/clear':
         if (from) {
           this.clearSession(from.id);
-          await this.sendMessage(chatId, '✅ 已清除对话历史');
+          await this.sendMessage(chatId, '✅ Conversation history cleared');
         }
         break;
 
       default:
-        await this.sendMessage(chatId, `未知命令: ${command}`);
+        await this.sendMessage(chatId, `Unknown command: ${command}`);
     }
   }
 
@@ -289,36 +289,36 @@ export class TelegramBot {
     const chatId = callbackQuery.message.chat.id.toString();
     const data = callbackQuery.data;
 
-    // 解析回调数据
+    // Parse callback data
     const [action, approvalId] = data.split(':');
 
     if (action === 'approve' || action === 'reject') {
       const permissionEngine = createPermissionEngine(process.cwd());
       const success = action === 'approve'
-        ? await permissionEngine.approveRequest(approvalId, `通过 Telegram 审批`)
-        : await permissionEngine.rejectRequest(approvalId, `通过 Telegram 拒绝`);
+        ? await permissionEngine.approveRequest(approvalId, `Approved via Telegram`)
+        : await permissionEngine.rejectRequest(approvalId, `Rejected via Telegram`);
 
-      await this.sendMessage(chatId, success ? '✅ 操作成功' : '❌ 操作失败');
+      await this.sendMessage(chatId, success ? '✅ Operation successful' : '❌ Operation failed');
     }
   }
 
   private async executeAndReply(chatId: string, instructions: string): Promise<void> {
     try {
-      // 从 chatId 提取 userId（Telegram 的 chatId 就是 userId）
+      // Extract userId from chatId (Telegram's chatId is userId)
       const userId = parseInt(chatId);
 
-      // 获取或创建会话
+      // Get or create session
       const agentRuntime = this.getOrCreateSession(userId);
 
-      // 初始化 agent（如果还没初始化）
+      // Initialize agent (if not already initialized)
       if (!agentRuntime.isInitialized()) {
         await agentRuntime.initialize();
       }
 
-      // 生成 sessionId（基于 telegram 和 userId）
+      // Generate sessionId (based on telegram and userId)
       const sessionId = `telegram:${userId}`;
 
-      // 使用会话中的 agent 执行指令
+      // Execute instruction using session agent
       const result = await agentRuntime.run({
         instructions,
         context: {
@@ -329,12 +329,12 @@ export class TelegramBot {
       });
 
       const message = result.success
-        ? `✅ 执行成功\n\n${result.output}`
-        : `❌ 执行失败\n\n${result.output}`;
+        ? `✅ Execution successful\n\n${result.output}`
+        : `❌ Execution failed\n\n${result.output}`;
 
       await this.sendMessage(chatId, message);
     } catch (error) {
-      await this.sendMessage(chatId, `❌ 执行错误: ${String(error)}`);
+      await this.sendMessage(chatId, `❌ Execution error: ${String(error)}`);
     }
   }
 
@@ -346,7 +346,7 @@ export class TelegramBot {
         parse_mode: 'Markdown',
       });
     } catch (error) {
-      this.logger.error('发送消息失败', { error: String(error) });
+      this.logger.error('Failed to send message', { error: String(error) });
     }
   }
 
@@ -364,7 +364,7 @@ export class TelegramBot {
         },
       });
     } catch (error) {
-      this.logger.error('发送消息失败', { error: String(error) });
+      this.logger.error('Failed to send message', { error: String(error) });
     }
   }
 
@@ -377,7 +377,7 @@ export class TelegramBot {
     });
 
     if (!response.ok) {
-      throw new Error(`Telegram API 错误: ${response.statusText}`);
+      throw new Error(`Telegram API error: ${response.statusText}`);
     }
 
     return response.json();
@@ -388,7 +388,7 @@ export class TelegramBot {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
     }
-    this.logger.info('Telegram Bot 已停止');
+    this.logger.info('Telegram Bot stopped');
   }
 }
 

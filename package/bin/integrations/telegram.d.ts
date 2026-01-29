@@ -25,11 +25,11 @@ export declare class TelegramBot {
      */
     private getOrCreateSession;
     /**
-     * 重置会话超时
+     * Reset session timeout
      */
     private resetSessionTimeout;
     /**
-     * 清除会话
+     * Clear session
      */
     clearSession(userId: number): void;
     start(): Promise<void>;

@@ -36,7 +36,7 @@ export declare class PermissionEngine {
     private approvalRequests;
     constructor(config: PermissionConfig, projectRoot: string);
     /**
-     * 从文件系统加载待审批请求到内存
+     * Load pending approval requests from filesystem to memory
      */
     private loadApprovalsFromDisk;
     checkReadRepo(filePath: string): Promise<PermissionCheckResult>;
@@ -50,10 +50,10 @@ export declare class PermissionEngine {
     getPendingApprovals(): ApprovalRequest[];
     getApprovalRequest(id: string): ApprovalRequest | undefined;
     /**
-     * 等待审批结果
-     * @param requestId 审批请求 ID
-     * @param timeoutSeconds 超时时间（秒）
-     * @returns 审批结果: approved | rejected | timeout
+     * Wait for approval result
+     * @param requestId Approval request ID
+     * @param timeoutSeconds Timeout in seconds
+     * @returns Approval result: approved | rejected | timeout
      */
     waitForApproval(requestId: string, timeoutSeconds?: number): Promise<'approved' | 'rejected' | 'timeout'>;
     getConfig(): PermissionConfig;

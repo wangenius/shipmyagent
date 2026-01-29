@@ -145,12 +145,12 @@ export class AgentRuntime {
 
     history.push(message);
 
-    // 如果超过最大消息数，移除最旧的消息
+    // If conversation history exceeds limit, remove oldest messages
     if (history.length > this.MAX_HISTORY_MESSAGES) {
       const removed = history.length - this.MAX_HISTORY_MESSAGES;
       const newHistory = history.slice(removed);
       this.conversationHistories.set(sessionId, newHistory);
-      this.logger.log('debug', `会话 ${sessionId} 对话历史超过限制，移除了 ${removed} 条旧消息`);
+      this.logger.log('debug', `Session ${sessionId} conversation history exceeded limit, removed ${removed} old messages`);
     }
   }
 
@@ -603,25 +603,25 @@ Chain commands with && for sequential execution or ; for independent execution.`
     } catch (error) {
       const errorMsg = String(error);
 
-      // 检查是否是上下文长度超限错误
+      // Check if context length exceeded error
       if (errorMsg.includes('context_length') ||
           errorMsg.includes('too long') ||
           errorMsg.includes('maximum context') ||
           errorMsg.includes('context window')) {
         const currentHistory = this.conversationHistories.get(sessionId) || [];
-        await this.logger.log('warn', '上下文长度超限，清空历史记录', {
+        await this.logger.log('warn', 'Context length exceeded, clearing history', {
           sessionId,
           currentMessages: currentHistory.length,
           error: errorMsg
         });
 
-        // 清空该会话的对话历史
+        // Clear conversation history for this session
         this.conversationHistories.delete(sessionId);
-        await this.logger.log('info', `已清空会话 ${sessionId} 的对话历史`);
+        await this.logger.log('info', `Cleared conversation history for session ${sessionId}`);
 
         return {
           success: false,
-          output: `上下文长度超限，已自动清空历史记录。请重新发送您的问题。`,
+          output: `Context length exceeded, history automatically cleared. Please resend your question.`,
           toolCalls,
         };
       }

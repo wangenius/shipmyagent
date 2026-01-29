@@ -23,15 +23,15 @@ export declare class FeishuBot {
     private projectRoot;
     constructor(appId: string, appSecret: string, domain: string | undefined, logger: Logger, taskExecutor: TaskExecutor, projectRoot: string);
     /**
-     * 获取或创建会话
+     * Get or create session
      */
     private getOrCreateSession;
     /**
-     * 重置会话超时
+     * Reset session timeout
      */
     private resetSessionTimeout;
     /**
-     * 清除会话
+     * Clear session
      */
     clearSession(chatId: string, chatType: string): void;
     start(): Promise<void>;

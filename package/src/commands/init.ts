@@ -24,9 +24,9 @@ interface InitOptions {
 export async function initCommand(cwd: string = '.', options: InitOptions = {}): Promise<void> {
   const projectRoot = path.resolve(cwd);
 
-  console.log(`🚀 初始化 ShipMyAgent 项目: ${projectRoot}`);
+  console.log(`🚀 Initializing ShipMyAgent project: ${projectRoot}`);
 
-  // 检查是否已存在 Agent.md 和 ship.json
+  // Check if Agent.md and ship.json already exist
   const existingAgentMd = fs.existsSync(getAgentMdPath(projectRoot));
   const existingShipJson = fs.existsSync(getShipJsonPath(projectRoot));
 
@@ -35,29 +35,29 @@ export async function initCommand(cwd: string = '.', options: InitOptions = {}):
       const response = await prompts({
         type: 'confirm',
         name: 'overwrite',
-        message: '项目已初始化，是否覆盖现有配置？',
+        message: 'Project already initialized. Overwrite existing configuration?',
         initial: false,
       });
 
       if (!response.overwrite) {
-        console.log('❌ 已取消初始化');
+        console.log('❌ Initialization cancelled');
         return;
       }
     }
   }
 
-  // 收集配置信息
+  // Collect configuration information
   const response = await prompts([
     {
       type: 'text',
       name: 'name',
-      message: 'Agent 名称',
+      message: 'Agent name',
       initial: path.basename(projectRoot),
     },
     {
       type: 'select',
       name: 'model',
-      message: '选择 LLM 模型',
+      message: 'Select LLM model',
       choices: [
         { title: 'Claude Sonnet 4', value: 'claude-sonnet-4-5' },
         { title: 'Claude Haiku', value: 'claude-haiku' },
@@ -68,28 +68,28 @@ export async function initCommand(cwd: string = '.', options: InitOptions = {}):
         { title: 'GPT-4o', value: 'gpt-4o' },
         { title: 'GPT-3.5 Turbo', value: 'gpt-3.5-turbo' },
         { title: 'DeepSeek Chat', value: 'deepseek-chat' },
-        { title: '自定义模型', value: 'custom' },
+        { title: 'Custom model', value: 'custom' },
       ],
       initial: 0,
     },
     {
       type: 'select',
       name: 'integration',
-      message: '选择消息集成方式',
+      message: 'Select messaging integration',
       choices: [
-        { title: '不启用', value: 'none' },
+        { title: 'None', value: 'none' },
         { title: 'Telegram', value: 'telegram' },
-        { title: '飞书', value: 'feishu' },
+        { title: 'Feishu', value: 'feishu' },
       ],
       initial: 0,
     },
   ]);
 
-  // 创建配置文件
+  // Create configuration files
   const agentMdPath = getAgentMdPath(projectRoot);
   const shipJsonPath = getShipJsonPath(projectRoot);
 
-  // 保存 Agent.md（默认的用户身份定义）
+  // Save Agent.md (default user identity definition)
   const defaultAgentMd = `# Agent Role
 
 You are a helpful project assistant.
@@ -107,16 +107,16 @@ Help users understand and work with their codebase by exploring, analyzing, and 
 `;
 
   await fs.writeFile(agentMdPath, defaultAgentMd);
-  console.log(`✅ 创建 Agent.md`);
+  console.log(`✅ Created Agent.md`);
 
-  // 保存 ship.json
-  // 构建 LLM 配置
+  // Save ship.json
+  // Build LLM configuration
   const selectedModel = response.model || 'claude-sonnet-4-5';
   const modelTemplate = MODEL_CONFIGS[selectedModel as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.custom;
 
   const llmConfig = {
     provider: modelTemplate.provider,
-    model: selectedModel, // 直接使用选择器值作为模型名称
+    model: selectedModel, // Use selector value directly as model name
     baseUrl: modelTemplate.baseUrl,
     apiKey: '${API_KEY}',
     temperature: 0.7,
@@ -144,9 +144,9 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   };
 
   await saveJson(shipJsonPath, shipConfig);
-  console.log(`✅ 创建 ship.json`);
+  console.log(`✅ Created ship.json`);
 
-  // 创建 .ship 目录结构
+  // Create .ship directory structure
   const dirs = [
     getShipDirPath(projectRoot),
     getTasksDirPath(projectRoot),
@@ -159,50 +159,50 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   for (const dir of dirs) {
     await ensureDir(dir);
   }
-  console.log(`✅ 创建 .ship/ 目录结构`);
+  console.log(`✅ Created .ship/ directory structure`);
 
-  // 创建示例任务文件
+  // Create sample task file
   const sampleTaskPath = path.join(getTasksDirPath(projectRoot), 'sample-task.md');
   const sampleTaskContent = `---
 id: sample-task
-name: 示例任务
+name: Sample Task
 cron: "0 9 * * *"
 notify: telegram
 ---
 
-这是一个示例任务。
+This is a sample task.
 
-请扫描仓库中的 TODO 注释并生成报告。
+Please scan the repository for TODO comments and generate a report.
 `;
   await fs.writeFile(sampleTaskPath, sampleTaskContent);
-  console.log(`✅ 创建示例任务文件`);
+  console.log(`✅ Created sample task file`);
 
-  console.log('\n🎉 初始化完成！\n');
-  console.log(`📦 当前模型: ${llmConfig.provider} / ${llmConfig.model}`);
+  console.log('\n🎉 Initialization complete!\n');
+  console.log(`📦 Current model: ${llmConfig.provider} / ${llmConfig.model}`);
   console.log(`🌐 API URL: ${llmConfig.baseUrl}\n`);
 
   if (response.integration === 'feishu') {
-    console.log('📱 飞书集成已启用');
-    console.log('   请在 ship.json 中配置 FEISHU_APP_ID 和 FEISHU_APP_SECRET');
-    console.log('   或设置环境变量: FEISHU_APP_ID 和 FEISHU_APP_SECRET\n');
+    console.log('📱 Feishu integration enabled');
+    console.log('   Please configure FEISHU_APP_ID and FEISHU_APP_SECRET in ship.json');
+    console.log('   or set environment variables: FEISHU_APP_ID and FEISHU_APP_SECRET\n');
   } else if (response.integration === 'telegram') {
-    console.log('📱 Telegram 集成已启用');
-    console.log('   请在 ship.json 中配置 TELEGRAM_BOT_TOKEN 和 TELEGRAM_CHAT_ID（可选）');
-    console.log('   或设置环境变量: TELEGRAM_BOT_TOKEN 和 TELEGRAM_CHAT_ID\n');
+    console.log('📱 Telegram integration enabled');
+    console.log('   Please configure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID (optional) in ship.json');
+    console.log('   or set environment variables: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID\n');
   }
 
-  console.log('下一步：');
-  console.log('  1. 编辑 Agent.md 自定义 Agent 行为');
-  console.log('  2. 编辑 ship.json 修改 LLM 配置（baseUrl、apiKey、temperature 等）');
+  console.log('Next steps:');
+  console.log('  1. Edit Agent.md to customize agent behavior');
+  console.log('  2. Edit ship.json to modify LLM configuration (baseUrl, apiKey, temperature, etc.)');
   if (response.integration === 'feishu') {
-    console.log('  3. 配置飞书 App ID 和 App Secret');
-    console.log('  4. 运行 "shipmyagent start" 启动 Agent\n');
+    console.log('  3. Configure Feishu App ID and App Secret');
+    console.log('  4. Run "shipmyagent start" to start the agent\n');
   } else if (response.integration === 'telegram') {
-    console.log('  3. 配置 Telegram Bot Token 和 Chat ID（可选）');
-    console.log('  4. 运行 "shipmyagent start" 启动 Agent\n');
+    console.log('  3. Configure Telegram Bot Token and Chat ID (optional)');
+    console.log('  4. Run "shipmyagent start" to start the agent\n');
   } else {
-    console.log('  3. 运行 "shipmyagent start" 启动 Agent\n');
+    console.log('  3. Run "shipmyagent start" to start the agent\n');
   }
-  console.log('💡 提示：API Key 建议使用环境变量（如 ${ANTHROPIC_API_KEY} 或 ${OPENAI_API_KEY}）\n');
-  console.log('如需切换模型或修改配置，直接编辑 ship.json 中的 llm 字段即可。\n');
+  console.log('💡 Tip: API Key is recommended to use environment variables (e.g. ${ANTHROPIC_API_KEY} or ${OPENAI_API_KEY})\n');
+  console.log('To switch models or modify configuration, edit the llm field in ship.json directly.\n');
 }

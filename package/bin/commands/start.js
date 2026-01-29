@@ -12,41 +12,41 @@ import { createFeishuBot } from '../integrations/feishu.js';
 import { getAgentMdPath, getShipJsonPath } from '../utils.js';
 export async function startCommand(cwd = '.', options) {
     const projectRoot = path.resolve(cwd);
-    console.log(`🚀 启动 ShipMyAgent: ${projectRoot}`);
-    // 检查是否已初始化
+    console.log(`🚀 Starting ShipMyAgent: ${projectRoot}`);
+    // Check if initialized
     if (!fs.existsSync(getAgentMdPath(projectRoot))) {
-        console.error('❌ 项目未初始化，请先运行 "shipmyagent init"');
+        console.error('❌ Project not initialized. Please run "shipmyagent init" first');
         process.exit(1);
     }
     if (!fs.existsSync(getShipJsonPath(projectRoot))) {
-        console.error('❌ ship.json 不存在，请先运行 "shipmyagent init"');
+        console.error('❌ ship.json does not exist. Please run "shipmyagent init" first');
         process.exit(1);
     }
-    // 读取配置
+    // Read configuration
     let shipConfig;
     try {
         shipConfig = fs.readJsonSync(getShipJsonPath(projectRoot));
     }
     catch (error) {
-        console.error('❌ 读取 ship.json 失败:', error);
+        console.error('❌ Failed to read ship.json:', error);
         process.exit(1);
     }
-    // 创建日志器
+    // Create logger
     const logger = createLogger(projectRoot, 'info');
-    logger.info('=== ShipMyAgent 启动 ===');
-    logger.info(`项目: ${projectRoot}`);
-    logger.info(`模型: ${shipConfig.llm?.provider} / ${shipConfig.llm?.model}`);
-    // 创建权限引擎
+    logger.info('=== ShipMyAgent Starting ===');
+    logger.info(`Project: ${projectRoot}`);
+    logger.info(`Model: ${shipConfig.llm?.provider} / ${shipConfig.llm?.model}`);
+    // Create permission engine
     const permissionEngine = createPermissionEngine(projectRoot);
-    logger.info('权限引擎已初始化');
-    // 创建工具执行器
+    logger.info('Permission engine initialized');
+    // Create tool executor
     const toolExecutor = createToolExecutor({
         projectRoot,
         permissionEngine,
         logger,
     });
-    logger.info('工具执行器已初始化');
-    // 创建 Agent Runtime
+    logger.info('Tool executor initialized');
+    // Create Agent Runtime
     const agentMd = fs.readFileSync(getAgentMdPath(projectRoot), 'utf-8');
     const agentContext = {
         projectRoot,
@@ -55,16 +55,16 @@ export async function startCommand(cwd = '.', options) {
     };
     const agentRuntime = createAgentRuntime(agentContext);
     await agentRuntime.initialize();
-    logger.info('Agent Runtime 已初始化');
-    // 创建任务执行器
+    logger.info('Agent Runtime initialized');
+    // Create task executor
     const taskExecutor = createTaskExecutor(toolExecutor, logger, agentRuntime, projectRoot);
-    logger.info('任务执行器已初始化');
-    // 创建任务调度器
+    logger.info('Task executor initialized');
+    // Create task scheduler
     const taskScheduler = createTaskScheduler(projectRoot, logger, async (task) => {
         await taskExecutor.executeTask(task, task.description || '');
     });
-    logger.info('任务调度器已初始化');
-    // 创建服务器上下文
+    logger.info('Task scheduler initialized');
+    // Create server context
     const serverContext = {
         projectRoot,
         logger,
@@ -73,26 +73,26 @@ export async function startCommand(cwd = '.', options) {
         taskExecutor,
         toolExecutor,
     };
-    // 创建并启动服务器
+    // Create and start server
     const server = createServer(serverContext);
-    // 创建 Telegram Bot（如果已启用）
+    // Create Telegram Bot (if enabled)
     let telegramBot = null;
     if (shipConfig.integrations?.telegram?.enabled) {
-        logger.info('Telegram 集成已启用');
+        logger.info('Telegram integration enabled');
         telegramBot = createTelegramBot(projectRoot, shipConfig.integrations.telegram, logger);
     }
-    // 创建飞书 Bot（如果已启用）
+    // Create Feishu Bot (if enabled)
     let feishuBot = null;
     if (shipConfig.integrations?.feishu?.enabled) {
-        logger.info('飞书集成已启用');
-        // 从环境变量或配置中读取飞书配置
+        logger.info('Feishu integration enabled');
+        // Read Feishu configuration from environment variables or config
         const feishuConfig = {
             enabled: true,
             appId: shipConfig.integrations.feishu.appId || process.env.FEISHU_APP_ID || '',
             appSecret: shipConfig.integrations.feishu.appSecret || process.env.FEISHU_APP_SECRET || '',
             domain: shipConfig.integrations.feishu.domain || 'https://open.feishu.cn',
         };
-        // 替换环境变量占位符
+        // Replace environment variable placeholders
         if (feishuConfig.appId.startsWith('${') && feishuConfig.appId.endsWith('}')) {
             const envVar = feishuConfig.appId.slice(2, -1);
             feishuConfig.appId = process.env[envVar] || '';
@@ -103,43 +103,43 @@ export async function startCommand(cwd = '.', options) {
         }
         feishuBot = await createFeishuBot(projectRoot, feishuConfig, logger);
     }
-    // 处理进程信号
+    // Handle process signals
     let isShuttingDown = false;
     const shutdown = async (signal) => {
         if (isShuttingDown)
             return;
         isShuttingDown = true;
-        logger.info(`收到 ${signal} 信号，正在关闭...`);
-        // 停止 Telegram Bot
+        logger.info(`Received ${signal} signal, shutting down...`);
+        // Stop Telegram Bot
         if (telegramBot) {
             await telegramBot.stop();
         }
-        // 停止飞书 Bot
+        // Stop Feishu Bot
         if (feishuBot) {
             await feishuBot.stop();
         }
-        // 停止服务器
+        // Stop server
         await server.stop();
-        // 保存日志
+        // Save logs
         await logger.saveAllLogs();
-        logger.info('👋 ShipMyAgent 已关闭');
+        logger.info('👋 ShipMyAgent stopped');
         process.exit(0);
     };
     process.on('SIGINT', () => shutdown('SIGINT'));
     process.on('SIGTERM', () => shutdown('SIGTERM'));
-    // 启动服务器
+    // Start server
     await server.start({
         port: options.port,
         host: options.host,
     });
-    // 启动 Telegram Bot
+    // Start Telegram Bot
     if (telegramBot) {
         await telegramBot.start();
     }
-    // 启动飞书 Bot
+    // Start Feishu Bot
     if (feishuBot) {
         await feishuBot.start();
     }
-    logger.info('=== ShipMyAgent 启动完成 ===');
+    logger.info('=== ShipMyAgent Started ===');
 }
 //# sourceMappingURL=start.js.map
