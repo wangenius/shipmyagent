@@ -8,7 +8,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { z } from 'zod';
-import { getAgentMdPath, getShipJsonPath, getShipDirPath, getApprovalsDirPath, getLogsDirPath, getTimestamp, } from '../utils.js';
+import { getAgentMdPath, getShipJsonPath, getShipDirPath, getApprovalsDirPath, getLogsDirPath, getTimestamp, DEFAULT_SHELL_GUIDE, } from '../utils.js';
 import { createPermissionEngine } from './permission.js';
 // ==================== ToolLoopAgent Implementation ====================
 /**
@@ -536,24 +536,10 @@ export function createAgentRuntimeFromPath(projectRoot) {
     // Read configuration
     const agentMdPath = getAgentMdPath(projectRoot);
     const shipJsonPath = getShipJsonPath(projectRoot);
-    let agentMd = `# Agent Role
+    // Default user identity if no Agent.md exists
+    let userAgentMd = `# Agent Role
 
-You are the maintainer agent of this repository.
-
-## Goals
-- Improve code quality
-- Reduce bugs
-- Assist humans, never override them
-
-## Constraints
-- Never modify files without approval
-- Never run shell commands unless explicitly allowed
-- Always explain your intent before acting
-
-## Communication Style
-- Concise
-- Technical
-- No speculation without evidence`;
+You are a helpful project assistant.`;
     let config = {
         name: 'shipmyagent',
         version: '1.0.0',
@@ -581,14 +567,17 @@ You are the maintainer agent of this repository.
     fs.ensureDirSync(path.join(shipDir, 'approvals'));
     fs.ensureDirSync(path.join(shipDir, 'logs'));
     fs.ensureDirSync(path.join(shipDir, '.cache'));
-    // Read Agent.md
+    // Read user's Agent.md (identity/role definition)
     try {
         if (fs.existsSync(agentMdPath)) {
-            agentMd = fs.readFileSync(agentMdPath, 'utf-8');
+            const content = fs.readFileSync(agentMdPath, 'utf-8').trim();
+            if (content) {
+                userAgentMd = content;
+            }
         }
     }
     catch {
-        // Use default
+        // Use default identity
     }
     // Read ship.json
     try {
@@ -599,6 +588,12 @@ You are the maintainer agent of this repository.
     catch {
         // Use default
     }
+    // Combine user identity + system shell guide
+    const agentMd = `${userAgentMd}
+
+---
+
+${DEFAULT_SHELL_GUIDE}`;
     return new AgentRuntime({
         projectRoot,
         config,

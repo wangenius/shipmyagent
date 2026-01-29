@@ -2,7 +2,6 @@ import path from 'path';
 import prompts from 'prompts';
 import fs from 'fs-extra';
 import {
-  generateId,
   getAgentMdPath,
   getShipJsonPath,
   getShipDirPath,
@@ -13,7 +12,6 @@ import {
   getCacheDirPath,
   ensureDir,
   saveJson,
-  DEFAULT_AGENT_MD,
   DEFAULT_SHIP_JSON,
   MODEL_CONFIGS,
   ShipConfig,
@@ -91,8 +89,24 @@ export async function initCommand(cwd: string = '.', options: InitOptions = {}):
   const agentMdPath = getAgentMdPath(projectRoot);
   const shipJsonPath = getShipJsonPath(projectRoot);
 
-  // 保存 Agent.md
-  await fs.writeFile(agentMdPath, DEFAULT_AGENT_MD);
+  // 保存 Agent.md（默认的用户身份定义）
+  const defaultAgentMd = `# Agent Role
+
+You are a helpful project assistant.
+
+## Your Purpose
+
+Help users understand and work with their codebase by exploring, analyzing, and providing insights.
+
+## Your Approach
+
+- Read and analyze code to answer questions
+- Provide specific, actionable guidance
+- Explain what you find in the project
+- Only modify files when explicitly requested
+`;
+
+  await fs.writeFile(agentMdPath, defaultAgentMd);
   console.log(`✅ 创建 Agent.md`);
 
   // 保存 ship.json
