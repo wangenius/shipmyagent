@@ -51,8 +51,9 @@ export interface AgentInput {
   context?: {
     taskId?: string;
     taskDescription?: string;
-    source?: 'telegram' | 'cli' | 'scheduler' | 'api';
+    source?: 'telegram' | 'feishu' | 'cli' | 'scheduler' | 'api';
     userId?: string;
+    sessionId?: string;
   };
 }
 
@@ -68,6 +69,15 @@ export interface ApprovalRequest {
   approvedAt?: string;
 }
 
+// 对话消息接口
+export interface ConversationMessage {
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+  toolCallId?: string;
+  toolName?: string;
+  timestamp: number;
+}
+
 // ==================== ToolLoopAgent Implementation ====================
 
 /**
@@ -78,14 +88,70 @@ export class AgentRuntime {
   private initialized: boolean = false;
   private logger: AgentLogger;
   private permissionEngine: PermissionEngine;
-  
+
   // ToolLoopAgent instance (v6)
   private agent: any = null;
-  
+
+  // 对话历史管理 - 按会话隔离
+  private conversationHistories: Map<string, ConversationMessage[]> = new Map();
+
+  // 上下文长度限制
+  private readonly MAX_HISTORY_MESSAGES = 20; // 保留最近20条消息
+
   constructor(context: AgentContext) {
     this.context = context;
     this.logger = new AgentLogger(context.projectRoot);
     this.permissionEngine = createPermissionEngine(context.projectRoot);
+  }
+
+  /**
+   * 获取对话历史
+   */
+  getConversationHistory(sessionId?: string): ConversationMessage[] {
+    if (!sessionId) {
+      // 如果没有指定 sessionId，返回所有会话的历史（用于兼容性）
+      const allMessages: ConversationMessage[] = [];
+      for (const messages of this.conversationHistories.values()) {
+        allMessages.push(...messages);
+      }
+      return allMessages;
+    }
+    return this.conversationHistories.get(sessionId) || [];
+  }
+
+  /**
+   * 清除对话历史
+   */
+  clearConversationHistory(sessionId?: string): void {
+    if (!sessionId) {
+      // 清除所有会话的历史
+      this.conversationHistories.clear();
+    } else {
+      // 清除指定会话的历史
+      this.conversationHistories.delete(sessionId);
+    }
+  }
+
+  /**
+   * 添加消息到对话历史（带长度限制）
+   */
+  private addToHistory(message: ConversationMessage, sessionId: string): void {
+    // 获取或创建该会话的历史记录
+    let history = this.conversationHistories.get(sessionId);
+    if (!history) {
+      history = [];
+      this.conversationHistories.set(sessionId, history);
+    }
+
+    history.push(message);
+
+    // 如果超过最大消息数，移除最旧的消息
+    if (history.length > this.MAX_HISTORY_MESSAGES) {
+      const removed = history.length - this.MAX_HISTORY_MESSAGES;
+      const newHistory = history.slice(removed);
+      this.conversationHistories.set(sessionId, newHistory);
+      this.logger.log('debug', `会话 ${sessionId} 对话历史超过限制，移除了 ${removed} 条旧消息`);
+    }
   }
 
   /**
@@ -161,8 +227,11 @@ export class AgentRuntime {
           });
         }
 
-        // Store model instance
-        this.agent = providerInstance(model);
+        // Store model instance with configuration
+        this.agent = providerInstance(model, {
+          maxTokens: this.context.config.llm.maxTokens || 4096,
+          temperature: this.context.config.llm.temperature || 0.7,
+        });
 
         await this.logger.log('info', 'Agent Runtime initialized with legacy AI SDK');
         this.initialized = true;
@@ -284,9 +353,13 @@ Chain commands with && for sequential execution or ; for independent execution.`
     const startTime = Date.now();
     const toolCalls: AgentResult['toolCalls'] = [];
 
+    // 生成 sessionId（如果没有提供）
+    const sessionId = context?.sessionId || context?.userId || 'default';
+
     // Read Agent.md as system prompt
     const systemPrompt = this.context.agentMd;
     await this.logger.log('debug', `Using system prompt (Agent.md): ${systemPrompt?.substring(0, 100)}...`);
+    await this.logger.log('debug', `Session ID: ${sessionId}`);
 
     // Build full prompt with context
     let fullPrompt = instructions;
@@ -296,7 +369,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
 
     // If initialized with model, use generateText with tool loop
     if (this.initialized && this.agent) {
-      return this.runWithGenerateText(fullPrompt, systemPrompt, startTime, context);
+      return this.runWithGenerateText(fullPrompt, systemPrompt, startTime, context, sessionId);
     }
 
     // Otherwise use simulation mode
@@ -310,7 +383,8 @@ Chain commands with && for sequential execution or ; for independent execution.`
     prompt: string,
     systemPrompt: string,
     startTime: number,
-    context?: AgentInput['context']
+    context: AgentInput['context'] | undefined,
+    sessionId: string
   ): Promise<AgentResult> {
     const toolCalls: AgentResult['toolCalls'] = [];
 
@@ -332,16 +406,26 @@ Chain commands with && for sequential execution or ; for independent execution.`
 
       await this.logger.log('debug', `Calling generateText with system prompt length: ${systemPrompt?.length || 0}`);
 
+      // 添加用户消息到历史
+      this.addToHistory({
+        role: 'user',
+        content: prompt,
+        timestamp: Date.now(),
+      }, sessionId);
+
+      // 构建完整的对话上下文
+      let conversationContext = this.buildConversationContext(sessionId);
+
       // Manual tool loop (max 20 iterations)
-      let currentPrompt = prompt;
       const maxIterations = 20;
 
       for (let iteration = 0; iteration < maxIterations; iteration++) {
         // Call generateText
+        // Note: maxTokens 和 temperature 已在创建模型实例时配置
         const result = await generateText({
           model: this.agent,
           system: systemPrompt,
-          prompt: currentPrompt,
+          prompt: conversationContext,
           tools: aiTools,
         });
 
@@ -355,6 +439,15 @@ Chain commands with && for sequential execution or ; for independent execution.`
         // Log raw tool calls structure
         if (result.toolCalls && result.toolCalls.length > 0) {
           await this.logger.log('debug', `Raw toolCalls: ${JSON.stringify(result.toolCalls)}`);
+        }
+
+        // 添加 assistant 响应到历史
+        if (result.text) {
+          this.addToHistory({
+            role: 'assistant',
+            content: result.text,
+            timestamp: Date.now(),
+          }, sessionId);
         }
 
         // If no tool calls, we're done
@@ -377,7 +470,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
         }
 
         // Process tool calls with approval workflow
-        const toolResults: Array<{ toolCallId: string; result: any }> = [];
+        const toolResults: Array<{ toolCallId: string; toolName: string; result: any }> = [];
 
         for (const toolCall of result.toolCalls) {
           const toolCallId = (toolCall as any).toolCallId;
@@ -429,9 +522,11 @@ Chain commands with && for sequential execution or ; for independent execution.`
           // Execute the tool
           const tool = tools[toolName];
           if (!tool || typeof tool.execute !== 'function') {
+            const errorResult = { success: false, error: `Unknown tool: ${toolName}` };
             toolResults.push({
               toolCallId,
-              result: { success: false, error: `Unknown tool: ${toolName}` },
+              toolName,
+              result: errorResult,
             });
             continue;
           }
@@ -445,6 +540,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
             const toolResult = await tool.execute(toolArgs);
             toolResults.push({
               toolCallId,
+              toolName,
               result: toolResult,
             });
 
@@ -462,6 +558,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
             const errorResult = { success: false, error: String(error) };
             toolResults.push({
               toolCallId,
+              toolName,
               result: errorResult,
             });
 
@@ -475,12 +572,19 @@ Chain commands with && for sequential execution or ; for independent execution.`
           }
         }
 
-        // Build next prompt with tool results
-        const toolResultsText = toolResults.map(tr =>
-          `Tool ${tr.toolCallId} result: ${JSON.stringify(tr.result)}`
-        ).join('\n');
+        // 添加工具调用结果到历史
+        for (const tr of toolResults) {
+          this.addToHistory({
+            role: 'tool',
+            content: `Tool: ${tr.toolName}\nResult: ${JSON.stringify(tr.result)}`,
+            toolCallId: tr.toolCallId,
+            toolName: tr.toolName,
+            timestamp: Date.now(),
+          }, sessionId);
+        }
 
-        currentPrompt = `Previous response: ${result.text || ''}\n\nTool results:\n${toolResultsText}\n\nContinue based on these results.`;
+        // 重新构建对话上下文（包含完整历史）
+        conversationContext = this.buildConversationContext(sessionId);
       }
 
       // Max iterations reached
@@ -497,13 +601,63 @@ Chain commands with && for sequential execution or ; for independent execution.`
         toolCalls,
       };
     } catch (error) {
-      await this.logger.log('error', 'Agent execution failed', { error: String(error) });
+      const errorMsg = String(error);
+
+      // 检查是否是上下文长度超限错误
+      if (errorMsg.includes('context_length') ||
+          errorMsg.includes('too long') ||
+          errorMsg.includes('maximum context') ||
+          errorMsg.includes('context window')) {
+        const currentHistory = this.conversationHistories.get(sessionId) || [];
+        await this.logger.log('warn', '上下文长度超限，清空历史记录', {
+          sessionId,
+          currentMessages: currentHistory.length,
+          error: errorMsg
+        });
+
+        // 清空该会话的对话历史
+        this.conversationHistories.delete(sessionId);
+        await this.logger.log('info', `已清空会话 ${sessionId} 的对话历史`);
+
+        return {
+          success: false,
+          output: `上下文长度超限，已自动清空历史记录。请重新发送您的问题。`,
+          toolCalls,
+        };
+      }
+
+      await this.logger.log('error', 'Agent execution failed', { error: errorMsg });
       return {
         success: false,
-        output: `Execution failed: ${String(error)}`,
+        output: `Execution failed: ${errorMsg}`,
         toolCalls,
       };
     }
+  }
+
+  /**
+   * 构建对话上下文（将历史消息转换为提示词）
+   */
+  private buildConversationContext(sessionId: string): string {
+    const history = this.conversationHistories.get(sessionId) || [];
+
+    if (history.length === 0) {
+      return '';
+    }
+
+    // 构建对话历史文本
+    const historyText = history.map((msg) => {
+      if (msg.role === 'user') {
+        return `User: ${msg.content}`;
+      } else if (msg.role === 'assistant') {
+        return `Assistant: ${msg.content}`;
+      } else if (msg.role === 'tool') {
+        return `Tool Result: ${msg.content}`;
+      }
+      return '';
+    }).filter(Boolean).join('\n\n');
+
+    return historyText;
   }
 
 

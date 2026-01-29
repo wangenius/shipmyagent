@@ -31,8 +31,9 @@ export interface AgentInput {
     context?: {
         taskId?: string;
         taskDescription?: string;
-        source?: 'telegram' | 'cli' | 'scheduler' | 'api';
+        source?: 'telegram' | 'feishu' | 'cli' | 'scheduler' | 'api';
         userId?: string;
+        sessionId?: string;
     };
 }
 export interface ApprovalRequest {
@@ -46,6 +47,13 @@ export interface ApprovalRequest {
     approvedBy?: string;
     approvedAt?: string;
 }
+export interface ConversationMessage {
+    role: 'user' | 'assistant' | 'tool';
+    content: string;
+    toolCallId?: string;
+    toolName?: string;
+    timestamp: number;
+}
 /**
  * ToolLoopAgent-based Agent Runtime with Human-in-the-loop support
  */
@@ -55,7 +63,21 @@ export declare class AgentRuntime {
     private logger;
     private permissionEngine;
     private agent;
+    private conversationHistories;
+    private readonly MAX_HISTORY_MESSAGES;
     constructor(context: AgentContext);
+    /**
+     * 获取对话历史
+     */
+    getConversationHistory(sessionId?: string): ConversationMessage[];
+    /**
+     * 清除对话历史
+     */
+    clearConversationHistory(sessionId?: string): void;
+    /**
+     * 添加消息到对话历史（带长度限制）
+     */
+    private addToHistory;
     /**
      * Initialize the Agent with generateText (legacy AI SDK)
      */
@@ -76,6 +98,10 @@ export declare class AgentRuntime {
      * Run with generateText and manual tool loop (legacy AI SDK)
      */
     private runWithGenerateText;
+    /**
+     * 构建对话上下文（将历史消息转换为提示词）
+     */
+    private buildConversationContext;
     /**
      * Simulation mode for when AI is not available
      */

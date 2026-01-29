@@ -17,7 +17,23 @@ export declare class FeishuBot {
     private isRunning;
     private processedMessages;
     private messageCleanupInterval;
-    constructor(appId: string, appSecret: string, domain: string | undefined, logger: Logger, taskExecutor: TaskExecutor);
+    private sessions;
+    private sessionTimeouts;
+    private readonly SESSION_TIMEOUT;
+    private projectRoot;
+    constructor(appId: string, appSecret: string, domain: string | undefined, logger: Logger, taskExecutor: TaskExecutor, projectRoot: string);
+    /**
+     * 获取或创建会话
+     */
+    private getOrCreateSession;
+    /**
+     * 重置会话超时
+     */
+    private resetSessionTimeout;
+    /**
+     * 清除会话
+     */
+    clearSession(chatId: string, chatType: string): void;
     start(): Promise<void>;
     private handleMessage;
     private handleCommand;

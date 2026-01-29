@@ -73,7 +73,7 @@ export class TaskExecutor {
             };
         }
     }
-    async executeInstructions(instructions) {
+    async executeInstructions(instructions, sessionId) {
         const startTime = Date.now();
         const toolCalls = [];
         this.logger.action(`执行指令: ${instructions}`);
@@ -81,6 +81,9 @@ export class TaskExecutor {
             // 使用 Agent Runtime 执行指令
             const agentInput = {
                 instructions,
+                context: {
+                    sessionId,
+                },
             };
             const result = await this.agentRuntime.run(agentInput);
             return {

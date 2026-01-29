@@ -20,7 +20,7 @@ export declare class TaskExecutor {
     private projectRoot;
     constructor(toolExecutor: ToolExecutor, logger: Logger, agentRuntime: AgentRuntime, projectRoot: string);
     executeTask(task: TaskDefinition, instructions: string): Promise<ExecutionResult>;
-    executeInstructions(instructions: string): Promise<ExecutionResult>;
+    executeInstructions(instructions: string, sessionId?: string): Promise<ExecutionResult>;
 }
 export declare function createTaskExecutor(toolExecutor: ToolExecutor, logger: Logger, agentRuntime: AgentRuntime, projectRoot: string): TaskExecutor;
 //# sourceMappingURL=task-executor.d.ts.map

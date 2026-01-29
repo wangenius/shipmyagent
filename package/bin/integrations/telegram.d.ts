@@ -13,9 +13,31 @@ export declare class TelegramBot {
     private lastUpdateId;
     private pollingInterval;
     private isRunning;
-    constructor(botToken: string, chatId: string | undefined, logger: Logger, taskExecutor: TaskExecutor);
+    private sessions;
+    private sessionTimeouts;
+    private readonly SESSION_TIMEOUT;
+    private projectRoot;
+    private readonly MAX_CONCURRENT;
+    private currentConcurrent;
+    constructor(botToken: string, chatId: string | undefined, logger: Logger, taskExecutor: TaskExecutor, projectRoot: string);
+    /**
+     * 获取或创建会话
+     */
+    private getOrCreateSession;
+    /**
+     * 重置会话超时
+     */
+    private resetSessionTimeout;
+    /**
+     * 清除会话
+     */
+    clearSession(userId: number): void;
     start(): Promise<void>;
     private pollUpdates;
+    /**
+     * 带并发限制的消息处理
+     */
+    private processUpdateWithLimit;
     private handleMessage;
     private handleCommand;
     private handleCallbackQuery;

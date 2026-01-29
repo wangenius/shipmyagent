@@ -103,7 +103,7 @@ export class TaskExecutor {
     }
   }
 
-  async executeInstructions(instructions: string): Promise<ExecutionResult> {
+  async executeInstructions(instructions: string, sessionId?: string): Promise<ExecutionResult> {
     const startTime = Date.now();
     const toolCalls: ExecutionResult['toolCalls'] = [];
 
@@ -113,6 +113,9 @@ export class TaskExecutor {
       // 使用 Agent Runtime 执行指令
       const agentInput: AgentInput = {
         instructions,
+        context: {
+          sessionId,
+        },
       };
 
       const result = await this.agentRuntime.run(agentInput);
@@ -129,7 +132,7 @@ export class TaskExecutor {
       };
     } catch (error) {
       this.logger.error(`指令执行失败`, { error: String(error) });
-      
+
       return {
         success: false,
         output: `指令执行失败: ${String(error)}`,

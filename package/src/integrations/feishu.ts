@@ -5,7 +5,7 @@ import { createLogger, Logger } from '../runtime/logger.js';
 import { createPermissionEngine } from '../runtime/permission.js';
 import { createTaskExecutor, TaskExecutor } from '../runtime/task-executor.js';
 import { createToolExecutor } from '../runtime/tools.js';
-import { createAgentRuntimeFromPath } from '../runtime/agent.js';
+import { createAgentRuntimeFromPath, AgentRuntime } from '../runtime/agent.js';
 
 interface FeishuConfig {
   appId: string;
@@ -26,18 +26,88 @@ export class FeishuBot {
   private processedMessages: Set<string> = new Set(); // 用于消息去重
   private messageCleanupInterval: NodeJS.Timeout | null = null;
 
+  // 会话管理：为每个聊天维护独立的 Agent 实例
+  private sessions: Map<string, AgentRuntime> = new Map();
+  private sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private readonly SESSION_TIMEOUT = 30 * 60 * 1000; // 30分钟超时
+  private projectRoot: string;
+
   constructor(
     appId: string,
     appSecret: string,
     domain: string | undefined,
     logger: Logger,
-    taskExecutor: TaskExecutor
+    taskExecutor: TaskExecutor,
+    projectRoot: string
   ) {
     this.appId = appId;
     this.appSecret = appSecret;
     this.domain = domain;
     this.logger = logger;
     this.taskExecutor = taskExecutor;
+    this.projectRoot = projectRoot;
+  }
+
+  /**
+   * 获取或创建会话
+   */
+  private getOrCreateSession(chatId: string, chatType: string): AgentRuntime {
+    const sessionKey = `${chatType}:${chatId}`;
+
+    // 如果会话已存在，重置超时
+    if (this.sessions.has(sessionKey)) {
+      this.resetSessionTimeout(sessionKey);
+      return this.sessions.get(sessionKey)!;
+    }
+
+    // 创建新会话
+    const agentRuntime = createAgentRuntimeFromPath(this.projectRoot);
+    this.sessions.set(sessionKey, agentRuntime);
+    this.resetSessionTimeout(sessionKey);
+
+    this.logger.debug(`创建新会话: ${sessionKey}`);
+    return agentRuntime;
+  }
+
+  /**
+   * 重置会话超时
+   */
+  private resetSessionTimeout(sessionKey: string): void {
+    // 清除旧的超时
+    const oldTimeout = this.sessionTimeouts.get(sessionKey);
+    if (oldTimeout) {
+      clearTimeout(oldTimeout);
+    }
+
+    // 设置新的超时
+    const timeout = setTimeout(() => {
+      this.sessions.delete(sessionKey);
+      this.sessionTimeouts.delete(sessionKey);
+      this.logger.debug(`会话超时清理: ${sessionKey}`);
+    }, this.SESSION_TIMEOUT);
+
+    this.sessionTimeouts.set(sessionKey, timeout);
+  }
+
+  /**
+   * 清除会话
+   */
+  clearSession(chatId: string, chatType: string): void {
+    const sessionKey = `${chatType}:${chatId}`;
+    const session = this.sessions.get(sessionKey);
+
+    if (session) {
+      session.clearConversationHistory();
+      this.sessions.delete(sessionKey);
+
+      const timeout = this.sessionTimeouts.get(sessionKey);
+      if (timeout) {
+        clearTimeout(timeout);
+        this.sessionTimeouts.delete(sessionKey);
+      }
+
+      this.logger.info(`已清除会话: ${sessionKey}`);
+    }
   }
 
   async start(): Promise<void> {
@@ -157,6 +227,7 @@ export class FeishuBot {
 - /help 或 /帮助 - 查看帮助信息
 - /status 或 /状态 - 查看 Agent 状态
 - /tasks 或 /任务 - 查看任务列表
+- /clear 或 /清除 - 清除当前对话历史
 - <任意消息> - 执行指令`;
         break;
 
@@ -168,6 +239,12 @@ export class FeishuBot {
       case '/tasks':
       case '/任务':
         responseText = '📋 任务列表\n暂无任务';
+        break;
+
+      case '/clear':
+      case '/清除':
+        this.clearSession(chatId, chatType);
+        responseText = '✅ 已清除对话历史';
         break;
 
       default:
@@ -187,13 +264,31 @@ export class FeishuBot {
       // 先发送处理中的消息
       await this.sendMessage(chatId, chatType, messageId, '🤔 正在处理您的请求...');
 
-      // 调用 Agent 执行指令
-      const result = await this.taskExecutor.executeInstructions(instructions);
+      // 获取或创建会话
+      const agentRuntime = this.getOrCreateSession(chatId, chatType);
+
+      // 初始化 agent（如果还没初始化）
+      if (!agentRuntime.isInitialized()) {
+        await agentRuntime.initialize();
+      }
+
+      // 生成 sessionId（基于 chatType 和 chatId）
+      const sessionId = `${chatType}:${chatId}`;
+
+      // 使用会话中的 agent 执行指令
+      const result = await agentRuntime.run({
+        instructions,
+        context: {
+          source: 'feishu',
+          userId: chatId,
+          sessionId,
+        },
+      });
 
       // 发送执行结果
       const message = result.success
         ? `✅ 执行成功\n\n${result.output}`
-        : `❌ 执行失败\n\n${result.error || '未知错误'}`;
+        : `❌ 执行失败\n\n${result.output}`;
 
       await this.sendMessage(chatId, chatType, messageId, message);
     } catch (error) {
@@ -293,6 +388,7 @@ export async function createFeishuBot(
     config.appSecret,
     config.domain,
     logger,
-    taskExecutor
+    taskExecutor,
+    projectRoot  // 传递 projectRoot
   );
 }
