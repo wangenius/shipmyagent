@@ -8,10 +8,25 @@ import {
 export default [
   // Homepage
   index("routes/home.tsx"),
-  // Placeholder routes
+
+  // Features page
   route("features", "routes/features.tsx"),
-  route("resources", "routes/resources.tsx"),
-  route("community", "routes/community.tsx"),
+
+  // Resources with child routes
+  route("resources", "routes/resources.tsx", [
+    index("routes/resources._index.tsx"),
+    route("examples", "routes/resources.examples.tsx"),
+    route("use-cases", "routes/resources.use-cases.tsx"),
+    route("skills", "routes/resources.skills.tsx"),
+    route("marketplace", "routes/resources.marketplace.tsx"),
+  ]),
+
+  // Community with child routes
+  route("community", "routes/community.tsx", [
+    index("routes/community._index.tsx"),
+    route("faq", "routes/community.faq.tsx"),
+    route("roadmap", "routes/community.roadmap.tsx"),
+  ]),
 
   // Docs routes with layout
   layout("routes/docs/layout.tsx", [

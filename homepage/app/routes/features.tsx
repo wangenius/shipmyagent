@@ -1,5 +1,8 @@
-import { StepsSection } from "@/components/sections/StepsSection";
+
 import { FeaturesSection } from "@/components/sections/FeaturesSection";
+import { EcosystemSection } from "@/components/sections/EcosystemSection";
+import { CodePreviewSection } from "@/components/sections/CodePreviewSection";
+import { UseCasesSection } from "@/components/sections/UseCasesSection";
 import { StatsSection } from "@/components/sections/StatsSection";
 import { CTASection } from "@/components/sections/CTASection";
 import { Navbar } from "@/components/sections/navbar";
@@ -52,8 +55,10 @@ export default function Features() {
     <div className="min-h-screen">
       <Navbar />
       <main>
-        <StepsSection />
         <FeaturesSection />
+        <CodePreviewSection />
+        <EcosystemSection />
+        <UseCasesSection />
         <StatsSection />
         <CTASection />
       </main>

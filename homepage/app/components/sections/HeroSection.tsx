@@ -21,7 +21,7 @@ export function HeroSection() {
       <div className="container mx-auto px-4 md:px-6">
         <div className="flex flex-col items-center gap-4 text-center">
           <Badge variant="outline" className="mb-4">
-            {t("common:version")} {product.version}
+            {t("hero:topBadge")}
           </Badge>
           <h1 className="text-3xl font-bold tracking-tighter sm:text-5xl md:text-6xl lg:text-7xl">
             {t("hero:title")} <br className="hidden sm:inline" />

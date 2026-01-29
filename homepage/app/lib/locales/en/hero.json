@@ -1,11 +1,12 @@
 {
-  "title": "Ship My Repo",
-  "titleItalic": "as Agent",
+  "topBadge": "✨ Repo-Native Agent Runtime",
+  "title": "The Repo",
+  "titleItalic": "IS The Agent",
   "titleEnd": "",
-  "subtitle": "Turn your repository into a conversational, schedulable, and auditable Agent Runtime.",
+  "subtitle": "Deploy your repository directly as a conversational, executable AI Agent. No extra orchestration required—just ship it.",
   "tag1": "Conversational",
-  "tag2": "Schedulable",
+  "tag2": "Autonomous",
   "tag3": "Auditable",
-  "verticalText": "AGENT RUNTIME",
-  "start": "Start"
+  "verticalText": "REPO IS AGENT",
+  "start": "Start Shipping"
 }

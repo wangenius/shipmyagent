@@ -5,20 +5,28 @@
   "description": "ShipMyAgent provides a safe and controllable Agent Runtime for your team.",
   "features": {
     "repo": {
-      "title": "Repo is the Agent",
-      "description": "Your codebase is the agent's context and memory. It understands your project deeply."
-    },
-    "approval": {
-      "title": "Human-in-the-Loop",
-      "description": "Sensitive actions require human approval. Security and control are built-in defaults."
+      "title": "Repo Native",
+      "description": "Reject complex low-code drag-and-drop platforms. Your directory structure and TypeScript definitions ARE the agent's definition. Developing an Agent is as intuitive as writing standard business code."
     },
     "interactive": {
-      "title": "Chat Interface",
-      "description": "Interact with your agent via Telegram, Discord, or Slack. It works where you work."
+      "title": "Proactive Employee",
+      "description": "True agency unlocked. It doesn't just wait for commands—it **proactively notifies you and executes tasks**. It learns by searching the web, installs skills, and writes scripts to handle complex workflows autonomously."
     },
     "schedule": {
-      "title": "Tasks & Schedule",
-      "description": "Automate repetitive tasks with Cron jobs. Let the agent handle maintenance autonomously."
+      "title": "Human-in-the-Loop",
+      "description": "Empower your Agent without losing control. All sensitive actions (fixes, shell commands) push approval requests to you. Just click Agree or Reject on your phone."
+    },
+    "audit": {
+      "title": "Auditable Memory",
+      "description": "Every thought, every action result, and every human approval is persistently logged in the file system. It's your most trustworthy and transparent digital employee."
+    },
+    "mcp": {
+      "title": "MCP Native",
+      "description": "Native support for the Model Context Protocol. Instantly connect to hundreds of existing MCP Servers (Postgres, Stripe, Linear) to give your Agent real-world data access."
+    },
+    "skills": {
+      "title": "Claude Code Skills",
+      "description": "Fully compatible with the Claude Code Skills ecosystem. Install high-quality community skills or extend your Agent's capabilities with simple Bash/Python scripts."
     }
   }
 }

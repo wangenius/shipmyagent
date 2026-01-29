@@ -1,0 +1,18 @@
+{
+  "title": "Open Ecosystem & Standards",
+  "description": "Built on open protocols. ShipMyAgent plays nice with your favorite tools, models, and standards.",
+  "categories": {
+    "models": {
+      "title": "Universal Models",
+      "items": ["Claude 4.5", "GPT-5.2", "DeepSeek V3.2", "Gemini 3 Pro"]
+    },
+    "protocols": {
+      "title": "Standard Protocols",
+      "items": ["MCP (Context)", "ACP (Client)", "HTTP / REST", "WebSocket"]
+    },
+    "tools": {
+      "title": "Agent Clients",
+      "items": ["Claude Code", "OpenCode", "Gemini CLI", "Codex"]
+    }
+  }
+}

@@ -4,7 +4,9 @@ import {
   IconSitemap,
   IconBrain,
   IconShieldCheck,
-  IconCode,
+  IconHistory,
+  IconApi,
+  IconTools,
 } from "@tabler/icons-react";
 import {
   Card,
@@ -20,11 +22,6 @@ const features = [
     icon: IconSitemap,
   },
   {
-    titleKey: "features:features.approval.title",
-    descriptionKey: "features:features.approval.description",
-    icon: IconShieldCheck,
-  },
-  {
     titleKey: "features:features.interactive.title",
     descriptionKey: "features:features.interactive.description",
     icon: IconBrain,
@@ -32,7 +29,22 @@ const features = [
   {
     titleKey: "features:features.schedule.title",
     descriptionKey: "features:features.schedule.description",
-    icon: IconCode,
+    icon: IconShieldCheck,
+  },
+  {
+    titleKey: "features:features.audit.title",
+    descriptionKey: "features:features.audit.description",
+    icon: IconHistory,
+  },
+  {
+    titleKey: "features:features.mcp.title",
+    descriptionKey: "features:features.mcp.description",
+    icon: IconApi,
+  },
+  {
+    titleKey: "features:features.skills.title",
+    descriptionKey: "features:features.skills.description",
+    icon: IconTools,
   },
 ];
 
@@ -55,7 +67,7 @@ export const FeaturesSection: FC = () => {
             </p>
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-6 mt-12 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-6 mt-12 md:grid-cols-2 lg:grid-cols-3">
           {features.map((feature, i) => (
             <Card key={i} className="bg-background">
               <CardHeader>

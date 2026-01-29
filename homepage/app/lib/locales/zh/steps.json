@@ -1,10 +1,14 @@
 {
   "title": "仅需三步，轻松部署",
   "subtitle": "几分钟内让您的 Agent 跑起来。",
+  "copy": "复制",
   "step1Title": "初始化",
   "step1Desc": "在您的代码仓库中运行初始化命令。",
+  "step1Command": "npx shipmyagent init",
   "step2Title": "启动服务",
   "step2Desc": "启动本地 Agent 服务。",
+  "step2Command": "npx shipmyagent start",
   "step3Title": "开始使用",
-  "step3Desc": "立即与您的 Agent 进行交互。"
+  "step3Desc": "立即与您的 Agent 进行交互。",
+  "step3Command": "打开 http://localhost:3000"
 }

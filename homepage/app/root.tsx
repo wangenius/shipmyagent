@@ -61,18 +61,18 @@ export const links: Route.LinksFunction = () => [
 
 export const meta: Route.MetaFunction = () => {
   return [
-    { title: "ShipMyAgent - Transform Your Repository into an AI Agent" },
+    { title: "ShipMyAgent - The Repo IS The Agent" },
     { charSet: "utf-8" },
     { name: "viewport", content: "width=device-width, initial-scale=1" },
     {
       name: "description",
       content:
-        "ShipMyAgent - Transform any GitHub repository into an AI agent instantly. Turn your repo into a conversational, schedulable, and auditable Agent Runtime.",
+        "ShipMyAgent - Deploy your repository directly as a conversational, executable AI Agent. No extra orchestration required—just ship it.",
     },
     {
       name: "keywords",
       content:
-        "AI agent, GitHub, repository, automation, developer tools, AI assistant, code automation",
+        "AI agent, GitHub, repository, automation, developer tools, AI assistant, code automation, repo as agent",
     },
     { name: "author", content: "ShipMyAgent" },
     { name: "theme-color", content: "#000000" },
@@ -82,12 +82,12 @@ export const meta: Route.MetaFunction = () => {
     { property: "og:site_name", content: "ShipMyAgent" },
     {
       property: "og:title",
-      content: "ShipMyAgent - Transform Your Repository into an AI Agent",
+      content: "ShipMyAgent - The Repo IS The Agent",
     },
     {
       property: "og:description",
       content:
-        "Turn your repository into a conversational, schedulable, and auditable Agent Runtime. Connect your repo, configure your agent, and ship.",
+        "Deploy your repository directly as a conversational, executable AI Agent. No extra orchestration required—just ship it.",
     },
     { property: "og:image", content: "/og-image.png" },
 
@@ -96,12 +96,12 @@ export const meta: Route.MetaFunction = () => {
     { name: "twitter:site", content: "@shipmyagent" },
     {
       name: "twitter:title",
-      content: "ShipMyAgent - Transform Your Repository into an AI Agent",
+      content: "ShipMyAgent - The Repo IS The Agent",
     },
     {
       name: "twitter:description",
       content:
-        "Turn your repository into a conversational, schedulable, and auditable Agent Runtime.",
+        "Deploy your repository directly as a conversational, executable AI Agent. No extra orchestration required—just ship it.",
     },
     { name: "twitter:image", content: "/twitter-image.png" },
 

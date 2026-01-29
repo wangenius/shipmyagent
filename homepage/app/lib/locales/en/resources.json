@@ -1,0 +1,20 @@
+{
+  "title": "Resources",
+  "subtitle": "Everything you need to build with ShipMyAgent",
+  "examples": {
+    "title": "Examples",
+    "description": "Explore example projects and starters"
+  },
+  "useCases": {
+    "title": "Use Cases",
+    "description": "Real-world applications and scenarios"
+  },
+  "skills": {
+    "title": "Skills",
+    "description": "Extend capabilities with new skills"
+  },
+  "marketplace": {
+    "title": "Agent Marketplace",
+    "description": "Discover and share community agents"
+  }
+}

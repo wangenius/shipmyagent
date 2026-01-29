@@ -1,0 +1,43 @@
+{
+  "title": "Universal Capabilities",
+  "description": "One architecture, infinite possibilities. Experience how ShipMyAgent transforms daily workflows across every domain.",
+  "cases": {
+    "coding": {
+      "title": "Full-Stack Engineer",
+      "description": "While you rest, Agent reads the documentation, rewrites the authentication module, and ensures all tests pass. You wake up to a green PR, ready to merge."
+    },
+    "research": {
+      "title": "Academic Researcher",
+      "description": "Your AI research assistant. It digests 200 Arxiv papers in an hour, synthesizing key innovations and identifying potential experimental flaws for your review."
+    },
+    "business": {
+      "title": "Business Intelligence",
+      "description": "Monitors global e-commerce data 24/7. When competitors adjust pricing, it calculates margin impacts and suggests counter-strategies before your morning briefing."
+    },
+    "finance": {
+      "title": "Financial Analyst",
+      "description": "Connects to exchange APIs to watch millisecond-level ticks. It executes arbitrage trades based on your custom RSI/MACD strategy, grinding profits automatically."
+    },
+    "content": {
+      "title": "Creative Studio",
+      "description": "Give Agent a topic, and it scouts trending memes, drafts SEO-optimized scripts with scene descriptions, and auto-generates cover art for your next viral post."
+    },
+    "news": {
+      "title": "Information Curator",
+      "description": "Filters 99% of the noise. It delivers refined updates on specific topics like 'Solana on-chain anomalies' or 'New Growth Hacks', respecting your attention span."
+    },
+    "office": {
+      "title": "Chief of Staff",
+      "description": "Auto-replies to routine queries, resolves cross-timezone scheduling conflicts, and prioritizes your Notion board. It manages the chaos so you can focus on strategy."
+    },
+    "data": {
+      "title": "Data Scientist",
+      "description": "Queries the data warehouse directly. It analyzes attribution models and renders charts to explain why DAU dropped, without you writing a single line of SQL."
+    },
+    "career": {
+      "title": "Career Coach",
+      "description": "Analyzes keywords from hundreds of job descriptions. It tailors a unique resume for each application and automates follow-ups to increase your interview rate."
+    }
+  },
+  "bottom_text": "And unlimited more scenarios defined by you. Your Agent learns, adapts, and grows with your needs."
+}

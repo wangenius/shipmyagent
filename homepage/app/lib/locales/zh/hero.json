@@ -1,11 +1,12 @@
 {
-  "title": "发布代码仓库",
-  "titleItalic": "作为 Agent",
+  "topBadge": "✨ Repo-Native Agent 运行时",
+  "title": "代码仓库",
+  "titleItalic": "即 Agent",
   "titleEnd": "",
-  "subtitle": "将您的代码仓库启动为可对话、可调度、可审计的 Agent Runtime。让 AI 成为您团队中安全可靠的一员。",
+  "subtitle": "无需额外编排，直接将代码仓库部署为可对话、可执行的 AI Agent。让你的代码拥有感知与行动力。",
   "tag1": "可对话",
-  "tag2": "可调度",
+  "tag2": "可自主",
   "tag3": "可审计",
-  "verticalText": "AGENT RUNTIME",
-  "start": "开始"
+  "verticalText": "REPO IS AGENT",
+  "start": "立即发布"
 }

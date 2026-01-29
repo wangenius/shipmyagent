@@ -1,0 +1,20 @@
+{
+  "title": "资源",
+  "subtitle": "构建 ShipMyAgent 所需的一切",
+  "examples": {
+    "title": "示例",
+    "description": "探索示例项目和入门模板"
+  },
+  "useCases": {
+    "title": "用例",
+    "description": "真实世界的应用场景"
+  },
+  "skills": {
+    "title": "技能",
+    "description": "利用新技能扩展能力"
+  },
+  "marketplace": {
+    "title": "Agent 市场",
+    "description": "发现并分享社区 Agent"
+  }
+}

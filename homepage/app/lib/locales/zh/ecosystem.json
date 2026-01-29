@@ -1,0 +1,18 @@
+{
+  "title": "开放生态与标准",
+  "description": "基于开放协议构建。ShipMyAgent 完美兼容你最爱的工具、模型与行业标准。",
+  "categories": {
+    "models": {
+      "title": "模型通用",
+      "items": ["Claude 4.5", "GPT-5.2", "DeepSeek V3.2", "Gemini 3 Pro"]
+    },
+    "protocols": {
+      "title": "标准协议",
+      "items": ["MCP (上下文协议)", "ACP (客户端协议)", "HTTP / REST", "WebSocket"]
+    },
+    "tools": {
+      "title": "Agent 客户端",
+      "items": ["Claude Code", "OpenCode", "Gemini CLI", "Codex"]
+    }
+  }
+}

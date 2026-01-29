@@ -2,16 +2,20 @@
   "title": "三步快速开始",
   "description": "在几分钟内将您的代码仓库转换为 AI Agent",
   "step1": {
-    "title": "初始化",
-    "description": "运行一个命令即可设置 Agent 配置"
+    "title": "初始化配置",
+    "description": "在项目根目录运行初始化命令。系统会自动生成 `Agent.md`（Agent Instruction）与配置文件，为你的代码仓库赋予独特的人格与权限边界。",
+    "command": "shipmyagent init"
   },
   "step2": {
-    "title": "部署",
-    "description": "推送到 GitHub，您的 Agent 即就绪"
+    "title": "唤醒运行时",
+    "description": "在本地启动 Agent Runtime。它将接管代码仓库的读写权限，并连接到你配置的即时通讯软件（如 Telegram），随时作为员工待命。",
+    "command": "shipmyagent ."
   },
   "step3": {
-    "title": "交互",
-    "description": "与 Agent 对话并自动化任务"
+    "title": "自然语言协作",
+    "description": "不再需要复杂的命令行。就像与真人同事聊天一样，通过自然语言或简单的指令（如 `/status`）指挥 Agent 执行任务、重构代码或回答问题。",
+    "command": "/status"
   },
-  "cta": "查看文档"
+  "cta": "查看文档",
+  "agentReply": "收到。正在运行状态检查..."
 }

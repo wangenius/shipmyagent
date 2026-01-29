@@ -2,16 +2,20 @@
   "title": "Get Started in 3 Steps",
   "description": "Transform your repository into an AI agent in minutes",
   "step1": {
-    "title": "Initialize",
-    "description": "Run one command to set up your agent configuration"
+    "title": "Initialize Config",
+    "description": "Run the init command at your project root. This generates `Agent.md` (Agent Instructions) and config files, giving your repository a unique personality and permission boundaries.",
+    "command": "shipmyagent init"
   },
   "step2": {
-    "title": "Deploy",
-    "description": "Push to GitHub and your agent is ready"
+    "title": "Wake Up Runtime",
+    "description": "Start the Agent Runtime locally. It takes over the repo's read/write capabilities and connects to your chat apps (e.g., Telegram), standing by as a team member.",
+    "command": "shipmyagent ."
   },
   "step3": {
-    "title": "Interact",
-    "description": "Chat with your agent and automate tasks"
+    "title": "Collaborate Naturally",
+    "description": "Forget complex CLIs. Chat with your Agent like a human colleague. Use natural language or slash commands (e.g., `/status`) to assign tasks, refactor code, or ask questions.",
+    "command": "/status"
   },
-  "cta": "View Documentation"
+  "cta": "View Documentation",
+  "agentReply": "I'm on it. Checking status..."
 }

@@ -1,0 +1,6 @@
+{
+  "title": "模型无关 & 本地优先",
+  "description": "无论你需要 GPT-4 的推理能力，还是本地模型的隐私安全，ShipMyAgent 都能无缝支持。",
+  "runtime": "支持运行时",
+  "models": "支持模型"
+}

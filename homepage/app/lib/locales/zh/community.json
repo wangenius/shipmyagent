@@ -1,0 +1,20 @@
+{
+  "title": "社区",
+  "subtitle": "加入 ShipMyAgent 开发者社区",
+  "faq": {
+    "title": "常见问题",
+    "description": "常见问题解答"
+  },
+  "roadmap": {
+    "title": "路线图",
+    "description": "查看我们接下来的构建计划"
+  },
+  "discussions": {
+    "title": "讨论",
+    "description": "参与 GitHub 上的讨论"
+  },
+  "discord": {
+    "title": "Discord",
+    "description": "与社区聊天"
+  }
+}

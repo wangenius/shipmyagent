@@ -5,20 +5,28 @@
   "description": "ShipMyAgent 为企业提供安全、可控的 AI Agent 运行时环境。",
   "features": {
     "repo": {
-      "title": "Repo is the Agent",
-      "description": "代码仓库就是 Agent 的大脑。它读取代码、理解上下文，并拥有长期的项目记忆。"
-    },
-    "approval": {
-      "title": "Human-in-the-Loop",
-      "description": "所有敏感操作（如写代码、执行命令）必须经过人类审批。安全是第一原则。"
+      "title": "Repo Native",
+      "description": "拒绝繁琐的低代码拖拽平台。你的代码仓库、目录结构与 TypeScript 类型定义，就是 Agent 的最强定义。开发 Agent 就像写普通业务代码一样简单直观。"
     },
     "interactive": {
-      "title": "Chat Interface",
-      "description": "通过 Telegram、飞书等 IM 软件与 Agent 直接对话。它是您的 24/7 在线同事。"
+      "title": "Proactive Employee",
+      "description": "它具备真正的主动性：它不仅能响应指令，更能**主动发出提醒并执行任务**。遇到未知领域，它会自动联网学习、下载 MCP 技能；面对复杂场景，它会编写脚本并自我规划，让一切自动发生。"
     },
     "schedule": {
-      "title": "Tasks & Schedule",
-      "description": "支持 Cron 定时任务和事件驱动。让 Agent 自动执行每日维护、代码审查等任务。"
+      "title": "Human-in-the-Loop",
+      "description": "赋予 Agent 能力，但不失去控制。所有敏感操作（如代码修改、Shell 执行）都会推送审批请求。你只需要并在手机上点击 Agree 或 Reject，安全尽在掌握。"
+    },
+    "audit": {
+      "title": "Auditable Memory",
+      "description": "Agent 的每一次思考、每一步行动结果、每一次人类的审批记录，都被完整记录在文件系统中。它是你最值得信赖、最透明的数字化员工。"
+    },
+    "mcp": {
+      "title": "MCP Native",
+      "description": "原生支持 Model Context Protocol 标准。一键接入数百种现有的 MCP Servers（如 Postgres, Stripe, Linear），让 Agent 瞬间拥有连接真实世界数据的能力。"
+    },
+    "skills": {
+      "title": "Claude Code Skills",
+      "description": "站在巨人的肩膀上。直接复用 Claude Code 庞大的技能生态。想让 Agent 操作 Kubernetes？管理 AWS？或者只是发送 Slack 通知？一句指令安装，即刻拥有。"
     }
   }
 }

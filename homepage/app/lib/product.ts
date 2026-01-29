@@ -11,6 +11,6 @@ export const product: ShipMyAgentProduct = {
   productName: "ShipMyAgent",
   version: "1.0.0",
   description:
-    "Turn your repository into a conversational, schedulable, and auditable Agent Runtime.",
+    "Deploy your repository directly as a conversational, executable AI Agent. No extra orchestration required—just ship it.",
   homepage: "https://github.com/wangenius/ShipMyAgent",
 };

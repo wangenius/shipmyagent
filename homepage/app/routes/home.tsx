@@ -6,7 +6,7 @@ import { product } from "@/lib/product";
 
 export function meta() {
   const baseUrl = product.homepage || "https://shipmyagent.com";
-  const title = `${product.productName} — Transform Your Repository into an AI Agent`;
+  const title = `${product.productName} — The Repo IS The Agent`;
   const description = product.description;
 
   return [

@@ -1,0 +1,20 @@
+{
+  "title": "Community",
+  "subtitle": "Join the ShipMyAgent developer community",
+  "faq": {
+    "title": "FAQ",
+    "description": "Frequently asked questions"
+  },
+  "roadmap": {
+    "title": "Roadmap",
+    "description": "See what we are building next"
+  },
+  "discussions": {
+    "title": "Discussions",
+    "description": "Join the conversation on GitHub"
+  },
+  "discord": {
+    "title": "Discord",
+    "description": "Chat with the community"
+  }
+}

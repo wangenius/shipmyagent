@@ -14,6 +14,16 @@ import enSteps from "./en/steps.json";
 import zhSteps from "./zh/steps.json";
 import enTutorial from "./en/tutorial.json";
 import zhTutorial from "./zh/tutorial.json";
+import enUseCases from "./en/usecases.json";
+import zhUseCases from "./zh/usecases.json";
+import enModels from "./en/models.json";
+import zhModels from "./zh/models.json";
+import enEcosystem from "./en/ecosystem.json";
+import zhEcosystem from "./zh/ecosystem.json";
+import enResources from "./en/resources.json";
+import zhResources from "./zh/resources.json";
+import enCommunity from "./en/community.json";
+import zhCommunity from "./zh/community.json";
 
 // Resources configuration
 const resources = {
@@ -24,6 +34,11 @@ const resources = {
     stats: enStats,
     steps: enSteps,
     tutorial: enTutorial,
+    usecases: enUseCases,
+    models: enModels,
+    ecosystem: enEcosystem,
+    resources: enResources,
+    community: enCommunity,
   },
   zh: {
     common: zhCommon,
@@ -32,6 +47,11 @@ const resources = {
     stats: zhStats,
     steps: zhSteps,
     tutorial: zhTutorial,
+    usecases: zhUseCases,
+    models: zhModels,
+    ecosystem: zhEcosystem,
+    resources: zhResources,
+    community: zhCommunity,
   },
 } as const;
 
@@ -42,7 +62,19 @@ i18n.use(initReactI18next).init({
   lng: "en", // Default language, will be overridden by URL path
   fallbackLng: "en",
   defaultNS: "common",
-  ns: ["common", "hero", "features", "stats", "steps", "tutorial"],
+  ns: [
+    "common",
+    "hero",
+    "features",
+    "stats",
+    "steps",
+    "tutorial",
+    "usecases",
+    "models",
+    "ecosystem",
+    "resources",
+    "community",
+  ],
   interpolation: {
     escapeValue: false, // React already escapes values
   },
