@@ -131,6 +131,8 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     integrations: {
       telegram: {
         enabled: response.integration === 'telegram',
+        botToken: response.integration === 'telegram' ? '${TELEGRAM_BOT_TOKEN}' : undefined,
+        chatId: response.integration === 'telegram' ? '${TELEGRAM_CHAT_ID}' : undefined,
       },
       feishu: {
         enabled: response.integration === 'feishu',
@@ -185,7 +187,8 @@ notify: telegram
     console.log('   或设置环境变量: FEISHU_APP_ID 和 FEISHU_APP_SECRET\n');
   } else if (response.integration === 'telegram') {
     console.log('📱 Telegram 集成已启用');
-    console.log('   请在 ship.json 中配置 botToken\n');
+    console.log('   请在 ship.json 中配置 TELEGRAM_BOT_TOKEN 和 TELEGRAM_CHAT_ID（可选）');
+    console.log('   或设置环境变量: TELEGRAM_BOT_TOKEN 和 TELEGRAM_CHAT_ID\n');
   }
 
   console.log('下一步：');
@@ -193,6 +196,9 @@ notify: telegram
   console.log('  2. 编辑 ship.json 修改 LLM 配置（baseUrl、apiKey、temperature 等）');
   if (response.integration === 'feishu') {
     console.log('  3. 配置飞书 App ID 和 App Secret');
+    console.log('  4. 运行 "shipmyagent start" 启动 Agent\n');
+  } else if (response.integration === 'telegram') {
+    console.log('  3. 配置 Telegram Bot Token 和 Chat ID（可选）');
     console.log('  4. 运行 "shipmyagent start" 启动 Agent\n');
   } else {
     console.log('  3. 运行 "shipmyagent start" 启动 Agent\n');

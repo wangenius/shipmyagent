@@ -264,6 +264,8 @@ export const DEFAULT_SHIP_JSON = {
     integrations: {
         telegram: {
             enabled: false,
+            botToken: undefined,
+            chatId: undefined,
         },
     },
 };

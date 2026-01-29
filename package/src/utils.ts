@@ -317,6 +317,8 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
   integrations: {
     telegram: {
       enabled: false,
+      botToken: undefined,
+      chatId: undefined,
     },
   },
 };
