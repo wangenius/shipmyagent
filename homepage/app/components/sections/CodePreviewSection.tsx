@@ -64,7 +64,7 @@ export const CodePreviewSection: FC = () => {
                 <div>
                   <h4 className="font-semibold">Agent.md</h4>
                   <p className="text-sm text-muted-foreground">
-                    Define personality & rules in plain English
+                    {t("features:codePreview.agentMdDesc")}
                   </p>
                 </div>
               </li>
@@ -81,7 +81,7 @@ export const CodePreviewSection: FC = () => {
                 <div>
                   <h4 className="font-semibold">ship.json</h4>
                   <p className="text-sm text-muted-foreground">
-                    Configure permissions and project settings
+                    {t("features:codePreview.shipJsonDesc")}
                   </p>
                 </div>
               </li>

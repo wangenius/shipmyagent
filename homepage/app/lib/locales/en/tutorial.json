@@ -17,5 +17,37 @@
     "command": "/status"
   },
   "cta": "View Documentation",
-  "agentReply": "I'm on it. Checking status..."
+  "agentReply": "I'm on it. Checking status...",
+  "mock": {
+    "terminal": {
+      "windowTitle": "bash — 80x24",
+      "step1": {
+        "initializing": "Initializing ShipMyAgent...",
+        "agentMdCreated": "✔ Agent.md created",
+        "shipJsonCreated": "✔ ship.json created",
+        "ready": "Ready to ship."
+      },
+      "step2": {
+        "starting": "Starting runtime...",
+        "watching": "Watching ./src for changes",
+        "online": "● Agent is online",
+        "listening": "Listening on port 3000..."
+      }
+    },
+    "chat": {
+      "status": "Online",
+      "botName": "ShipMyAgent Bot",
+      "you": "You",
+      "cards": {
+        "status": {
+          "label": "Status",
+          "value": "Active"
+        },
+        "memory": {
+          "label": "Memory",
+          "value": "128MB"
+        }
+      }
+    }
+  }
 }

@@ -31,5 +31,37 @@
     "starOnGithub": "在 GitHub 上 Star",
     "language": "语言",
     "toggleMenu": "切换菜单"
+  },
+  "languages": {
+    "en": "English",
+    "zh": "中文"
+  },
+  "social": {
+    "github": "GitHub",
+    "twitter": "Twitter"
+  },
+  "footer": {
+    "product": "产品",
+    "resources": "资源",
+    "features": "功能特性",
+    "documentation": "文档",
+    "releases": "版本发布",
+    "github": "GitHub",
+    "issues": "Issues",
+    "twitter": "Twitter",
+    "copyright": "© {{year}} {{productName}}。基于 MIT License 开源。",
+    "madeWithIntent": "用心打造"
+  },
+  "errors": {
+    "oops": "哎呀！",
+    "error": "错误",
+    "unexpected": "发生了意外错误。",
+    "pageNotFound": "页面未找到",
+    "notFoundDetails": "找不到你请求的页面。",
+    "backToHome": "返回首页"
+  },
+  "ctaSection": {
+    "titlePrefix": "发布你的",
+    "titleItalic": "仓库"
   }
 }

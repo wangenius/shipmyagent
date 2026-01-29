@@ -28,5 +28,9 @@
       "title": "Claude Code Skills",
       "description": "站在巨人的肩膀上。直接复用 Claude Code 庞大的技能生态。想让 Agent 操作 Kubernetes？管理 AWS？或者只是发送 Slack 通知？一句指令安装，即刻拥有。"
     }
+  },
+  "codePreview": {
+    "agentMdDesc": "用自然语言定义人格与规则",
+    "shipJsonDesc": "配置权限与项目设置"
   }
 }

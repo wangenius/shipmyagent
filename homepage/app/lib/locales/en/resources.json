@@ -16,5 +16,262 @@
   "marketplace": {
     "title": "Agent Marketplace",
     "description": "Discover and share community agents"
+  },
+  "examplesPage": {
+    "subtitle": "Explore example projects and starters built with ShipMyAgent",
+    "viewCode": "View Code",
+    "featuresHeading": "Features",
+    "contribute": {
+      "title": "Want to contribute an example?",
+      "description": "Help us grow the community by sharing your ShipMyAgent projects",
+      "button": "Submit on GitHub"
+    },
+    "examplesList": {
+      "cliInteractive": {
+        "title": "CLI Interactive",
+        "description": "Interactive command-line interface example with full API support",
+        "features": {
+          "status": "View Agent status",
+          "execute": "Execute commands",
+          "tasks": "Manage tasks",
+          "approval": "Approval workflow",
+          "files": "File browser",
+          "logs": "View logs"
+        }
+      },
+      "serverAgent": {
+        "title": "Server Agent",
+        "description": "Complete server-side Agent with task scheduling and webhook integration",
+        "features": {
+          "cron": "Automated tasks with cron",
+          "webhooks": "Webhook endpoints",
+          "approvals": "Approval management",
+          "logs": "Log persistence",
+          "multiChannel": "Multi-channel support"
+        }
+      }
+    }
+  },
+  "useCasesPage": {
+    "subtitle": "Real-world applications and scenarios for ShipMyAgent",
+    "exampleLabel": "Example",
+    "callout": {
+      "title": "Have a unique use case?",
+      "description": "Share your story and help others discover new possibilities",
+      "button": "Share Your Story"
+    },
+    "cases": {
+      "collaborator": {
+        "title": "Agent as Project Collaborator",
+        "description": "Let your Agent become a 24/7 AI collaborator for your project",
+        "bullets": {
+          "review": "Review code changes and suggest improvements",
+          "answer": "Answer questions about codebase architecture",
+          "onboard": "Help onboard new team members",
+          "bugs": "Identify potential bugs and refactoring opportunities",
+          "docs": "Generate documentation from code"
+        }
+      },
+      "worker": {
+        "title": "Agent as Background Worker",
+        "description": "Create automated tasks to let your Agent maintain your project periodically",
+        "bullets": {
+          "todo": "Scan for TODO comments and summarize",
+          "deps": "Check for outdated dependencies",
+          "reports": "Generate daily/weekly reports",
+          "quality": "Monitor code quality metrics",
+          "tests": "Automated testing and validation"
+        }
+      },
+      "interface": {
+        "title": "Agent as Interface",
+        "description": "Interact with your project through natural language, without writing UI",
+        "bullets": {
+          "deploy": "Deploy applications via chat commands",
+          "query": "Query database and analytics",
+          "infra": "Manage infrastructure and deployments",
+          "workflows": "Trigger workflows and pipelines",
+          "logs": "Access project metrics and logs"
+        }
+      },
+      "maintainer": {
+        "title": "Agent as Code Maintainer",
+        "description": "Continuous maintenance and improvement with human oversight",
+        "bullets": {
+          "depUpdates": "Automated dependency updates",
+          "security": "Security vulnerability scanning",
+          "quality": "Code quality enforcement",
+          "perf": "Performance optimization suggestions",
+          "coverage": "Test coverage monitoring"
+        }
+      }
+    }
+  },
+  "skillsPage": {
+    "subtitle": "Core capabilities and features of ShipMyAgent",
+    "callout": {
+      "title": "Want to extend capabilities?",
+      "description": "Build custom skills and integrations for your specific needs",
+      "button": "Read the Docs"
+    },
+    "categories": {
+      "core": {
+        "title": "Core Capabilities",
+        "description": "Essential features that power every Agent",
+        "skills": {
+          "repoContext": {
+            "name": "Repo-Native Context",
+            "description": "Your entire codebase serves as the Agent's memory and knowledge base"
+          },
+          "conversational": {
+            "name": "Conversational Interface",
+            "description": "Natural interaction through Telegram, Discord, or Feishu"
+          },
+          "execution": {
+            "name": "Autonomous Execution",
+            "description": "Execute tasks with configurable permissions and oversight"
+          },
+          "audit": {
+            "name": "Full Auditability",
+            "description": "Every action is logged, traceable, and replayable"
+          }
+        }
+      },
+      "security": {
+        "title": "Security & Control",
+        "description": "Enterprise-grade security features",
+        "skills": {
+          "permissionEngine": {
+            "name": "Permission Engine",
+            "description": "Granular control over what the Agent can read, write, and execute"
+          },
+          "humanLoop": {
+            "name": "Human-in-the-Loop",
+            "description": "All sensitive operations require explicit approval"
+          },
+          "approvalWorkflow": {
+            "name": "Approval Workflow",
+            "description": "Review, modify, or reject proposed actions before execution"
+          },
+          "minimumPrivilege": {
+            "name": "Minimum Privilege",
+            "description": "Default-deny policy with explicit permission grants"
+          }
+        }
+      },
+      "automation": {
+        "title": "Automation & Scheduling",
+        "description": "Powerful automation capabilities",
+        "skills": {
+          "cron": {
+            "name": "Cron Tasks",
+            "description": "Schedule recurring tasks with standard cron syntax"
+          },
+          "eventDriven": {
+            "name": "Event-Driven",
+            "description": "Trigger actions based on webhooks and events"
+          },
+          "taskManagement": {
+            "name": "Task Management",
+            "description": "Define, monitor, and manage automated tasks"
+          },
+          "notifications": {
+            "name": "Notification System",
+            "description": "Get alerts through your preferred communication channel"
+          }
+        }
+      },
+      "integration": {
+        "title": "Integrations",
+        "description": "Connect with your favorite tools",
+        "skills": {
+          "telegram": {
+            "name": "Telegram Bot",
+            "description": "Full-featured Telegram integration with command support"
+          },
+          "webhook": {
+            "name": "Webhook API",
+            "description": "RESTful API for programmatic access and integrations"
+          },
+          "git": {
+            "name": "Git Operations",
+            "description": "Create PRs, review code, and manage repositories"
+          },
+          "shell": {
+            "name": "Shell Commands",
+            "description": "Execute shell commands with approval workflow"
+          }
+        }
+      }
+    }
+  },
+  "marketplacePage": {
+    "subtitle": "Discover, share, and install community-built agents to supercharge your development workflow",
+    "badge": "Coming in v3",
+    "features": {
+      "discover": {
+        "title": "Discover Agents",
+        "description": "Browse community-built agents for various use cases"
+      },
+      "share": {
+        "title": "Share Your Agents",
+        "description": "Publish your agents and help the community grow"
+      },
+      "install": {
+        "title": "One-Click Install",
+        "description": "Easily add agents to your project with a single command"
+      },
+      "ratings": {
+        "title": "Ratings & Reviews",
+        "description": "See what others think before you install"
+      }
+    },
+    "previewTitle": "Preview: Upcoming Agents",
+    "soon": "Soon",
+    "categories": {
+      "development": "Development",
+      "documentation": "Documentation",
+      "maintenance": "Maintenance",
+      "testing": "Testing"
+    },
+    "agents": {
+      "codeReviewer": {
+        "name": "Code Reviewer Agent",
+        "description": "Automated code review with best practices checking"
+      },
+      "docsGenerator": {
+        "name": "Documentation Generator",
+        "description": "Generate and maintain project documentation automatically"
+      },
+      "depManager": {
+        "name": "Dependency Manager",
+        "description": "Keep dependencies updated and secure automatically"
+      },
+      "testRunner": {
+        "name": "Test Runner Agent",
+        "description": "Run tests, analyze failures, and suggest fixes"
+      }
+    },
+    "howItWorksTitle": "How It Will Work",
+    "howItWorks": {
+      "browse": {
+        "title": "Browse",
+        "description": "Explore the marketplace to find agents that fit your needs"
+      },
+      "install": {
+        "title": "Install",
+        "description": "Add agents to your project with a single command"
+      },
+      "customize": {
+        "title": "Customize",
+        "description": "Configure agents to match your project's requirements"
+      }
+    },
+    "cta": {
+      "title": "Be the First to Know",
+      "description": "The Agent Marketplace is coming in v3. Join our community to get updates and participate in the beta.",
+      "star": "Star on GitHub",
+      "joinDiscussions": "Join Discussions"
+    }
   }
 }

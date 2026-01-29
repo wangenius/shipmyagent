@@ -55,6 +55,12 @@ export function Navbar() {
     setLang(lang);
   };
 
+  const homePath = i18n.language === "zh" ? "/zh" : "/";
+  const docsPath = i18n.language === "zh" ? "/zh/docs" : "/en/docs";
+  const featuresPath = i18n.language === "zh" ? "/zh/features" : "/features";
+  const resourcesPath = i18n.language === "zh" ? "/zh/resources" : "/resources";
+  const communityPath = i18n.language === "zh" ? "/zh/community" : "/community";
+
   return (
     <header
       className={`sticky top-0 z-50 w-full transition-all duration-300 ${
@@ -66,7 +72,7 @@ export function Navbar() {
       <div className="container mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link
-          to="/"
+          to={homePath}
           className="flex items-center gap-2 mr-6 hover:opacity-80 transition-opacity"
         >
           <img src="/icon.png" alt="Logo" className="size-8" />
@@ -79,7 +85,7 @@ export function Navbar() {
         <nav className="hidden md:flex items-center gap-1">
           {/* Docs - Simple Link */}
           <Link
-            to={i18n.language === "zh" ? "/zh/docs" : "/en/docs"}
+            to={docsPath}
             className={cn(
               buttonVariants({ variant: "ghost" }),
               "text-sm font-medium transition-colors",
@@ -90,7 +96,7 @@ export function Navbar() {
 
           {/* Features - Simple Link */}
           <Link
-            to="/features"
+            to={featuresPath}
             className={cn(
               buttonVariants({ variant: "ghost" }),
               "text-sm font-medium transition-colors",
@@ -113,7 +119,7 @@ export function Navbar() {
             <PopoverContent align="start" className="w-80 p-2">
               <div className="grid gap-1">
                 <Link
-                  to="/resources/examples"
+                  to={`${resourcesPath}/examples`}
                   className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
                 >
                   <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
@@ -129,7 +135,7 @@ export function Navbar() {
                   </div>
                 </Link>
                 <Link
-                  to="/resources/use-cases"
+                  to={`${resourcesPath}/use-cases`}
                   className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
                 >
                   <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
@@ -145,7 +151,7 @@ export function Navbar() {
                   </div>
                 </Link>
                 <Link
-                  to="/resources/skills"
+                  to={`${resourcesPath}/skills`}
                   className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
                 >
                   <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
@@ -161,7 +167,7 @@ export function Navbar() {
                   </div>
                 </Link>
                 <Link
-                  to="/resources/marketplace"
+                  to={`${resourcesPath}/marketplace`}
                   className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
                 >
                   <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
@@ -178,7 +184,7 @@ export function Navbar() {
                 </Link>
                 <div className="my-1 border-t border-border/50" />
                 <Link
-                  to="/resources"
+                  to={resourcesPath}
                   className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
                 >
                   <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
@@ -208,7 +214,7 @@ export function Navbar() {
             <PopoverContent align="start" className="w-80 p-2">
               <div className="grid gap-1">
                 <Link
-                  to="/community/faq"
+                  to={`${communityPath}/faq`}
                   className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
                 >
                   <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
@@ -224,7 +230,7 @@ export function Navbar() {
                   </div>
                 </Link>
                 <Link
-                  to="/community/roadmap"
+                  to={`${communityPath}/roadmap`}
                   className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
                 >
                   <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
@@ -277,7 +283,7 @@ export function Navbar() {
                 </a>
                 <div className="my-1 border-t border-border/50" />
                 <Link
-                  to="/community"
+                  to={communityPath}
                   className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
                 >
                   <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
@@ -304,14 +310,14 @@ export function Navbar() {
                 "text-sm font-medium text-muted-foreground hover:text-primary transition-colors min-w-[60px]",
               )}
             >
-              {i18n.language === "zh" ? "中文" : "English"}
+              {i18n.language === "zh" ? t("languages.zh") : t("languages.en")}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => handleLanguageChange("en")}>
-                English
+                {t("languages.en")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleLanguageChange("zh")}>
-                中文
+                {t("languages.zh")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -324,7 +330,7 @@ export function Navbar() {
             className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
           >
             <IconBrandX className="size-4" />
-            <span className="sr-only">Twitter</span>
+            <span className="sr-only">{t("social.twitter")}</span>
           </Link>
 
           {/* GitHub Button - Minimalist Outline */}
@@ -360,7 +366,7 @@ export function Navbar() {
           <div className="container px-4 py-4 space-y-4">
             {/* Docs Link */}
             <Link
-              to={i18n.language === "zh" ? "/zh/docs" : "/en/docs"}
+              to={docsPath}
               className="block text-sm font-medium hover:underline"
               onClick={() => setMobileMenuOpen(false)}
             >
@@ -369,7 +375,7 @@ export function Navbar() {
 
             {/* Features Link */}
             <Link
-              to="/features"
+              to={featuresPath}
               className="block text-sm font-medium hover:underline"
               onClick={() => setMobileMenuOpen(false)}
             >
@@ -381,35 +387,35 @@ export function Navbar() {
               <p className="text-sm font-medium mb-2">{t("nav.resources")}</p>
               <div className="pl-4 space-y-2">
                 <Link
-                  to="/resources/examples"
+                  to={`${resourcesPath}/examples`}
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {t("nav.examples")}
                 </Link>
                 <Link
-                  to="/resources/use-cases"
+                  to={`${resourcesPath}/use-cases`}
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {t("nav.useCases")}
                 </Link>
                 <Link
-                  to="/resources/skills"
+                  to={`${resourcesPath}/skills`}
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {t("nav.skills")}
                 </Link>
                 <Link
-                  to="/resources/marketplace"
+                  to={`${resourcesPath}/marketplace`}
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {t("nav.agentMarketplace")}
                 </Link>
                 <Link
-                  to="/resources"
+                  to={resourcesPath}
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
@@ -423,14 +429,14 @@ export function Navbar() {
               <p className="text-sm font-medium mb-2">{t("nav.community")}</p>
               <div className="pl-4 space-y-2">
                 <Link
-                  to="/community/faq"
+                  to={`${communityPath}/faq`}
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {t("nav.faq")}
                 </Link>
                 <Link
-                  to="/community/roadmap"
+                  to={`${communityPath}/roadmap`}
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
@@ -453,7 +459,7 @@ export function Navbar() {
                   {t("nav.discord")}
                 </Link>
                 <Link
-                  to="/community"
+                  to={communityPath}
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
@@ -469,7 +475,7 @@ export function Navbar() {
                 className="flex items-center gap-2 text-sm font-medium"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                <IconBrandGithub className="size-4" /> GitHub
+                <IconBrandGithub className="size-4" /> {t("social.github")}
               </Link>
               <Link
                 to="https://twitter.com/shipmyagent"
@@ -477,7 +483,7 @@ export function Navbar() {
                 className="flex items-center gap-2 text-sm font-medium"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                <IconBrandX className="size-4" /> Twitter
+                <IconBrandX className="size-4" /> {t("social.twitter")}
               </Link>
             </div>
 
@@ -490,14 +496,14 @@ export function Navbar() {
                   size="sm"
                   onClick={() => handleLanguageChange("en")}
                 >
-                  English
+                  {t("languages.en")}
                 </Button>
                 <Button
                   variant={i18n.language === "zh" ? "default" : "outline"}
                   size="sm"
                   onClick={() => handleLanguageChange("zh")}
                 >
-                  中文
+                  {t("languages.zh")}
                 </Button>
               </div>
             </div>

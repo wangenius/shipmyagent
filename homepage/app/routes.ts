@@ -8,9 +8,11 @@ import {
 export default [
   // Homepage
   index("routes/home.tsx"),
+  route("zh", "routes/home.tsx", { id: "home-zh" }),
 
   // Features page
   route("features", "routes/features.tsx"),
+  route("zh/features", "routes/features.tsx", { id: "features-zh" }),
 
   // Resources with child routes
   route("resources", "routes/resources.tsx", [
@@ -20,6 +22,26 @@ export default [
     route("skills", "routes/resources.skills.tsx"),
     route("marketplace", "routes/resources.marketplace.tsx"),
   ]),
+  route(
+    "zh/resources",
+    "routes/resources.tsx",
+    { id: "routes/zh/resources" },
+    [
+      index("routes/resources._index.tsx", { id: "routes/zh/resources._index" }),
+      route("examples", "routes/resources.examples.tsx", {
+        id: "routes/zh/resources.examples",
+      }),
+      route("use-cases", "routes/resources.use-cases.tsx", {
+        id: "routes/zh/resources.use-cases",
+      }),
+      route("skills", "routes/resources.skills.tsx", {
+        id: "routes/zh/resources.skills",
+      }),
+      route("marketplace", "routes/resources.marketplace.tsx", {
+        id: "routes/zh/resources.marketplace",
+      }),
+    ],
+  ),
 
   // Community with child routes
   route("community", "routes/community.tsx", [
@@ -27,6 +49,18 @@ export default [
     route("faq", "routes/community.faq.tsx"),
     route("roadmap", "routes/community.roadmap.tsx"),
   ]),
+  route(
+    "zh/community",
+    "routes/community.tsx",
+    { id: "routes/zh/community" },
+    [
+      index("routes/community._index.tsx", { id: "routes/zh/community._index" }),
+      route("faq", "routes/community.faq.tsx", { id: "routes/zh/community.faq" }),
+      route("roadmap", "routes/community.roadmap.tsx", {
+        id: "routes/zh/community.roadmap",
+      }),
+    ],
+  ),
 
   // Docs routes with layout
   layout("routes/docs/layout.tsx", [
@@ -36,9 +70,6 @@ export default [
 
     // Chinese docs
     route("zh/docs/*", "routes/docs/page.tsx", { id: "docs-zh" }),
-    route("zh/features", "routes/features.tsx", { id: "features-zh" }),
-    route("zh/resources", "routes/resources.tsx", { id: "resources-zh" }),
-    route("zh/community", "routes/community.tsx", { id: "community-zh" }),
   ]),
 
   // API routes

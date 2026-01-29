@@ -16,5 +16,262 @@
   "marketplace": {
     "title": "Agent 市场",
     "description": "发现并分享社区 Agent"
+  },
+  "examplesPage": {
+    "subtitle": "探索使用 ShipMyAgent 构建的示例项目与启动模板",
+    "viewCode": "查看代码",
+    "featuresHeading": "功能",
+    "contribute": {
+      "title": "想贡献一个示例？",
+      "description": "分享你的 ShipMyAgent 项目，帮助我们壮大社区",
+      "button": "在 GitHub 提交"
+    },
+    "examplesList": {
+      "cliInteractive": {
+        "title": "CLI 交互示例",
+        "description": "带完整 API 支持的交互式命令行界面示例",
+        "features": {
+          "status": "查看 Agent 状态",
+          "execute": "执行命令",
+          "tasks": "管理任务",
+          "approval": "审批工作流",
+          "files": "文件浏览器",
+          "logs": "查看日志"
+        }
+      },
+      "serverAgent": {
+        "title": "服务端 Agent",
+        "description": "包含任务调度与 Webhook 集成的完整服务端 Agent 示例",
+        "features": {
+          "cron": "基于 cron 的自动化任务",
+          "webhooks": "Webhook 端点",
+          "approvals": "审批管理",
+          "logs": "日志持久化",
+          "multiChannel": "多渠道支持"
+        }
+      }
+    }
+  },
+  "useCasesPage": {
+    "subtitle": "ShipMyAgent 的真实世界应用与场景",
+    "exampleLabel": "示例",
+    "callout": {
+      "title": "有更特别的用例？",
+      "description": "分享你的故事，帮助更多人发现新的可能性",
+      "button": "分享你的故事"
+    },
+    "cases": {
+      "collaborator": {
+        "title": "Agent 作为项目协作者",
+        "description": "让你的 Agent 成为项目的 7×24 小时 AI 协作者",
+        "bullets": {
+          "review": "审阅代码变更并提出改进建议",
+          "answer": "回答关于代码库架构的问题",
+          "onboard": "帮助新成员快速上手",
+          "bugs": "识别潜在缺陷与重构机会",
+          "docs": "从代码生成文档"
+        }
+      },
+      "worker": {
+        "title": "Agent 作为后台 Worker",
+        "description": "创建自动化任务，让 Agent 定期维护你的项目",
+        "bullets": {
+          "todo": "扫描 TODO 注释并汇总",
+          "deps": "检查过期依赖",
+          "reports": "生成日报/周报",
+          "quality": "监控代码质量指标",
+          "tests": "自动化测试与验证"
+        }
+      },
+      "interface": {
+        "title": "Agent 作为交互界面",
+        "description": "无需编写 UI，通过自然语言与项目交互",
+        "bullets": {
+          "deploy": "通过聊天指令部署应用",
+          "query": "查询数据库与分析数据",
+          "infra": "管理基础设施与发布",
+          "workflows": "触发工作流与流水线",
+          "logs": "访问指标与日志"
+        }
+      },
+      "maintainer": {
+        "title": "Agent 作为代码维护者",
+        "description": "在人类监督下持续维护与改进",
+        "bullets": {
+          "depUpdates": "自动化依赖更新",
+          "security": "安全漏洞扫描",
+          "quality": "代码质量约束",
+          "perf": "性能优化建议",
+          "coverage": "测试覆盖率监控"
+        }
+      }
+    }
+  },
+  "skillsPage": {
+    "subtitle": "ShipMyAgent 的核心能力与特性",
+    "callout": {
+      "title": "想扩展更多能力？",
+      "description": "为你的特定需求构建自定义技能与集成",
+      "button": "查看文档"
+    },
+    "categories": {
+      "core": {
+        "title": "核心能力",
+        "description": "支撑每个 Agent 的关键特性",
+        "skills": {
+          "repoContext": {
+            "name": "仓库原生上下文",
+            "description": "整个代码库就是 Agent 的记忆与知识库"
+          },
+          "conversational": {
+            "name": "对话式界面",
+            "description": "通过 Telegram、Discord 或飞书进行自然交互"
+          },
+          "execution": {
+            "name": "自主执行",
+            "description": "在可配置权限与监督下执行任务"
+          },
+          "audit": {
+            "name": "全程可审计",
+            "description": "每个动作都被记录、可追溯且可回放"
+          }
+        }
+      },
+      "security": {
+        "title": "安全与控制",
+        "description": "企业级安全能力",
+        "skills": {
+          "permissionEngine": {
+            "name": "权限引擎",
+            "description": "精细化控制 Agent 的读取、写入与执行权限"
+          },
+          "humanLoop": {
+            "name": "人在回路",
+            "description": "所有敏感操作都需要显式审批"
+          },
+          "approvalWorkflow": {
+            "name": "审批工作流",
+            "description": "在执行前审阅、修改或拒绝候选动作"
+          },
+          "minimumPrivilege": {
+            "name": "最小权限",
+            "description": "默认拒绝，按需显式授予权限"
+          }
+        }
+      },
+      "automation": {
+        "title": "自动化与调度",
+        "description": "强大的自动化能力",
+        "skills": {
+          "cron": {
+            "name": "Cron 任务",
+            "description": "使用标准 cron 语法调度周期性任务"
+          },
+          "eventDriven": {
+            "name": "事件驱动",
+            "description": "基于 Webhook 与事件触发动作"
+          },
+          "taskManagement": {
+            "name": "任务管理",
+            "description": "定义、监控并管理自动化任务"
+          },
+          "notifications": {
+            "name": "通知系统",
+            "description": "通过你偏好的沟通渠道接收提醒"
+          }
+        }
+      },
+      "integration": {
+        "title": "集成",
+        "description": "连接你常用的工具",
+        "skills": {
+          "telegram": {
+            "name": "Telegram 机器人",
+            "description": "支持命令的完整 Telegram 集成"
+          },
+          "webhook": {
+            "name": "Webhook API",
+            "description": "用于程序化访问与集成的 RESTful API"
+          },
+          "git": {
+            "name": "Git 操作",
+            "description": "创建 PR、审阅代码与管理仓库"
+          },
+          "shell": {
+            "name": "Shell 命令",
+            "description": "通过审批工作流安全执行 Shell 命令"
+          }
+        }
+      }
+    }
+  },
+  "marketplacePage": {
+    "subtitle": "发现、分享并安装社区构建的 Agent，显著提升你的开发效率",
+    "badge": "v3 敬请期待",
+    "features": {
+      "discover": {
+        "title": "发现 Agent",
+        "description": "浏览适用于不同场景的社区 Agent"
+      },
+      "share": {
+        "title": "分享你的 Agent",
+        "description": "发布你的 Agent，帮助社区成长"
+      },
+      "install": {
+        "title": "一键安装",
+        "description": "通过一条命令轻松为项目添加 Agent"
+      },
+      "ratings": {
+        "title": "评分与评价",
+        "description": "安装前先看看其他人的反馈"
+      }
+    },
+    "previewTitle": "预览：即将上线的 Agent",
+    "soon": "即将上线",
+    "categories": {
+      "development": "开发",
+      "documentation": "文档",
+      "maintenance": "维护",
+      "testing": "测试"
+    },
+    "agents": {
+      "codeReviewer": {
+        "name": "代码审阅 Agent",
+        "description": "自动化代码审阅与最佳实践检查"
+      },
+      "docsGenerator": {
+        "name": "文档生成器",
+        "description": "自动生成并维护项目文档"
+      },
+      "depManager": {
+        "name": "依赖管理 Agent",
+        "description": "自动更新依赖并保持安全"
+      },
+      "testRunner": {
+        "name": "测试运行 Agent",
+        "description": "运行测试、分析失败并给出修复建议"
+      }
+    },
+    "howItWorksTitle": "它将如何工作",
+    "howItWorks": {
+      "browse": {
+        "title": "浏览",
+        "description": "在市场中找到符合你需求的 Agent"
+      },
+      "install": {
+        "title": "安装",
+        "description": "用一条命令把 Agent 加入你的项目"
+      },
+      "customize": {
+        "title": "自定义",
+        "description": "按项目需求配置 Agent"
+      }
+    },
+    "cta": {
+      "title": "第一时间获取消息",
+      "description": "Agent 市场将在 v3 上线。加入社区以获取更新并参与 beta 测试。",
+      "star": "在 GitHub 上 Star",
+      "joinDiscussions": "加入讨论"
+    }
   }
 }

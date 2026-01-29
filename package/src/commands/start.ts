@@ -142,7 +142,6 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
     );
   }
 
-<<<<<<< HEAD
   // 创建交互式 Web 服务器（如果已启用）
   let interactiveServer = null;
   if (options.interactiveWeb) {
@@ -153,9 +152,6 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
   }
 
   // 处理进程信号
-=======
-  // Handle process signals
->>>>>>> origin/wzg
   let isShuttingDown = false;
   const shutdown = async (signal: string) => {
     if (isShuttingDown) return;
@@ -173,16 +169,12 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
       await feishuBot.stop();
     }
 
-<<<<<<< HEAD
     // 停止交互式 Web 服务器
     if (interactiveServer) {
       await interactiveServer.stop();
     }
 
     // 停止服务器
-=======
-    // Stop server
->>>>>>> origin/wzg
     await server.stop();
 
     // Save logs
@@ -201,7 +193,6 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
     host: options.host,
   });
 
-<<<<<<< HEAD
   // 启动交互式 Web 服务器（如果已启用）
   if (interactiveServer) {
     await interactiveServer.start({
@@ -211,9 +202,6 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
   }
 
   // 启动 Telegram Bot
-=======
-  // Start Telegram Bot
->>>>>>> origin/wzg
   if (telegramBot) {
     await telegramBot.start();
   }

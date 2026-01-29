@@ -14,74 +14,29 @@ export function meta() {
 }
 
 const faqs = [
-  {
-    id: "modify-code",
-    question: "Will the Agent modify my code?",
-    answer: "By default, no. All write operations require your explicit approval through Telegram, Feishu, or other configured channels. You have full control over what gets changed, and can review, modify, or reject any proposed changes before they're applied.",
-    category: "Security",
-  },
-  {
-    id: "llm-models",
-    question: "Which LLM models are supported?",
-    answer: "ShipMyAgent supports all models compatible with ai-sdk v6, including Claude (Anthropic), GPT-4 (OpenAI), and many others. You can easily switch between models or use different models for different tasks.",
-    category: "Technical",
-  },
-  {
-    id: "remote-deployment",
-    question: "Can I deploy to remote servers?",
-    answer: "v1 primarily supports local运行 for security and simplicity. v2 will add support for remote deployment with enhanced security features for team and enterprise use cases.",
-    category: "Deployment",
-  },
-  {
-    id: "security-guarantee",
-    question: "How is security ensured?",
-    answer: "ShipMyAgent adopts a minimum privilege principle by default. All sensitive operations require approval, all actions are auditable, and you maintain full control over permissions. The permission model ensures the Agent can only do what you explicitly allow.",
-    category: "Security",
-  },
-  {
-    id: "comparison-copilot",
-    question: "How is this different from GitHub Copilot?",
-    answer: "GitHub Copilot is for individual developers with code completion features. ShipMyAgent is designed for teams and enterprises, providing an executable AI team member with security controls, auditability, and human-in-the-loop approval workflows.",
-    category: "General",
-  },
-  {
-    id: "memory",
-    question: "Does the Agent remember previous conversations?",
-    answer: "Yes. ShipMyAgent maintains project-level long-term memory. The Agent's context is your entire repository, and it remembers interactions, approvals, and actions across sessions.",
-    category: "Features",
-  },
-  {
-    id: "multi-agent",
-    question: "Can I run multiple Agents?",
-    answer: "Yes. You can run multiple Agents for different projects or purposes. Each Agent has its own configuration, permissions, and communication channels. v3 will introduce multi-agent collaboration features.",
-    category: "Features",
-  },
-  {
-    id: "custom-integrations",
-    question: "Can I add custom integrations?",
-    answer: "Absolutely. ShipMyAgent is designed to be extensible. You can add custom webhooks, integrate with your existing tools, and build custom skills. The webhook API makes it easy to connect with any service.",
-    category: "Integration",
-  },
-  {
-    id: "pricing",
-    question: "What's the pricing model?",
-    answer: "ShipMyAgent is open source (MIT license) and free to use. You only pay for the LLM API costs (Claude, GPT-4, etc.) that you choose to use. Enterprise editions with additional features and support will be available in the future.",
-    category: "General",
-  },
-  {
-    id: "approval-workflow",
-    question: "How does the approval workflow work?",
-    answer: "When the Agent wants to perform a sensitive action, it sends an approval request to your configured channel (Telegram, Discord, etc.). You can review the proposed action, modify it if needed, and then approve or reject it. The Agent only executes approved actions.",
-    category: "Security",
-  },
-];
+  { id: "modify-code", category: "security" },
+  { id: "llm-models", category: "technical" },
+  { id: "remote-deployment", category: "deployment" },
+  { id: "security-guarantee", category: "security" },
+  { id: "comparison-copilot", category: "general" },
+  { id: "memory", category: "features" },
+  { id: "multi-agent", category: "features" },
+  { id: "custom-integrations", category: "integration" },
+  { id: "pricing", category: "general" },
+  { id: "approval-workflow", category: "security" },
+] as const;
 
 const categories = [...new Set(faqs.map((faq) => faq.category))];
 
 export default function FAQ() {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const docsPath = i18n.language === "zh" ? "/zh/docs" : "/en/docs";
+  const discussionsUrl =
+    product.homepage?.includes("github.com") === true
+      ? `${product.homepage}/discussions`
+      : "https://github.com/wangenius/shipmyagent/discussions";
 
   const filteredFAQs = selectedCategory
     ? faqs.filter((faq) => faq.category === selectedCategory)
@@ -95,7 +50,7 @@ export default function FAQ() {
             {t("nav.faq")}
           </h1>
           <p className="text-xl text-muted-foreground">
-            {t("faqDesc")}
+            {t("community:faqPage.subtitle")}
           </p>
         </div>
 
@@ -109,7 +64,7 @@ export default function FAQ() {
                 : "bg-muted hover:bg-muted/80"
             }`}
           >
-            All
+            {t("community:faqPage.all")}
           </button>
           {categories.map((category) => (
             <button
@@ -121,7 +76,7 @@ export default function FAQ() {
                   : "bg-muted hover:bg-muted/80"
               }`}
             >
-              {category}
+              {t(`community:faqPage.categories.${category}`)}
             </button>
           ))}
         </div>
@@ -138,7 +93,7 @@ export default function FAQ() {
                 className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-muted/50 transition-colors"
               >
                 <span className="font-medium flex-1 pr-4">
-                  {faq.question}
+                  {t(`community:faqPage.items.${faq.id}.question`)}
                 </span>
                 <span className="text-muted-foreground text-2xl">
                   {openId === faq.id ? "−" : "+"}
@@ -146,7 +101,9 @@ export default function FAQ() {
               </button>
               {openId === faq.id && (
                 <div className="px-6 pb-4 pt-2 text-muted-foreground border-t">
-                  <p className="text-sm leading-relaxed">{faq.answer}</p>
+                  <p className="text-sm leading-relaxed">
+                    {t(`community:faqPage.items.${faq.id}.answer`)}
+                  </p>
                 </div>
               )}
             </div>
@@ -156,25 +113,25 @@ export default function FAQ() {
         <div className="mt-12 p-6 bg-muted/50 rounded-lg border border-dashed">
           <div className="text-center">
             <h3 className="text-lg font-semibold mb-2">
-              Still have questions?
+              {t("community:faqPage.callout.title")}
             </h3>
             <p className="text-muted-foreground mb-4">
-              Join our community discussions or check the documentation
+              {t("community:faqPage.callout.description")}
             </p>
             <div className="flex gap-3 justify-center flex-wrap">
               <a
-                href="https://github.com/yourusername/shipmyagent/discussions"
+                href={discussionsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors font-medium"
               >
-                Ask on GitHub
+                {t("community:faqPage.callout.askGithub")}
               </a>
               <a
-                href="/docs"
+                href={docsPath}
                 className="inline-flex items-center gap-2 px-6 py-3 bg-muted hover:bg-muted/80 rounded-md transition-colors font-medium"
               >
-                Read Docs
+                {t("community:faqPage.callout.readDocs")}
               </a>
             </div>
           </div>

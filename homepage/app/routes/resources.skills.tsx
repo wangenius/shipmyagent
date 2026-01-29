@@ -15,108 +15,84 @@ export function meta() {
 const skillCategories = [
   {
     id: "core",
-    title: "Core Capabilities",
-    description: "Essential features that power every Agent",
     skills: [
       {
-        name: "Repo-Native Context",
-        description: "Your entire codebase serves as the Agent's memory and knowledge base",
+        id: "repoContext",
         icon: "📁",
       },
       {
-        name: "Conversational Interface",
-        description: "Natural interaction through Telegram, Discord, or Feishu",
+        id: "conversational",
         icon: "💬",
       },
       {
-        name: "Autonomous Execution",
-        description: "Execute tasks with configurable permissions and oversight",
+        id: "execution",
         icon: "⚡",
       },
       {
-        name: "Full Auditability",
-        description: "Every action is logged, traceable, and replayable",
+        id: "audit",
         icon: "📋",
       },
     ],
   },
   {
     id: "security",
-    title: "Security & Control",
-    description: "Enterprise-grade security features",
     skills: [
       {
-        name: "Permission Engine",
-        description: "Granular control over what the Agent can read, write, and execute",
+        id: "permissionEngine",
         icon: "🔐",
       },
       {
-        name: "Human-in-the-Loop",
-        description: "All sensitive operations require explicit approval",
+        id: "humanLoop",
         icon: "✅",
       },
       {
-        name: "Approval Workflow",
-        description: "Review, modify, or reject proposed actions before execution",
+        id: "approvalWorkflow",
         icon: "👀",
       },
       {
-        name: "Minimum Privilege",
-        description: "Default-deny policy with explicit permission grants",
+        id: "minimumPrivilege",
         icon: "🛡️",
       },
     ],
   },
   {
     id: "automation",
-    title: "Automation & Scheduling",
-    description: "Powerful automation capabilities",
     skills: [
       {
-        name: "Cron Tasks",
-        description: "Schedule recurring tasks with standard cron syntax",
+        id: "cron",
         icon: "🕐",
       },
       {
-        name: "Event-Driven",
-        description: "Trigger actions based on webhooks and events",
+        id: "eventDriven",
         icon: "🔔",
       },
       {
-        name: "Task Management",
-        description: "Define, monitor, and manage automated tasks",
+        id: "taskManagement",
         icon: "📊",
       },
       {
-        name: "Notification System",
-        description: "Get alerts through your preferred communication channel",
+        id: "notifications",
         icon: "📢",
       },
     ],
   },
   {
     id: "integration",
-    title: "Integrations",
-    description: "Connect with your favorite tools",
     skills: [
       {
-        name: "Telegram Bot",
-        description: "Full-featured Telegram integration with command support",
+        id: "telegram",
         icon: "✈️",
       },
       {
-        name: "Webhook API",
-        description: "RESTful API for programmatic access and integrations",
+        id: "webhook",
         icon: "🔗",
       },
       {
-        name: "Git Operations",
-        description: "Create PRs, review code, and manage repositories",
+        id: "git",
         icon: "🔀",
       },
       {
-        name: "Shell Commands",
-        description: "Execute shell commands with approval workflow",
+        id: "shell",
         icon: "⌨️",
       },
     ],
@@ -124,7 +100,9 @@ const skillCategories = [
 ];
 
 export default function Skills() {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
+  const docsPath = i18n.language === "zh" ? "/zh/docs" : "/en/docs";
+
   return (
     <div className="container mx-auto px-4 py-12 md:py-20">
       <div className="max-w-6xl mx-auto">
@@ -133,7 +111,7 @@ export default function Skills() {
             {t("nav.skills")}
           </h1>
           <p className="text-xl text-muted-foreground">
-            {t("skillsDesc")}
+            {t("resources:skillsPage.subtitle")}
           </p>
         </div>
 
@@ -142,26 +120,32 @@ export default function Skills() {
             <div key={category.id}>
               <div className="mb-6">
                 <h2 className="text-2xl font-bold mb-2">
-                  {category.title}
+                  {t(`resources:skillsPage.categories.${category.id}.title`)}
                 </h2>
                 <p className="text-muted-foreground">
-                  {category.description}
+                  {t(
+                    `resources:skillsPage.categories.${category.id}.description`,
+                  )}
                 </p>
               </div>
               <div className="grid md:grid-cols-2 gap-4">
                 {category.skills.map((skill) => (
                   <div
-                    key={skill.name}
+                    key={skill.id}
                     className="border rounded-lg p-5 hover:shadow-md transition-shadow"
                   >
                     <div className="flex items-start gap-3">
                       <div className="text-3xl">{skill.icon}</div>
                       <div className="flex-1">
                         <h3 className="font-semibold mb-1">
-                          {skill.name}
+                          {t(
+                            `resources:skillsPage.categories.${category.id}.skills.${skill.id}.name`,
+                          )}
                         </h3>
                         <p className="text-sm text-muted-foreground">
-                          {skill.description}
+                          {t(
+                            `resources:skillsPage.categories.${category.id}.skills.${skill.id}.description`,
+                          )}
                         </p>
                       </div>
                     </div>
@@ -175,16 +159,16 @@ export default function Skills() {
         <div className="mt-12 p-6 bg-muted/50 rounded-lg border border-dashed">
           <div className="text-center">
             <h3 className="text-lg font-semibold mb-2">
-              Want to extend capabilities?
+              {t("resources:skillsPage.callout.title")}
             </h3>
             <p className="text-muted-foreground mb-4">
-              Build custom skills and integrations for your specific needs
+              {t("resources:skillsPage.callout.description")}
             </p>
             <a
-              href="/docs"
+              href={docsPath}
               className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors font-medium"
             >
-              Read the Docs
+              {t("resources:skillsPage.callout.button")}
             </a>
           </div>
         </div>

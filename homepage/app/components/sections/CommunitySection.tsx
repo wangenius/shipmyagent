@@ -18,13 +18,13 @@ const communityLinks = [
     titleKey: "community:faq.title",
     descriptionKey: "community:faq.description",
     icon: IconHelp,
-    href: "/community/faq",
+    path: "/faq",
   },
   {
     titleKey: "community:roadmap.title",
     descriptionKey: "community:roadmap.description",
     icon: IconMap2,
-    href: "/community/roadmap",
+    path: "/roadmap",
   },
   {
     titleKey: "community:discussions.title",
@@ -43,7 +43,8 @@ const communityLinks = [
 ];
 
 export const CommunitySection: FC = () => {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
+  const basePath = i18n.language === "zh" ? "/zh/community" : "/community";
 
   return (
     <section className="py-12 md:py-24 lg:py-32 bg-background">
@@ -62,7 +63,7 @@ export const CommunitySection: FC = () => {
           {communityLinks.map((item, i) => (
             <a
               key={i}
-              href={item.href}
+              href={item.external ? item.href : `${basePath}${item.path}`}
               target={item.external ? "_blank" : undefined}
               rel={item.external ? "noopener noreferrer" : undefined}
               className="block group"

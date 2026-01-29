@@ -28,5 +28,9 @@
       "title": "Claude Code Skills",
       "description": "Fully compatible with the Claude Code Skills ecosystem. Install high-quality community skills or extend your Agent's capabilities with simple Bash/Python scripts."
     }
+  },
+  "codePreview": {
+    "agentMdDesc": "Define personality & rules in plain English",
+    "shipJsonDesc": "Configure permissions and project settings"
   }
 }

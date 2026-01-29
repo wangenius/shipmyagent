@@ -16,5 +16,175 @@
   "discord": {
     "title": "Discord",
     "description": "Chat with the community"
+  },
+  "faqPage": {
+    "subtitle": "Frequently asked questions about ShipMyAgent",
+    "all": "All",
+    "categories": {
+      "security": "Security",
+      "technical": "Technical",
+      "deployment": "Deployment",
+      "general": "General",
+      "features": "Features",
+      "integration": "Integration"
+    },
+    "items": {
+      "modify-code": {
+        "question": "Will the Agent modify my code?",
+        "answer": "By default, no. All write operations require your explicit approval through Telegram, Feishu, or other configured channels. You have full control over what gets changed, and can review, modify, or reject any proposed changes before they're applied.",
+        "category": "security"
+      },
+      "llm-models": {
+        "question": "Which LLM models are supported?",
+        "answer": "ShipMyAgent supports all models compatible with ai-sdk v6, including Claude (Anthropic), GPT-4 (OpenAI), and many others. You can easily switch between models or use different models for different tasks.",
+        "category": "technical"
+      },
+      "remote-deployment": {
+        "question": "Can I deploy to remote servers?",
+        "answer": "v1 primarily supports local runs for security and simplicity. v2 will add support for remote deployment with enhanced security features for team and enterprise use cases.",
+        "category": "deployment"
+      },
+      "security-guarantee": {
+        "question": "How is security ensured?",
+        "answer": "ShipMyAgent adopts a minimum privilege principle by default. All sensitive operations require approval, all actions are auditable, and you maintain full control over permissions. The permission model ensures the Agent can only do what you explicitly allow.",
+        "category": "security"
+      },
+      "comparison-copilot": {
+        "question": "How is this different from GitHub Copilot?",
+        "answer": "GitHub Copilot is for individual developers with code completion features. ShipMyAgent is designed for teams and enterprises, providing an executable AI team member with security controls, auditability, and human-in-the-loop approval workflows.",
+        "category": "general"
+      },
+      "memory": {
+        "question": "Does the Agent remember previous conversations?",
+        "answer": "Yes. ShipMyAgent maintains project-level long-term memory. The Agent's context is your entire repository, and it remembers interactions, approvals, and actions across sessions.",
+        "category": "features"
+      },
+      "multi-agent": {
+        "question": "Can I run multiple Agents?",
+        "answer": "Yes. You can run multiple Agents for different projects or purposes. Each Agent has its own configuration, permissions, and communication channels. v3 will introduce multi-agent collaboration features.",
+        "category": "features"
+      },
+      "custom-integrations": {
+        "question": "Can I add custom integrations?",
+        "answer": "Absolutely. ShipMyAgent is designed to be extensible. You can add custom webhooks, integrate with your existing tools, and build custom skills. The webhook API makes it easy to connect with any service.",
+        "category": "integration"
+      },
+      "pricing": {
+        "question": "What's the pricing model?",
+        "answer": "ShipMyAgent is open source (MIT license) and free to use. You only pay for the LLM API costs (Claude, GPT-4, etc.) that you choose to use. Enterprise editions with additional features and support will be available in the future.",
+        "category": "general"
+      },
+      "approval-workflow": {
+        "question": "How does the approval workflow work?",
+        "answer": "When the Agent wants to perform a sensitive action, it sends an approval request to your configured channel (Telegram, Discord, etc.). You can review the proposed action, modify it if needed, and then approve or reject it. The Agent only executes approved actions.",
+        "category": "security"
+      }
+    },
+    "callout": {
+      "title": "Still have questions?",
+      "description": "Join our community discussions or check the documentation",
+      "askGithub": "Ask on GitHub",
+      "readDocs": "Read Docs"
+    }
+  },
+  "roadmapPage": {
+    "phases": {
+      "current": "🚀 Current",
+      "planned": "📋 Planned",
+      "exploring": "✨ Exploring"
+    },
+    "versions": {
+      "v1": {
+        "title": "Current Release",
+        "description": "Foundation for repo-native agent runtime. Ship your repository as an AI Agent today.",
+        "features": {
+          "coreRuntime": {
+            "name": "Core Runtime",
+            "desc": "Agent execution engine"
+          },
+          "constitution": {
+            "name": "Agent Constitution",
+            "desc": "Behavior rules & guidelines"
+          },
+          "permission": {
+            "name": "Permission Engine",
+            "desc": "Granular access control"
+          },
+          "telegram": {
+            "name": "Telegram Integration",
+            "desc": "Chat interface"
+          },
+          "tasks": {
+            "name": "Declarative Tasks",
+            "desc": "Cron & event-driven"
+          },
+          "docs": {
+            "name": "Documentation",
+            "desc": "Complete guides"
+          }
+        }
+      },
+      "v2": {
+        "title": "Team Collaboration",
+        "description": "Enhanced integrations for team workflows and multi-agent scenarios.",
+        "features": {
+          "discord": {
+            "name": "Discord Integration",
+            "desc": "Team collaboration"
+          },
+          "slack": {
+            "name": "Slack Integration",
+            "desc": "Enterprise chat"
+          },
+          "snapshot": {
+            "name": "Agent Snapshot/Replay",
+            "desc": "State management"
+          },
+          "githubApp": {
+            "name": "GitHub App",
+            "desc": "Native integration"
+          },
+          "multiAgent": {
+            "name": "Multi-Agent",
+            "desc": "Agent collaboration"
+          },
+          "remoteDeploy": {
+            "name": "Remote Deployment",
+            "desc": "Cloud hosting"
+          }
+        }
+      },
+      "v3": {
+        "title": "Ecosystem Expansion",
+        "description": "Advanced features and the Agent Marketplace for sharing and discovery.",
+        "features": {
+          "marketplace": {
+            "name": "Agent Marketplace",
+            "desc": "Share & discover"
+          },
+          "remoteHosting": {
+            "name": "Remote Hosting",
+            "desc": "Managed service"
+          },
+          "webIde": {
+            "name": "Web IDE Integration",
+            "desc": "Browser-based dev"
+          },
+          "sso": {
+            "name": "Enterprise SSO",
+            "desc": "Single sign-on"
+          },
+          "analytics": {
+            "name": "Analytics",
+            "desc": "Usage insights"
+          }
+        }
+      }
+    },
+    "cta": {
+      "title": "Want to shape the future?",
+      "description": "Share your ideas and help us build the next generation of ShipMyAgent",
+      "button": "Request a Feature"
+    }
   }
 }

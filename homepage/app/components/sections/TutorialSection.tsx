@@ -2,7 +2,8 @@ import { useTranslation } from "react-i18next";
 import { Code, Play, MessageSquare } from "lucide-react";
 
 export function TutorialSection() {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
+  const docsPath = i18n.language === "zh" ? "/zh/docs" : "/en/docs";
 
   const steps = [
     {
@@ -73,7 +74,9 @@ export function TutorialSection() {
                           <div className="w-3 h-3 rounded-full bg-[#FF5F56] border border-[#E0443E]" />
                           <div className="w-3 h-3 rounded-full bg-[#FFBD2E] border border-[#DEA123]" />
                           <div className="w-3 h-3 rounded-full bg-[#27C93F] border border-[#1AAB29]" />
-                          <div className="ml-2 text-[10px] text-white/30 font-sans">bash — 80x24</div>
+                          <div className="ml-2 text-[10px] text-white/30 font-sans">
+                            {t("tutorial:mock.terminal.windowTitle")}
+                          </div>
                         </div>
                         <div className="p-4 pt-2 text-[#abb2bf] leading-relaxed">
                           <div className="flex gap-2">
@@ -86,18 +89,28 @@ export function TutorialSection() {
                           </div>
                           {index === 0 && (
                              <div className="mt-2 text-gray-500 animate-in fade-in duration-1000">
-                               <p>Initializing ShipMyAgent...</p>
-                               <p className="text-green-500/80">✔ Agent.md created</p>
-                               <p className="text-green-500/80">✔ ship.json created</p>
-                               <p className="text-blue-400/80">Ready to ship.</p>
+                               <p>{t("tutorial:mock.terminal.step1.initializing")}</p>
+                               <p className="text-green-500/80">
+                                 {t("tutorial:mock.terminal.step1.agentMdCreated")}
+                               </p>
+                               <p className="text-green-500/80">
+                                 {t("tutorial:mock.terminal.step1.shipJsonCreated")}
+                               </p>
+                               <p className="text-blue-400/80">
+                                 {t("tutorial:mock.terminal.step1.ready")}
+                               </p>
                              </div>
                           )}
                           {index === 1 && (
                              <div className="mt-2 text-gray-500 animate-in fade-in duration-1000">
-                               <p>Starting runtime...</p>
-                               <p>Watching ./src for changes</p>
-                               <p className="text-green-500/80">● Agent is online</p>
-                               <p className="text-xs mt-1 text-gray-600">Listening on port 3000...</p>
+                               <p>{t("tutorial:mock.terminal.step2.starting")}</p>
+                               <p>{t("tutorial:mock.terminal.step2.watching")}</p>
+                               <p className="text-green-500/80">
+                                 {t("tutorial:mock.terminal.step2.online")}
+                               </p>
+                               <p className="text-xs mt-1 text-gray-600">
+                                 {t("tutorial:mock.terminal.step2.listening")}
+                               </p>
                              </div>
                           )}
                         </div>
@@ -109,9 +122,13 @@ export function TutorialSection() {
                          <div className="flex items-center justify-between px-2 pb-2 border-b border-black/5 dark:border-white/5 mb-2">
                             <div className="flex items-center gap-2">
                                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"/>
-                               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Online</span>
+                               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                 {t("tutorial:mock.chat.status")}
+                               </span>
                             </div>
-                            <span className="text-[10px] text-muted-foreground">ShipMyAgent Bot</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {t("tutorial:mock.chat.botName")}
+                            </span>
                          </div>
 
                         {/* User Message */}
@@ -120,7 +137,7 @@ export function TutorialSection() {
                             <p className="font-medium">{step.command}</p>
                           </div>
                            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-xs font-bold text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
-                            You
+                            {t("tutorial:mock.chat.you")}
                           </div>
                         </div>
 
@@ -133,21 +150,26 @@ export function TutorialSection() {
                           </div>
                           <div className="bg-white dark:bg-zinc-800 px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm border border-border/50 max-w-[85%] transition-all group-hover:shadow-md">
                             <p className="text-foreground leading-relaxed">
-                              {t("tutorial:agentReply", {
-                                defaultValue: "I'm on it. Checking status...",
-                              })}
+                              {t("tutorial:agentReply")}
                             </p>
                              {/* Mini chart/status mockup */}
                              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                                 <div className="bg-muted/50 p-2 rounded border border-border/50">
-                                   <div className="text-muted-foreground mb-1">Status</div>
+                                   <div className="text-muted-foreground mb-1">
+                                     {t("tutorial:mock.chat.cards.status.label")}
+                                   </div>
                                    <div className="text-green-600 font-bold flex items-center gap-1">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-green-500"/> Active
+                                      <span className="w-1.5 h-1.5 rounded-full bg-green-500" />{" "}
+                                      {t("tutorial:mock.chat.cards.status.value")}
                                    </div>
                                 </div>
                                  <div className="bg-muted/50 p-2 rounded border border-border/50">
-                                   <div className="text-muted-foreground mb-1">Memory</div>
-                                   <div className="font-mono">128MB</div>
+                                   <div className="text-muted-foreground mb-1">
+                                     {t("tutorial:mock.chat.cards.memory.label")}
+                                   </div>
+                                   <div className="font-mono">
+                                     {t("tutorial:mock.chat.cards.memory.value")}
+                                   </div>
                                 </div>
                              </div>
                           </div>
@@ -163,7 +185,7 @@ export function TutorialSection() {
 
         <div className="max-w-4xl mx-auto mt-20 text-center">
           <a
-            href="/docs"
+            href={docsPath}
             className="inline-flex items-center justify-center rounded-full bg-primary px-8 py-4 text-base font-semibold text-primary-foreground shadow-lg transition-all hover:bg-primary/90 hover:scale-105"
           >
             {t("tutorial:cta")}

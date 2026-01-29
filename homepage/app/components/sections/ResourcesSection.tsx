@@ -18,30 +18,31 @@ const resources = [
     titleKey: "resources:examples.title",
     descriptionKey: "resources:examples.description",
     icon: IconCode,
-    href: "/resources/examples",
+    path: "/examples",
   },
   {
     titleKey: "resources:useCases.title",
     descriptionKey: "resources:useCases.description",
     icon: IconBriefcase,
-    href: "/resources/use-cases",
+    path: "/use-cases",
   },
   {
     titleKey: "resources:skills.title",
     descriptionKey: "resources:skills.description",
     icon: IconTools,
-    href: "/resources/skills",
+    path: "/skills",
   },
   {
     titleKey: "resources:marketplace.title",
     descriptionKey: "resources:marketplace.description",
     icon: IconBuildingStore,
-    href: "/resources/marketplace",
+    path: "/marketplace",
   },
 ];
 
 export const ResourcesSection: FC = () => {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
+  const basePath = i18n.language === "zh" ? "/zh/resources" : "/resources";
 
   return (
     <section className="py-12 md:py-24 lg:py-32 bg-background">
@@ -58,7 +59,7 @@ export const ResourcesSection: FC = () => {
         </div>
         <div className="grid grid-cols-1 gap-6 mt-12 md:grid-cols-2 lg:grid-cols-2 max-w-4xl mx-auto">
           {resources.map((item, i) => (
-            <a key={i} href={item.href} className="block group">
+            <a key={i} href={`${basePath}${item.path}`} className="block group">
               <Card className="h-full transition-colors hover:bg-muted/50">
                 <CardHeader>
                   <item.icon className="h-10 w-10 mb-2 text-primary group-hover:scale-110 transition-transform duration-200" />

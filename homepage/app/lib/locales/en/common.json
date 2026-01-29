@@ -31,5 +31,37 @@
     "starOnGithub": "Star on GitHub",
     "language": "Language",
     "toggleMenu": "Toggle Menu"
+  },
+  "languages": {
+    "en": "English",
+    "zh": "中文"
+  },
+  "social": {
+    "github": "GitHub",
+    "twitter": "Twitter"
+  },
+  "footer": {
+    "product": "Product",
+    "resources": "Resources",
+    "features": "Features",
+    "documentation": "Documentation",
+    "releases": "Releases",
+    "github": "GitHub",
+    "issues": "Issues",
+    "twitter": "Twitter",
+    "copyright": "© {{year}} {{productName}}. Open source under MIT License.",
+    "madeWithIntent": "Made with intent"
+  },
+  "errors": {
+    "oops": "Oops!",
+    "error": "Error",
+    "unexpected": "An unexpected error occurred.",
+    "pageNotFound": "Page not found",
+    "notFoundDetails": "The requested page could not be found.",
+    "backToHome": "Back to Home"
+  },
+  "ctaSection": {
+    "titlePrefix": "Ship Your",
+    "titleItalic": "Repo"
   }
 }

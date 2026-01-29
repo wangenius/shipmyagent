@@ -17,5 +17,37 @@
     "command": "/status"
   },
   "cta": "查看文档",
-  "agentReply": "收到。正在运行状态检查..."
+  "agentReply": "收到。正在运行状态检查...",
+  "mock": {
+    "terminal": {
+      "windowTitle": "bash — 80x24",
+      "step1": {
+        "initializing": "正在初始化 ShipMyAgent...",
+        "agentMdCreated": "✔ 已生成 Agent.md",
+        "shipJsonCreated": "✔ 已生成 ship.json",
+        "ready": "准备起航。"
+      },
+      "step2": {
+        "starting": "正在启动运行时...",
+        "watching": "正在监听 ./src 的变更",
+        "online": "● Agent 已上线",
+        "listening": "正在监听端口 3000..."
+      }
+    },
+    "chat": {
+      "status": "在线",
+      "botName": "ShipMyAgent 机器人",
+      "you": "你",
+      "cards": {
+        "status": {
+          "label": "状态",
+          "value": "运行中"
+        },
+        "memory": {
+          "label": "内存",
+          "value": "128MB"
+        }
+      }
+    }
+  }
 }

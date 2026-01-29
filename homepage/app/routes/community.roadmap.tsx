@@ -26,46 +26,39 @@ const roadmap = [
   {
     version: "v1",
     status: "current",
-    title: "Current Release",
-    description:
-      "Foundation for repo-native agent runtime. Ship your repository as an AI Agent today.",
     icon: IconRocket,
     features: [
-      { name: "Core Runtime", status: "completed", desc: "Agent execution engine" },
-      { name: "Agent Constitution", status: "completed", desc: "Behavior rules & guidelines" },
-      { name: "Permission Engine", status: "completed", desc: "Granular access control" },
-      { name: "Telegram Integration", status: "completed", desc: "Chat interface" },
-      { name: "Declarative Tasks", status: "completed", desc: "Cron & event-driven" },
-      { name: "Documentation", status: "in-progress", desc: "Complete guides" },
+      { id: "coreRuntime", status: "completed" },
+      { id: "constitution", status: "completed" },
+      { id: "permission", status: "completed" },
+      { id: "telegram", status: "completed" },
+      { id: "tasks", status: "completed" },
+      { id: "docs", status: "in-progress" },
     ],
   },
   {
     version: "v2",
     status: "planned",
-    title: "Team Collaboration",
-    description: "Enhanced integrations for team workflows and multi-agent scenarios.",
     icon: IconBuildingFactory,
     features: [
-      { name: "Discord Integration", status: "pending", desc: "Team collaboration" },
-      { name: "Slack Integration", status: "pending", desc: "Enterprise chat" },
-      { name: "Agent Snapshot/Replay", status: "pending", desc: "State management" },
-      { name: "GitHub App", status: "pending", desc: "Native integration" },
-      { name: "Multi-Agent", status: "pending", desc: "Agent collaboration" },
-      { name: "Remote Deployment", status: "pending", desc: "Cloud hosting" },
+      { id: "discord", status: "pending" },
+      { id: "slack", status: "pending" },
+      { id: "snapshot", status: "pending" },
+      { id: "githubApp", status: "pending" },
+      { id: "multiAgent", status: "pending" },
+      { id: "remoteDeploy", status: "pending" },
     ],
   },
   {
     version: "v3",
     status: "exploring",
-    title: "Ecosystem Expansion",
-    description: "Advanced features and the Agent Marketplace for sharing and discovery.",
     icon: IconSparkles,
     features: [
-      { name: "Agent Marketplace", status: "pending", desc: "Share & discover" },
-      { name: "Remote Hosting", status: "pending", desc: "Managed service" },
-      { name: "Web IDE Integration", status: "pending", desc: "Browser-based dev" },
-      { name: "Enterprise SSO", status: "pending", desc: "Single sign-on" },
-      { name: "Analytics", status: "pending", desc: "Usage insights" },
+      { id: "marketplace", status: "pending" },
+      { id: "remoteHosting", status: "pending" },
+      { id: "webIde", status: "pending" },
+      { id: "sso", status: "pending" },
+      { id: "analytics", status: "pending" },
     ],
   },
 ];
@@ -87,21 +80,23 @@ const statusConfig = {
 
 const phaseConfig = {
   current: {
-    label: "🚀 Current",
     className: "bg-primary/10 text-primary",
   },
   planned: {
-    label: "📋 Planned",
     className: "bg-muted text-foreground",
   },
   exploring: {
-    label: "✨ Exploring",
     className: "bg-muted text-foreground",
   },
 } as const;
 
 export default function Roadmap() {
   const { t } = useTranslation();
+  const repoUrl =
+    product.homepage?.includes("github.com") === true
+      ? product.homepage
+      : "https://github.com/wangenius/shipmyagent";
+  const issuesUrl = `${repoUrl}/issues`;
 
   return (
     <section className="py-16 md:py-24 bg-background overflow-hidden relative">
@@ -111,7 +106,9 @@ export default function Roadmap() {
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4">
             {t("nav.roadmap")}
           </h1>
-          <p className="text-muted-foreground text-lg">{t("roadmapDesc")}</p>
+          <p className="text-muted-foreground text-lg">
+            {t("community:roadmap.description")}
+          </p>
         </div>
 
         {/* Roadmap Timeline (match homepage “Get Started in 3 Steps”) */}
@@ -148,13 +145,17 @@ export default function Roadmap() {
                             phase?.className ?? "bg-muted text-foreground",
                           )}
                         >
-                          {phase?.label ?? version.status}
+                          {t(`community:roadmapPage.phases.${version.status}`)}
                         </span>
                       </div>
 
-                      <h3 className="text-xl font-bold mb-2">{version.title}</h3>
+                      <h3 className="text-xl font-bold mb-2">
+                        {t(`community:roadmapPage.versions.${version.version}.title`)}
+                      </h3>
                       <p className="text-muted-foreground leading-relaxed">
-                        {version.description}
+                        {t(
+                          `community:roadmapPage.versions.${version.version}.description`,
+                        )}
                       </p>
                     </div>
 
@@ -169,7 +170,7 @@ export default function Roadmap() {
 
                             return (
                               <motion.div
-                                key={feature.name}
+                                key={feature.id}
                                 initial={{ opacity: 0, x: -8 }}
                                 whileInView={{ opacity: 1, x: 0 }}
                                 transition={{
@@ -187,10 +188,14 @@ export default function Roadmap() {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="font-medium text-sm">
-                                    {feature.name}
+                                    {t(
+                                      `community:roadmapPage.versions.${version.version}.features.${feature.id}.name`,
+                                    )}
                                   </p>
                                   <p className="text-xs text-muted-foreground">
-                                    {feature.desc}
+                                    {t(
+                                      `community:roadmapPage.versions.${version.version}.features.${feature.id}.desc`,
+                                    )}
                                   </p>
                                 </div>
                               </motion.div>
@@ -210,18 +215,19 @@ export default function Roadmap() {
         <div className="max-w-4xl mx-auto mt-20 text-center">
           <div className="flex flex-col items-center gap-4">
             <IconSparkles className="w-8 h-8 text-primary" />
-            <h3 className="text-lg font-semibold">Want to shape the future?</h3>
+            <h3 className="text-lg font-semibold">
+              {t("community:roadmapPage.cta.title")}
+            </h3>
             <p className="text-muted-foreground max-w-2xl">
-              Share your ideas and help us build the next generation of
-              ShipMyAgent
+              {t("community:roadmapPage.cta.description")}
             </p>
             <a
-              href="https://github.com/yourusername/shipmyagent/issues"
+              href={issuesUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center rounded-full bg-primary px-8 py-4 text-base font-semibold text-primary-foreground shadow-lg transition-all hover:bg-primary/90 hover:scale-105"
             >
-              Request a Feature
+              {t("community:roadmapPage.cta.button")}
             </a>
           </div>
         </div>

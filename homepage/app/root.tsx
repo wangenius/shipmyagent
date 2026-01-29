@@ -164,15 +164,20 @@ export default function App() {
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  let message = "Oops!";
-  let details = "An unexpected error occurred.";
+  let message = i18next.t("errors.oops");
+  let details = i18next.t("errors.unexpected");
   let stack: string | undefined;
+  const homePath = i18next.language === "zh" ? "/zh" : "/";
+  const heading =
+    isRouteErrorResponse(error) && error.status === 404
+      ? i18next.t("errors.pageNotFound")
+      : i18next.t("errors.error");
 
   if (isRouteErrorResponse(error)) {
-    message = error.status === 404 ? "404" : "Error";
+    message = error.status === 404 ? "404" : i18next.t("errors.error");
     details =
       error.status === 404
-        ? "The requested page could not be found."
+        ? i18next.t("errors.notFoundDetails")
         : error.statusText || details;
   } else if (import.meta.env.DEV && error && error instanceof Error) {
     details = error.message;
@@ -189,16 +194,16 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
           </h1>
           <div className="space-y-2">
             <h2 className="text-2xl font-semibold tracking-tight">
-              Page not found
+              {heading}
             </h2>
             <p className="text-muted-foreground text-lg">{details}</p>
           </div>
           <div className="pt-4">
             <Link
-              to="/"
+              to={homePath}
               className="inline-flex items-center gap-2 px-8 py-3 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 transition-all hover:scale-105 font-medium shadow-lg shadow-primary/20"
             >
-              Back to Home
+              {i18next.t("errors.backToHome")}
             </Link>
           </div>
         </div>

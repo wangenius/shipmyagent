@@ -6,7 +6,10 @@ import { product } from "@/lib/product";
 
 export const Footer: FC = () => {
   const currentYear = new Date().getFullYear();
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
+  const docsPath = i18n.language === "zh" ? "/zh/docs" : "/en/docs";
+  const homePath = i18n.language === "zh" ? "/zh" : "/";
+  const featuresPath = i18n.language === "zh" ? "/zh/features" : "/features";
 
   return (
     <footer className="py-12 md:py-16 bg-muted text-muted-foreground border-t">
@@ -14,7 +17,7 @@ export const Footer: FC = () => {
         <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
           {/* Brand */}
           <div className="md:col-span-1">
-            <Link to="/" className="inline-block mb-4">
+            <Link to={homePath} className="inline-block mb-4">
               <span className="text-lg font-bold text-foreground">
                 {product.productName}
               </span>
@@ -27,30 +30,30 @@ export const Footer: FC = () => {
               className="inline-flex items-center gap-2 text-sm hover:text-foreground transition-colors"
             >
               <IconBrandGithub size={16} />
-              <span>GitHub</span>
+              <span>{t("footer.github")}</span>
             </Link>
           </div>
 
           {/* Links */}
           <div className="md:col-start-3">
             <h4 className="text-sm font-medium mb-4 text-foreground">
-              Product
+              {t("footer.product")}
             </h4>
             <ul className="space-y-3 text-sm">
               <li>
                 <Link
-                  to="/"
+                  to={featuresPath}
                   className="hover:text-foreground transition-colors"
                 >
-                  Features
+                  {t("footer.features")}
                 </Link>
               </li>
               <li>
                 <Link
-                  to="/docs"
+                  to={docsPath}
                   className="hover:text-foreground transition-colors"
                 >
-                  Documentation
+                  {t("footer.documentation")}
                 </Link>
               </li>
               <li>
@@ -59,7 +62,7 @@ export const Footer: FC = () => {
                   target="_blank"
                   className="hover:text-foreground transition-colors"
                 >
-                  Releases
+                  {t("footer.releases")}
                 </Link>
               </li>
             </ul>
@@ -67,7 +70,7 @@ export const Footer: FC = () => {
 
           <div>
             <h4 className="text-sm font-medium mb-4 text-foreground">
-              Resources
+              {t("footer.resources")}
             </h4>
             <ul className="space-y-3 text-sm">
               <li>
@@ -76,7 +79,7 @@ export const Footer: FC = () => {
                   target="_blank"
                   className="hover:text-foreground transition-colors"
                 >
-                  GitHub
+                  {t("footer.github")}
                 </Link>
               </li>
               <li>
@@ -85,7 +88,7 @@ export const Footer: FC = () => {
                   target="_blank"
                   className="hover:text-foreground transition-colors"
                 >
-                  Issues
+                  {t("footer.issues")}
                 </Link>
               </li>
               <li>
@@ -94,7 +97,7 @@ export const Footer: FC = () => {
                   target="_blank"
                   className="hover:text-foreground transition-colors"
                 >
-                  Twitter
+                  {t("footer.twitter")}
                 </Link>
               </li>
             </ul>
@@ -104,10 +107,12 @@ export const Footer: FC = () => {
         {/* Bottom bar */}
         <div className="mt-8 pt-8 border-t flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-sm">
           <p>
-            © {currentYear} {product.productName}. Open source under MIT
-            License.
+            {t("footer.copyright", {
+              year: currentYear,
+              productName: product.productName,
+            })}
           </p>
-          <p>Made with intent</p>
+          <p>{t("footer.madeWithIntent")}</p>
         </div>
       </div>
     </footer>
