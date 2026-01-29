@@ -85,7 +85,7 @@ export function Navbar() {
               "text-sm font-medium transition-colors",
             )}
           >
-            Docs
+            {t("nav.docs")}
           </Link>
 
           {/* Features - Simple Link */}
@@ -96,7 +96,7 @@ export function Navbar() {
               "text-sm font-medium transition-colors",
             )}
           >
-            Features
+            {t("nav.features")}
           </Link>
 
           {/* Resources Menu */}
@@ -107,7 +107,7 @@ export function Navbar() {
                 "group gap-1",
               )}
             >
-              Resources
+              {t("nav.resources")}
               <IconChevronDown className="size-3 transition-transform duration-200 group-data-[state=open]:rotate-180" />
             </PopoverTrigger>
             <PopoverContent align="start" className="w-80 p-2">
@@ -121,10 +121,10 @@ export function Navbar() {
                   </div>
                   <div>
                     <div className="text-sm font-medium leading-none mb-1">
-                      Examples
+                      {t("nav.examples")}
                     </div>
                     <div className="text-xs text-muted-foreground line-clamp-1">
-                      Explore example projects and starters
+                      {t("nav.examplesDesc")}
                     </div>
                   </div>
                 </Link>
@@ -137,10 +137,10 @@ export function Navbar() {
                   </div>
                   <div>
                     <div className="text-sm font-medium leading-none mb-1">
-                      Use Cases
+                      {t("nav.useCases")}
                     </div>
                     <div className="text-xs text-muted-foreground line-clamp-1">
-                      Real-world applications and scenarios
+                      {t("nav.useCasesDesc")}
                     </div>
                   </div>
                 </Link>
@@ -153,10 +153,10 @@ export function Navbar() {
                   </div>
                   <div>
                     <div className="text-sm font-medium leading-none mb-1">
-                      Skills
+                      {t("nav.skills")}
                     </div>
                     <div className="text-xs text-muted-foreground line-clamp-1">
-                      Extend capabilities with new skills
+                      {t("nav.skillsDesc")}
                     </div>
                   </div>
                 </Link>
@@ -169,10 +169,10 @@ export function Navbar() {
                   </div>
                   <div>
                     <div className="text-sm font-medium leading-none mb-1">
-                      Agent Marketplace
+                      {t("nav.agentMarketplace")}
                     </div>
                     <div className="text-xs text-muted-foreground line-clamp-1">
-                      Discover and share community agents
+                      {t("nav.agentMarketplaceDesc")}
                     </div>
                   </div>
                 </Link>
@@ -186,7 +186,7 @@ export function Navbar() {
                   </div>
                   <div>
                     <div className="text-sm font-medium leading-none text-muted-foreground group-hover:text-foreground transition-colors">
-                      View All Resources
+                      {t("nav.viewAllResources")}
                     </div>
                   </div>
                 </Link>
@@ -202,7 +202,7 @@ export function Navbar() {
                 "group gap-1",
               )}
             >
-              Community
+              {t("nav.community")}
               <IconChevronDown className="size-3 transition-transform duration-200 group-data-[state=open]:rotate-180" />
             </PopoverTrigger>
             <PopoverContent align="start" className="w-80 p-2">
@@ -216,10 +216,10 @@ export function Navbar() {
                   </div>
                   <div>
                     <div className="text-sm font-medium leading-none mb-1">
-                      FAQ
+                      {t("nav.faq")}
                     </div>
                     <div className="text-xs text-muted-foreground line-clamp-1">
-                      Frequently asked questions
+                      {t("nav.faqDesc")}
                     </div>
                   </div>
                 </Link>
@@ -232,10 +232,10 @@ export function Navbar() {
                   </div>
                   <div>
                     <div className="text-sm font-medium leading-none mb-1">
-                      Roadmap
+                      {t("nav.roadmap")}
                     </div>
                     <div className="text-xs text-muted-foreground line-clamp-1">
-                      See what we are building next
+                      {t("nav.roadmapDesc")}
                     </div>
                   </div>
                 </Link>
@@ -250,10 +250,10 @@ export function Navbar() {
                   </div>
                   <div>
                     <div className="text-sm font-medium leading-none mb-1">
-                      Discussions
+                      {t("nav.discussions")}
                     </div>
                     <div className="text-xs text-muted-foreground line-clamp-1">
-                      Join the conversation on GitHub
+                      {t("nav.discussionsDesc")}
                     </div>
                   </div>
                 </a>
@@ -268,10 +268,10 @@ export function Navbar() {
                   </div>
                   <div>
                     <div className="text-sm font-medium leading-none mb-1">
-                      Discord
+                      {t("nav.discord")}
                     </div>
                     <div className="text-xs text-muted-foreground line-clamp-1">
-                      Chat with the community
+                      {t("nav.discordDesc")}
                     </div>
                   </div>
                 </a>
@@ -285,7 +285,7 @@ export function Navbar() {
                   </div>
                   <div>
                     <div className="text-sm font-medium leading-none text-muted-foreground group-hover:text-foreground transition-colors">
-                      Join Community
+                      {t("nav.joinCommunity")}
                     </div>
                   </div>
                 </Link>
@@ -335,7 +335,7 @@ export function Navbar() {
             className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
           >
             <IconBrandGithub className="size-4" />
-            <span>Star on GitHub</span>
+            <span>{t("nav.starOnGithub")}</span>
           </Link>
         </div>
 
@@ -350,7 +350,7 @@ export function Navbar() {
           ) : (
             <IconMenu2 className="size-4" />
           )}
-          <span className="sr-only">Toggle Menu</span>
+          <span className="sr-only">{t("nav.toggleMenu")}</span>
         </Button>
       </div>
 
@@ -364,7 +364,7 @@ export function Navbar() {
               className="block text-sm font-medium hover:underline"
               onClick={() => setMobileMenuOpen(false)}
             >
-              Docs
+              {t("nav.docs")}
             </Link>
 
             {/* Features Link */}
@@ -373,68 +373,68 @@ export function Navbar() {
               className="block text-sm font-medium hover:underline"
               onClick={() => setMobileMenuOpen(false)}
             >
-              Features
+              {t("nav.features")}
             </Link>
 
             {/* Resources Section */}
             <div>
-              <p className="text-sm font-medium mb-2">Resources</p>
+              <p className="text-sm font-medium mb-2">{t("nav.resources")}</p>
               <div className="pl-4 space-y-2">
                 <Link
                   to="/resources/examples"
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Examples
+                  {t("nav.examples")}
                 </Link>
                 <Link
                   to="/resources/use-cases"
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Use Cases
+                  {t("nav.useCases")}
                 </Link>
                 <Link
                   to="/resources/skills"
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Skills
+                  {t("nav.skills")}
                 </Link>
                 <Link
                   to="/resources/marketplace"
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Agent Marketplace
+                  {t("nav.agentMarketplace")}
                 </Link>
                 <Link
                   to="/resources"
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  View All
+                  {t("nav.viewAll")}
                 </Link>
               </div>
             </div>
 
             {/* Community Section */}
             <div>
-              <p className="text-sm font-medium mb-2">Community</p>
+              <p className="text-sm font-medium mb-2">{t("nav.community")}</p>
               <div className="pl-4 space-y-2">
                 <Link
                   to="/community/faq"
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  FAQ
+                  {t("nav.faq")}
                 </Link>
                 <Link
                   to="/community/roadmap"
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Roadmap
+                  {t("nav.roadmap")}
                 </Link>
                 <Link
                   to="https://github.com/wangenius/shipmyagent/discussions"
@@ -442,7 +442,7 @@ export function Navbar() {
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Discussions
+                  {t("nav.discussions")}
                 </Link>
                 <Link
                   to="https://discord.gg/shipmyagent"
@@ -450,14 +450,14 @@ export function Navbar() {
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Discord
+                  {t("nav.discord")}
                 </Link>
                 <Link
                   to="/community"
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Join Community
+                  {t("nav.joinCommunity")}
                 </Link>
               </div>
             </div>
@@ -483,7 +483,7 @@ export function Navbar() {
 
             {/* Language Switcher in Mobile */}
             <div className="pt-4 border-t">
-              <p className="text-xs text-muted-foreground mb-2">Language</p>
+              <p className="text-xs text-muted-foreground mb-2">{t("nav.language")}</p>
               <div className="flex gap-2">
                 <Button
                   variant={i18n.language === "en" ? "default" : "outline"}

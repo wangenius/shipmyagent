@@ -57,32 +57,8 @@ export default i18n;
 // Language setter
 export const setLang = (language: "en" | "zh") => {
   i18n.changeLanguage(language);
-  // Save to localStorage for persistence
+  // Save to localStorage for persistence (no URL redirect needed)
   if (typeof window !== "undefined") {
     localStorage.setItem("shipmyagent-lang", language);
-    // Update URL to match language
-    const currentPath = window.location.pathname;
-    const hasLangInPath = /^\/(en|zh)\//.test(currentPath);
-
-    if (!hasLangInPath) {
-      // Redirect to language-specific URL
-      if (currentPath.startsWith("/docs")) {
-        const newPath = currentPath.replace("/docs", `/${language}/docs`);
-        window.location.pathname = newPath;
-      }
-    } else {
-      // Switch between languages
-      let newPath = currentPath;
-      if (language === "zh" && currentPath.startsWith("/en")) {
-        newPath = currentPath.replace(/^\/en/, "/zh");
-      } else if (language === "en" && currentPath.startsWith("/zh")) {
-        newPath = currentPath.replace(/^\/zh/, "/en");
-      }
-
-      // Only navigate if path actually changed
-      if (newPath !== currentPath) {
-        window.location.pathname = newPath;
-      }
-    }
   }
 };

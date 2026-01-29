@@ -25,9 +25,16 @@ export default function Layout({ loaderData }: Route.ComponentProps) {
   const { lang } = loaderData;
 
   useEffect(() => {
-    // Sync i18n language with URL immediately on mount (client-side only)
-    if (typeof window !== "undefined" && i18next.language !== lang) {
-      i18next.changeLanguage(lang);
+    if (typeof window !== "undefined") {
+      // On first load, check localStorage for saved language preference
+      const savedLang = localStorage.getItem("shipmyagent-lang") as "en" | "zh" | null;
+      if (savedLang && i18next.language !== savedLang) {
+        i18next.changeLanguage(savedLang);
+      } else if (i18next.language !== lang) {
+        // Sync with URL path and save to localStorage
+        i18next.changeLanguage(lang);
+        localStorage.setItem("shipmyagent-lang", lang);
+      }
     }
 
     // Redirect from old /docs/ to new /en/docs/
@@ -35,7 +42,7 @@ export default function Layout({ loaderData }: Route.ComponentProps) {
       navigate("/en/docs", { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang]);
+  }, []);
 
   return (
     <DocsLayout
