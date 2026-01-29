@@ -44,9 +44,9 @@ export class TaskScheduler {
 
   async loadTasks(): Promise<void> {
     const tasksDir = getTasksDirPath(this.projectRoot);
-    
+
     if (!fs.existsSync(tasksDir)) {
-      this.logger.info('任务目录不存在，跳过加载任务');
+      this.logger.info('Tasks directory does not exist, skipping task loading');
       return;
     }
 
@@ -57,28 +57,28 @@ export class TaskScheduler {
       try {
         const content = await fs.readFile(path.join(tasksDir, file), 'utf-8');
         const task = this.parseTaskFile(file.replace('.md', ''), content);
-        
+
         if (task) {
           this.tasks.set(task.id, task);
-          this.logger.info(`加载任务: ${task.name} (${task.id})`);
+          this.logger.info(`Loaded task: ${task.name} (${task.id})`);
         }
       } catch (error) {
-        this.logger.warn(`加载任务文件失败: ${file}`, { error: String(error) });
+        this.logger.warn(`Failed to load task file: ${file}`, { error: String(error) });
       }
     }
 
-    this.logger.info(`共加载 ${this.tasks.size} 个任务`);
+    this.logger.info(`Loaded ${this.tasks.size} tasks in total`);
   }
 
   private parseTaskFile(id: string, content: string): TaskDefinition | null {
-    // 解析 YAML 前置元数据
+    // Parse YAML front matter
     const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
-    
+
     if (!frontmatterMatch) {
       return {
         id,
         name: id,
-        cron: '0 9 * * *', // 默认每天 9 点
+        cron: '0 9 * * *', // Default: 9 AM daily
         enabled: true,
       };
     }
@@ -110,7 +110,7 @@ export class TaskScheduler {
   start(): void {
     for (const [id, task] of this.tasks) {
       if (!task.enabled) {
-        this.logger.info(`任务 ${task.name} 已禁用，跳过`);
+        this.logger.info(`Task ${task.name} is disabled, skipping`);
         continue;
       }
 
@@ -120,13 +120,13 @@ export class TaskScheduler {
         });
 
         this.cronJobs.set(id, cronJob);
-        this.logger.info(`任务 ${task.name} 已调度 (${task.cron})`);
+        this.logger.info(`Task ${task.name} scheduled (${task.cron})`);
       } catch (error) {
-        this.logger.warn(`调度任务失败: ${task.name}`, { error: String(error) });
+        this.logger.warn(`Failed to schedule task: ${task.name}`, { error: String(error) });
       }
     }
 
-    this.logger.info(`调度器启动，共 ${this.cronJobs.size} 个活跃任务`);
+    this.logger.info(`Scheduler started, ${this.cronJobs.size} active tasks`);
   }
 
   private async executeTask(task: TaskDefinition): Promise<void> {
@@ -136,27 +136,27 @@ export class TaskScheduler {
       status: 'running',
     };
 
-    // 记录执行
+    // Record execution
     if (!this.executions.has(task.id)) {
       this.executions.set(task.id, []);
     }
     this.executions.get(task.id)!.push(execution);
 
-    this.logger.action(`开始执行任务: ${task.name}`);
+    this.logger.action(`Starting task execution: ${task.name}`);
 
     try {
       await this.taskHandler(task);
-      
+
       execution.status = 'completed';
       execution.endTime = getTimestamp();
-      
-      this.logger.info(`任务执行完成: ${task.name}`);
+
+      this.logger.info(`Task execution completed: ${task.name}`);
     } catch (error) {
       execution.status = 'failed';
       execution.endTime = getTimestamp();
       execution.error = String(error);
-      
-      this.logger.error(`任务执行失败: ${task.name}`, { error: String(error) });
+
+      this.logger.error(`Task execution failed: ${task.name}`, { error: String(error) });
     }
   }
 
@@ -189,7 +189,7 @@ export class TaskScheduler {
   stop(): void {
     for (const [id, cronJob] of this.cronJobs) {
       cronJob.stop();
-      this.logger.info(`任务已停止: ${id}`);
+      this.logger.info(`Task stopped: ${id}`);
     }
     this.cronJobs.clear();
   }

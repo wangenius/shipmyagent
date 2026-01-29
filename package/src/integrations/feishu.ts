@@ -5,7 +5,7 @@ import { createLogger, Logger } from '../runtime/logger.js';
 import { createPermissionEngine } from '../runtime/permission.js';
 import { createTaskExecutor, TaskExecutor } from '../runtime/task-executor.js';
 import { createToolExecutor } from '../runtime/tools.js';
-import { createAgentRuntimeFromPath } from '../runtime/agent.js';
+import { createAgentRuntimeFromPath, AgentRuntime } from '../runtime/agent.js';
 
 interface FeishuConfig {
   appId: string;
@@ -26,51 +26,121 @@ export class FeishuBot {
   private processedMessages: Set<string> = new Set(); // 用于消息去重
   private messageCleanupInterval: NodeJS.Timeout | null = null;
 
+  // 会话管理：为每个聊天维护独立的 Agent 实例
+  private sessions: Map<string, AgentRuntime> = new Map();
+  private sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private readonly SESSION_TIMEOUT = 30 * 60 * 1000; // 30分钟超时
+  private projectRoot: string;
+
   constructor(
     appId: string,
     appSecret: string,
     domain: string | undefined,
     logger: Logger,
-    taskExecutor: TaskExecutor
+    taskExecutor: TaskExecutor,
+    projectRoot: string
   ) {
     this.appId = appId;
     this.appSecret = appSecret;
     this.domain = domain;
     this.logger = logger;
     this.taskExecutor = taskExecutor;
+    this.projectRoot = projectRoot;
+  }
+
+  /**
+   * Get or create session
+   */
+  private getOrCreateSession(chatId: string, chatType: string): AgentRuntime {
+    const sessionKey = `${chatType}:${chatId}`;
+
+    // If session exists, reset timeout
+    if (this.sessions.has(sessionKey)) {
+      this.resetSessionTimeout(sessionKey);
+      return this.sessions.get(sessionKey)!;
+    }
+
+    // Create new session
+    const agentRuntime = createAgentRuntimeFromPath(this.projectRoot);
+    this.sessions.set(sessionKey, agentRuntime);
+    this.resetSessionTimeout(sessionKey);
+
+    this.logger.debug(`Created new session: ${sessionKey}`);
+    return agentRuntime;
+  }
+
+  /**
+   * Reset session timeout
+   */
+  private resetSessionTimeout(sessionKey: string): void {
+    // Clear old timeout
+    const oldTimeout = this.sessionTimeouts.get(sessionKey);
+    if (oldTimeout) {
+      clearTimeout(oldTimeout);
+    }
+
+    // Set new timeout
+    const timeout = setTimeout(() => {
+      this.sessions.delete(sessionKey);
+      this.sessionTimeouts.delete(sessionKey);
+      this.logger.debug(`Session timeout cleanup: ${sessionKey}`);
+    }, this.SESSION_TIMEOUT);
+
+    this.sessionTimeouts.set(sessionKey, timeout);
+  }
+
+  /**
+   * Clear session
+   */
+  clearSession(chatId: string, chatType: string): void {
+    const sessionKey = `${chatType}:${chatId}`;
+    const session = this.sessions.get(sessionKey);
+
+    if (session) {
+      session.clearConversationHistory();
+      this.sessions.delete(sessionKey);
+
+      const timeout = this.sessionTimeouts.get(sessionKey);
+      if (timeout) {
+        clearTimeout(timeout);
+        this.sessionTimeouts.delete(sessionKey);
+      }
+
+      this.logger.info(`Cleared session: ${sessionKey}`);
+    }
   }
 
   async start(): Promise<void> {
     if (!this.appId || !this.appSecret) {
-      this.logger.warn('飞书 App ID 或 App Secret 未配置，跳过启动');
+      this.logger.warn('Feishu App ID or App Secret not configured, skipping startup');
       return;
     }
 
-    // 防止重复启动
+    // Prevent duplicate startup
     if (this.isRunning) {
-      this.logger.warn('飞书 Bot 已经在运行中，跳过重复启动');
+      this.logger.warn('Feishu Bot is already running, skipping duplicate startup');
       return;
     }
 
     this.isRunning = true;
-    this.logger.info('🤖 飞书 Bot 启动中...');
+    this.logger.info('🤖 Starting Feishu Bot...');
 
     try {
-      // 配置飞书客户端
+      // Configure Feishu client
       const baseConfig = {
         appId: this.appId,
         appSecret: this.appSecret,
         domain: this.domain || 'https://open.feishu.cn',
       };
 
-      // 创建 LarkClient 和 WSClient
+      // Create LarkClient and WSClient
       this.client = new Lark.Client(baseConfig);
       this.wsClient = new Lark.WSClient(baseConfig);
 
-      // 注册事件处理器
+      // Register event handlers
       const eventDispatcher = new Lark.EventDispatcher({}).register({
         /**
-         * 注册接收消息事件
+         * Register message receive event
          * https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/events/receive
          */
         'im.message.receive_v1': async (data: any) => {
@@ -78,19 +148,19 @@ export class FeishuBot {
         },
       });
 
-      // 启动长连接
+      // Start long connection
       this.wsClient.start({ eventDispatcher });
-      this.logger.info('飞书 Bot 已启动，使用长连接模式');
+      this.logger.info('Feishu Bot started, using long connection mode');
 
-      // 启动消息缓存清理定时器（每5分钟清理一次，保留最近10分钟的消息ID）
+      // Start message cache cleanup timer (clean every 5 minutes, keep message IDs from last 10 minutes)
       this.messageCleanupInterval = setInterval(() => {
         if (this.processedMessages.size > 1000) {
           this.processedMessages.clear();
-          this.logger.debug('已清理消息去重缓存');
+          this.logger.debug('Cleared message deduplication cache');
         }
       }, 5 * 60 * 1000);
     } catch (error) {
-      this.logger.error('飞书 Bot 启动失败', { error: String(error) });
+      this.logger.error('Failed to start Feishu Bot', { error: String(error) });
     }
   }
 
@@ -100,41 +170,41 @@ export class FeishuBot {
         message: { chat_id, content, message_type, chat_type, message_id },
       } = data;
 
-      // 消息去重：检查是否已经处理过这条消息
+      // Message deduplication: check if this message has been processed
       if (this.processedMessages.has(message_id)) {
-        this.logger.debug(`消息已处理，跳过: ${message_id}`);
+        this.logger.debug(`Message already processed, skipping: ${message_id}`);
         return;
       }
 
-      // 标记消息为已处理
+      // Mark message as processed
       this.processedMessages.add(message_id);
 
-      // 解析用户发送的消息
+      // Parse user message
       let userMessage = '';
 
       try {
         if (message_type === 'text') {
           userMessage = JSON.parse(content).text;
         } else {
-          await this.sendErrorMessage(chat_id, chat_type, message_id, '暂不支持非文本消息，请发送文本消息');
+          await this.sendErrorMessage(chat_id, chat_type, message_id, 'Non-text messages not supported, please send text message');
           return;
         }
       } catch (error) {
-        await this.sendErrorMessage(chat_id, chat_type, message_id, '解析消息失败，请发送文本消息');
+        await this.sendErrorMessage(chat_id, chat_type, message_id, 'Failed to parse message, please send text message');
         return;
       }
 
-      this.logger.info(`收到飞书消息: ${userMessage}`);
+      this.logger.info(`Received Feishu message: ${userMessage}`);
 
-      // 检查是否是命令
+      // Check if it's a command
       if (userMessage.startsWith('/')) {
         await this.handleCommand(chat_id, chat_type, message_id, userMessage);
       } else {
-        // 普通消息，调用 Agent 执行
+        // Regular message, call Agent to execute
         await this.executeAndReply(chat_id, chat_type, message_id, userMessage);
       }
     } catch (error) {
-      this.logger.error('处理飞书消息失败', { error: String(error) });
+      this.logger.error('Failed to process Feishu message', { error: String(error) });
     }
   }
 
@@ -144,7 +214,7 @@ export class FeishuBot {
     messageId: string,
     command: string
   ): Promise<void> {
-    this.logger.info(`收到飞书命令: ${command}`);
+    this.logger.info(`Received Feishu command: ${command}`);
 
     let responseText = '';
 
@@ -153,25 +223,32 @@ export class FeishuBot {
       case '/帮助':
         responseText = `🤖 ShipMyAgent Bot
 
-可用命令:
-- /help 或 /帮助 - 查看帮助信息
-- /status 或 /状态 - 查看 Agent 状态
-- /tasks 或 /任务 - 查看任务列表
-- <任意消息> - 执行指令`;
+Available commands:
+- /help or /帮助 - View help information
+- /status or /状态 - View agent status
+- /tasks or /任务 - View task list
+- /clear or /清除 - Clear current conversation history
+- <any message> - Execute instruction`;
         break;
 
       case '/status':
       case '/状态':
-        responseText = '📊 Agent 状态: 运行中\n任务数: 0\n待审批: 0';
+        responseText = '📊 Agent status: Running\nTasks: 0\nPending approvals: 0';
         break;
 
       case '/tasks':
       case '/任务':
-        responseText = '📋 任务列表\n暂无任务';
+        responseText = '📋 Task list\nNo tasks';
+        break;
+
+      case '/clear':
+      case '/清除':
+        this.clearSession(chatId, chatType);
+        responseText = '✅ Conversation history cleared';
         break;
 
       default:
-        responseText = `未知命令: ${command}\n输入 /help 查看可用命令`;
+        responseText = `Unknown command: ${command}\nType /help to view available commands`;
     }
 
     await this.sendMessage(chatId, chatType, messageId, responseText);
@@ -184,20 +261,38 @@ export class FeishuBot {
     instructions: string
   ): Promise<void> {
     try {
-      // 先发送处理中的消息
-      await this.sendMessage(chatId, chatType, messageId, '🤔 正在处理您的请求...');
+      // First send processing message
+      await this.sendMessage(chatId, chatType, messageId, '🤔 Processing your request...');
 
-      // 调用 Agent 执行指令
-      const result = await this.taskExecutor.executeInstructions(instructions);
+      // Get or create session
+      const agentRuntime = this.getOrCreateSession(chatId, chatType);
 
-      // 发送执行结果
+      // Initialize agent (if not already initialized)
+      if (!agentRuntime.isInitialized()) {
+        await agentRuntime.initialize();
+      }
+
+      // Generate sessionId (based on chatType and chatId)
+      const sessionId = `${chatType}:${chatId}`;
+
+      // Execute instruction using session agent
+      const result = await agentRuntime.run({
+        instructions,
+        context: {
+          source: 'feishu',
+          userId: chatId,
+          sessionId,
+        },
+      });
+
+      // Send execution result
       const message = result.success
-        ? `✅ 执行成功\n\n${result.output}`
-        : `❌ 执行失败\n\n${result.error || '未知错误'}`;
+        ? `✅ Execution successful\n\n${result.output}`
+        : `❌ Execution failed\n\n${result.output}`;
 
       await this.sendMessage(chatId, chatType, messageId, message);
     } catch (error) {
-      await this.sendErrorMessage(chatId, chatType, messageId, `执行错误: ${String(error)}`);
+      await this.sendErrorMessage(chatId, chatType, messageId, `Execution error: ${String(error)}`);
     }
   }
 
@@ -209,7 +304,7 @@ export class FeishuBot {
   ): Promise<void> {
     try {
       if (chatType === 'p2p') {
-        // 私聊消息，直接发送
+        // Private chat message, send directly
         await this.client.im.v1.message.create({
           params: {
             receive_id_type: 'chat_id',
@@ -221,7 +316,7 @@ export class FeishuBot {
           },
         });
       } else {
-        // 群聊消息，回复原消息
+        // Group chat message, reply to original message
         await this.client.im.v1.message.reply({
           path: {
             message_id: messageId,
@@ -233,7 +328,7 @@ export class FeishuBot {
         });
       }
     } catch (error) {
-      this.logger.error('发送飞书消息失败', { error: String(error) });
+      this.logger.error('Failed to send Feishu message', { error: String(error) });
     }
   }
 
@@ -249,18 +344,18 @@ export class FeishuBot {
   async stop(): Promise<void> {
     this.isRunning = false;
 
-    // 清理定时器
+    // Clean up timer
     if (this.messageCleanupInterval) {
       clearInterval(this.messageCleanupInterval);
       this.messageCleanupInterval = null;
     }
 
-    // 清理消息缓存
+    // Clean up message cache
     this.processedMessages.clear();
 
     if (this.wsClient) {
-      // 飞书 SDK 的 WSClient 没有显式的 stop 方法，直接设置状态即可
-      this.logger.info('飞书 Bot 已停止');
+      // Feishu SDK's WSClient doesn't have explicit stop method, just set status
+      this.logger.info('Feishu Bot stopped');
     }
   }
 }
@@ -293,6 +388,7 @@ export async function createFeishuBot(
     config.appSecret,
     config.domain,
     logger,
-    taskExecutor
+    taskExecutor,
+    projectRoot  // 传递 projectRoot
   );
 }

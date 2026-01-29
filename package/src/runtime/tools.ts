@@ -1,9 +1,23 @@
+/**
+ * ToolExecutor - Legacy file operation utilities
+ *
+ * NOTE: This module is primarily used by the HTTP server API endpoints
+ * to provide file reading and listing capabilities via REST API.
+ *
+ * The Agent Runtime (agent.ts) does NOT use these methods directly.
+ * Instead, the agent uses ONLY the exec_shell tool to perform all operations
+ * through shell commands (cat, grep, echo, etc.).
+ *
+ * This separation allows:
+ * - Server API: Direct file operations for web interface
+ * - Agent: Shell-based operations for maximum flexibility
+ */
+
 import fs from 'fs-extra';
 import fg from 'fast-glob';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { generateId, getProjectRoot } from '../utils.js';
 import { PermissionEngine, PermissionCheckResult } from './permission.js';
 import { Logger } from './logger.js';
 
@@ -150,34 +164,34 @@ export class ToolExecutor {
   }
 
   async execShell(command: string): Promise<ToolResult> {
-    // 检查权限
+    // Check permissions
     const permission = await this.context.permissionEngine.checkExecShell(command);
     if (!permission.allowed && permission.requiresApproval) {
       const approvalId = (permission as PermissionCheckResult & { approvalId: string }).approvalId;
-      this.context.logger.approval(`执行命令等待审批: ${command}`, { approvalId });
+      this.context.logger.approval(`Command execution awaiting approval: ${command}`, { approvalId });
 
-      // 等待审批结果
+      // Wait for approval result
       const result = await this.context.permissionEngine.waitForApproval(approvalId);
 
       if (result === 'approved') {
-        this.context.logger.info(`审批通过，重新执行命令: ${command}`);
-        // 重新检查权限（应该通过了）
+        this.context.logger.info(`Approval granted, re-executing command: ${command}`);
+        // Re-check permissions (should pass now)
         const newPermission = await this.context.permissionEngine.checkExecShell(command);
         if (!newPermission.allowed) {
           return {
             success: false,
-            error: `审批后仍无权限: ${newPermission.reason}`,
+            error: `Still no permission after approval: ${newPermission.reason}`,
           };
         }
       } else if (result === 'rejected') {
         return {
           success: false,
-          error: `命令执行已被拒绝`,
+          error: `Command execution rejected`,
         };
       } else {
         return {
           success: false,
-          error: `审批等待超时`,
+          error: `Approval timeout`,
         };
       }
     }
@@ -185,15 +199,15 @@ export class ToolExecutor {
     if (!permission.allowed) {
       return {
         success: false,
-        error: `无权限执行命令: ${permission.reason}`,
+        error: `No permission to execute command: ${permission.reason}`,
       };
     }
 
     try {
-      this.context.logger.action(`执行命令: ${command}`);
+      this.context.logger.action(`Executing command: ${command}`);
       const { stdout, stderr } = await execAsync(command, {
         cwd: this.context.projectRoot,
-        timeout: 60000, // 60 秒超时
+        timeout: 60000, // 60 second timeout
       });
 
       return {
@@ -203,7 +217,7 @@ export class ToolExecutor {
     } catch (error) {
       return {
         success: false,
-        error: `命令执行失败: ${String(error)}`,
+        error: `Command execution failed: ${String(error)}`,
       };
     }
   }
@@ -224,7 +238,7 @@ export class ToolExecutor {
         matchingFiles = files;
       }
 
-      this.context.logger.debug(`搜索文件: ${pattern}, 找到 ${matchingFiles.length} 个匹配`);
+      this.context.logger.debug(`Search files: ${pattern}, found ${matchingFiles.length} matches`);
 
       return {
         success: true,
@@ -233,7 +247,7 @@ export class ToolExecutor {
     } catch (error) {
       return {
         success: false,
-        error: `搜索文件失败: ${String(error)}`,
+        error: `Failed to search files: ${String(error)}`,
       };
     }
   }
@@ -243,7 +257,7 @@ export class ToolExecutor {
 
     try {
       await fs.mkdir(absolutePath, { recursive: true });
-      this.context.logger.action(`创建目录: ${dirPath}`);
+      this.context.logger.action(`Create directory: ${dirPath}`);
 
       return {
         success: true,
@@ -252,7 +266,7 @@ export class ToolExecutor {
     } catch (error) {
       return {
         success: false,
-        error: `创建目录失败: ${String(error)}`,
+        error: `Failed to create directory: ${String(error)}`,
       };
     }
   }
@@ -260,33 +274,33 @@ export class ToolExecutor {
   async deleteFile(filePath: string): Promise<ToolResult> {
     const absolutePath = path.resolve(this.context.projectRoot, filePath);
 
-    // 检查权限
+    // Check permissions
     const permission = await this.context.permissionEngine.checkWriteRepo(absolutePath, '');
     if (!permission.allowed && permission.requiresApproval) {
       const approvalId = (permission as PermissionCheckResult & { approvalId: string }).approvalId;
-      this.context.logger.approval(`删除文件等待审批: ${filePath}`, { approvalId });
+      this.context.logger.approval(`Delete file awaiting approval: ${filePath}`, { approvalId });
 
-      // 等待审批结果
+      // Wait for approval result
       const result = await this.context.permissionEngine.waitForApproval(approvalId);
 
       if (result === 'approved') {
-        this.context.logger.info(`审批通过，重新检查删除权限: ${filePath}`);
+        this.context.logger.info(`Approval granted, re-checking delete permission: ${filePath}`);
         const newPermission = await this.context.permissionEngine.checkWriteRepo(absolutePath, '');
         if (!newPermission.allowed) {
           return {
             success: false,
-            error: `审批后仍无权限: ${newPermission.reason}`,
+            error: `Still no permission after approval: ${newPermission.reason}`,
           };
         }
       } else if (result === 'rejected') {
         return {
           success: false,
-          error: `删除操作已被拒绝`,
+          error: `Delete operation rejected`,
         };
       } else {
         return {
           success: false,
-          error: `审批等待超时`,
+          error: `Approval timeout`,
         };
       }
     }
@@ -294,7 +308,7 @@ export class ToolExecutor {
     if (!permission.allowed) {
       return {
         success: false,
-        error: `无权限删除文件: ${permission.reason}`,
+        error: `No permission to delete file: ${permission.reason}`,
       };
     }
 
@@ -302,12 +316,12 @@ export class ToolExecutor {
       if (!fs.existsSync(absolutePath)) {
         return {
           success: false,
-          error: `文件不存在: ${filePath}`,
+          error: `File does not exist: ${filePath}`,
         };
       }
 
       await fs.remove(absolutePath);
-      this.context.logger.action(`删除文件: ${filePath}`);
+      this.context.logger.action(`Delete file: ${filePath}`);
 
       return {
         success: true,
@@ -315,7 +329,7 @@ export class ToolExecutor {
     } catch (error) {
       return {
         success: false,
-        error: `删除文件失败: ${String(error)}`,
+        error: `Failed to delete file: ${String(error)}`,
       };
     }
   }

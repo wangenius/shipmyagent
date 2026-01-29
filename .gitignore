@@ -16,3 +16,5 @@ bun.lock
 
 bin
 bun.*
+# Package build output
+package/bin

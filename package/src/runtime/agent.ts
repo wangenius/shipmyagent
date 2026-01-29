@@ -11,7 +11,6 @@ import fs from 'fs-extra';
 import path from 'path';
 import { z } from 'zod';
 import {
-  generateId,
   getAgentMdPath,
   getShipJsonPath,
   getShipDirPath,
@@ -19,6 +18,7 @@ import {
   getLogsDirPath,
   ShipConfig,
   getTimestamp,
+  DEFAULT_SHELL_GUIDE,
 } from '../utils.js';
 import { createPermissionEngine, PermissionEngine, PermissionCheckResult } from './permission.js';
 
@@ -51,8 +51,9 @@ export interface AgentInput {
   context?: {
     taskId?: string;
     taskDescription?: string;
-    source?: 'telegram' | 'cli' | 'scheduler' | 'api';
+    source?: 'telegram' | 'feishu' | 'cli' | 'scheduler' | 'api';
     userId?: string;
+    sessionId?: string;
   };
 }
 
@@ -68,6 +69,15 @@ export interface ApprovalRequest {
   approvedAt?: string;
 }
 
+// 对话消息接口
+export interface ConversationMessage {
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+  toolCallId?: string;
+  toolName?: string;
+  timestamp: number;
+}
+
 // ==================== ToolLoopAgent Implementation ====================
 
 /**
@@ -78,14 +88,70 @@ export class AgentRuntime {
   private initialized: boolean = false;
   private logger: AgentLogger;
   private permissionEngine: PermissionEngine;
-  
+
   // ToolLoopAgent instance (v6)
   private agent: any = null;
-  
+
+  // 对话历史管理 - 按会话隔离
+  private conversationHistories: Map<string, ConversationMessage[]> = new Map();
+
+  // 上下文长度限制
+  private readonly MAX_HISTORY_MESSAGES = 20; // 保留最近20条消息
+
   constructor(context: AgentContext) {
     this.context = context;
     this.logger = new AgentLogger(context.projectRoot);
     this.permissionEngine = createPermissionEngine(context.projectRoot);
+  }
+
+  /**
+   * 获取对话历史
+   */
+  getConversationHistory(sessionId?: string): ConversationMessage[] {
+    if (!sessionId) {
+      // 如果没有指定 sessionId，返回所有会话的历史（用于兼容性）
+      const allMessages: ConversationMessage[] = [];
+      for (const messages of this.conversationHistories.values()) {
+        allMessages.push(...messages);
+      }
+      return allMessages;
+    }
+    return this.conversationHistories.get(sessionId) || [];
+  }
+
+  /**
+   * 清除对话历史
+   */
+  clearConversationHistory(sessionId?: string): void {
+    if (!sessionId) {
+      // 清除所有会话的历史
+      this.conversationHistories.clear();
+    } else {
+      // 清除指定会话的历史
+      this.conversationHistories.delete(sessionId);
+    }
+  }
+
+  /**
+   * 添加消息到对话历史（带长度限制）
+   */
+  private addToHistory(message: ConversationMessage, sessionId: string): void {
+    // 获取或创建该会话的历史记录
+    let history = this.conversationHistories.get(sessionId);
+    if (!history) {
+      history = [];
+      this.conversationHistories.set(sessionId, history);
+    }
+
+    history.push(message);
+
+    // If conversation history exceeds limit, remove oldest messages
+    if (history.length > this.MAX_HISTORY_MESSAGES) {
+      const removed = history.length - this.MAX_HISTORY_MESSAGES;
+      const newHistory = history.slice(removed);
+      this.conversationHistories.set(sessionId, newHistory);
+      this.logger.log('debug', `Session ${sessionId} conversation history exceeded limit, removed ${removed} old messages`);
+    }
   }
 
   /**
@@ -161,8 +227,11 @@ export class AgentRuntime {
           });
         }
 
-        // Store model instance
-        this.agent = providerInstance(model);
+        // Store model instance with configuration
+        this.agent = providerInstance(model, {
+          maxTokens: this.context.config.llm.maxTokens || 4096,
+          temperature: this.context.config.llm.temperature || 0.7,
+        });
 
         await this.logger.log('info', 'Agent Runtime initialized with legacy AI SDK');
         this.initialized = true;
@@ -185,28 +254,7 @@ export class AgentRuntime {
     message?: string;
   }> {
     const { toolName, args } = toolCall;
-    
-    // 检查写文件操作
-    if (toolName === 'write_file' || toolName === 'delete_file' || toolName === 'create_diff') {
-      const filePath = (args.path || args.filePath) as string;
-      if (filePath) {
-        const content = (args.content || '') as string;
-        const permission = await this.permissionEngine.checkWriteRepo(filePath, content);
-        if (!permission.allowed && permission.requiresApproval) {
-          // checkWriteRepo 已经创建了审批请求并返回了 approvalId
-          const approvalId = (permission as PermissionCheckResult & { approvalId?: string }).approvalId;
-          
-          return {
-            requiresApproval: true,
-            approvalId,
-            type: 'write_repo',
-            description: `${toolName === 'write_file' ? 'Write' : toolName === 'delete_file' ? 'Delete' : 'Modify'} file: ${filePath}`,
-            message: `Approval required to ${toolName === 'write_file' ? 'write' : toolName === 'delete_file' ? 'delete' : 'modify'}: ${filePath}`,
-          };
-        }
-      }
-    }
-    
+
     // 检查 shell 执行
     if (toolName === 'exec_shell') {
       const command = args.command as string;
@@ -215,7 +263,7 @@ export class AgentRuntime {
         if (!permission.allowed && permission.requiresApproval) {
           // checkExecShell 已经创建了审批请求并返回了 approvalId
           const approvalId = (permission as PermissionCheckResult & { approvalId?: string }).approvalId;
-          
+
           return {
             requiresApproval: true,
             approvalId,
@@ -226,7 +274,7 @@ export class AgentRuntime {
         }
       }
     }
-    
+
     return { requiresApproval: false };
   }
 
@@ -235,93 +283,32 @@ export class AgentRuntime {
    */
   private async createTools(): Promise<Record<string, any>> {
     return {
-      // File reading tool
-      read_file: {
-        description: 'Read file content from the repository',
-        parameters: z.object({
-          path: z.string().describe('File path to read'),
-          encoding: z.string().optional().default('utf-8'),
-        }),
-        execute: async ({ path: filePath, encoding = 'utf-8' }: { path: string; encoding?: string }) => {
-          // Check permissions
-          const permission = await this.permissionEngine.checkReadRepo(filePath);
-          if (!permission.allowed) {
-            return {
-              success: false,
-              error: `Permission denied: ${permission.reason}`,
-            };
-          }
-
-          // Check file exists
-          if (!fs.existsSync(filePath)) {
-            return {
-              success: false,
-              error: `File not found: ${filePath}`,
-            };
-          }
-
-          const content = await fs.readFile(filePath, encoding as BufferEncoding);
-          await this.logger.log('debug', `Read file: ${filePath}`);
-          
-          return {
-            success: true,
-            content: content.toString(),
-            path: filePath,
-          };
-        },
-      },
-
-      // File writing tool
-      write_file: {
-        description: 'Create or modify a file',
-        parameters: z.object({
-          path: z.string().describe('File path to write'),
-          content: z.string().describe('File content'),
-        }),
-        execute: async ({ path: filePath, content }: { path: string; content: string }) => {
-          // Approval already handled in tool loop, just execute
-          await fs.ensureDir(path.dirname(filePath));
-          await fs.writeFile(filePath, content);
-          await this.logger.log('info', `Wrote file: ${filePath}`);
-
-          return {
-            success: true,
-            message: `File written: ${filePath}`,
-          };
-        },
-      },
-
-      // File deletion
-      delete_file: {
-        description: 'Delete a file or directory',
-        parameters: z.object({
-          path: z.string().describe('File or directory path to delete'),
-        }),
-        execute: async ({ path: filePath }: { path: string }) => {
-          // Approval already handled in tool loop, just execute
-          if (!fs.existsSync(filePath)) {
-            return {
-              success: false,
-              error: `File not found: ${filePath}`,
-            };
-          }
-
-          await fs.remove(filePath);
-          await this.logger.log('info', `Deleted file: ${filePath}`);
-
-          return {
-            success: true,
-            message: `File deleted: ${filePath}`,
-          };
-        },
-      },
-
-      // Shell execution
+      // Shell execution - 唯一的执行工具，所有操作都通过 shell 命令实现
       exec_shell: {
-        description: 'Execute a shell command',
+        description: `Execute a shell command. This is your ONLY tool for interacting with the filesystem and codebase.
+
+Use this tool for ALL operations:
+- Reading files: cat, head, tail, less
+- Writing files: echo >, cat > file << EOF, sed -i
+- Searching: grep -r, find, rg
+- Listing: ls, find, tree
+- File operations: cp, mv, rm, mkdir
+- Code analysis: grep, wc, awk
+- Git operations: git status, git diff, git log
+- Running tests: npm test, npm run build
+- Any other shell command
+
+Examples:
+- Read file: cat src/index.ts
+- Search code: grep -rn "function.*export" src/
+- Write file: cat > file.ts << 'EOF'\\ncontent\\nEOF
+- Find files: find . -name "*.ts" -type f
+- Run tests: npm test
+
+Chain commands with && for sequential execution or ; for independent execution.`,
         parameters: z.object({
-          command: z.string().describe('Command to execute'),
-          timeout: z.number().optional().default(30000),
+          command: z.string().describe('Shell command to execute. Can be a single command or multiple commands chained with && or ;'),
+          timeout: z.number().optional().default(30000).describe('Timeout in milliseconds (default: 30000)'),
         }),
         execute: async ({ command, timeout = 30000 }: { command: string; timeout?: number }) => {
           // Approval already handled in tool loop, just execute
@@ -355,238 +342,7 @@ export class AgentRuntime {
           }
         },
       },
-
-      // File listing tool
-      list_files: {
-        description: 'List files in a directory',
-        parameters: z.object({
-          path: z.string().describe('Directory path'),
-          pattern: z.string().optional().default('**/*'),
-        }),
-        execute: async ({ path: dirPath, pattern = '**/*' }: { path: string; pattern?: string }) => {
-          const permission = await this.permissionEngine.checkReadRepo(dirPath);
-          if (!permission.allowed) {
-            return {
-              success: false,
-              error: `Permission denied: ${permission.reason}`,
-            };
-          }
-
-          const globImport = await import('fast-glob');
-          const files = await globImport.default([`${dirPath}/${pattern}`], {
-            cwd: this.context.projectRoot,
-            ignore: ['node_modules/**', '.git/**', '.ship/**'],
-          });
-
-          await this.logger.log('debug', `Listed files: ${dirPath}`, { count: files.length });
-
-          return {
-            success: true,
-            files,
-          };
-        },
-      },
-
-      // File search tool
-      search_files: {
-        description: 'Search for text in files',
-        parameters: z.object({
-          pattern: z.string().describe('Search pattern'),
-          path: z.string().optional().default('.'),
-          glob: z.string().optional().default('**/*'),
-        }),
-        execute: async ({ pattern, path: searchPath = '.', glob = '**/*' }: { pattern: string; path?: string; glob?: string }) => {
-          const permission = await this.permissionEngine.checkReadRepo(searchPath);
-          if (!permission.allowed) {
-            return {
-              success: false,
-              error: `Permission denied: ${permission.reason}`,
-            };
-          }
-
-          const results: Array<{ file: string; line: number; content: string }> = [];
-          const globImport = await import('fast-glob');
-          const files = await globImport.default([`${searchPath}/${glob}`], {
-            cwd: this.context.projectRoot,
-            ignore: ['node_modules/**', '.git/**', '.ship/**'],
-          });
-
-          for (const file of files) {
-            try {
-              const content = await fs.readFile(file, 'utf-8');
-              const lines = content.split('\n');
-              lines.forEach((line, index) => {
-                if (line.toLowerCase().includes(pattern.toLowerCase())) {
-                  results.push({
-                    file,
-                    line: index + 1,
-                    content: line.trim(),
-                  });
-                }
-              });
-            } catch {
-              // Ignore read errors
-            }
-          }
-
-          await this.logger.log('debug', `Searched files: ${pattern}`, { count: results.length });
-
-          return {
-            success: true,
-            results,
-          };
-        },
-      },
-
-      // Status check tool
-      get_status: {
-        description: 'Get agent and project status',
-        parameters: z.object({}),
-        execute: async () => {
-          const { config } = this.context;
-          const pendingApprovals = this.permissionEngine.getPendingApprovals();
-
-          return {
-            success: true,
-            name: config.name,
-            version: config.version,
-            llm: {
-              provider: config.llm.provider,
-              model: config.llm.model,
-            },
-            permissions: {
-              read_repo: typeof config.permissions.read_repo === 'boolean'
-                ? config.permissions.read_repo
-                : { paths: config.permissions.read_repo?.paths },
-              write_repo: config.permissions.write_repo,
-              exec_shell: config.permissions.exec_shell,
-            },
-            pendingApprovals: pendingApprovals.length,
-            projectRoot: this.context.projectRoot,
-          };
-        },
-      },
-
-      // Task management tools
-      get_tasks: {
-        description: 'Get list of tasks',
-        parameters: z.object({}),
-        execute: async () => {
-          const tasksDir = path.join(this.context.projectRoot, '.ship', 'tasks');
-
-          if (!fs.existsSync(tasksDir)) {
-            return { success: true, tasks: [] };
-          }
-
-          const files = await fs.readdir(tasksDir);
-          const tasks: Array<{ name: string; file: string }> = [];
-
-          for (const file of files) {
-            if (file.endsWith('.md')) {
-              tasks.push({
-                name: file.replace('.md', ''),
-                file: path.join(tasksDir, file),
-              });
-            }
-          }
-
-          return { success: true, tasks };
-        },
-      },
-
-      // Approval management tools
-      get_pending_approvals: {
-        description: 'Get pending approval requests',
-        parameters: z.object({}),
-        execute: async () => {
-          const approvals = this.permissionEngine.getPendingApprovals();
-          return {
-            success: true,
-            approvals: approvals.map(a => ({
-              id: a.id,
-              type: a.type,
-              action: a.action,
-              details: a.details,
-              status: a.status,
-              createdAt: a.createdAt,
-            })),
-          };
-        },
-      },
-
-      approve: {
-        description: 'Approve or reject a pending request',
-        parameters: z.object({
-          approvalId: z.string().describe('Approval request ID'),
-          approved: z.boolean().describe('Whether to approve'),
-          response: z.string().optional().describe('Response comment'),
-        }),
-        execute: async ({ approvalId, approved, response }: { approvalId: string; approved: boolean; response?: string }) => {
-          if (approved) {
-            const success = await this.permissionEngine.approveRequest(approvalId, response || 'Approved');
-            return {
-              success,
-              message: success ? 'Approved' : 'Approval not found',
-            };
-          } else {
-            const success = await this.permissionEngine.rejectRequest(approvalId, response || 'Rejected');
-            return {
-              success,
-              message: success ? 'Rejected' : 'Approval not found',
-            };
-          }
-        },
-      },
-
-      // Create diff tool
-      create_diff: {
-        description: 'Create a diff and request approval for file changes',
-        parameters: z.object({
-          filePath: z.string().describe('File path'),
-          original: z.string().describe('Original content'),
-          modified: z.string().describe('Modified content'),
-        }),
-        execute: async ({ filePath, original, modified }: { filePath: string; original: string; modified: string }) => {
-          // Approval already handled in tool loop, just execute
-          await fs.ensureDir(path.dirname(filePath));
-          await fs.writeFile(filePath, modified);
-          await this.logger.log('info', `Modified file: ${filePath}`);
-
-          return {
-            success: true,
-            message: `File modified: ${filePath}`,
-            diff: this.generateDiff(original, modified),
-          };
-        },
-      },
     };
-  }
-
-  /**
-   * Generate a diff between original and modified content
-   */
-  private generateDiff(original: string, modified: string): string {
-    const oldLines = original.split('\n');
-    const newLines = modified.split('\n');
-    let diff = '';
-    const maxLen = Math.max(oldLines.length, newLines.length);
-
-    for (let i = 0; i < maxLen; i++) {
-      const oldLine = oldLines[i];
-      const newLine = newLines[i];
-
-      if (oldLine === undefined) {
-        diff += `+ ${newLine}\n`;
-      } else if (newLine === undefined) {
-        diff += `- ${oldLine}\n`;
-      } else if (oldLine !== newLine) {
-        diff += `- ${oldLine}\n`;
-        diff += `+ ${newLine}\n`;
-      } else {
-        diff += `  ${oldLine}\n`;
-      }
-    }
-    return diff;
   }
 
   /**
@@ -597,9 +353,13 @@ export class AgentRuntime {
     const startTime = Date.now();
     const toolCalls: AgentResult['toolCalls'] = [];
 
+    // 生成 sessionId（如果没有提供）
+    const sessionId = context?.sessionId || context?.userId || 'default';
+
     // Read Agent.md as system prompt
     const systemPrompt = this.context.agentMd;
     await this.logger.log('debug', `Using system prompt (Agent.md): ${systemPrompt?.substring(0, 100)}...`);
+    await this.logger.log('debug', `Session ID: ${sessionId}`);
 
     // Build full prompt with context
     let fullPrompt = instructions;
@@ -609,7 +369,7 @@ export class AgentRuntime {
 
     // If initialized with model, use generateText with tool loop
     if (this.initialized && this.agent) {
-      return this.runWithGenerateText(fullPrompt, systemPrompt, startTime, context);
+      return this.runWithGenerateText(fullPrompt, systemPrompt, startTime, context, sessionId);
     }
 
     // Otherwise use simulation mode
@@ -623,7 +383,8 @@ export class AgentRuntime {
     prompt: string,
     systemPrompt: string,
     startTime: number,
-    context?: AgentInput['context']
+    context: AgentInput['context'] | undefined,
+    sessionId: string
   ): Promise<AgentResult> {
     const toolCalls: AgentResult['toolCalls'] = [];
 
@@ -645,17 +406,26 @@ export class AgentRuntime {
 
       await this.logger.log('debug', `Calling generateText with system prompt length: ${systemPrompt?.length || 0}`);
 
+      // 添加用户消息到历史
+      this.addToHistory({
+        role: 'user',
+        content: prompt,
+        timestamp: Date.now(),
+      }, sessionId);
+
+      // 构建完整的对话上下文
+      let conversationContext = this.buildConversationContext(sessionId);
+
       // Manual tool loop (max 20 iterations)
-      let currentPrompt = prompt;
-      let conversationHistory: Array<{ role: string; content: string }> = [];
       const maxIterations = 20;
 
       for (let iteration = 0; iteration < maxIterations; iteration++) {
         // Call generateText
+        // Note: maxTokens 和 temperature 已在创建模型实例时配置
         const result = await generateText({
           model: this.agent,
           system: systemPrompt,
-          prompt: currentPrompt,
+          prompt: conversationContext,
           tools: aiTools,
         });
 
@@ -669,6 +439,15 @@ export class AgentRuntime {
         // Log raw tool calls structure
         if (result.toolCalls && result.toolCalls.length > 0) {
           await this.logger.log('debug', `Raw toolCalls: ${JSON.stringify(result.toolCalls)}`);
+        }
+
+        // 添加 assistant 响应到历史
+        if (result.text) {
+          this.addToHistory({
+            role: 'assistant',
+            content: result.text,
+            timestamp: Date.now(),
+          }, sessionId);
         }
 
         // If no tool calls, we're done
@@ -691,7 +470,7 @@ export class AgentRuntime {
         }
 
         // Process tool calls with approval workflow
-        const toolResults: Array<{ toolCallId: string; result: any }> = [];
+        const toolResults: Array<{ toolCallId: string; toolName: string; result: any }> = [];
 
         for (const toolCall of result.toolCalls) {
           const toolCallId = (toolCall as any).toolCallId;
@@ -743,9 +522,11 @@ export class AgentRuntime {
           // Execute the tool
           const tool = tools[toolName];
           if (!tool || typeof tool.execute !== 'function') {
+            const errorResult = { success: false, error: `Unknown tool: ${toolName}` };
             toolResults.push({
               toolCallId,
-              result: { success: false, error: `Unknown tool: ${toolName}` },
+              toolName,
+              result: errorResult,
             });
             continue;
           }
@@ -759,6 +540,7 @@ export class AgentRuntime {
             const toolResult = await tool.execute(toolArgs);
             toolResults.push({
               toolCallId,
+              toolName,
               result: toolResult,
             });
 
@@ -776,6 +558,7 @@ export class AgentRuntime {
             const errorResult = { success: false, error: String(error) };
             toolResults.push({
               toolCallId,
+              toolName,
               result: errorResult,
             });
 
@@ -789,12 +572,19 @@ export class AgentRuntime {
           }
         }
 
-        // Build next prompt with tool results
-        const toolResultsText = toolResults.map(tr =>
-          `Tool ${tr.toolCallId} result: ${JSON.stringify(tr.result)}`
-        ).join('\n');
+        // 添加工具调用结果到历史
+        for (const tr of toolResults) {
+          this.addToHistory({
+            role: 'tool',
+            content: `Tool: ${tr.toolName}\nResult: ${JSON.stringify(tr.result)}`,
+            toolCallId: tr.toolCallId,
+            toolName: tr.toolName,
+            timestamp: Date.now(),
+          }, sessionId);
+        }
 
-        currentPrompt = `Previous response: ${result.text || ''}\n\nTool results:\n${toolResultsText}\n\nContinue based on these results.`;
+        // 重新构建对话上下文（包含完整历史）
+        conversationContext = this.buildConversationContext(sessionId);
       }
 
       // Max iterations reached
@@ -811,13 +601,63 @@ export class AgentRuntime {
         toolCalls,
       };
     } catch (error) {
-      await this.logger.log('error', 'Agent execution failed', { error: String(error) });
+      const errorMsg = String(error);
+
+      // Check if context length exceeded error
+      if (errorMsg.includes('context_length') ||
+          errorMsg.includes('too long') ||
+          errorMsg.includes('maximum context') ||
+          errorMsg.includes('context window')) {
+        const currentHistory = this.conversationHistories.get(sessionId) || [];
+        await this.logger.log('warn', 'Context length exceeded, clearing history', {
+          sessionId,
+          currentMessages: currentHistory.length,
+          error: errorMsg
+        });
+
+        // Clear conversation history for this session
+        this.conversationHistories.delete(sessionId);
+        await this.logger.log('info', `Cleared conversation history for session ${sessionId}`);
+
+        return {
+          success: false,
+          output: `Context length exceeded, history automatically cleared. Please resend your question.`,
+          toolCalls,
+        };
+      }
+
+      await this.logger.log('error', 'Agent execution failed', { error: errorMsg });
       return {
         success: false,
-        output: `Execution failed: ${String(error)}`,
+        output: `Execution failed: ${errorMsg}`,
         toolCalls,
       };
     }
+  }
+
+  /**
+   * 构建对话上下文（将历史消息转换为提示词）
+   */
+  private buildConversationContext(sessionId: string): string {
+    const history = this.conversationHistories.get(sessionId) || [];
+
+    if (history.length === 0) {
+      return '';
+    }
+
+    // 构建对话历史文本
+    const historyText = history.map((msg) => {
+      if (msg.role === 'user') {
+        return `User: ${msg.content}`;
+      } else if (msg.role === 'assistant') {
+        return `Assistant: ${msg.content}`;
+      } else if (msg.role === 'tool') {
+        return `Tool Result: ${msg.content}`;
+      }
+      return '';
+    }).filter(Boolean).join('\n\n');
+
+    return historyText;
   }
 
 
@@ -1019,24 +859,10 @@ export function createAgentRuntimeFromPath(projectRoot: string): AgentRuntime {
   const agentMdPath = getAgentMdPath(projectRoot);
   const shipJsonPath = getShipJsonPath(projectRoot);
 
-  let agentMd = `# Agent Role
+  // Default user identity if no Agent.md exists
+  let userAgentMd = `# Agent Role
 
-You are the maintainer agent of this repository.
-
-## Goals
-- Improve code quality
-- Reduce bugs
-- Assist humans, never override them
-
-## Constraints
-- Never modify files without approval
-- Never run shell commands unless explicitly allowed
-- Always explain your intent before acting
-
-## Communication Style
-- Concise
-- Technical
-- No speculation without evidence`;
+You are a helpful project assistant.`;
 
   let config: ShipConfig = {
     name: 'shipmyagent',
@@ -1067,13 +893,16 @@ You are the maintainer agent of this repository.
   fs.ensureDirSync(path.join(shipDir, 'logs'));
   fs.ensureDirSync(path.join(shipDir, '.cache'));
 
-  // Read Agent.md
+  // Read user's Agent.md (identity/role definition)
   try {
     if (fs.existsSync(agentMdPath)) {
-      agentMd = fs.readFileSync(agentMdPath, 'utf-8');
+      const content = fs.readFileSync(agentMdPath, 'utf-8').trim();
+      if (content) {
+        userAgentMd = content;
+      }
     }
   } catch {
-    // Use default
+    // Use default identity
   }
 
   // Read ship.json
@@ -1084,6 +913,13 @@ You are the maintainer agent of this repository.
   } catch {
     // Use default
   }
+
+  // Combine user identity + system shell guide
+  const agentMd = `${userAgentMd}
+
+---
+
+${DEFAULT_SHELL_GUIDE}`;
 
   return new AgentRuntime({
     projectRoot,
