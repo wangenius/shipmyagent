@@ -14,6 +14,16 @@ interface FeishuConfig {
   domain?: string;
 }
 
+function sanitizeChatText(text: string): string {
+  if (!text) return text;
+  let out = text;
+  out = out.replace(/(^|\n)Tool Result:[\s\S]*?(?=\n{2,}|$)/g, '\n[工具输出已省略：我已在后台读取并提炼关键信息]\n');
+  if (out.length > 6000) {
+    out = out.slice(0, 5800) + '\n\n…[truncated]（如需完整输出请回复“发完整输出”）';
+  }
+  return out;
+}
+
 export class FeishuBot {
   private appId: string;
   private appSecret: string;
@@ -25,12 +35,15 @@ export class FeishuBot {
   private isRunning: boolean = false;
   private processedMessages: Set<string> = new Set(); // 用于消息去重
   private messageCleanupInterval: NodeJS.Timeout | null = null;
+  private approvalInterval: NodeJS.Timeout | null = null;
+  private notifiedApprovalKeys: Set<string> = new Set();
 
   // 会话管理：为每个聊天维护独立的 Agent 实例
   private sessions: Map<string, AgentRuntime> = new Map();
   private sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private readonly SESSION_TIMEOUT = 30 * 60 * 1000; // 30分钟超时
   private projectRoot: string;
+  private knownChats: Map<string, { chatId: string; chatType: string }> = new Map();
 
   constructor(
     appId: string,
@@ -152,6 +165,13 @@ export class FeishuBot {
       this.wsClient.start({ eventDispatcher });
       this.logger.info('Feishu Bot started, using long connection mode');
 
+      // Start approval polling (notify chats that have pending approvals)
+      this.approvalInterval = setInterval(() => {
+        this.notifyPendingApprovals().catch((e) => {
+          this.logger.error('Failed to notify pending approvals', { error: String(e) });
+        });
+      }, 2000);
+
       // Start message cache cleanup timer (clean every 5 minutes, keep message IDs from last 10 minutes)
       this.messageCleanupInterval = setInterval(() => {
         if (this.processedMessages.size > 1000) {
@@ -161,6 +181,52 @@ export class FeishuBot {
       }, 5 * 60 * 1000);
     } catch (error) {
       this.logger.error('Failed to start Feishu Bot', { error: String(error) });
+    }
+  }
+
+  private async notifyPendingApprovals(): Promise<void> {
+    if (!this.isRunning) return;
+    if (!this.client) return;
+
+    const permissionEngine = createPermissionEngine(this.projectRoot);
+    const pending = permissionEngine.getPendingApprovals();
+
+    for (const req of pending as any[]) {
+      const meta = req?.meta as { source?: string; userId?: string; sessionId?: string } | undefined;
+      if (meta?.source !== 'feishu') continue;
+
+      const sessionId = meta?.sessionId;
+      const userId = meta?.userId;
+      if (!sessionId || !userId) continue;
+
+      // We can only notify chats we have seen (so we know chatType)
+      const known = this.knownChats.get(sessionId);
+      if (!known) continue;
+
+      const key = `${req.id}:${sessionId}`;
+      if (this.notifiedApprovalKeys.has(key)) continue;
+      this.notifiedApprovalKeys.add(key);
+
+      const command =
+        req.type === "exec_shell"
+          ? (req.details as { command?: string } | undefined)?.command
+          : undefined;
+      const actionText = command ? `我想执行命令：${command}` : `我想执行操作：${req.action}`;
+
+      await this.sendChatMessage(
+        known.chatId,
+        known.chatType,
+        [
+          `⏳ 需要你确认一下：`,
+          actionText,
+          ``,
+          `你可以直接用自然语言回复，比如：`,
+          `- “可以” / “同意”`,
+          `- “不可以，因为 …” / “拒绝，因为 …”`,
+          command ? `- “只同意执行 ${command}”` : undefined,
+          `- “全部同意” / “全部拒绝”`,
+        ].filter(Boolean).join('\n'),
+      );
     }
   }
 
@@ -195,6 +261,10 @@ export class FeishuBot {
       }
 
       this.logger.info(`Received Feishu message: ${userMessage}`);
+
+      // Record this chat as a known notification target
+      const sessionId = `${chat_type}:${chat_id}`;
+      this.knownChats.set(sessionId, { chatId: chat_id, chatType: chat_type });
 
       // Check if it's a command
       if (userMessage.startsWith('/')) {
@@ -275,6 +345,21 @@ Available commands:
       // Generate sessionId (based on chatType and chatId)
       const sessionId = `${chatType}:${chatId}`;
 
+      // If there are pending approvals for this session, treat the message as an approval reply first.
+      const approvalResult = await agentRuntime.handleApprovalReply({
+        userMessage: instructions,
+        context: {
+          source: 'feishu',
+          userId: chatId,
+          sessionId,
+        },
+        sessionId,
+      });
+      if (approvalResult) {
+        await this.sendMessage(chatId, chatType, messageId, approvalResult.output);
+        return;
+      }
+
       // Execute instruction using session agent
       const result = await agentRuntime.run({
         instructions,
@@ -285,12 +370,17 @@ Available commands:
         },
       });
 
+      if ((result as any).pendingApproval) {
+        await this.notifyPendingApprovals();
+        return;
+      }
+
       // Send execution result
       const message = result.success
         ? `✅ Execution successful\n\n${result.output}`
         : `❌ Execution failed\n\n${result.output}`;
 
-      await this.sendMessage(chatId, chatType, messageId, message);
+      await this.sendMessage(chatId, chatType, messageId, sanitizeChatText(message));
     } catch (error) {
       await this.sendErrorMessage(chatId, chatType, messageId, `Execution error: ${String(error)}`);
     }
@@ -332,6 +422,24 @@ Available commands:
     }
   }
 
+  private async sendChatMessage(chatId: string, chatType: string, text: string): Promise<void> {
+    try {
+      // Send directly to chat without needing to reply to a message
+      await this.client.im.v1.message.create({
+        params: {
+          receive_id_type: 'chat_id',
+        },
+        data: {
+          receive_id: chatId,
+          content: JSON.stringify({ text }),
+          msg_type: 'text',
+        },
+      });
+    } catch (error) {
+      this.logger.error('Failed to send Feishu chat message', { error: String(error) });
+    }
+  }
+
   private async sendErrorMessage(
     chatId: string,
     chatType: string,
@@ -349,9 +457,14 @@ Available commands:
       clearInterval(this.messageCleanupInterval);
       this.messageCleanupInterval = null;
     }
+    if (this.approvalInterval) {
+      clearInterval(this.approvalInterval);
+      this.approvalInterval = null;
+    }
 
     // Clean up message cache
     this.processedMessages.clear();
+    this.notifiedApprovalKeys.clear();
 
     if (this.wsClient) {
       // Feishu SDK's WSClient doesn't have explicit stop method, just set status

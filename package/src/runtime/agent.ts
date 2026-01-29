@@ -20,6 +20,7 @@ import {
   loadShipConfig,
   ShipConfig,
   getTimestamp,
+  generateId,
   DEFAULT_SHELL_GUIDE,
 } from '../utils.js';
 import { createPermissionEngine, PermissionEngine, PermissionCheckResult } from './permission.js';
@@ -57,6 +58,7 @@ export interface AgentInput {
     userId?: string;
     sessionId?: string;
   };
+  onStep?: (event: { type: string; text: string; data?: Record<string, unknown> }) => Promise<void>;
 }
 
 export interface ApprovalRequest {
@@ -78,6 +80,12 @@ export interface ConversationMessage {
   toolCallId?: string;
   toolName?: string;
   timestamp: number;
+}
+
+export interface ApprovalDecisionResult {
+  approvals?: Record<string, string>;
+  refused?: Record<string, string>;
+  pass?: Record<string, string>;
 }
 
 // ==================== ToolLoopAgent Implementation ====================
@@ -104,6 +112,91 @@ export class AgentRuntime {
     this.context = context;
     this.logger = new AgentLogger(context.projectRoot);
     this.permissionEngine = createPermissionEngine(context.projectRoot);
+  }
+
+  setConversationHistory(sessionId: string, messages: ConversationMessage[]): void {
+    this.conversationHistories.set(sessionId, Array.isArray(messages) ? messages : []);
+  }
+
+  private serializeMessagesForSummary(messages: ConversationMessage[], maxChars: number = 12000): string {
+    const text = messages.map((m) => {
+      const role = m.role === 'tool' ? 'Tool' : m.role === 'assistant' ? 'Assistant' : 'User';
+      const name = m.role === 'tool' && m.toolName ? ` (${m.toolName})` : '';
+      return `${role}${name}: ${m.content}`;
+    }).join('\n\n');
+
+    if (text.length <= maxChars) return text;
+    return text.slice(0, maxChars) + '\n\n[TRUNCATED]';
+  }
+
+  private async compactConversationHistory(sessionId: string): Promise<boolean> {
+    const history = this.conversationHistories.get(sessionId) || [];
+    if (history.length < 4) return false;
+
+    const cut = Math.max(1, Math.floor(history.length * 0.5));
+    const older = history.slice(0, cut);
+    const newer = history.slice(cut);
+
+    let summaryText = '';
+    if (this.initialized && this.agent) {
+      try {
+        const { generateText } = await import('ai');
+        const input = this.serializeMessagesForSummary(older, 12000);
+        const result = await generateText({
+          model: this.agent,
+          system: 'You are a summarization assistant. Summarize the conversation faithfully. Preserve key decisions, commands, file paths, IDs, and user intent. Output plain text.',
+          prompt: `Summarize the following earlier conversation into a compact summary (<= 400 words):\n\n${input}`,
+        });
+        summaryText = (result.text || '').trim();
+      } catch (e) {
+        summaryText = '';
+      }
+    }
+
+    if (!summaryText) {
+      summaryText = '[Auto-compact] Earlier conversation was summarized/omitted due to context limits.';
+    }
+
+    const summaryMessage: ConversationMessage = {
+      role: 'assistant',
+      content: `🧾 Summary of earlier messages:\n${summaryText}`,
+      timestamp: Date.now(),
+    };
+
+    this.conversationHistories.set(sessionId, [summaryMessage, ...newer]);
+    return true;
+  }
+
+  private formatToolResultForHistory(
+    toolName: string,
+    toolArgs: Record<string, unknown>,
+    toolResult: unknown,
+  ): string {
+    if (toolName !== 'exec_shell') {
+      const ok = Boolean((toolResult as any)?.success);
+      return `Tool: ${toolName}\nSuccess: ${ok}`;
+    }
+
+    const command = String((toolArgs as any)?.command || '').trim();
+    const exitCode = (toolResult as any)?.exitCode;
+    const stdoutRaw = String((toolResult as any)?.stdout || (toolResult as any)?.output || '');
+    const stderrRaw = String((toolResult as any)?.stderr || '');
+    const stdout = stdoutRaw.trim();
+    const stderr = stderrRaw.trim();
+
+    const MAX = 1200;
+    const take = (s: string) => (s.length > MAX ? s.slice(0, MAX) + '\n…[truncated]' : s);
+
+    const out = stdout ? take(stdout) : '';
+    const err = stderr ? take(stderr) : '';
+
+    return [
+      `Tool: exec_shell`,
+      command ? `Command: ${command}` : undefined,
+      typeof exitCode === 'number' ? `ExitCode: ${exitCode}` : undefined,
+      out ? `Stdout:\n${out}` : undefined,
+      err ? `Stderr:\n${err}` : undefined,
+    ].filter(Boolean).join('\n');
   }
 
   /**
@@ -407,9 +500,10 @@ Chain commands with && for sequential execution or ; for independent execution.`
    * Run the agent with the given instructions
    */
   async run(input: AgentInput): Promise<AgentResult> {
-    const { instructions, context } = input;
+    const { instructions, context, onStep } = input;
     const startTime = Date.now();
     const toolCalls: AgentResult['toolCalls'] = [];
+    const requestId = generateId();
 
     // 生成 sessionId（如果没有提供）
     const sessionId = context?.sessionId || context?.userId || 'default';
@@ -418,6 +512,14 @@ Chain commands with && for sequential execution or ; for independent execution.`
     const systemPrompt = this.context.agentMd;
     await this.logger.log('debug', `Using system prompt (Agent.md): ${systemPrompt?.substring(0, 100)}...`);
     await this.logger.log('debug', `Session ID: ${sessionId}`);
+    await this.logger.log('info', 'Agent request started', {
+      requestId,
+      sessionId,
+      source: context?.source,
+      userId: context?.userId,
+      instructionsPreview: instructions?.slice(0, 200),
+      projectRoot: this.context.projectRoot,
+    });
 
     // Build full prompt with context
     let fullPrompt = instructions;
@@ -425,9 +527,23 @@ Chain commands with && for sequential execution or ; for independent execution.`
       fullPrompt = `${context.taskDescription}\n\n${instructions}`;
     }
 
+    // Provide a stable runtime context prefix so the model doesn't guess paths.
+    // Also: avoid leaking tool logs into user-facing chat replies.
+    const runtimePrefix =
+      `Runtime context:\n` +
+      `- Project root: ${this.context.projectRoot}\n` +
+      `- Session: ${sessionId}\n` +
+      `- Request ID: ${requestId}\n` +
+      `\nUser-facing output rules:\n` +
+      `- Reply in natural language.\n` +
+      `- Do NOT paste raw tool outputs or JSON logs; summarize them.\n`;
+    fullPrompt = `${runtimePrefix}\n${fullPrompt}`;
+
+    // Frontends may optionally subscribe to onStep; default integrations do not emit step-by-step chat messages.
+
     // If initialized with model, use generateText with tool loop
     if (this.initialized && this.agent) {
-      return this.runWithGenerateText(fullPrompt, systemPrompt, startTime, context, sessionId);
+      return this.runWithGenerateText(fullPrompt, systemPrompt, startTime, context, sessionId, { onStep, requestId });
     }
 
     // Otherwise use simulation mode
@@ -442,11 +558,25 @@ Chain commands with && for sequential execution or ; for independent execution.`
     systemPrompt: string,
     startTime: number,
     context: AgentInput['context'] | undefined,
-    sessionId: string
+    sessionId: string,
+    opts?: { addUserPrompt?: boolean; compactionAttempts?: number; onStep?: AgentInput['onStep']; requestId?: string }
   ): Promise<AgentResult> {
     const toolCalls: AgentResult['toolCalls'] = [];
     let hadToolFailure = false;
     const toolFailureSummaries: string[] = [];
+    const addUserPrompt = opts?.addUserPrompt !== false;
+    const compactionAttempts = opts?.compactionAttempts ?? 0;
+    const onStep = opts?.onStep;
+    const requestId = opts?.requestId;
+
+    const emitStep = async (type: string, text: string, data?: Record<string, unknown>) => {
+      if (!onStep) return;
+      try {
+        await onStep({ type, text, data });
+      } catch {
+        // ignore
+      }
+    };
 
     try {
       // Import generateText from AI SDK
@@ -466,12 +596,14 @@ Chain commands with && for sequential execution or ; for independent execution.`
 
       await this.logger.log('debug', `Calling generateText with system prompt length: ${systemPrompt?.length || 0}`);
 
-      // 添加用户消息到历史
-      this.addToHistory({
-        role: 'user',
-        content: prompt,
-        timestamp: Date.now(),
-      }, sessionId);
+      if (addUserPrompt) {
+        // 添加用户消息到历史
+        this.addToHistory({
+          role: 'user',
+          content: prompt,
+          timestamp: Date.now(),
+        }, sessionId);
+      }
 
       // 构建完整的对话上下文
       let conversationContext = this.buildConversationContext(sessionId);
@@ -521,6 +653,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
           });
 
           await this.logger.log('debug', `Agent response: ${result.text?.substring(0, 200)}...`);
+          await emitStep('done', 'done', { requestId, sessionId });
 
           return {
             success: !hadToolFailure,
@@ -535,7 +668,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
         }
 
         // Process tool calls with approval workflow
-        const toolResults: Array<{ toolCallId: string; toolName: string; result: any }> = [];
+        const toolResults: Array<{ toolCallId: string; toolName: string; args: Record<string, unknown>; result: any }> = [];
 
         for (const toolCall of result.toolCalls) {
           const toolCallId = (toolCall as any).toolCallId;
@@ -561,6 +694,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
             toolResults.push({
               toolCallId,
               toolName,
+              args: args || {},
               result: errorResult,
             });
             toolCalls.push({
@@ -583,6 +717,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
               toolResults.push({
                 toolCallId,
                 toolName,
+                args: args || {},
                 result: errorResult,
               });
               toolCalls.push({
@@ -604,23 +739,47 @@ Chain commands with && for sequential execution or ; for independent execution.`
               type: approvalCheck.type,
             });
 
-            // Wait for approval (with timeout)
-            const approvalResult = await this.permissionEngine.waitForApproval(
-              approvalCheck.approvalId,
-              300 // 5 minutes timeout
-            );
-
-            if (approvalResult === 'rejected') {
-              throw new Error(`Tool call rejected: ${approvalCheck.message || toolName}`);
-            }
-
-            if (approvalResult === 'timeout') {
-              throw new Error(`Approval timeout for tool call: ${toolName}`);
-            }
-
-            await this.logger.log('info', `Tool call approved: ${toolName}`, {
-              approvalId: approvalCheck.approvalId,
+            // New workflow: snapshot history into approval file and return immediately.
+            const snapshot = this.getConversationHistory(sessionId);
+            await this.permissionEngine.updateApprovalRequest(approvalCheck.approvalId, {
+              tool: toolName,
+              input: args || {},
+              messages: snapshot as unknown[],
+              meta: {
+                sessionId,
+                source: context?.source,
+                userId: context?.userId,
+                requestId,
+              },
             });
+            await this.logger.log('info', 'Approval snapshot saved', {
+              requestId,
+              sessionId,
+              approvalId: approvalCheck.approvalId,
+              toolName,
+              source: context?.source,
+              userId: context?.userId,
+              historyMessages: snapshot.length,
+            });
+
+            const pendingText =
+              `⏳ 需要你确认一下我接下来要做的操作（已发起审批请求）。\n` +
+              `操作: ${approvalCheck.description || toolName}\n\n` +
+              `你可以直接用自然语言回复，比如：\n` +
+              `- “可以” / “同意”\n` +
+              `- “不可以，因为 …” / “拒绝，因为 …”\n` +
+              `- “全部同意” / “全部拒绝”`;
+            return {
+              success: false,
+              output: pendingText,
+              toolCalls,
+              pendingApproval: {
+                id: approvalCheck.approvalId,
+                type: approvalCheck.type || 'other',
+                description: approvalCheck.description || `Approval required: ${toolName}`,
+                data: { toolName, args },
+              },
+            };
           }
 
           // Execute the tool
@@ -630,6 +789,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
             toolResults.push({
               toolCallId,
               toolName,
+              args: args || {},
               result: errorResult,
             });
             continue;
@@ -640,6 +800,14 @@ Chain commands with && for sequential execution or ; for independent execution.`
             const toolArgs = args || {};
 
             await this.logger.log('debug', `Executing tool: ${toolName}`, { args: toolArgs });
+            if (toolName === 'exec_shell') {
+              const command = (toolArgs as any).command;
+              if (typeof command === 'string') {
+                await emitStep('step_start', `我准备执行：${command}`, { toolName, command, requestId, sessionId });
+              }
+            } else {
+              await emitStep('step_start', `我准备执行工具：${toolName}`, { toolName, requestId, sessionId });
+            }
 
             if (toolName === 'exec_shell') {
               const command = (toolArgs as any).command;
@@ -648,6 +816,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
                 toolResults.push({
                   toolCallId,
                   toolName,
+                  args: toolArgs,
                   result: errorResult,
                 });
                 toolCalls.push({
@@ -666,8 +835,31 @@ Chain commands with && for sequential execution or ; for independent execution.`
             toolResults.push({
               toolCallId,
               toolName,
+              args: toolArgs,
               result: toolResult,
             });
+            await this.logger.log('info', 'Tool step finished', {
+              requestId,
+              sessionId,
+              toolName,
+              exitCode: (toolResult as any)?.exitCode,
+            });
+
+            // Human-friendly step finish message
+            if (toolName === 'exec_shell') {
+              const command = (toolArgs as any).command as string;
+              const exitCode = (toolResult as any)?.exitCode;
+              const stdout = String((toolResult as any)?.stdout || (toolResult as any)?.output || '').trim();
+              const stderr = String((toolResult as any)?.stderr || '').trim();
+              const snippet = (stdout || stderr).slice(0, 500);
+              await emitStep(
+                'step_finish',
+                `已执行：${command}${typeof exitCode === 'number' ? `（exitCode=${exitCode}）` : ''}${snippet ? `\n摘要：${snippet}${(stdout || stderr).length > 500 ? '…' : ''}` : ''}`,
+                { toolName, command, exitCode: typeof exitCode === 'number' ? exitCode : undefined, requestId, sessionId },
+              );
+            } else {
+              await emitStep('step_finish', `工具执行完成：${toolName}`, { toolName, requestId, sessionId });
+            }
 
             // Log tool call
             toolCalls.push({
@@ -693,6 +885,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
             toolResults.push({
               toolCallId,
               toolName,
+              args: args || {},
               result: errorResult,
             });
 
@@ -710,9 +903,10 @@ Chain commands with && for sequential execution or ; for independent execution.`
 
         // 添加工具调用结果到历史
         for (const tr of toolResults) {
+          const formatted = this.formatToolResultForHistory(tr.toolName, tr.args || {}, tr.result);
           this.addToHistory({
             role: 'tool',
-            content: `Tool: ${tr.toolName}\nResult: ${JSON.stringify(tr.result)}`,
+            content: formatted,
             toolCallId: tr.toolCallId,
             toolName: tr.toolName,
             timestamp: Date.now(),
@@ -740,26 +934,45 @@ Chain commands with && for sequential execution or ; for independent execution.`
       const errorMsg = String(error);
 
       // Check if context length exceeded error
-      if (errorMsg.includes('context_length') ||
+        if (errorMsg.includes('context_length') ||
           errorMsg.includes('too long') ||
           errorMsg.includes('maximum context') ||
           errorMsg.includes('context window')) {
         const currentHistory = this.conversationHistories.get(sessionId) || [];
-        await this.logger.log('warn', 'Context length exceeded, clearing history', {
+        await this.logger.log('warn', 'Context length exceeded, compacting history', {
           sessionId,
           currentMessages: currentHistory.length,
-          error: errorMsg
+          error: errorMsg,
+          compactionAttempts,
         });
+        await emitStep('compaction', '上下文过长，已自动压缩历史记录后继续。', { requestId, sessionId, compactionAttempts });
 
-        // Clear conversation history for this session
-        this.conversationHistories.delete(sessionId);
-        await this.logger.log('info', `Cleared conversation history for session ${sessionId}`);
+        if (compactionAttempts >= 3) {
+          this.conversationHistories.delete(sessionId);
+          return {
+            success: false,
+            output: `Context length exceeded and compaction failed. History cleared. Please resend your question.`,
+            toolCalls,
+          };
+        }
 
-        return {
-          success: false,
-          output: `Context length exceeded, history automatically cleared. Please resend your question.`,
-          toolCalls,
-        };
+        const compacted = await this.compactConversationHistory(sessionId);
+        if (!compacted) {
+          this.conversationHistories.delete(sessionId);
+          return {
+            success: false,
+            output: `Context length exceeded and compaction was not possible. History cleared. Please resend your question.`,
+            toolCalls,
+          };
+        }
+
+        // Retry without adding a new user prompt again (it is already in history)
+        return this.runWithGenerateText(prompt, systemPrompt, startTime, context, sessionId, {
+          addUserPrompt: false,
+          compactionAttempts: compactionAttempts + 1,
+          onStep,
+          requestId,
+        });
       }
 
       await this.logger.log('error', 'Agent execution failed', { error: errorMsg });
@@ -769,6 +982,252 @@ Chain commands with && for sequential execution or ; for independent execution.`
         toolCalls,
       };
     }
+  }
+
+  async decideApprovals(
+    userMessage: string,
+    pendingApprovals: Array<{ id: string; type: string; action: string; tool?: string; input?: unknown; details?: unknown }>
+  ): Promise<ApprovalDecisionResult> {
+    if (!this.initialized || !this.agent) {
+      return { pass: Object.fromEntries(pendingApprovals.map((a) => [a.id, ''])) };
+    }
+
+    const { generateText } = await import('ai');
+    const compactList = pendingApprovals.map((a) => ({
+      id: a.id,
+      type: a.type,
+      action: a.action,
+      tool: a.tool,
+      input: a.input,
+      details: a.details,
+    }));
+
+    const result = await generateText({
+      model: this.agent,
+      system: [
+        'You are an approval-routing assistant.',
+        'Given a user message and a list of pending approval requests, decide which approvals to approve, refuse, or pass.',
+        'Return ONLY valid JSON with this exact structure:',
+        '{ "approvals": { "<id>": "<any string>" }, "refused": { "<id>": "<reason>" }, "pass": { "<id>": "<any string>" } }',
+        'If the user is ambiguous, put everything into "pass".',
+      ].join('\n'),
+      prompt: `User message:\n${userMessage}\n\nPending approvals:\n${JSON.stringify(compactList, null, 2)}\n\nReturn JSON only.`,
+    });
+
+    try {
+      const parsed = JSON.parse((result.text || '').trim()) as ApprovalDecisionResult;
+      return parsed && typeof parsed === 'object' ? parsed : { pass: Object.fromEntries(pendingApprovals.map((a) => [a.id, ''])) };
+    } catch {
+      return { pass: Object.fromEntries(pendingApprovals.map((a) => [a.id, ''])) };
+    }
+  }
+
+  async handleApprovalReply(input: {
+    userMessage: string;
+    context?: AgentInput['context'];
+    sessionId: string;
+    onStep?: AgentInput['onStep'];
+  }): Promise<AgentResult | null> {
+    const { userMessage, context, sessionId, onStep } = input;
+
+    await this.logger.log('info', 'Approval reply received', {
+      sessionId,
+      source: context?.source,
+      userId: context?.userId,
+      messagePreview: userMessage.slice(0, 200),
+    });
+
+    const pending = this.permissionEngine.getPendingApprovals();
+    const relevant = pending.filter((a: any) => {
+      const metaSessionId = (a as any)?.meta?.sessionId;
+      const metaUserId = (a as any)?.meta?.userId;
+      if (metaSessionId && metaSessionId === sessionId) return true;
+      if (!metaSessionId && metaUserId && context?.userId && metaUserId === context.userId) return true;
+      return false;
+    });
+
+    if (relevant.length === 0) return null;
+
+    const decisions = await this.decideApprovals(
+      userMessage,
+      relevant.map((a) => ({
+        id: a.id,
+        type: a.type,
+        action: a.action,
+        tool: (a as any).tool,
+        input: (a as any).input,
+        details: a.details,
+      }))
+    );
+
+    const approvals = decisions.approvals || {};
+    const refused = decisions.refused || {};
+
+    if (Object.keys(approvals).length === 0 && Object.keys(refused).length === 0) {
+      return {
+        success: true,
+        output: `No approval action taken. Pending approvals: ${relevant.map((a) => a.id).join(', ')}`,
+        toolCalls: [],
+      };
+    }
+
+    await this.logger.log('info', 'Approval decisions parsed', {
+      sessionId,
+      approvals: Object.keys(approvals),
+      refused: Object.keys(refused),
+    });
+
+    return this.resumeFromApprovalActions({
+      sessionId,
+      context,
+      approvals,
+      refused,
+      onStep,
+    });
+  }
+
+  async resumeFromApprovalActions(input: {
+    sessionId: string;
+    context?: AgentInput['context'];
+    approvals?: Record<string, string>;
+    refused?: Record<string, string>;
+    onStep?: AgentInput['onStep'];
+  }): Promise<AgentResult> {
+    const { sessionId, context } = input;
+    const approvals = input.approvals || {};
+    const refused = input.refused || {};
+    const onStep = input.onStep;
+
+    const emitStep = async (type: string, text: string, data?: Record<string, unknown>) => {
+      if (!onStep) return;
+      try {
+        await onStep({ type, text, data });
+      } catch {
+        // ignore
+      }
+    };
+
+    const approvedIds = Object.keys(approvals);
+    const refusedEntries = Object.entries(refused);
+
+    await this.logger.log('info', 'Resuming from approval actions', {
+      sessionId,
+      source: context?.source,
+      userId: context?.userId,
+      approvedIds,
+      refusedIds: refusedEntries.map(([id]) => id),
+    });
+
+    const approvalsDir = getApprovalsDirPath(this.context.projectRoot);
+
+    // Load snapshot from the first referenced approval that has messages.
+    let baseMessages: ConversationMessage[] | null = null;
+    const idsToTry = [...approvedIds, ...refusedEntries.map(([id]) => id)];
+    for (const id of idsToTry) {
+      const file = path.join(approvalsDir, `${id}.json`);
+      if (!fs.existsSync(file)) continue;
+      try {
+        const data = (await fs.readJson(file)) as any;
+        if (Array.isArray(data?.messages)) {
+          baseMessages = data.messages as ConversationMessage[];
+          break;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (!baseMessages) {
+      baseMessages = this.getConversationHistory(sessionId);
+    }
+
+    this.setConversationHistory(sessionId, baseMessages);
+
+    // Approve: execute tool(s) and append tool results.
+    if (approvedIds.length > 0) {
+      const tools = await this.createTools();
+      for (const approvalId of approvedIds) {
+        const file = path.join(approvalsDir, `${approvalId}.json`);
+        let toolName: string | undefined;
+        let toolInput: Record<string, unknown> | undefined;
+
+        if (fs.existsSync(file)) {
+          try {
+            const data = (await fs.readJson(file)) as any;
+            toolName = data.tool;
+            toolInput = data.input;
+          } catch {
+            // ignore
+          }
+        }
+
+        if (!toolName || typeof toolName !== 'string') continue;
+        const tool = (tools as any)[toolName];
+        if (!tool || typeof tool.execute !== 'function') continue;
+
+        const execInput = toolInput && typeof toolInput === 'object' ? toolInput : {};
+        if (toolName === 'exec_shell') {
+          const command = String((execInput as any)?.command || '').trim();
+          if (command) {
+            await emitStep('step_start', `我准备执行：${command}`, { toolName, command, approvalId, sessionId });
+          }
+        } else {
+          await emitStep('step_start', `我准备执行工具：${toolName}`, { toolName, approvalId, sessionId });
+        }
+        const toolResult = await tool.execute(execInput);
+
+        if (toolName === 'exec_shell') {
+          const command = String((execInput as any)?.command || '').trim();
+          const exitCode = (toolResult as any)?.exitCode;
+          const stdout = String((toolResult as any)?.stdout || (toolResult as any)?.output || '').trim();
+          const stderr = String((toolResult as any)?.stderr || '').trim();
+          const snippet = (stdout || stderr).slice(0, 500);
+          await emitStep(
+            'step_finish',
+            `已执行：${command}${typeof exitCode === 'number' ? `（exitCode=${exitCode}）` : ''}${snippet ? `\n摘要：${snippet}${(stdout || stderr).length > 500 ? '…' : ''}` : ''}`,
+            { toolName, command, exitCode: typeof exitCode === 'number' ? exitCode : undefined, approvalId, sessionId },
+          );
+        } else {
+          await emitStep('step_finish', `工具执行完成：${toolName}`, { toolName, approvalId, sessionId });
+        }
+
+        const formatted = this.formatToolResultForHistory(toolName, execInput, toolResult);
+        this.addToHistory({
+          role: 'tool',
+          content: formatted,
+          toolName,
+          timestamp: Date.now(),
+        }, sessionId);
+
+        await this.permissionEngine.updateApprovalRequest(approvalId, {
+          status: 'approved',
+          respondedAt: getTimestamp(),
+          response: approvals[approvalId] || 'Approved',
+        });
+        // Requirement: delete approval json after decision
+        await this.permissionEngine.deleteApprovalRequest(approvalId);
+      }
+    }
+
+    // Refuse: mark rejected and inject as a user message so the agent can continue.
+    if (refusedEntries.length > 0) {
+      for (const [approvalId, reason] of refusedEntries) {
+        await this.permissionEngine.updateApprovalRequest(approvalId, {
+          status: 'rejected',
+          respondedAt: getTimestamp(),
+          response: reason || 'Rejected',
+        });
+        await this.permissionEngine.deleteApprovalRequest(approvalId);
+
+        this.addToHistory({
+          role: 'user',
+          content: `Approval ${approvalId} was rejected. Reason: ${reason || 'no reason provided'}`,
+          timestamp: Date.now(),
+        }, sessionId);
+      }
+    }
+
+    const startTime = Date.now();
+    return this.runWithGenerateText('', this.context.agentMd, startTime, context, sessionId, { addUserPrompt: false });
   }
 
   /**

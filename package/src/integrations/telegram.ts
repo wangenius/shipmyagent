@@ -46,6 +46,22 @@ interface TelegramApiResponse<T> {
   error_code?: number;
 }
 
+function sanitizeChatText(text: string): string {
+  if (!text) return text;
+
+  let out = text;
+
+  // Remove/compact tool-log style dumps if present
+  out = out.replace(/(^|\n)Tool Result:[\s\S]*?(?=\n{2,}|$)/g, '\n[工具输出已省略：我已在后台读取并提炼关键信息]\n');
+
+  // Collapse very long JSON-ish blocks
+  if (out.length > 6000) {
+    out = out.slice(0, 5800) + '\n\n…[truncated]（如需完整输出请回复“发完整输出”）';
+  }
+
+  return out;
+}
+
 export class TelegramBot {
   private botToken: string;
   private chatId?: string;
@@ -56,7 +72,7 @@ export class TelegramBot {
   private approvalInterval: ReturnType<typeof setInterval> | null = null;
   private isRunning: boolean = false;
   private pollInFlight: boolean = false;
-  private notifiedApprovalIds: Set<string> = new Set();
+  private notifiedApprovalKeys: Set<string> = new Set();
 
   // 会话管理：为每个用户维护独立的 Agent 实例
   private sessions: Map<string, AgentRuntime> = new Map();
@@ -222,7 +238,6 @@ export class TelegramBot {
   }
 
   private async notifyPendingApprovals(): Promise<void> {
-    if (!this.chatId) return;
     if (!this.isRunning) return;
 
     try {
@@ -230,24 +245,50 @@ export class TelegramBot {
       const pending = permissionEngine.getPendingApprovals();
 
       for (const req of pending) {
-        if (this.notifiedApprovalIds.has(req.id)) continue;
-        this.notifiedApprovalIds.add(req.id);
+        const meta = (req as any).meta as { source?: string; userId?: string } | undefined;
+        const targets: string[] = [];
 
-        const command =
-          req.type === "exec_shell"
-            ? (req.details as { command?: string } | undefined)?.command
-            : undefined;
+        // Notify the originating Telegram chat (if available)
+        if (meta?.source === 'telegram' && meta.userId) {
+          targets.push(String(meta.userId));
+        }
 
-        const detailsText = command ? `\nCommand: ${command}` : "";
+        // Also notify configured admin chatId (optional)
+        if (this.chatId) {
+          targets.push(String(this.chatId));
+        }
 
-        await this.sendMessageWithInlineKeyboard(
-          this.chatId,
-          `⏳ Approval required\nID: ${req.id}\nType: ${req.type}\nAction: ${req.action}${detailsText}`,
-          [
-            { text: "Approve", callback_data: `approve:${req.id}` },
-            { text: "Reject", callback_data: `reject:${req.id}` },
-          ],
-        );
+        if (targets.length === 0) {
+          continue;
+        }
+
+        // prefer natural-language, avoid dumping detailsText
+
+        for (const target of targets) {
+          const key = `${req.id}:${target}`;
+          if (this.notifiedApprovalKeys.has(key)) continue;
+          this.notifiedApprovalKeys.add(key);
+
+          const command =
+            req.type === "exec_shell"
+              ? (req.details as { command?: string } | undefined)?.command
+              : undefined;
+          const actionText = command ? `我想执行命令：${command}` : `我想执行操作：${req.action}`;
+
+          await this.sendMessage(
+            target,
+            [
+              `⏳ 需要你确认一下：`,
+              actionText,
+              ``,
+              `你可以直接用自然语言回复，比如：`,
+              `- “可以” / “同意”`,
+              `- “不可以，因为 …” / “拒绝，因为 …”`,
+              command ? `- “只同意执行 ${command}”` : undefined,
+              `- “全部同意” / “全部拒绝”`,
+            ].filter(Boolean).join('\n'),
+          );
+        }
       }
     } catch (error) {
       this.logger.error(`Failed to notify pending approvals: ${String(error)}`);
@@ -372,24 +413,21 @@ Available commands:
           break;
         }
 
-        const permissionEngine = createPermissionEngine(this.projectRoot);
-        const success =
-          cmd === "/approve"
-            ? await permissionEngine.approveRequest(
-                arg,
-                "Approved via Telegram command",
-              )
-            : await permissionEngine.rejectRequest(
-                arg,
-                "Rejected via Telegram command",
-              );
+        const userId = parseInt(chatId);
+        const sessionId = `telegram:${userId}`;
+        const agentRuntime = this.getOrCreateSession(userId);
+        if (!agentRuntime.isInitialized()) {
+          await agentRuntime.initialize();
+        }
 
-        await this.sendMessage(
-          chatId,
-          success
-            ? "✅ Operation successful"
-            : "❌ Operation failed (unknown id?)",
-        );
+        const result = await agentRuntime.resumeFromApprovalActions({
+          sessionId,
+          context: { source: 'telegram', userId: chatId, sessionId },
+          approvals: cmd === '/approve' ? { [arg]: 'Approved via Telegram command' } : {},
+          refused: cmd === '/reject' ? { [arg]: 'Rejected via Telegram command' } : {},
+        });
+
+        await this.sendMessage(chatId, result.output);
         break;
       }
 
@@ -417,22 +455,22 @@ Available commands:
     const [action, approvalId] = data.split(":");
 
     if (action === "approve" || action === "reject") {
-      const permissionEngine = createPermissionEngine(this.projectRoot);
-      const success =
-        action === "approve"
-          ? await permissionEngine.approveRequest(
-              approvalId,
-              `Approved via Telegram`,
-            )
-          : await permissionEngine.rejectRequest(
-              approvalId,
-              `Rejected via Telegram`,
-            );
+      // Resume execution immediately using the stored approval snapshot.
+      const userId = parseInt(chatId);
+      const sessionId = `telegram:${userId}`;
+      const agentRuntime = this.getOrCreateSession(userId);
+      if (!agentRuntime.isInitialized()) {
+        await agentRuntime.initialize();
+      }
 
-      await this.sendMessage(
-        chatId,
-        success ? "✅ Operation successful" : "❌ Operation failed",
-      );
+      const result = await agentRuntime.resumeFromApprovalActions({
+        sessionId,
+        context: { source: 'telegram', userId: chatId, sessionId },
+        approvals: action === 'approve' ? { [approvalId]: 'Approved via Telegram' } : {},
+        refused: action === 'reject' ? { [approvalId]: 'Rejected via Telegram' } : {},
+      });
+
+      await this.sendMessage(chatId, result.output);
     }
   }
 
@@ -455,6 +493,21 @@ Available commands:
       // Generate sessionId (based on telegram and userId)
       const sessionId = `telegram:${userId}`;
 
+      // If there are pending approvals for this session, treat the message as an approval reply first.
+      const approvalResult = await agentRuntime.handleApprovalReply({
+        userMessage: instructions,
+        context: {
+          source: "telegram",
+          userId: chatId,
+          sessionId,
+        },
+        sessionId,
+      });
+      if (approvalResult) {
+        await this.sendMessage(chatId, approvalResult.output);
+        return;
+      }
+
       // Execute instruction using session agent
       const result = await agentRuntime.run({
         instructions,
@@ -465,13 +518,20 @@ Available commands:
         },
       });
 
-      await this.sendMessage(chatId, result.output);
+      if (result.pendingApproval) {
+        // Send approval request once (and broadcast via polling) without duplicating messages.
+        await this.notifyPendingApprovals();
+        return;
+      }
+
+      await this.sendMessage(chatId, sanitizeChatText(result.output));
     } catch (error) {
       await this.sendMessage(chatId, `❌ Execution error: ${String(error)}`);
     }
   }
 
   async sendMessage(chatId: string, text: string): Promise<void> {
+    text = sanitizeChatText(text);
     const chunks = splitTelegramMessage(text);
     for (const chunk of chunks) {
       try {

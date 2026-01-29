@@ -9,7 +9,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "node bin/start.js"
+    "start": "node bin/start.js",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "agent",

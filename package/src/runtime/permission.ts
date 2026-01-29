@@ -17,6 +17,13 @@ export interface ApprovalRequest {
   type: PermissionType;
   action: string;
   details: Record<string, unknown>;
+  // Optional: tool + input snapshot for resuming execution
+  tool?: string;
+  input?: Record<string, unknown>;
+  // Optional: full conversation snapshot at the moment approval was requested
+  messages?: unknown[];
+  // Optional: metadata for routing notifications back to the right user/channel
+  meta?: Record<string, unknown>;
   diff?: string;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
@@ -277,6 +284,8 @@ export class PermissionEngine {
   }
 
   getPendingApprovals(): ApprovalRequest[] {
+    // Refresh from disk to catch requests created by other instances/processes
+    this.loadApprovalsFromDisk();
     return Array.from(this.approvalRequests.values()).filter(
       request => request.status === 'pending'
     );
@@ -284,6 +293,45 @@ export class PermissionEngine {
 
   getApprovalRequest(id: string): ApprovalRequest | undefined {
     return this.approvalRequests.get(id);
+  }
+
+  async updateApprovalRequest(requestId: string, patch: Partial<ApprovalRequest>): Promise<boolean> {
+    const existing = this.approvalRequests.get(requestId);
+    if (!existing) {
+      // Try refresh from disk once
+      this.loadApprovalsFromDisk();
+    }
+
+    const req = this.approvalRequests.get(requestId);
+    if (!req) return false;
+
+    const updated: ApprovalRequest = { ...req, ...patch, id: req.id };
+    this.approvalRequests.set(requestId, updated);
+
+    const approvalsDir = getApprovalsDirPath(this.projectRoot);
+    const filePath = path.join(approvalsDir, `${requestId}.json`);
+    await fs.writeJson(filePath, updated, { spaces: 2 });
+    return true;
+  }
+
+  async deleteApprovalRequest(requestId: string): Promise<boolean> {
+    // Ensure it's loaded
+    if (!this.approvalRequests.has(requestId)) {
+      this.loadApprovalsFromDisk();
+    }
+
+    this.approvalRequests.delete(requestId);
+
+    const approvalsDir = getApprovalsDirPath(this.projectRoot);
+    const filePath = path.join(approvalsDir, `${requestId}.json`);
+    try {
+      if (fs.existsSync(filePath)) {
+        await fs.remove(filePath);
+      }
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**

@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs-extra';
-import { getProjectRoot, getTimestamp, getShipJsonPath, getTasksDirPath } from '../utils.js';
+import { getTimestamp, getShipJsonPath, getTasksDirPath } from '../utils.js';
 import { Logger } from './logger.js';
 import { PermissionEngine } from './permission.js';
 import { ToolExecutor, ToolContext } from './tools.js';
@@ -41,7 +41,7 @@ export class TaskExecutor {
 
     try {
       // Read task definition file
-      const taskFilePath = path.join(getProjectRoot('.'), '.ship', 'tasks', `${task.id}.md`);
+      const taskFilePath = path.join(this.projectRoot, '.ship', 'tasks', `${task.id}.md`);
 
       if (fs.existsSync(taskFilePath)) {
         const taskContent = await fs.readFile(taskFilePath, 'utf-8');
