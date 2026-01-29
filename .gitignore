@@ -13,3 +13,6 @@ yarn.lock
 tsconfig.tsbuildinfo
 
 bun.lock
+
+# Package build output
+package/bin
