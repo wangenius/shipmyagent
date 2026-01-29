@@ -56,8 +56,44 @@ ShipMyAgent 支持集成即时通讯软件，让你随时随地与你的 Agent �
   - `/status`: 查看 Agent 当前状态。
   - `/tasks`: 查看已计划的任务。
 
+## 飞书机器人
+
+飞书是一款流行的企业协作平台。你可以将 ShipMyAgent 与飞书集成，通过飞书与你的 Agent 交互。
+
+### 设置步骤
+
+1. **创建飞书机器人**
+   - 访问 [飞书开放平台](https://open.feishu.cn/document/develop-an-echo-bot/introduction)
+   - 按照指南创建一个新的机器人应用
+   - 获取你的 **App ID** 和 **App Secret**
+
+2. **配置 ship.json**
+
+编辑 `ship.json` 的 `integrations.feishu` 部分：
+
+```json
+{
+  "integrations": {
+    "feishu": {
+      "enabled": true,
+      "appId": "cli_xxxxxxxxxxxxxxxx",
+      "appSecret": "your_app_secret_here"
+    }
+  }
+}
+```
+
+> 🔒 **安全提示**：请妥善保管你的 App Secret。不要将其提交到版本控制系统。建议使用环境变量。
+
+3. **重启服务**
+   运行 `shipmyagent start` 重启服务。
+
+### 使用方法
+
+- **直接对话**：在飞书中发送消息即可与 Agent 对话。
+- **群聊**：将机器人添加到群组中，实现团队协作。
+
 ## 即将推出的集成
 
 - **Discord**: 正在开发中。
 - **Slack**: 计划中。
-- **Feishu/Lark**: 计划中。
