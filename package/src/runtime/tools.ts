@@ -1,9 +1,23 @@
+/**
+ * ToolExecutor - Legacy file operation utilities
+ *
+ * NOTE: This module is primarily used by the HTTP server API endpoints
+ * to provide file reading and listing capabilities via REST API.
+ *
+ * The Agent Runtime (agent.ts) does NOT use these methods directly.
+ * Instead, the agent uses ONLY the exec_shell tool to perform all operations
+ * through shell commands (cat, grep, echo, etc.).
+ *
+ * This separation allows:
+ * - Server API: Direct file operations for web interface
+ * - Agent: Shell-based operations for maximum flexibility
+ */
+
 import fs from 'fs-extra';
 import fg from 'fast-glob';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { generateId, getProjectRoot } from '../utils.js';
 import { PermissionEngine, PermissionCheckResult } from './permission.js';
 import { Logger } from './logger.js';
 

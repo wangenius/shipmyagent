@@ -105,25 +105,6 @@ export class AgentRuntime {
      */
     async checkToolCallApproval(toolCall) {
         const { toolName, args } = toolCall;
-        // 检查写文件操作
-        if (toolName === 'write_file' || toolName === 'delete_file' || toolName === 'create_diff') {
-            const filePath = (args.path || args.filePath);
-            if (filePath) {
-                const content = (args.content || '');
-                const permission = await this.permissionEngine.checkWriteRepo(filePath, content);
-                if (!permission.allowed && permission.requiresApproval) {
-                    // checkWriteRepo 已经创建了审批请求并返回了 approvalId
-                    const approvalId = permission.approvalId;
-                    return {
-                        requiresApproval: true,
-                        approvalId,
-                        type: 'write_repo',
-                        description: `${toolName === 'write_file' ? 'Write' : toolName === 'delete_file' ? 'Delete' : 'Modify'} file: ${filePath}`,
-                        message: `Approval required to ${toolName === 'write_file' ? 'write' : toolName === 'delete_file' ? 'delete' : 'modify'}: ${filePath}`,
-                    };
-                }
-            }
-        }
         // 检查 shell 执行
         if (toolName === 'exec_shell') {
             const command = args.command;
@@ -149,84 +130,32 @@ export class AgentRuntime {
      */
     async createTools() {
         return {
-            // File reading tool
-            read_file: {
-                description: 'Read file content from the repository',
-                parameters: z.object({
-                    path: z.string().describe('File path to read'),
-                    encoding: z.string().optional().default('utf-8'),
-                }),
-                execute: async ({ path: filePath, encoding = 'utf-8' }) => {
-                    // Check permissions
-                    const permission = await this.permissionEngine.checkReadRepo(filePath);
-                    if (!permission.allowed) {
-                        return {
-                            success: false,
-                            error: `Permission denied: ${permission.reason}`,
-                        };
-                    }
-                    // Check file exists
-                    if (!fs.existsSync(filePath)) {
-                        return {
-                            success: false,
-                            error: `File not found: ${filePath}`,
-                        };
-                    }
-                    const content = await fs.readFile(filePath, encoding);
-                    await this.logger.log('debug', `Read file: ${filePath}`);
-                    return {
-                        success: true,
-                        content: content.toString(),
-                        path: filePath,
-                    };
-                },
-            },
-            // File writing tool
-            write_file: {
-                description: 'Create or modify a file',
-                parameters: z.object({
-                    path: z.string().describe('File path to write'),
-                    content: z.string().describe('File content'),
-                }),
-                execute: async ({ path: filePath, content }) => {
-                    // Approval already handled in tool loop, just execute
-                    await fs.ensureDir(path.dirname(filePath));
-                    await fs.writeFile(filePath, content);
-                    await this.logger.log('info', `Wrote file: ${filePath}`);
-                    return {
-                        success: true,
-                        message: `File written: ${filePath}`,
-                    };
-                },
-            },
-            // File deletion
-            delete_file: {
-                description: 'Delete a file or directory',
-                parameters: z.object({
-                    path: z.string().describe('File or directory path to delete'),
-                }),
-                execute: async ({ path: filePath }) => {
-                    // Approval already handled in tool loop, just execute
-                    if (!fs.existsSync(filePath)) {
-                        return {
-                            success: false,
-                            error: `File not found: ${filePath}`,
-                        };
-                    }
-                    await fs.remove(filePath);
-                    await this.logger.log('info', `Deleted file: ${filePath}`);
-                    return {
-                        success: true,
-                        message: `File deleted: ${filePath}`,
-                    };
-                },
-            },
-            // Shell execution
+            // Shell execution - 唯一的执行工具，所有操作都通过 shell 命令实现
             exec_shell: {
-                description: 'Execute a shell command',
+                description: `Execute a shell command. This is your ONLY tool for interacting with the filesystem and codebase.
+
+Use this tool for ALL operations:
+- Reading files: cat, head, tail, less
+- Writing files: echo >, cat > file << EOF, sed -i
+- Searching: grep -r, find, rg
+- Listing: ls, find, tree
+- File operations: cp, mv, rm, mkdir
+- Code analysis: grep, wc, awk
+- Git operations: git status, git diff, git log
+- Running tests: npm test, npm run build
+- Any other shell command
+
+Examples:
+- Read file: cat src/index.ts
+- Search code: grep -rn "function.*export" src/
+- Write file: cat > file.ts << 'EOF'\\ncontent\\nEOF
+- Find files: find . -name "*.ts" -type f
+- Run tests: npm test
+
+Chain commands with && for sequential execution or ; for independent execution.`,
                 parameters: z.object({
-                    command: z.string().describe('Command to execute'),
-                    timeout: z.number().optional().default(30000),
+                    command: z.string().describe('Shell command to execute. Can be a single command or multiple commands chained with && or ;'),
+                    timeout: z.number().optional().default(30000).describe('Timeout in milliseconds (default: 30000)'),
                 }),
                 execute: async ({ command, timeout = 30000 }) => {
                     // Approval already handled in tool loop, just execute
@@ -259,220 +188,7 @@ export class AgentRuntime {
                     }
                 },
             },
-            // File listing tool
-            list_files: {
-                description: 'List files in a directory',
-                parameters: z.object({
-                    path: z.string().describe('Directory path'),
-                    pattern: z.string().optional().default('**/*'),
-                }),
-                execute: async ({ path: dirPath, pattern = '**/*' }) => {
-                    const permission = await this.permissionEngine.checkReadRepo(dirPath);
-                    if (!permission.allowed) {
-                        return {
-                            success: false,
-                            error: `Permission denied: ${permission.reason}`,
-                        };
-                    }
-                    const globImport = await import('fast-glob');
-                    const files = await globImport.default([`${dirPath}/${pattern}`], {
-                        cwd: this.context.projectRoot,
-                        ignore: ['node_modules/**', '.git/**', '.ship/**'],
-                    });
-                    await this.logger.log('debug', `Listed files: ${dirPath}`, { count: files.length });
-                    return {
-                        success: true,
-                        files,
-                    };
-                },
-            },
-            // File search tool
-            search_files: {
-                description: 'Search for text in files',
-                parameters: z.object({
-                    pattern: z.string().describe('Search pattern'),
-                    path: z.string().optional().default('.'),
-                    glob: z.string().optional().default('**/*'),
-                }),
-                execute: async ({ pattern, path: searchPath = '.', glob = '**/*' }) => {
-                    const permission = await this.permissionEngine.checkReadRepo(searchPath);
-                    if (!permission.allowed) {
-                        return {
-                            success: false,
-                            error: `Permission denied: ${permission.reason}`,
-                        };
-                    }
-                    const results = [];
-                    const globImport = await import('fast-glob');
-                    const files = await globImport.default([`${searchPath}/${glob}`], {
-                        cwd: this.context.projectRoot,
-                        ignore: ['node_modules/**', '.git/**', '.ship/**'],
-                    });
-                    for (const file of files) {
-                        try {
-                            const content = await fs.readFile(file, 'utf-8');
-                            const lines = content.split('\n');
-                            lines.forEach((line, index) => {
-                                if (line.toLowerCase().includes(pattern.toLowerCase())) {
-                                    results.push({
-                                        file,
-                                        line: index + 1,
-                                        content: line.trim(),
-                                    });
-                                }
-                            });
-                        }
-                        catch {
-                            // Ignore read errors
-                        }
-                    }
-                    await this.logger.log('debug', `Searched files: ${pattern}`, { count: results.length });
-                    return {
-                        success: true,
-                        results,
-                    };
-                },
-            },
-            // Status check tool
-            get_status: {
-                description: 'Get agent and project status',
-                parameters: z.object({}),
-                execute: async () => {
-                    const { config } = this.context;
-                    const pendingApprovals = this.permissionEngine.getPendingApprovals();
-                    return {
-                        success: true,
-                        name: config.name,
-                        version: config.version,
-                        llm: {
-                            provider: config.llm.provider,
-                            model: config.llm.model,
-                        },
-                        permissions: {
-                            read_repo: typeof config.permissions.read_repo === 'boolean'
-                                ? config.permissions.read_repo
-                                : { paths: config.permissions.read_repo?.paths },
-                            write_repo: config.permissions.write_repo,
-                            exec_shell: config.permissions.exec_shell,
-                        },
-                        pendingApprovals: pendingApprovals.length,
-                        projectRoot: this.context.projectRoot,
-                    };
-                },
-            },
-            // Task management tools
-            get_tasks: {
-                description: 'Get list of tasks',
-                parameters: z.object({}),
-                execute: async () => {
-                    const tasksDir = path.join(this.context.projectRoot, '.ship', 'tasks');
-                    if (!fs.existsSync(tasksDir)) {
-                        return { success: true, tasks: [] };
-                    }
-                    const files = await fs.readdir(tasksDir);
-                    const tasks = [];
-                    for (const file of files) {
-                        if (file.endsWith('.md')) {
-                            tasks.push({
-                                name: file.replace('.md', ''),
-                                file: path.join(tasksDir, file),
-                            });
-                        }
-                    }
-                    return { success: true, tasks };
-                },
-            },
-            // Approval management tools
-            get_pending_approvals: {
-                description: 'Get pending approval requests',
-                parameters: z.object({}),
-                execute: async () => {
-                    const approvals = this.permissionEngine.getPendingApprovals();
-                    return {
-                        success: true,
-                        approvals: approvals.map(a => ({
-                            id: a.id,
-                            type: a.type,
-                            action: a.action,
-                            details: a.details,
-                            status: a.status,
-                            createdAt: a.createdAt,
-                        })),
-                    };
-                },
-            },
-            approve: {
-                description: 'Approve or reject a pending request',
-                parameters: z.object({
-                    approvalId: z.string().describe('Approval request ID'),
-                    approved: z.boolean().describe('Whether to approve'),
-                    response: z.string().optional().describe('Response comment'),
-                }),
-                execute: async ({ approvalId, approved, response }) => {
-                    if (approved) {
-                        const success = await this.permissionEngine.approveRequest(approvalId, response || 'Approved');
-                        return {
-                            success,
-                            message: success ? 'Approved' : 'Approval not found',
-                        };
-                    }
-                    else {
-                        const success = await this.permissionEngine.rejectRequest(approvalId, response || 'Rejected');
-                        return {
-                            success,
-                            message: success ? 'Rejected' : 'Approval not found',
-                        };
-                    }
-                },
-            },
-            // Create diff tool
-            create_diff: {
-                description: 'Create a diff and request approval for file changes',
-                parameters: z.object({
-                    filePath: z.string().describe('File path'),
-                    original: z.string().describe('Original content'),
-                    modified: z.string().describe('Modified content'),
-                }),
-                execute: async ({ filePath, original, modified }) => {
-                    // Approval already handled in tool loop, just execute
-                    await fs.ensureDir(path.dirname(filePath));
-                    await fs.writeFile(filePath, modified);
-                    await this.logger.log('info', `Modified file: ${filePath}`);
-                    return {
-                        success: true,
-                        message: `File modified: ${filePath}`,
-                        diff: this.generateDiff(original, modified),
-                    };
-                },
-            },
         };
-    }
-    /**
-     * Generate a diff between original and modified content
-     */
-    generateDiff(original, modified) {
-        const oldLines = original.split('\n');
-        const newLines = modified.split('\n');
-        let diff = '';
-        const maxLen = Math.max(oldLines.length, newLines.length);
-        for (let i = 0; i < maxLen; i++) {
-            const oldLine = oldLines[i];
-            const newLine = newLines[i];
-            if (oldLine === undefined) {
-                diff += `+ ${newLine}\n`;
-            }
-            else if (newLine === undefined) {
-                diff += `- ${oldLine}\n`;
-            }
-            else if (oldLine !== newLine) {
-                diff += `- ${oldLine}\n`;
-                diff += `+ ${newLine}\n`;
-            }
-            else {
-                diff += `  ${oldLine}\n`;
-            }
-        }
-        return diff;
     }
     /**
      * Run the agent with the given instructions
@@ -517,7 +233,6 @@ export class AgentRuntime {
             await this.logger.log('debug', `Calling generateText with system prompt length: ${systemPrompt?.length || 0}`);
             // Manual tool loop (max 20 iterations)
             let currentPrompt = prompt;
-            let conversationHistory = [];
             const maxIterations = 20;
             for (let iteration = 0; iteration < maxIterations; iteration++) {
                 // Call generateText

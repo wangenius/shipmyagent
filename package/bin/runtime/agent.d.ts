@@ -69,10 +69,6 @@ export declare class AgentRuntime {
      */
     private createTools;
     /**
-     * Generate a diff between original and modified content
-     */
-    private generateDiff;
-    /**
      * Run the agent with the given instructions
      */
     run(input: AgentInput): Promise<AgentResult>;
