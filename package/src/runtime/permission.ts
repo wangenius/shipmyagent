@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { diffLines, Change } from 'diff';
-import { generateId, getTimestamp, getApprovalsDirPath, getLogsDirPath, getProjectRoot } from '../utils.js';
+import { generateId, getTimestamp, getApprovalsDirPath, getLogsDirPath, getProjectRoot, loadShipConfig } from '../utils.js';
 
 export type PermissionType = 'read_repo' | 'write_repo' | 'exec_shell' | 'open_pr' | 'merge';
 
@@ -9,6 +9,7 @@ export interface PermissionCheckResult {
   allowed: boolean;
   reason: string;
   requiresApproval: boolean;
+  approvalId?: string;
 }
 
 export interface ApprovalRequest {
@@ -52,7 +53,7 @@ export class PermissionEngine {
   /**
    * Load pending approval requests from filesystem to memory
    */
-  private async loadApprovalsFromDisk(): Promise<void> {
+  private loadApprovalsFromDisk(): void {
     const approvalsDir = getApprovalsDirPath(this.projectRoot);
 
     if (!fs.existsSync(approvalsDir)) {
@@ -60,13 +61,13 @@ export class PermissionEngine {
     }
 
     try {
-      const files = await fs.readdir(approvalsDir);
+      const files = fs.readdirSync(approvalsDir);
       const jsonFiles = files.filter(f => f.endsWith('.json'));
 
       for (const file of jsonFiles) {
         const filePath = path.join(approvalsDir, file);
         try {
-          const request = await fs.readJson(filePath) as ApprovalRequest;
+          const request = fs.readJsonSync(filePath) as ApprovalRequest;
           // Only load pending requests
           if (request.status === 'pending') {
             this.approvalRequests.set(request.id, request);
@@ -118,7 +119,7 @@ export class PermissionEngine {
         return {
           allowed: false,
           reason: 'Path not in allow list',
-          requiresApproval: writeConfig.requiresApproval,
+          requiresApproval: false,
         };
       }
     }
@@ -151,14 +152,17 @@ export class PermissionEngine {
 
     // Check if command is in allow list
     if (execConfig.allow && execConfig.allow.length > 0) {
-      const isAllowed = execConfig.allow.some(cmd =>
-        command.startsWith(cmd.split(' ')[0] || '')
-      );
+      const commandName = command.trim().split(/\s+/)[0] || '';
+      const isAllowed = execConfig.allow.some((allowed) => {
+        const allowedName = String(allowed).trim().split(/\s+/)[0] || '';
+        if (!allowedName) return false;
+        return allowedName === commandName;
+      });
       if (!isAllowed) {
         return {
           allowed: false,
           reason: 'Command not in allow list',
-          requiresApproval: execConfig.requiresApproval,
+          requiresApproval: false,
         };
       }
     }
@@ -297,7 +301,7 @@ export class PermissionEngine {
 
       if (!request) {
         // May have been loaded, retry reading from disk
-        await this.loadApprovalsFromDisk();
+        this.loadApprovalsFromDisk();
         continue;
       }
 
@@ -331,8 +335,10 @@ export function createPermissionEngine(projectRoot: string): PermissionEngine {
 
   if (fs.existsSync(shipJsonPath)) {
     try {
-      const shipConfig = fs.readJsonSync(shipJsonPath) as { permissions: PermissionConfig };
-      config = { ...config, ...shipConfig.permissions };
+      const shipConfig = loadShipConfig(projectRoot) as { permissions?: PermissionConfig };
+      if (shipConfig.permissions) {
+        config = { ...config, ...shipConfig.permissions };
+      }
     } catch (error) {
       console.warn('⚠️ Failed to read ship.json, using default permission config');
     }

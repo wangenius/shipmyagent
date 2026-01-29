@@ -113,9 +113,13 @@ shipmyagent test --operation write
   "permissions": {
     "exec_shell": {
       "allow": [
-        "npm test",
-        "npm run lint",
-        "git status"
+        "ls *",
+        "cat *",
+        "find *",
+        "rg *",
+        "grep *",
+        "git *",
+        "npm *"
       ],
       "requiresApproval": true  // 运行前询问
     }
@@ -305,6 +309,11 @@ shipmyagent test --exec "npm test"
   "permissions": {
     "exec_shell": {
       "allow": [
+        "ls *",            // 基础探索
+        "cat *",
+        "find *",
+        "rg *",
+        "grep *",
         "npm *",           // 所有 npm 命令
         "git *",           // 所有 git 命令
         "node *",          // Node 脚本

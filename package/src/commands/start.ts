@@ -10,7 +10,7 @@ import { createServer, ServerContext } from '../server/index.js';
 import { createInteractiveServer } from '../server/interactive.js';
 import { createTelegramBot } from '../integrations/telegram.js';
 import { createFeishuBot } from '../integrations/feishu.js';
-import { getAgentMdPath, getShipJsonPath, getProjectRoot, ShipConfig } from '../utils.js';
+import { getAgentMdPath, getShipJsonPath, loadShipConfig, ShipConfig } from '../utils.js';
 
 interface StartOptions {
   port: number;
@@ -38,7 +38,7 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
   // Read configuration
   let shipConfig;
   try {
-    shipConfig = fs.readJsonSync(getShipJsonPath(projectRoot));
+    shipConfig = loadShipConfig(projectRoot);
   } catch (error) {
     console.error('❌ Failed to read ship.json:', error);
     process.exit(1);
@@ -124,16 +124,6 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
       appSecret: shipConfig.integrations.feishu.appSecret || process.env.FEISHU_APP_SECRET || '',
       domain: shipConfig.integrations.feishu.domain || 'https://open.feishu.cn',
     };
-
-    // Replace environment variable placeholders
-    if (feishuConfig.appId.startsWith('${') && feishuConfig.appId.endsWith('}')) {
-      const envVar = feishuConfig.appId.slice(2, -1);
-      feishuConfig.appId = process.env[envVar] || '';
-    }
-    if (feishuConfig.appSecret.startsWith('${') && feishuConfig.appSecret.endsWith('}')) {
-      const envVar = feishuConfig.appSecret.slice(2, -1);
-      feishuConfig.appSecret = process.env[envVar] || '';
-    }
 
     feishuBot = await createFeishuBot(
       projectRoot,

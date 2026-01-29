@@ -209,10 +209,13 @@ EOF
 
 **Solution**:
 ```bash
-# Ensure the variable is exported
+# Ensure the env var is set (pick one)
 export MY_API_KEY="xxx"
 
-# Verify it's set
+# Or create `.env` in the project root (do not commit it)
+# MY_API_KEY=xxx
+
+# Verify it’s set (includes values loaded from `.env`)
 echo $MY_API_KEY
 
 # Restart the agent

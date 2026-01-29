@@ -48,7 +48,7 @@ your-project/
       "requiresApproval": true
     },
     "exec_shell": {
-      "allow": ["npm test", "npm run lint", "git status"],
+      "allow": ["ls *", "cat *", "find *", "rg *", "grep *", "git *", "npm *"],
       "requiresApproval": false
     }
   },
@@ -194,7 +194,7 @@ your-project/
 {
   "permissions": {
     "exec_shell": {
-      "allow": ["npm test", "npm run lint", "git *"],  // 命令模式
+      "allow": ["ls *", "cat *", "find *", "rg *", "grep *", "git *", "npm *"],  // 命令模式
       "requiresApproval": false  // 自动允许安全命令
     }
   }
@@ -502,6 +502,8 @@ const data = useContext(MyContext);
 ## 环境变量
 
 将敏感数据存储在环境变量中，永远不要存储在 `ship.json` 中。
+
+> ShipMyAgent 启动时会自动加载项目根目录的 `.env`（不会向上查找），并将 `ship.json` 中**完全等于** `${VAR_NAME}` 形式的字段替换为对应的环境变量值。已存在的系统环境变量优先于 `.env`。
 
 ### 设置
 

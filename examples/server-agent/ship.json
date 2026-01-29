@@ -28,7 +28,8 @@
   },
   "integrations": {
     "telegram": {
-      "enabled": true
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}"
     },
     "feishu": {
       "enabled": false,

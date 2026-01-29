@@ -48,7 +48,7 @@ The main configuration file that controls the agent's capabilities and behavior.
       "requiresApproval": true
     },
     "exec_shell": {
-      "allow": ["npm test", "npm run lint", "git status"],
+      "allow": ["ls *", "cat *", "find *", "rg *", "grep *", "git *", "npm *"],
       "requiresApproval": false
     }
   },
@@ -194,7 +194,7 @@ Control shell command execution.
 {
   "permissions": {
     "exec_shell": {
-      "allow": ["npm test", "npm run lint", "git *"],  // Command patterns
+      "allow": ["ls *", "cat *", "find *", "rg *", "grep *", "git *", "npm *"],  // Command patterns
       "requiresApproval": false  // Auto-allow safe commands
     }
   }
@@ -502,6 +502,8 @@ You maintain accurate, up-to-date documentation for this project.
 ## Environment Variables
 
 Store sensitive data in environment variables, never in `ship.json`.
+
+> ShipMyAgent automatically loads `.env` from the project root on startup (it won’t search parent directories), and replaces fields in `ship.json` that are **exactly** `${VAR_NAME}` with the corresponding environment variable value. Existing system environment variables take precedence over `.env`.
 
 ### Setup
 

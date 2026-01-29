@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import dotenv from 'dotenv';
 import fs from 'fs-extra';
 import path from 'path';
 
@@ -322,6 +323,43 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
     },
   },
 };
+
+export function loadProjectDotenv(projectRoot: string): void {
+  // Only load the project's .env (do not search upwards)
+  dotenv.config({ path: path.join(projectRoot, '.env') });
+}
+
+function resolveEnvPlaceholdersDeep(value: unknown): unknown {
+  if (typeof value === 'string') {
+    const match = value.match(/^\$\{([A-Z0-9_]+)\}$/);
+    if (!match) return value;
+    const envVar = match[1];
+    return process.env[envVar];
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => resolveEnvPlaceholdersDeep(item));
+  }
+
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      out[k] = resolveEnvPlaceholdersDeep(v);
+    }
+    return out;
+  }
+
+  return value;
+}
+
+export function loadShipConfig(projectRoot: string): ShipConfig {
+  loadProjectDotenv(projectRoot);
+
+  const shipJsonPath = getShipJsonPath(projectRoot);
+  const raw = fs.readJsonSync(shipJsonPath) as unknown;
+  return resolveEnvPlaceholdersDeep(raw) as ShipConfig;
+}
 
 export function generateId(): string {
   return createHash('md5').update(Date.now().toString()).digest('hex').slice(0, 8);

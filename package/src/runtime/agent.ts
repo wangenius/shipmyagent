@@ -16,6 +16,8 @@ import {
   getShipDirPath,
   getApprovalsDirPath,
   getLogsDirPath,
+  loadProjectDotenv,
+  loadShipConfig,
   ShipConfig,
   getTimestamp,
   DEFAULT_SHELL_GUIDE,
@@ -252,6 +254,7 @@ export class AgentRuntime {
     type?: 'write_repo' | 'exec_shell' | 'other';
     description?: string;
     message?: string;
+    denied?: boolean;
   }> {
     const { toolName, args } = toolCall;
 
@@ -272,10 +275,65 @@ export class AgentRuntime {
             message: `Approval required to execute: ${command}`,
           };
         }
+
+        if (!permission.allowed) {
+          const commandName = String(command).trim().split(/\s+/)[0] || '';
+          const allowHint = commandName
+            ? ` To allow it, add "${commandName} *" to ship.json -> permissions.exec_shell.allow (or set allow: [] to allow all commands).`
+            : '';
+          return {
+            requiresApproval: false,
+            denied: true,
+            type: 'exec_shell',
+            description: `Execute command: ${command}`,
+            message: `No permission to execute: ${command} (${permission.reason}).${allowHint}`,
+          };
+        }
       }
     }
 
     return { requiresApproval: false };
+  }
+
+  /**
+   * Normalize tool call args coming from different model/tool-call formats.
+   * Some providers occasionally send exec_shell input as {"": "ls -la"} or as a bare string.
+   */
+  private normalizeToolArgs(toolName: string, rawArgs: unknown): Record<string, unknown> {
+    const asObject = (value: unknown): Record<string, unknown> => {
+      if (!value || typeof value !== 'object') return {};
+      return value as Record<string, unknown>;
+    };
+
+    if (toolName !== 'exec_shell') {
+      return asObject(rawArgs);
+    }
+
+    if (typeof rawArgs === 'string') {
+      return { command: rawArgs };
+    }
+
+    const obj = asObject(rawArgs);
+    if (typeof obj.command === 'string' && obj.command.trim().length > 0) {
+      return obj;
+    }
+
+    // Common malformed shape: {"": "ls -la"}
+    const emptyKey = (obj as any)[''];
+    if (typeof emptyKey === 'string' && emptyKey.trim().length > 0) {
+      return { ...obj, command: emptyKey };
+    }
+
+    // If there's exactly one string value, treat it as the command.
+    const keys = Object.keys(obj);
+    if (keys.length === 1) {
+      const onlyVal = obj[keys[0] as keyof typeof obj];
+      if (typeof onlyVal === 'string' && onlyVal.trim().length > 0) {
+        return { ...obj, command: onlyVal };
+      }
+    }
+
+    return obj;
   }
 
   /**
@@ -387,6 +445,8 @@ Chain commands with && for sequential execution or ; for independent execution.`
     sessionId: string
   ): Promise<AgentResult> {
     const toolCalls: AgentResult['toolCalls'] = [];
+    let hadToolFailure = false;
+    const toolFailureSummaries: string[] = [];
 
     try {
       // Import generateText from AI SDK
@@ -463,8 +523,13 @@ Chain commands with && for sequential execution or ; for independent execution.`
           await this.logger.log('debug', `Agent response: ${result.text?.substring(0, 200)}...`);
 
           return {
-            success: true,
-            output: result.text || 'Execution completed',
+            success: !hadToolFailure,
+            output: [
+              result.text || 'Execution completed',
+              hadToolFailure
+                ? `\n\nTool errors:\n${toolFailureSummaries.map((s) => `- ${s}`).join('\n')}`
+                : '',
+            ].join(''),
             toolCalls,
           };
         }
@@ -476,12 +541,13 @@ Chain commands with && for sequential execution or ; for independent execution.`
           const toolCallId = (toolCall as any).toolCallId;
           const toolName = (toolCall as any).toolName;
           // AI SDK uses 'input' field for tool arguments, not 'args'
-          const args = (toolCall as any).args || (toolCall as any).input;
+          const rawArgs = (toolCall as any).args || (toolCall as any).input;
+          const args = this.normalizeToolArgs(toolName, rawArgs);
 
           await this.logger.log('debug', `Tool call raw data: ${JSON.stringify({
             toolCallId,
             toolName,
-            args,
+            args: rawArgs,
             fullToolCall: toolCall,
           })}`);
 
@@ -490,9 +556,47 @@ Chain commands with && for sequential execution or ; for independent execution.`
           // Check if this tool call requires approval
           const approvalCheck = await this.checkToolCallApproval({ toolName, args });
 
+          if (approvalCheck.denied) {
+            const errorResult = { success: false, error: approvalCheck.message || 'Permission denied' };
+            toolResults.push({
+              toolCallId,
+              toolName,
+              result: errorResult,
+            });
+            toolCalls.push({
+              tool: toolName,
+              input: args || {},
+              output: JSON.stringify(errorResult),
+            });
+            hadToolFailure = true;
+            toolFailureSummaries.push(`${toolName}: ${approvalCheck.message || 'Permission denied'}`.slice(0, 200));
+            await this.logger.log('warn', `Tool call denied: ${toolName}`, {
+              toolCallId,
+              message: approvalCheck.message,
+            });
+            continue;
+          }
+
           if (approvalCheck.requiresApproval) {
             if (!approvalCheck.approvalId) {
-              throw new Error(`Approval required but no approval ID generated for ${toolName}`);
+              const errorResult = { success: false, error: `Approval required but no approval ID generated for ${toolName}` };
+              toolResults.push({
+                toolCallId,
+                toolName,
+                result: errorResult,
+              });
+              toolCalls.push({
+                tool: toolName,
+                input: args || {},
+                output: JSON.stringify(errorResult),
+              });
+              hadToolFailure = true;
+              toolFailureSummaries.push(`${toolName}: missing approvalId`.slice(0, 200));
+              await this.logger.log('error', `Approval required but no approval ID generated for ${toolName}`, {
+                toolCallId,
+                type: approvalCheck.type,
+              });
+              continue;
             }
 
             await this.logger.log('info', `Tool call requires approval: ${toolName}`, {
@@ -537,6 +641,27 @@ Chain commands with && for sequential execution or ; for independent execution.`
 
             await this.logger.log('debug', `Executing tool: ${toolName}`, { args: toolArgs });
 
+            if (toolName === 'exec_shell') {
+              const command = (toolArgs as any).command;
+              if (typeof command !== 'string' || command.trim().length === 0) {
+                const errorResult = { success: false, error: `Missing required argument: command` };
+                toolResults.push({
+                  toolCallId,
+                  toolName,
+                  result: errorResult,
+                });
+                toolCalls.push({
+                  tool: toolName,
+                  input: toolArgs,
+                  output: JSON.stringify(errorResult),
+                });
+                hadToolFailure = true;
+                toolFailureSummaries.push(`${toolName}: missing command`);
+                await this.logger.log('warn', `Tool call missing required argument: ${toolName}`, { toolCallId });
+                continue;
+              }
+            }
+
             const toolResult = await tool.execute(toolArgs);
             toolResults.push({
               toolCallId,
@@ -554,6 +679,15 @@ Chain commands with && for sequential execution or ; for independent execution.`
             await this.logger.log('debug', `Tool executed: ${toolName}`, {
               result: typeof toolResult === 'object' ? JSON.stringify(toolResult).substring(0, 200) : toolResult,
             });
+
+            if (toolResult && typeof toolResult === 'object' && 'success' in (toolResult as any)) {
+              const ok = Boolean((toolResult as any).success);
+              if (!ok) {
+                hadToolFailure = true;
+                const err = (toolResult as any).error || (toolResult as any).stderr || 'unknown error';
+                toolFailureSummaries.push(`${toolName}: ${String(err)}`.slice(0, 200));
+              }
+            }
           } catch (error) {
             const errorResult = { success: false, error: String(error) };
             toolResults.push({
@@ -569,6 +703,8 @@ Chain commands with && for sequential execution or ; for independent execution.`
             });
 
             await this.logger.log('error', `Tool execution failed: ${toolName}`, { error: String(error) });
+            hadToolFailure = true;
+            toolFailureSummaries.push(`${toolName}: ${String(error)}`.slice(0, 200));
           }
         }
 
@@ -855,6 +991,8 @@ export function createAgentRuntime(context: AgentContext): AgentRuntime {
 }
 
 export function createAgentRuntimeFromPath(projectRoot: string): AgentRuntime {
+  loadProjectDotenv(projectRoot);
+
   // Read configuration
   const agentMdPath = getAgentMdPath(projectRoot);
   const shipJsonPath = getShipJsonPath(projectRoot);
@@ -908,7 +1046,7 @@ You are a helpful project assistant.`;
   // Read ship.json
   try {
     if (fs.existsSync(shipJsonPath)) {
-      config = fs.readJsonSync(shipJsonPath) as ShipConfig;
+      config = loadShipConfig(projectRoot) as ShipConfig;
     }
   } catch {
     // Use default

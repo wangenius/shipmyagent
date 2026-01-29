@@ -145,6 +145,8 @@ You are the maintainer agent of this repository.
 }
 ```
 
+> 注：启动时会自动加载项目根目录的 `.env`，并把 `ship.json` 里的 `${VAR_NAME}` 形式占位符替换为对应环境变量。
+
 ---
 
 ## 使用场景

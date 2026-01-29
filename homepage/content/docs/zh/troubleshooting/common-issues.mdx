@@ -209,10 +209,13 @@ EOF
 
 **解决方案**：
 ```bash
-# 确保变量已导出
+# 确保环境变量已设置（两种方式任选其一）
 export MY_API_KEY="xxx"
 
-# 验证已设置
+# 或者在项目根目录创建 .env（不要提交到 Git）
+# MY_API_KEY=xxx
+
+# 验证已设置（会包含 .env 加载后的值）
 echo $MY_API_KEY
 
 # 重启 agent
