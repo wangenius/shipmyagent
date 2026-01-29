@@ -19,9 +19,13 @@
     },
     "exec_shell": {
       "allow": [
-        "npm test",
-        "pnpm test",
-        "bun test"
+        "ls *",
+        "cat *",
+        "find *",
+        "rg *",
+        "grep *",
+        "git *",
+        "npm *"
       ],
       "requiresApproval": true
     }

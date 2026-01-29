@@ -658,5 +658,102 @@
     "timestamp": "2026-01-29T08:54:45.716Z",
     "level": "debug",
     "message": "Agent response: I see that shell command execution isn't available right now. Without being able to explore the project structure, I can't provide specific guidance about your codebase. \n\nHowever, I'm here to help yo..."
+  },
+  {
+    "timestamp": "2026-01-29T09:09:42.441Z",
+    "level": "info",
+    "message": "Initializing Agent Runtime with generateText (legacy AI SDK)"
+  },
+  {
+    "timestamp": "2026-01-29T09:09:42.442Z",
+    "level": "info",
+    "message": "Agent.md content length: 377 chars"
+  },
+  {
+    "timestamp": "2026-01-29T09:09:42.476Z",
+    "level": "info",
+    "message": "Agent Runtime initialized with legacy AI SDK"
+  },
+  {
+    "timestamp": "2026-01-29T09:09:55.312Z",
+    "level": "info",
+    "message": "Initializing Agent Runtime with generateText (legacy AI SDK)"
+  },
+  {
+    "timestamp": "2026-01-29T09:09:55.313Z",
+    "level": "info",
+    "message": "Agent.md content length: 377 chars"
+  },
+  {
+    "timestamp": "2026-01-29T09:09:55.341Z",
+    "level": "info",
+    "message": "Agent Runtime initialized with legacy AI SDK"
+  },
+  {
+    "timestamp": "2026-01-29T09:10:06.176Z",
+    "level": "info",
+    "message": "Initializing Agent Runtime with generateText (legacy AI SDK)"
+  },
+  {
+    "timestamp": "2026-01-29T09:10:06.178Z",
+    "level": "info",
+    "message": "Agent.md content length: 5697 chars"
+  },
+  {
+    "timestamp": "2026-01-29T09:10:06.180Z",
+    "level": "info",
+    "message": "Agent Runtime initialized with legacy AI SDK"
+  },
+  {
+    "timestamp": "2026-01-29T09:10:06.183Z",
+    "level": "debug",
+    "message": "Using system prompt (Agent.md): # Agent Role\n\nYou are the maintainer agent of this repository.\n\n## Goals\n- Improve code quality\n- Re..."
+  },
+  {
+    "timestamp": "2026-01-29T09:10:06.185Z",
+    "level": "debug",
+    "message": "Session ID: telegram:8444574557"
+  },
+  {
+    "timestamp": "2026-01-29T09:10:06.223Z",
+    "level": "debug",
+    "message": "Calling generateText with system prompt length: 5697"
+  },
+  {
+    "timestamp": "2026-01-29T09:10:11.526Z",
+    "level": "debug",
+    "message": "Iteration 1: {\"hasText\":true,\"hasToolCalls\":true,\"toolCallsCount\":1,\"text\":\"Hello! Nice to meet you too. I'm the maintainer agent for this repository - I'm here to help you und\"}"
+  },
+  {
+    "timestamp": "2026-01-29T09:10:11.528Z",
+    "level": "debug",
+    "message": "Raw toolCalls: [{\"type\":\"tool-call\",\"toolCallId\":\"exec_shell:0\",\"toolName\":\"exec_shell\",\"input\":{\"\":\"ls -la && cat package.json 2>/dev/null | head -20\"}}]"
+  },
+  {
+    "timestamp": "2026-01-29T09:10:11.531Z",
+    "level": "debug",
+    "message": "Tool call raw data: {\"toolCallId\":\"exec_shell:0\",\"toolName\":\"exec_shell\",\"args\":{\"\":\"ls -la && cat package.json 2>/dev/null | head -20\"},\"fullToolCall\":{\"type\":\"tool-call\",\"toolCallId\":\"exec_shell:0\",\"toolName\":\"exec_shell\",\"input\":{\"\":\"ls -la && cat package.json 2>/dev/null | head -20\"}}}"
+  },
+  {
+    "timestamp": "2026-01-29T09:10:11.533Z",
+    "level": "debug",
+    "message": "Tool call: exec_shell",
+    "args": {
+      "": "ls -la && cat package.json 2>/dev/null | head -20",
+      "command": "ls -la && cat package.json 2>/dev/null | head -20"
+    }
+  },
+  {
+    "timestamp": "2026-01-29T09:10:11.536Z",
+    "level": "info",
+    "message": "Tool call requires approval: exec_shell",
+    "approvalId": "89bd0b65",
+    "type": "exec_shell"
+  },
+  {
+    "timestamp": "2026-01-29T09:15:11.830Z",
+    "level": "error",
+    "message": "Agent execution failed",
+    "error": "Error: Approval timeout for tool call: exec_shell"
   }
 ]
