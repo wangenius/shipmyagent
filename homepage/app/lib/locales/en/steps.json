@@ -1,0 +1,10 @@
+{
+  "title": "Deploy in 3 Steps",
+  "subtitle": "Get your agent running in minutes.",
+  "step1Title": "Initialize",
+  "step1Desc": "Run the init command in your repository.",
+  "step2Title": "Start Service",
+  "step2Desc": "Launch the local agent service.",
+  "step3Title": "Start Using",
+  "step3Desc": "Interact with your agent immediately."
+}

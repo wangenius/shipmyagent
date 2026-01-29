@@ -1,0 +1,17 @@
+{
+  "title": "三步快速开始",
+  "description": "在几分钟内将您的代码仓库转换为 AI Agent",
+  "step1": {
+    "title": "初始化",
+    "description": "运行一个命令即可设置 Agent 配置"
+  },
+  "step2": {
+    "title": "部署",
+    "description": "推送到 GitHub，您的 Agent 即就绪"
+  },
+  "step3": {
+    "title": "交互",
+    "description": "与 Agent 对话并自动化任务"
+  },
+  "cta": "查看文档"
+}

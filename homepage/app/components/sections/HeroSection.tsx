@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router";
+
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,9 +48,6 @@ export function HeroSection() {
                   <IconCopy className="h-4 w-4 text-muted-foreground transition-opacity group-hover:text-foreground" />
                 )}
               </div>
-            </Button>
-            <Button size="lg">
-              <Link to="/docs">{t("common:documentation")}</Link>
             </Button>
           </div>
           <div className="flex flex-wrap justify-center gap-2 mt-8">

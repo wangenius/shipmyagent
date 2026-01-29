@@ -10,7 +10,8 @@
   },
   "scripts": {
     "build": "cd package && bun run build",
-    "example:cli": "bun run examples/cli-interactive/src/index.ts"
+    "dev":"cd examples/server-agent && shipmyagent start",
+    "cli": "bun run examples/cli-interactive/src/index.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"

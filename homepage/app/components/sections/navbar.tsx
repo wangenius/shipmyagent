@@ -17,12 +17,14 @@ import {
   IconMessageCircle,
   IconBrandDiscord,
   IconUsers,
+  IconChevronDown,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { setLang } from "@/lib/locales";
 
 import { product } from "@/lib/product";
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,17 +57,22 @@ export function Navbar() {
 
   return (
     <header
-      className={`sticky top-0 z-50 w-full border-b transition-all duration-100 ${
+      className={`sticky top-0 z-50 w-full transition-all duration-300 ${
         scrolled
-          ? "bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60"
-          : "bg-background/0 border-transparent"
+          ? "bg-background/80 backdrop-blur-xl border-b border-border/40 supports-backdrop-filter:bg-background/60"
+          : "bg-transparent border-transparent"
       }`}
     >
-      <div className="container mx-auto px-4 md:px-6 h-14 flex items-center justify-between">
+      <div className="container mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 mr-6">
-          <img src="/icon.png" alt="Logo" className="size-6" />
-          <span className="font-bold inline-block">{product.productName}</span>
+        <Link
+          to="/"
+          className="flex items-center gap-2 mr-6 hover:opacity-80 transition-opacity"
+        >
+          <img src="/icon.png" alt="Logo" className="size-8" />
+          <span className="font-semibold tracking-tight text-lg inline-block">
+            {product.productName}
+          </span>
         </Link>
 
         {/* Desktop Nav */}
@@ -73,7 +80,10 @@ export function Navbar() {
           {/* Docs - Simple Link */}
           <Link
             to={i18n.language === "zh" ? "/zh/docs" : "/en/docs"}
-            className="text-sm font-medium px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
+            className={cn(
+              buttonVariants({ variant: "ghost" }),
+              "text-sm font-medium transition-colors",
+            )}
           >
             Docs
           </Link>
@@ -81,15 +91,24 @@ export function Navbar() {
           {/* Features - Simple Link */}
           <Link
             to="/features"
-            className="text-sm font-medium px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground"
+            className={cn(
+              buttonVariants({ variant: "ghost" }),
+              "text-sm font-medium transition-colors",
+            )}
           >
             Features
           </Link>
 
           {/* Resources Menu */}
           <Popover>
-            <PopoverTrigger className="cursor-pointer text-sm font-medium px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent/50 outline-none transition-colors">
+            <PopoverTrigger
+              className={cn(
+                buttonVariants({ variant: "ghost" }),
+                "group gap-1",
+              )}
+            >
               Resources
+              <IconChevronDown className="size-3 transition-transform duration-200 group-data-[state=open]:rotate-180" />
             </PopoverTrigger>
             <PopoverContent align="start" className="w-80 p-2">
               <div className="grid gap-1">
@@ -177,8 +196,14 @@ export function Navbar() {
 
           {/* Community Menu */}
           <Popover>
-            <PopoverTrigger className="cursor-pointer text-sm font-medium px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent/50 outline-none transition-colors">
+            <PopoverTrigger
+              className={cn(
+                buttonVariants({ variant: "ghost" }),
+                "group gap-1",
+              )}
+            >
               Community
+              <IconChevronDown className="size-3 transition-transform duration-200 group-data-[state=open]:rotate-180" />
             </PopoverTrigger>
             <PopoverContent align="start" className="w-80 p-2">
               <div className="grid gap-1">
@@ -271,32 +296,15 @@ export function Navbar() {
 
         {/* Desktop Actions */}
         <div className="hidden md:flex items-center gap-2">
-          <Button variant="ghost" size="icon">
-            <Link
-              to="https://github.com/wangenius/shipmyagent"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <IconBrandGithub className="size-4" />
-              <span className="sr-only">GitHub</span>
-            </Link>
-          </Button>
-          <Button variant="ghost" size="icon">
-            <Link
-              to="https://twitter.com/shipmyagent"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <IconBrandX className="size-4" />
-              <span className="sr-only">Twitter</span>
-            </Link>
-          </Button>
-
-          {/* Language Switcher Dropdown */}
+          {/* Language Switcher - Text Button */}
           <DropdownMenu>
-            <DropdownMenuTrigger>
-              <IconLanguage className="size-4" />
-              <span className="sr-only">Switch Language</span>
+            <DropdownMenuTrigger
+              className={cn(
+                buttonVariants({ variant: "ghost" }),
+                "text-sm font-medium text-muted-foreground hover:text-primary transition-colors min-w-[60px]",
+              )}
+            >
+              {i18n.language === "zh" ? "中文" : "English"}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => handleLanguageChange("en")}>
@@ -307,6 +315,28 @@ export function Navbar() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Twitter (X) Button */}
+          <Link
+            to="https://twitter.com/shipmyagent"
+            target="_blank"
+            rel="noreferrer"
+            className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
+          >
+            <IconBrandX className="size-4" />
+            <span className="sr-only">Twitter</span>
+          </Link>
+
+          {/* GitHub Button - Minimalist Outline */}
+          <Link
+            to="https://github.com/wangenius/shipmyagent"
+            target="_blank"
+            rel="noreferrer"
+            className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
+          >
+            <IconBrandGithub className="size-4" />
+            <span>Star on GitHub</span>
+          </Link>
         </div>
 
         {/* Mobile Menu Button */}

@@ -1,0 +1,17 @@
+{
+  "title": "Get Started in 3 Steps",
+  "description": "Transform your repository into an AI agent in minutes",
+  "step1": {
+    "title": "Initialize",
+    "description": "Run one command to set up your agent configuration"
+  },
+  "step2": {
+    "title": "Deploy",
+    "description": "Push to GitHub and your agent is ready"
+  },
+  "step3": {
+    "title": "Interact",
+    "description": "Chat with your agent and automate tasks"
+  },
+  "cta": "View Documentation"
+}

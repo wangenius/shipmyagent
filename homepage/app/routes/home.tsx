@@ -1,7 +1,5 @@
 import { HeroSection } from "@/components/sections/HeroSection";
-import { FeaturesSection } from "@/components/sections/FeaturesSection";
-import { StatsSection } from "@/components/sections/StatsSection";
-import { CTASection } from "@/components/sections/CTASection";
+import { TutorialSection } from "@/components/sections/TutorialSection";
 import { Footer } from "@/components/sections/Footer";
 import { Navbar } from "@/components/sections/navbar";
 import { product } from "@/lib/product";
@@ -87,9 +85,7 @@ export default function Home() {
       <Navbar />
       <main>
         <HeroSection />
-        <FeaturesSection />
-        <StatsSection />
-        <CTASection />
+        <TutorialSection />
       </main>
       <Footer />
     </div>

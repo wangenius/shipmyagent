@@ -10,6 +10,10 @@ import enFeatures from "./en/features.json";
 import zhFeatures from "./zh/features.json";
 import enStats from "./en/stats.json";
 import zhStats from "./zh/stats.json";
+import enSteps from "./en/steps.json";
+import zhSteps from "./zh/steps.json";
+import enTutorial from "./en/tutorial.json";
+import zhTutorial from "./zh/tutorial.json";
 
 // Resources configuration
 const resources = {
@@ -18,12 +22,16 @@ const resources = {
     hero: enHero,
     features: enFeatures,
     stats: enStats,
+    steps: enSteps,
+    tutorial: enTutorial,
   },
   zh: {
     common: zhCommon,
     hero: zhHero,
     features: zhFeatures,
     stats: zhStats,
+    steps: zhSteps,
+    tutorial: zhTutorial,
   },
 } as const;
 
@@ -34,7 +42,7 @@ i18n.use(initReactI18next).init({
   lng: "en", // Default language, will be overridden by URL path
   fallbackLng: "en",
   defaultNS: "common",
-  ns: ["common", "hero", "features", "stats"],
+  ns: ["common", "hero", "features", "stats", "steps", "tutorial"],
   interpolation: {
     escapeValue: false, // React already escapes values
   },

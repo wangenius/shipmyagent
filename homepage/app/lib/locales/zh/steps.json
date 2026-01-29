@@ -1,0 +1,10 @@
+{
+  "title": "仅需三步，轻松部署",
+  "subtitle": "几分钟内让您的 Agent 跑起来。",
+  "step1Title": "初始化",
+  "step1Desc": "在您的代码仓库中运行初始化命令。",
+  "step2Title": "启动服务",
+  "step2Desc": "启动本地 Agent 服务。",
+  "step3Title": "开始使用",
+  "step3Desc": "立即与您的 Agent 进行交互。"
+}

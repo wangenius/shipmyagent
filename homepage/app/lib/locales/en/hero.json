@@ -1,10 +1,11 @@
 {
-  "title": "Repo",
-  "titleItalic": "is the",
-  "titleEnd": "Agent",
+  "title": "Ship My Repo",
+  "titleItalic": "as Agent",
+  "titleEnd": "",
   "subtitle": "Turn your repository into a conversational, schedulable, and auditable Agent Runtime.",
   "tag1": "Conversational",
   "tag2": "Schedulable",
   "tag3": "Auditable",
-  "verticalText": "AGENT RUNTIME"
+  "verticalText": "AGENT RUNTIME",
+  "start": "Start"
 }
