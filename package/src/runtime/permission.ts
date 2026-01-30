@@ -5,6 +5,63 @@ import { generateId, getTimestamp, getApprovalsDirPath, getLogsDirPath, getProje
 
 export type PermissionType = 'read_repo' | 'write_repo' | 'exec_shell' | 'open_pr' | 'merge';
 
+export function extractExecShellCommandNames(command: string): string[] {
+  const trimmed = String(command || '').trim();
+  if (!trimmed) return [];
+
+  const separators = /(?:\r?\n|&&|\|\||;|\|)/g;
+  const segments = trimmed.split(separators);
+  const names: string[] = [];
+
+  const isAssignment = (token: string) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(token);
+
+  for (const rawSegment of segments) {
+    let segment = rawSegment.trim();
+    if (!segment) continue;
+
+    // Strip a few common leading wrappers/assignments: FOO=bar, sudo, env, command
+    const parts = segment.split(/\s+/).filter(Boolean);
+    let i = 0;
+    while (i < parts.length) {
+      const token = String(parts[i] || '').replace(/^[({]+/, '');
+      if (!token) {
+        i += 1;
+        continue;
+      }
+
+      if (isAssignment(token)) {
+        i += 1;
+        continue;
+      }
+
+      if (token === 'sudo') {
+        i += 1;
+        while (i < parts.length && /^-/.test(parts[i] || '')) i += 1;
+        if (parts[i] === '--') i += 1;
+        continue;
+      }
+
+      if (token === 'env') {
+        i += 1;
+        while (i < parts.length && isAssignment(String(parts[i] || ''))) i += 1;
+        continue;
+      }
+
+      if (token === 'command') {
+        i += 1;
+        while (i < parts.length && /^-/.test(parts[i] || '')) i += 1;
+        continue;
+      }
+
+      const base = path.basename(token);
+      if (base) names.push(base);
+      break;
+    }
+  }
+
+  return names;
+}
+
 export interface PermissionCheckResult {
   allowed: boolean;
   reason: string;
@@ -38,6 +95,15 @@ export interface PermissionConfig {
     requiresApproval: boolean;
   };
   exec_shell?: {
+    /**
+     * Blacklist of command names that are denied.
+     * Supports entries like "rm" or "rm *" (only the first token is used).
+     */
+    deny?: string[];
+    /**
+     * Legacy allowlist (deprecated). If provided and non-empty, only those command names are allowed.
+     * Prefer `deny` for safer defaults.
+     */
     allow?: string[];
     requiresApproval: boolean;
   };
@@ -157,14 +223,34 @@ export class PermissionEngine {
       return { allowed: false, reason: 'Shell execution permission not configured', requiresApproval: true };
     }
 
-    // Check if command is in allow list
-    if (execConfig.allow && execConfig.allow.length > 0) {
-      const commandName = command.trim().split(/\s+/)[0] || '';
-      const isAllowed = execConfig.allow.some((allowed) => {
-        const allowedName = String(allowed).trim().split(/\s+/)[0] || '';
-        if (!allowedName) return false;
-        return allowedName === commandName;
-      });
+    const commandNames = extractExecShellCommandNames(command);
+    if (commandNames.length === 0) {
+      return { allowed: false, reason: 'Empty command', requiresApproval: false };
+    }
+
+    // Blacklist takes precedence
+    if (execConfig.deny && execConfig.deny.length > 0) {
+      const deniedNames = execConfig.deny
+        .map((d) => String(d).trim().split(/\s+/)[0] || '')
+        .filter(Boolean)
+        .map((d) => path.basename(d));
+
+      const hit = commandNames.find((n) => deniedNames.includes(n));
+      if (hit) {
+        return {
+          allowed: false,
+          reason: `Command denied by blacklist: ${hit}`,
+          requiresApproval: false,
+        };
+      }
+    } else if (execConfig.allow && execConfig.allow.length > 0) {
+      // Legacy allowlist fallback
+      const allowedNames = execConfig.allow
+        .map((a) => String(a).trim().split(/\s+/)[0] || '')
+        .filter(Boolean)
+        .map((a) => path.basename(a));
+
+      const isAllowed = commandNames.every((n) => allowedNames.includes(n));
       if (!isAllowed) {
         return {
           allowed: false,
@@ -378,7 +464,7 @@ export function createPermissionEngine(projectRoot: string): PermissionEngine {
   let config: PermissionConfig = {
     read_repo: true,
     write_repo: { requiresApproval: true },
-    exec_shell: { allow: [], requiresApproval: false },
+    exec_shell: { deny: ['rm'], requiresApproval: false },
   };
 
   if (fs.existsSync(shipJsonPath)) {
@@ -389,6 +475,14 @@ export function createPermissionEngine(projectRoot: string): PermissionEngine {
       }
     } catch (error) {
       console.warn('⚠️ Failed to read ship.json, using default permission config');
+    }
+  }
+
+  // Ensure safe default: allow all commands except `rm`, unless explicitly overridden with `deny: []`.
+  if (config.exec_shell) {
+    const hasExplicitDeny = Object.prototype.hasOwnProperty.call(config.exec_shell, 'deny');
+    if (!hasExplicitDeny || config.exec_shell.deny == null) {
+      config.exec_shell.deny = ['rm'];
     }
   }
 

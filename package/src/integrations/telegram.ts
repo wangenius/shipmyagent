@@ -1,5 +1,6 @@
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs-extra";
 import { Logger } from "../runtime/logger.js";
 import { createPermissionEngine } from "../runtime/permission.js";
 import {
@@ -7,6 +8,11 @@ import {
 } from "../runtime/task-executor.js";
 import { createToolExecutor } from "../runtime/tools.js";
 import { createAgentRuntimeFromPath, AgentRuntime } from "../runtime/agent.js";
+import { getCacheDirPath, getRunsDirPath } from "../utils.js";
+import { ChatStore } from "../runtime/chat-store.js";
+import { RunManager } from "../runtime/run-manager.js";
+import type { RunRecord } from "../runtime/run-types.js";
+import { loadRun, saveRun } from "../runtime/run-store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -19,18 +25,27 @@ interface TelegramConfig {
 interface TelegramUpdate {
   update_id: number;
   message?: {
+    message_id?: number;
     text: string;
     chat: {
       id: number;
+      type?: 'private' | 'group' | 'supergroup' | 'channel';
     };
-    from: {
+    from?: {
       id: number;
       username?: string;
     };
+    entities?: Array<{
+      type: string;
+      offset: number;
+      length: number;
+      user?: { id: number; username?: string };
+    }>;
   };
   callback_query?: {
     id: string;
     data: string;
+    from?: { id: number; username?: string };
     message: {
       chat: {
         id: number;
@@ -70,11 +85,12 @@ export class TelegramBot {
   private lastUpdateId: number = 0;
   private pollingInterval: ReturnType<typeof setInterval> | null = null;
   private approvalInterval: ReturnType<typeof setInterval> | null = null;
+  private runNotifyInterval: ReturnType<typeof setInterval> | null = null;
   private isRunning: boolean = false;
   private pollInFlight: boolean = false;
   private notifiedApprovalKeys: Set<string> = new Set();
 
-  // 会话管理：为每个用户维护独立的 Agent 实例
+  // 会话管理：按 thread（chat）维护独立的 Agent 实例
   private sessions: Map<string, AgentRuntime> = new Map();
   private sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private readonly SESSION_TIMEOUT = 30 * 60 * 1000; // 30分钟超时
@@ -83,6 +99,18 @@ export class TelegramBot {
   // 并发控制
   private readonly MAX_CONCURRENT = 5; // 最大并发数
   private currentConcurrent = 0; // 当前并发数
+  private threadLocks: Map<string, Promise<void>> = new Map();
+
+  private lastUpdateIdFile: string;
+  private notifiedRunsFile: string;
+  private threadInitiatorsFile: string;
+  private threadInitiators: Map<string, string> = new Map();
+  private notifiedRunIds: Set<string> = new Set();
+
+  private botUsername?: string;
+  private botId?: number;
+  private chatStore: ChatStore;
+  private runManager: RunManager;
 
   constructor(
     botToken: string,
@@ -96,13 +124,248 @@ export class TelegramBot {
     this.logger = logger;
     this.taskExecutor = taskExecutor;
     this.projectRoot = projectRoot;
+    this.lastUpdateIdFile = path.join(getCacheDirPath(projectRoot), "telegram", "lastUpdateId.json");
+    this.notifiedRunsFile = path.join(getCacheDirPath(projectRoot), "telegram", "notifiedRuns.json");
+    this.threadInitiatorsFile = path.join(getCacheDirPath(projectRoot), "telegram", "threadInitiators.json");
+    this.chatStore = new ChatStore(projectRoot);
+    this.runManager = new RunManager(projectRoot);
+  }
+
+  private getThreadId(chatId: string): string {
+    return `telegram:chat:${chatId}`;
+  }
+
+  private async loadLastUpdateId(): Promise<void> {
+    try {
+      if (await fs.pathExists(this.lastUpdateIdFile)) {
+        const data = await fs.readJson(this.lastUpdateIdFile);
+        const value = Number((data as any)?.lastUpdateId);
+        if (Number.isFinite(value) && value > 0) {
+          this.lastUpdateId = value;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  private async loadThreadInitiators(): Promise<void> {
+    try {
+      if (!(await fs.pathExists(this.threadInitiatorsFile))) return;
+      const data = await fs.readJson(this.threadInitiatorsFile);
+      const raw = (data as any)?.initiators;
+      if (!raw || typeof raw !== 'object') return;
+      for (const [k, v] of Object.entries(raw)) {
+        const threadId = String(k);
+        const initiatorId = String(v);
+        if (!threadId || !initiatorId) continue;
+        this.threadInitiators.set(threadId, initiatorId);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  private async loadNotifiedRuns(): Promise<void> {
+    try {
+      if (!(await fs.pathExists(this.notifiedRunsFile))) return;
+      const data = await fs.readJson(this.notifiedRunsFile);
+      const ids = (data as any)?.runIds;
+      if (Array.isArray(ids)) {
+        for (const id of ids) {
+          if (typeof id === 'string' && id.trim()) this.notifiedRunIds.add(id.trim());
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  private async persistNotifiedRuns(): Promise<void> {
+    try {
+      await fs.ensureDir(path.dirname(this.notifiedRunsFile));
+      const ids = Array.from(this.notifiedRunIds).slice(-5000);
+      await fs.writeJson(this.notifiedRunsFile, { runIds: ids, updatedAt: Date.now() }, { spaces: 2 });
+    } catch {
+      // ignore
+    }
+  }
+
+  private async notifyCompletedRuns(): Promise<void> {
+    if (!this.isRunning) return;
+    try {
+      const runsDir = getRunsDirPath(this.projectRoot);
+      if (!(await fs.pathExists(runsDir))) return;
+      const files = (await fs.readdir(runsDir)).filter((f) => f.endsWith('.json')).slice(-200);
+
+      for (const f of files) {
+        const runId = f.replace(/\.json$/, '');
+        if (this.notifiedRunIds.has(runId)) continue;
+
+        const run = (await loadRun(this.projectRoot, runId)) as RunRecord | null;
+        if (!run) continue;
+        if (run.status !== 'succeeded' && run.status !== 'failed') continue;
+        if (run.notified) {
+          this.notifiedRunIds.add(runId);
+          continue;
+        }
+
+        const chatId = run.context?.source === 'telegram' ? run.context.userId : undefined;
+        if (!chatId) continue;
+
+        const title = run.name || run.taskId || '任务';
+        const prefix = run.status === 'succeeded' ? '✅' : '❌';
+        const snippet = (run.output?.text || run.error?.message || '').trim();
+        const body = snippet ? `\n\n${snippet.slice(0, 2500)}${snippet.length > 2500 ? '\n…[truncated]' : ''}` : '';
+
+        await this.sendMessage(chatId, `${prefix} ${title} 已完成（runId=${runId}）${body}`);
+        run.notified = true;
+        await saveRun(this.projectRoot, run);
+        this.notifiedRunIds.add(runId);
+      }
+
+      if (files.length > 0) {
+        await this.persistNotifiedRuns();
+      }
+    } catch (e) {
+      this.logger.error(`Failed to notify completed runs: ${String(e)}`);
+    }
+  }
+
+  private async persistThreadInitiators(): Promise<void> {
+    try {
+      await fs.ensureDir(path.dirname(this.threadInitiatorsFile));
+      const entries = Array.from(this.threadInitiators.entries());
+      const capped = entries.slice(-1000);
+      const initiators: Record<string, string> = {};
+      for (const [k, v] of capped) initiators[k] = v;
+      await fs.writeJson(this.threadInitiatorsFile, { initiators, updatedAt: Date.now() }, { spaces: 2 });
+    } catch {
+      // ignore
+    }
+  }
+
+  private async persistLastUpdateId(): Promise<void> {
+    try {
+      await fs.ensureDir(path.dirname(this.lastUpdateIdFile));
+      await fs.writeJson(this.lastUpdateIdFile, { lastUpdateId: this.lastUpdateId }, { spaces: 2 });
+    } catch {
+      // ignore
+    }
+  }
+
+  private runInThread(threadId: string, fn: () => Promise<void>): Promise<void> {
+    const prev = this.threadLocks.get(threadId) ?? Promise.resolve();
+    const run = prev.catch(() => {}).then(fn);
+    this.threadLocks.set(
+      threadId,
+      run.finally(() => {
+        if (this.threadLocks.get(threadId) === run) {
+          this.threadLocks.delete(threadId);
+        }
+      }),
+    );
+    return run;
+  }
+
+  private escapeRegExp(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  private isGroupChat(chatType?: string): boolean {
+    return chatType === 'group' || chatType === 'supergroup';
+  }
+
+  private isBotMentioned(text: string, entities?: NonNullable<TelegramUpdate['message']>['entities']): boolean {
+    if (!text) return false;
+    const username = this.botUsername;
+
+    if (username) {
+      const re = new RegExp(`@${this.escapeRegExp(username)}\\b`, 'i');
+      if (re.test(text)) return true;
+    }
+
+    if (!entities || entities.length === 0) return false;
+
+    for (const ent of entities) {
+      if (!ent || typeof ent !== 'object') continue;
+      if (ent.type === 'text_mention' && this.botId && ent.user?.id === this.botId) return true;
+      if (ent.type === 'mention' && username) {
+        const mentionText = text.slice(ent.offset, ent.offset + ent.length);
+        if (mentionText.toLowerCase() === `@${username.toLowerCase()}`) return true;
+      }
+    }
+
+    return false;
+  }
+
+  private stripBotMention(text: string): string {
+    if (!text) return text;
+    if (!this.botUsername) return text.trim();
+    const re = new RegExp(`\\s*@${this.escapeRegExp(this.botUsername)}\\b`, 'ig');
+    return text.replace(re, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  private async isTelegramAdmin(originChatId: string, actorId: string): Promise<boolean> {
+    const chatIdNum = Number(originChatId);
+    const userIdNum = Number(actorId);
+    if (!Number.isFinite(chatIdNum) || !Number.isFinite(userIdNum)) return false;
+
+    try {
+      const res = await this.sendRequest<{ status?: string }>('getChatMember', {
+        chat_id: chatIdNum,
+        user_id: userIdNum,
+      });
+      const status = String((res as any)?.status || '').toLowerCase();
+      return status === 'administrator' || status === 'creator';
+    } catch (e) {
+      this.logger.warn('Failed to check Telegram admin', { originChatId, actorId, error: String(e) });
+      return false;
+    }
+  }
+
+  private async isAllowedGroupActor(threadId: string, originChatId: string, actorId: string): Promise<boolean> {
+    const existing = this.threadInitiators.get(threadId);
+    if (!existing) {
+      this.threadInitiators.set(threadId, actorId);
+      await this.persistThreadInitiators();
+      return true;
+    }
+    if (existing === actorId) return true;
+    return this.isTelegramAdmin(originChatId, actorId);
+  }
+
+  private async canApproveTelegram(approvalId: string, actorId?: string): Promise<{ ok: boolean; reason: string }> {
+    if (!actorId) return { ok: false, reason: '❌ 无法识别审批人身份。' };
+
+    const permissionEngine = createPermissionEngine(this.projectRoot);
+    const req = permissionEngine.getApprovalRequest(approvalId) as any;
+    if (!req) return { ok: false, reason: '❌ 未找到该审批请求（可能已处理或已过期）。' };
+
+    const meta = (req as any)?.meta as { initiatorId?: string; userId?: string } | undefined;
+    const initiatorId = meta?.initiatorId ? String(meta.initiatorId) : undefined;
+    if (initiatorId && initiatorId === actorId) {
+      return { ok: true, reason: 'ok' };
+    }
+
+    const originChatId = meta?.userId ? String(meta.userId) : '';
+    if (!originChatId) {
+      return { ok: false, reason: '❌ 审批请求缺少来源 chatId，无法校验管理员权限。' };
+    }
+
+    const isAdmin = await this.isTelegramAdmin(originChatId, actorId);
+    if (!isAdmin) {
+      return { ok: false, reason: '⛔️ 仅发起人或群管理员可以审批/拒绝该操作。' };
+    }
+
+    return { ok: true, reason: 'ok' };
   }
 
   /**
    * 获取或创建会话
    */
-  private getOrCreateSession(userId: number): AgentRuntime {
-    const sessionKey = `telegram:${userId}`;
+  private getOrCreateSession(threadId: string): AgentRuntime {
+    const sessionKey = threadId;
 
     // 如果会话已存在，重置超时
     if (this.sessions.has(sessionKey)) {
@@ -114,6 +377,11 @@ export class TelegramBot {
     const agentRuntime = createAgentRuntimeFromPath(this.projectRoot);
     this.sessions.set(sessionKey, agentRuntime);
     this.resetSessionTimeout(sessionKey);
+
+    // Hydrate from persisted chat history (best-effort)
+    this.chatStore.hydrateOnce(sessionKey, (msgs) => {
+      agentRuntime.setConversationHistory(sessionKey, msgs);
+    }).catch(() => {});
 
     this.logger.debug(`Created new session: ${sessionKey}`);
     return agentRuntime;
@@ -142,8 +410,8 @@ export class TelegramBot {
   /**
    * Clear session
    */
-  clearSession(userId: number): void {
-    const sessionKey = `telegram:${userId}`;
+  clearSession(chatId: string): void {
+    const sessionKey = this.getThreadId(chatId);
     const session = this.sessions.get(sessionKey);
 
     if (session) {
@@ -168,10 +436,15 @@ export class TelegramBot {
 
     this.isRunning = true;
     this.logger.info("🤖 Starting Telegram Bot...");
+    await this.loadLastUpdateId();
+    await this.loadThreadInitiators();
+    await this.loadNotifiedRuns();
 
     // Get bot info
     try {
-      const me = await this.sendRequest<{ username?: string }>("getMe", {});
+      const me = await this.sendRequest<{ id?: number; username?: string }>("getMe", {});
+      this.botUsername = me.username || undefined;
+      this.botId = typeof me.id === 'number' ? me.id : undefined;
       this.logger.info(`Bot username: @${me.username || "unknown"}`);
     } catch (error) {
       this.logger.error("Failed to get Bot info", { error: String(error) });
@@ -182,13 +455,12 @@ export class TelegramBot {
     this.pollingInterval = setInterval(() => this.pollUpdates(), 1000);
     this.logger.info("Telegram Bot started");
 
-    // If chatId is configured, push pending approvals to that chat
-    if (this.chatId) {
-      this.approvalInterval = setInterval(
-        () => this.notifyPendingApprovals(),
-        2000,
-      );
-    }
+    // Push pending approvals to originating chat (if any) and optionally to configured/admin chat.
+    // If no admin chatId is configured, fall back to the last active chat we've seen.
+    this.approvalInterval = setInterval(() => this.notifyPendingApprovals(), 2000);
+
+    // Notify completed runs (no commands needed)
+    this.runNotifyInterval = setInterval(() => this.notifyCompletedRuns(), 2000);
   }
 
   private async pollUpdates(): Promise<void> {
@@ -207,6 +479,7 @@ export class TelegramBot {
       for (const update of updates) {
         this.lastUpdateId = Math.max(this.lastUpdateId, update.update_id);
       }
+      await this.persistLastUpdateId();
 
       // 并发处理所有消息（带并发限制）
       const tasks = updates.map((update) =>
@@ -251,11 +524,6 @@ export class TelegramBot {
         // Notify the originating Telegram chat (if available)
         if (meta?.source === 'telegram' && meta.userId) {
           targets.push(String(meta.userId));
-        }
-
-        // Also notify configured admin chatId (optional)
-        if (this.chatId) {
-          targets.push(String(this.chatId));
         }
 
         if (targets.length === 0) {
@@ -324,14 +592,45 @@ export class TelegramBot {
 
     const chatId = message.chat.id.toString();
     const text = message.text;
+    const threadId = this.getThreadId(chatId);
+    const from = message.from;
+    const messageId = typeof message.message_id === 'number' ? String(message.message_id) : undefined;
+    const actorId = from?.id ? String(from.id) : undefined;
+    const isGroup = this.isGroupChat(message.chat.type);
 
-    // Check if it's a command
-    if (text.startsWith("/")) {
-      await this.handleCommand(chatId, text, message.from);
-    } else {
-      // Regular message, execute instruction
-      await this.executeAndReply(chatId, text);
-    }
+    await this.runInThread(threadId, async () => {
+      // Check if it's a command
+      if (text.startsWith("/")) {
+        if (isGroup && actorId) {
+          const cmdName = (text.trim().split(/\s+/)[0] || '').split("@")[0]?.toLowerCase();
+          const allowAny = cmdName === '/help' || cmdName === '/start';
+          if (!allowAny) {
+            const ok = await this.isAllowedGroupActor(threadId, chatId, actorId);
+            if (!ok) {
+              await this.sendMessage(chatId, '⛔️ 仅发起人或群管理员可以使用该命令。');
+              return;
+            }
+          }
+        }
+        await this.handleCommand(chatId, text, from);
+      } else {
+        if (isGroup) {
+          if (!this.isBotMentioned(text, message.entities)) return;
+          if (!actorId) return;
+          const ok = await this.isAllowedGroupActor(threadId, chatId, actorId);
+          if (!ok) {
+            await this.sendMessage(chatId, '⛔️ 仅发起人或群管理员可以与我对话。');
+            return;
+          }
+        }
+
+        const cleaned = isGroup ? this.stripBotMention(text) : text;
+        if (!cleaned) return;
+
+        // Regular message, execute instruction
+        await this.executeAndReply(chatId, cleaned, from, messageId);
+      }
+    });
   }
 
   private async handleCommand(
@@ -413,29 +712,35 @@ Available commands:
           break;
         }
 
-        const userId = parseInt(chatId);
-        const sessionId = `telegram:${userId}`;
-        const agentRuntime = this.getOrCreateSession(userId);
-        if (!agentRuntime.isInitialized()) {
-          await agentRuntime.initialize();
-        }
+        const threadId = this.getThreadId(chatId);
+        await this.runInThread(threadId, async () => {
+          const can = await this.canApproveTelegram(arg, from?.id ? String(from.id) : undefined);
+          if (!can.ok) {
+            await this.sendMessage(chatId, can.reason);
+            return;
+          }
 
-        const result = await agentRuntime.resumeFromApprovalActions({
-          sessionId,
-          context: { source: 'telegram', userId: chatId, sessionId },
-          approvals: cmd === '/approve' ? { [arg]: 'Approved via Telegram command' } : {},
-          refused: cmd === '/reject' ? { [arg]: 'Rejected via Telegram command' } : {},
+          const sessionId = threadId;
+          const agentRuntime = this.getOrCreateSession(threadId);
+          if (!agentRuntime.isInitialized()) {
+            await agentRuntime.initialize();
+          }
+
+          const result = await agentRuntime.resumeFromApprovalActions({
+            sessionId,
+            context: { source: 'telegram', userId: chatId, sessionId, actorId: from?.id ? String(from.id) : undefined },
+            approvals: cmd === '/approve' ? { [arg]: 'Approved via Telegram command' } : {},
+            refused: cmd === '/reject' ? { [arg]: 'Rejected via Telegram command' } : {},
+          });
+
+          await this.sendMessage(chatId, result.output);
         });
-
-        await this.sendMessage(chatId, result.output);
         break;
       }
 
       case "/clear":
-        if (from) {
-          this.clearSession(from.id);
-          await this.sendMessage(chatId, "✅ Conversation history cleared");
-        }
+        this.clearSession(chatId);
+        await this.sendMessage(chatId, "✅ Conversation history cleared");
         break;
 
       default:
@@ -450,81 +755,172 @@ Available commands:
 
     const chatId = callbackQuery.message.chat.id.toString();
     const data = callbackQuery.data;
+    const threadId = this.getThreadId(chatId);
+    const actorId = callbackQuery.from?.id ? String(callbackQuery.from.id) : undefined;
 
-    // Parse callback data
-    const [action, approvalId] = data.split(":");
+    await this.runInThread(threadId, async () => {
+      // Parse callback data
+      const [action, approvalId] = data.split(":");
 
-    if (action === "approve" || action === "reject") {
-      // Resume execution immediately using the stored approval snapshot.
-      const userId = parseInt(chatId);
-      const sessionId = `telegram:${userId}`;
-      const agentRuntime = this.getOrCreateSession(userId);
-      if (!agentRuntime.isInitialized()) {
-        await agentRuntime.initialize();
+      if (action === "approve" || action === "reject") {
+        const can = await this.canApproveTelegram(approvalId, actorId);
+        if (!can.ok) {
+          await this.sendMessage(chatId, can.reason);
+          return;
+        }
+
+        // Resume execution immediately using the stored approval snapshot.
+        const sessionId = threadId;
+        const agentRuntime = this.getOrCreateSession(threadId);
+        if (!agentRuntime.isInitialized()) {
+          await agentRuntime.initialize();
+        }
+
+        const result = await agentRuntime.resumeFromApprovalActions({
+          sessionId,
+          context: { source: 'telegram', userId: chatId, sessionId, actorId },
+          approvals: action === 'approve' ? { [approvalId]: 'Approved via Telegram' } : {},
+          refused: action === 'reject' ? { [approvalId]: 'Rejected via Telegram' } : {},
+        });
+
+        await this.sendMessage(chatId, result.output);
       }
-
-      const result = await agentRuntime.resumeFromApprovalActions({
-        sessionId,
-        context: { source: 'telegram', userId: chatId, sessionId },
-        approvals: action === 'approve' ? { [approvalId]: 'Approved via Telegram' } : {},
-        refused: action === 'reject' ? { [approvalId]: 'Rejected via Telegram' } : {},
-      });
-
-      await this.sendMessage(chatId, result.output);
-    }
+    });
   }
 
   private async executeAndReply(
     chatId: string,
     instructions: string,
+    from?: { id: number; username?: string },
+    messageId?: string,
   ): Promise<void> {
     try {
-      // Extract userId from chatId (Telegram's chatId is userId)
-      const userId = parseInt(chatId);
-
-      // Get or create session
-      const agentRuntime = this.getOrCreateSession(userId);
+      const threadId = this.getThreadId(chatId);
+      const agentRuntime = this.getOrCreateSession(threadId);
 
       // Initialize agent (if not already initialized)
       if (!agentRuntime.isInitialized()) {
         await agentRuntime.initialize();
       }
 
-      // Generate sessionId (based on telegram and userId)
-      const sessionId = `telegram:${userId}`;
+      // Generate sessionId (thread-based: DM/group share the same thread)
+      const sessionId = threadId;
+      const actorId = from?.id ? String(from.id) : undefined;
+
+      // Persist user message into chat history (append-only)
+      await this.chatStore.append({
+        channel: 'telegram',
+        chatId,
+        chatKey: sessionId,
+        userId: actorId,
+        messageId,
+        role: 'user',
+        text: instructions,
+      });
+
+      // If there are pending approvals for this session, only initiator/admin can reply.
+      try {
+        const permissionEngine = createPermissionEngine(this.projectRoot);
+        const pending = permissionEngine.getPendingApprovals().filter((req: any) => {
+          const meta = (req as any)?.meta as { sessionId?: string; source?: string } | undefined;
+          return meta?.sessionId === sessionId && meta?.source === 'telegram';
+        });
+        if (pending.length > 0) {
+          const can = await this.canApproveTelegram(String((pending[0] as any).id), actorId);
+          if (!can.ok) {
+            await this.sendMessage(chatId, '⛔️ 当前有待审批操作，仅发起人或群管理员可以回复审批。');
+            return;
+          }
+        }
+      } catch {
+        // ignore
+      }
 
       // If there are pending approvals for this session, treat the message as an approval reply first.
       const approvalResult = await agentRuntime.handleApprovalReply({
         userMessage: instructions,
         context: {
           source: "telegram",
-          userId: chatId,
+          userId: chatId, // route approvals back to this chat
           sessionId,
+          actorId,
         },
         sessionId,
       });
       if (approvalResult) {
         await this.sendMessage(chatId, approvalResult.output);
+        await this.chatStore.append({
+          channel: 'telegram',
+          chatId,
+          chatKey: sessionId,
+          userId: this.botId ? String(this.botId) : 'bot',
+          role: 'assistant',
+          text: approvalResult.output,
+        });
         return;
       }
 
-      // Execute instruction using session agent
-      const result = await agentRuntime.run({
-        instructions,
-        context: {
-          source: "telegram",
-          userId: chatId,
-          sessionId,
-        },
-      });
+      const context = {
+        source: "telegram" as const,
+        userId: chatId,
+        sessionId,
+        actorId,
+      };
+
+      // Let the agent decide whether to run sync or enqueue a background Run.
+      const mode = await agentRuntime.decideExecutionMode({ instructions, context });
+      if (mode.mode === 'async') {
+        const run = await this.runManager.createAndEnqueueAdhocRun({
+          name: 'Adhoc',
+          instructions,
+          context,
+          trigger: { type: 'chat', by: 'telegram' },
+        });
+
+        const ack =
+          `我会在后台处理这个请求，完成后把结果发你。\n` +
+          `runId=${run.runId}\n` +
+          `（原因：${mode.reason || 'n/a'}）`;
+        await this.sendMessage(chatId, ack);
+        await this.chatStore.append({
+          channel: 'telegram',
+          chatId,
+          chatKey: sessionId,
+          userId: this.botId ? String(this.botId) : 'bot',
+          role: 'assistant',
+          text: ack,
+          meta: { runId: run.runId, mode: 'async' },
+        });
+        return;
+      }
+
+      // Execute instruction synchronously using session agent
+      const result = await agentRuntime.run({ instructions, context });
 
       if (result.pendingApproval) {
         // Send approval request once (and broadcast via polling) without duplicating messages.
         await this.notifyPendingApprovals();
+        await this.chatStore.append({
+          channel: 'telegram',
+          chatId,
+          chatKey: sessionId,
+          userId: this.botId ? String(this.botId) : 'bot',
+          role: 'assistant',
+          text: `⏳ 已发起审批请求：${result.pendingApproval.id}`,
+          meta: { pendingApproval: result.pendingApproval },
+        });
         return;
       }
 
       await this.sendMessage(chatId, sanitizeChatText(result.output));
+      await this.chatStore.append({
+        channel: 'telegram',
+        chatId,
+        chatKey: sessionId,
+        userId: this.botId ? String(this.botId) : 'bot',
+        role: 'assistant',
+        text: sanitizeChatText(result.output),
+      });
     } catch (error) {
       await this.sendMessage(chatId, `❌ Execution error: ${String(error)}`);
     }
@@ -609,6 +1005,9 @@ Available commands:
     if (this.approvalInterval) {
       clearInterval(this.approvalInterval);
     }
+    if (this.runNotifyInterval) {
+      clearInterval(this.runNotifyInterval);
+    }
     this.logger.info("Telegram Bot stopped");
   }
 }
@@ -636,7 +1035,7 @@ export function createTelegramBot(
   config: TelegramConfig,
   logger: Logger,
 ): TelegramBot | null {
-  if (!config.enabled || !config.botToken) {
+  if (!config.enabled || !config.botToken || config.botToken === '${}') {
     return null;
   }
 

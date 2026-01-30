@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "llm": {
     "provider": "custom",
-    "model": "kimi-k2-0905-preview",
-    "baseUrl": "https://api.moonshot.cn/v1",
-    "apiKey": "sk-SaWATfh4Ldn8xXmIid0XCsDzHPhCgraj2k9oYFCjgQny3XTf",
+    "model": "${LLM_MODEL}",
+    "baseUrl": "${LLM_BASE_URL}",
+    "apiKey": "${LLM_API_KEY}",
     "temperature": 0.7
   },
   "permissions": {
@@ -18,16 +18,10 @@
       "requiresApproval": true
     },
     "exec_shell": {
-      "allow": [
-        "ls *",
-        "cat *",
-        "find *",
-        "rg *",
-        "grep *",
-        "git *",
-        "npm *"
+      "deny": [
+        "rm"
       ],
-      "requiresApproval": true
+      "requiresApproval": false
     }
   },
   "integrations": {

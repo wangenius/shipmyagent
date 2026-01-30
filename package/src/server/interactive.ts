@@ -27,11 +27,19 @@ export class InteractiveServer {
   private context: InteractiveServerContext;
   private server: ReturnType<typeof http.createServer> | null = null;
   private publicDir: string;
+  private version: string = 'unknown';
 
   constructor(context: InteractiveServerContext) {
     this.context = context;
     this.publicDir = path.join(__dirname, '../../public');
     this.app = new Hono();
+
+    try {
+      const pkg = fs.readJsonSync(path.join(__dirname, '../../package.json')) as any;
+      if (pkg && typeof pkg.version === 'string') this.version = pkg.version;
+    } catch {
+      // ignore
+    }
 
     // 中间件
     this.app.use('*', logger());
@@ -87,22 +95,35 @@ export class InteractiveServer {
 
     // API 代理 - 将所有 /api/* 请求代理到主 API 服务器
     this.app.all('/api/*', async (c) => {
-      const url = this.context.agentApiUrl + c.req.path;
-      const method = c.req.method;
-      const body = await c.req.text();
-
       try {
-        const response = await fetch(url, {
+        const reqUrl = new URL(c.req.url);
+        const upstreamUrl = new URL(reqUrl.pathname + reqUrl.search, this.context.agentApiUrl).toString();
+        const method = c.req.method;
+
+        const headers = new Headers();
+        for (const [k, v] of c.req.raw.headers.entries()) {
+          const key = k.toLowerCase();
+          if (key === 'host' || key === 'content-length') continue;
+          headers.set(k, v);
+        }
+
+        const body =
+          method === 'GET' || method === 'HEAD'
+            ? undefined
+            : Buffer.from(await c.req.raw.arrayBuffer());
+
+        const response = await fetch(upstreamUrl, {
           method,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: body || undefined,
+          headers,
+          body,
         });
 
-        const responseData = await response.json();
-
-        return c.json(responseData);
+        const buf = Buffer.from(await response.arrayBuffer());
+        const contentType = response.headers.get('content-type') || 'application/octet-stream';
+        return new Response(buf, {
+          status: response.status,
+          headers: { 'Content-Type': contentType },
+        });
       } catch (error) {
         return c.json({
           success: false,
@@ -114,10 +135,14 @@ export class InteractiveServer {
     // API 代理 - /health
     this.app.get('/health', async (c) => {
       try {
-        const url = `${this.context.agentApiUrl}/health`;
-        const response = await fetch(url);
-        const data = await response.json();
-        return c.json(data);
+        const upstreamUrl = new URL('/health', this.context.agentApiUrl).toString();
+        const response = await fetch(upstreamUrl);
+        const buf = Buffer.from(await response.arrayBuffer());
+        const contentType = response.headers.get('content-type') || 'application/json; charset=utf-8';
+        return new Response(buf, {
+          status: response.status,
+          headers: { 'Content-Type': contentType },
+        });
       } catch (error) {
         return c.json({
           status: 'error',
@@ -128,20 +153,26 @@ export class InteractiveServer {
 
     // Webhook 代理
     this.app.post('/webhook/:type', async (c) => {
-      const url = `${this.context.agentApiUrl}/webhook/${c.req.param('type')}`;
-      const body = await c.req.json();
-
       try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-        });
+        const upstreamUrl = new URL(`/webhook/${c.req.param('type')}`, this.context.agentApiUrl).toString();
+        const headers = new Headers();
+        for (const [k, v] of c.req.raw.headers.entries()) {
+          const key = k.toLowerCase();
+          if (key === 'host' || key === 'content-length') continue;
+          headers.set(k, v);
+        }
+        if (!headers.get('content-type')) {
+          headers.set('Content-Type', 'application/json');
+        }
 
-        const data = await response.json();
-        return c.json(data);
+        const body = Buffer.from(await c.req.raw.arrayBuffer());
+        const response = await fetch(upstreamUrl, { method: 'POST', headers, body });
+        const buf = Buffer.from(await response.arrayBuffer());
+        const contentType = response.headers.get('content-type') || 'application/json; charset=utf-8';
+        return new Response(buf, {
+          status: response.status,
+          headers: { 'Content-Type': contentType },
+        });
       } catch (error) {
         return c.json({
           success: false,
@@ -154,7 +185,7 @@ export class InteractiveServer {
     this.app.get('/info', (c) => {
       return c.json({
         name: 'ShipMyAgent Interactive Web UI',
-        version: '1.0.0',
+        version: this.version,
         agentApiUrl: this.context.agentApiUrl,
       });
     });

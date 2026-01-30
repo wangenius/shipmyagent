@@ -29,6 +29,7 @@ export interface ShipConfig {
       requiresApproval: boolean;
     };
     exec_shell?: {
+      deny?: string[];
       allow?: string[];
       requiresApproval: boolean;
     };
@@ -302,7 +303,6 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
     baseUrl: 'https://api.anthropic.com/v1',
     apiKey: '${API_KEY}',
     temperature: 0.7,
-    maxTokens: 4096,
   },
   permissions: {
     read_repo: true,
@@ -311,7 +311,7 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
       requiresApproval: true,
     },
     exec_shell: {
-      allow: [],
+      deny: ['rm'],
       requiresApproval: false,
     },
   },
@@ -412,6 +412,14 @@ export function getTasksDirPath(cwd: string): string {
   return path.join(cwd, '.ship', 'tasks');
 }
 
+export function getRunsDirPath(cwd: string): string {
+  return path.join(cwd, '.ship', 'runs');
+}
+
+export function getQueueDirPath(cwd: string): string {
+  return path.join(cwd, '.ship', 'queue');
+}
+
 export function getRoutesDirPath(cwd: string): string {
   return path.join(cwd, '.ship', 'routes');
 }
@@ -426,4 +434,8 @@ export function getLogsDirPath(cwd: string): string {
 
 export function getCacheDirPath(cwd: string): string {
   return path.join(cwd, '.ship', '.cache');
+}
+
+export function getChatsDirPath(cwd: string): string {
+  return path.join(cwd, '.ship', 'chats');
 }

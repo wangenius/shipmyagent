@@ -3,13 +3,27 @@
 /**
  * ShipMyAgent - Agent Runtime with Human-in-the-loop Support
  * 
- * Uses ai-sdk v6 ToolLoopAgent for advanced tool calling and
- * built-in support for human-in-the-loop workflows.
+ * Uses ai-sdk v6 ToolLoopAgent for tool calling and
+ * built-in support for tool execution approval workflows.
  */
 
 import fs from 'fs-extra';
 import path from 'path';
 import { z } from 'zod';
+import { execa } from 'execa';
+import { createAnthropic } from '@ai-sdk/anthropic';
+import { createOpenAI } from '@ai-sdk/openai';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import {
+  ToolLoopAgent,
+  generateText,
+  stepCountIs,
+  tool,
+  type LanguageModel,
+  type ModelMessage,
+  type ToolApprovalResponse,
+  type ToolExecutionOptions,
+} from 'ai';
 import {
   getAgentMdPath,
   getShipJsonPath,
@@ -23,7 +37,8 @@ import {
   generateId,
   DEFAULT_SHELL_GUIDE,
 } from '../utils.js';
-import { createPermissionEngine, PermissionEngine, PermissionCheckResult } from './permission.js';
+import { createPermissionEngine, PermissionEngine, PermissionCheckResult, extractExecShellCommandNames } from './permission.js';
+import { DEFAULT_SHIP_PROMPTS } from './ship-prompts.js';
 
 // ==================== Types ====================
 
@@ -57,6 +72,17 @@ export interface AgentInput {
     source?: 'telegram' | 'feishu' | 'cli' | 'scheduler' | 'api';
     userId?: string;
     sessionId?: string;
+    runId?: string;
+    /**
+     * The current human actor (platform sender/user) who triggered this call.
+     * In group chats this is different from userId (chat/thread id).
+     */
+    actorId?: string;
+    /**
+     * Optional explicit initiator (first human who started a thread). If omitted,
+     * the runtime will treat actorId as initiator when snapshotting approvals.
+     */
+    initiatorId?: string;
   };
   onStep?: (event: { type: string; text: string; data?: Record<string, unknown> }) => Promise<void>;
 }
@@ -99,14 +125,11 @@ export class AgentRuntime {
   private logger: AgentLogger;
   private permissionEngine: PermissionEngine;
 
-  // ToolLoopAgent instance (v6)
-  private agent: any = null;
+  private model: LanguageModel | null = null;
+  private agent: ToolLoopAgent<never, any, any> | null = null;
 
-  // 对话历史管理 - 按会话隔离
-  private conversationHistories: Map<string, ConversationMessage[]> = new Map();
-
-  // 上下文长度限制
-  private readonly MAX_HISTORY_MESSAGES = 20; // 保留最近20条消息
+  // 对话历史（AI SDK ModelMessage），按 session 隔离
+  private sessionMessages: Map<string, ModelMessage[]> = new Map();
 
   constructor(context: AgentContext) {
     this.context = context;
@@ -114,104 +137,46 @@ export class AgentRuntime {
     this.permissionEngine = createPermissionEngine(context.projectRoot);
   }
 
-  setConversationHistory(sessionId: string, messages: ConversationMessage[]): void {
-    this.conversationHistories.set(sessionId, Array.isArray(messages) ? messages : []);
+  private getOrCreateSessionMessages(sessionId: string): ModelMessage[] {
+    const existing = this.sessionMessages.get(sessionId);
+    if (existing) return existing;
+    const fresh: ModelMessage[] = [];
+    this.sessionMessages.set(sessionId, fresh);
+    return fresh;
   }
 
-  private serializeMessagesForSummary(messages: ConversationMessage[], maxChars: number = 12000): string {
-    const text = messages.map((m) => {
-      const role = m.role === 'tool' ? 'Tool' : m.role === 'assistant' ? 'Assistant' : 'User';
-      const name = m.role === 'tool' && m.toolName ? ` (${m.toolName})` : '';
-      return `${role}${name}: ${m.content}`;
-    }).join('\n\n');
-
-    if (text.length <= maxChars) return text;
-    return text.slice(0, maxChars) + '\n\n[TRUNCATED]';
-  }
-
-  private async compactConversationHistory(sessionId: string): Promise<boolean> {
-    const history = this.conversationHistories.get(sessionId) || [];
-    if (history.length < 4) return false;
-
-    const cut = Math.max(1, Math.floor(history.length * 0.5));
-    const older = history.slice(0, cut);
-    const newer = history.slice(cut);
-
-    let summaryText = '';
-    if (this.initialized && this.agent) {
-      try {
-        const { generateText } = await import('ai');
-        const input = this.serializeMessagesForSummary(older, 12000);
-        const result = await generateText({
-          model: this.agent,
-          system: 'You are a summarization assistant. Summarize the conversation faithfully. Preserve key decisions, commands, file paths, IDs, and user intent. Output plain text.',
-          prompt: `Summarize the following earlier conversation into a compact summary (<= 400 words):\n\n${input}`,
-        });
-        summaryText = (result.text || '').trim();
-      } catch (e) {
-        summaryText = '';
-      }
-    }
-
-    if (!summaryText) {
-      summaryText = '[Auto-compact] Earlier conversation was summarized/omitted due to context limits.';
-    }
-
-    const summaryMessage: ConversationMessage = {
-      role: 'assistant',
-      content: `🧾 Summary of earlier messages:\n${summaryText}`,
-      timestamp: Date.now(),
-    };
-
-    this.conversationHistories.set(sessionId, [summaryMessage, ...newer]);
-    return true;
-  }
-
-  private formatToolResultForHistory(
-    toolName: string,
-    toolArgs: Record<string, unknown>,
-    toolResult: unknown,
-  ): string {
-    if (toolName !== 'exec_shell') {
-      const ok = Boolean((toolResult as any)?.success);
-      return `Tool: ${toolName}\nSuccess: ${ok}`;
-    }
-
-    const command = String((toolArgs as any)?.command || '').trim();
-    const exitCode = (toolResult as any)?.exitCode;
-    const stdoutRaw = String((toolResult as any)?.stdout || (toolResult as any)?.output || '');
-    const stderrRaw = String((toolResult as any)?.stderr || '');
-    const stdout = stdoutRaw.trim();
-    const stderr = stderrRaw.trim();
-
-    const MAX = 1200;
-    const take = (s: string) => (s.length > MAX ? s.slice(0, MAX) + '\n…[truncated]' : s);
-
-    const out = stdout ? take(stdout) : '';
-    const err = stderr ? take(stderr) : '';
-
-    return [
-      `Tool: exec_shell`,
-      command ? `Command: ${command}` : undefined,
-      typeof exitCode === 'number' ? `ExitCode: ${exitCode}` : undefined,
-      out ? `Stdout:\n${out}` : undefined,
-      err ? `Stderr:\n${err}` : undefined,
-    ].filter(Boolean).join('\n');
+  setConversationHistory(sessionId: string, messages: unknown[]): void {
+    this.sessionMessages.set(
+      sessionId,
+      this.coerceStoredMessagesToModelMessages(Array.isArray(messages) ? (messages as unknown[]) : []),
+    );
   }
 
   /**
    * 获取对话历史
    */
   getConversationHistory(sessionId?: string): ConversationMessage[] {
+    const toLegacy = (m: ModelMessage): ConversationMessage => {
+      const role = (m as any).role as ConversationMessage['role'];
+      const content = (m as any).content;
+      const text =
+        typeof content === 'string'
+          ? content
+          : Array.isArray(content)
+            ? JSON.stringify(content).slice(0, 2000)
+            : String(content ?? '');
+      return { role: role === 'tool' ? 'tool' : role === 'assistant' ? 'assistant' : 'user', content: text, timestamp: Date.now() };
+    };
+
     if (!sessionId) {
-      // 如果没有指定 sessionId，返回所有会话的历史（用于兼容性）
-      const allMessages: ConversationMessage[] = [];
-      for (const messages of this.conversationHistories.values()) {
-        allMessages.push(...messages);
+      const all: ConversationMessage[] = [];
+      for (const messages of this.sessionMessages.values()) {
+        all.push(...messages.map(toLegacy));
       }
-      return allMessages;
+      return all;
     }
-    return this.conversationHistories.get(sessionId) || [];
+
+    return (this.sessionMessages.get(sessionId) || []).map(toLegacy);
   }
 
   /**
@@ -219,45 +184,118 @@ export class AgentRuntime {
    */
   clearConversationHistory(sessionId?: string): void {
     if (!sessionId) {
-      // 清除所有会话的历史
-      this.conversationHistories.clear();
+      this.sessionMessages.clear();
     } else {
-      // 清除指定会话的历史
-      this.conversationHistories.delete(sessionId);
+      this.sessionMessages.delete(sessionId);
     }
   }
 
-  /**
-   * 添加消息到对话历史（带长度限制）
-   */
-  private addToHistory(message: ConversationMessage, sessionId: string): void {
-    // 获取或创建该会话的历史记录
-    let history = this.conversationHistories.get(sessionId);
-    if (!history) {
-      history = [];
-      this.conversationHistories.set(sessionId, history);
+  private coerceStoredMessagesToModelMessages(messages: unknown[]): ModelMessage[] {
+    // New format: messages are already ModelMessage[]
+    if (
+      Array.isArray(messages) &&
+      messages.every((m) => m && typeof m === 'object' && 'role' in (m as any) && 'content' in (m as any))
+    ) {
+      return messages as ModelMessage[];
     }
 
-    history.push(message);
-
-    // If conversation history exceeds limit, remove oldest messages
-    if (history.length > this.MAX_HISTORY_MESSAGES) {
-      const removed = history.length - this.MAX_HISTORY_MESSAGES;
-      const newHistory = history.slice(removed);
-      this.conversationHistories.set(sessionId, newHistory);
-      this.logger.log('debug', `Session ${sessionId} conversation history exceeded limit, removed ${removed} old messages`);
+    // Legacy format: ConversationMessage[]
+    const out: ModelMessage[] = [];
+    for (const raw of messages) {
+      if (!raw || typeof raw !== 'object') continue;
+      const role = (raw as any).role;
+      const content = (raw as any).content;
+      if (role === 'user' || role === 'assistant') {
+        out.push({ role, content: String(content ?? '') });
+      } else if (role === 'tool') {
+        out.push({ role: 'assistant', content: `Tool result:\n${String(content ?? '')}` });
+      }
     }
+    return out;
+  }
+
+  private extractTextForSummary(messages: ModelMessage[], maxChars: number = 12000): string {
+    const lines: string[] = [];
+    for (const m of messages) {
+      const role =
+        (m as any).role === 'assistant' ? 'Assistant' :
+        (m as any).role === 'tool' ? 'Tool' :
+        (m as any).role === 'user' ? 'User' :
+        'Other';
+
+      const content = (m as any).content;
+      if (typeof content === 'string') {
+        lines.push(`${role}: ${content}`);
+        continue;
+      }
+
+      if (Array.isArray(content)) {
+        const parts = content
+          .map((p: any) => {
+            if (!p || typeof p !== 'object') return '';
+            if (p.type === 'text') return String(p.text ?? '');
+            if (p.type === 'tool-approval-request') {
+              const toolName = (p.toolCall as any)?.toolName;
+              return `Approval requested for tool: ${String(toolName ?? '')}`;
+            }
+            if (p.type === 'tool-result') return `Tool result: ${String((p as any).toolName ?? '')}`;
+            if (p.type === 'tool-error') return `Tool error: ${String((p as any).toolName ?? '')}`;
+            return '';
+          })
+          .filter(Boolean)
+          .join('\n');
+        if (parts) lines.push(`${role}: ${parts}`);
+      }
+    }
+
+    const text = lines.join('\n\n');
+    if (text.length <= maxChars) return text;
+    return text.slice(0, maxChars) + '\n\n[TRUNCATED]';
+  }
+
+  private async compactConversationHistory(sessionId: string): Promise<boolean> {
+    const history = this.getOrCreateSessionMessages(sessionId);
+    if (history.length < 6) return false;
+    if (!this.model) return false;
+
+    const cut = Math.max(1, Math.floor(history.length * 0.5));
+    const older = history.slice(0, cut);
+    const newer = history.slice(cut);
+
+    const input = this.extractTextForSummary(older, 12000);
+    const result = await generateText({
+      model: this.model,
+      system:
+        'You are a summarization assistant. Summarize the conversation faithfully. Preserve key decisions, commands, file paths, IDs, and user intent. Output plain text.',
+      prompt: `Summarize the following earlier conversation into a compact summary (<= 400 words):\n\n${input}`,
+    });
+
+    const summaryText = (result.text || '').trim() || '[Auto-compact] Earlier conversation was summarized/omitted due to context limits.';
+    const summaryMessage: ModelMessage = {
+      role: 'assistant',
+      content: `Summary of earlier messages:\n${summaryText}`,
+    };
+
+    this.sessionMessages.set(sessionId, [summaryMessage, ...newer]);
+    return true;
   }
 
   /**
-   * Initialize the Agent with generateText (legacy AI SDK)
+   * Initialize ToolLoopAgent (AI SDK v6)
    */
   async initialize(): Promise<void> {
     try {
-      await this.logger.log('info', 'Initializing Agent Runtime with generateText (legacy AI SDK)');
+      await this.logger.log('info', 'Initializing Agent Runtime with ToolLoopAgent (AI SDK v6)');
       await this.logger.log('info', `Agent.md content length: ${this.context.agentMd?.length || 0} chars`);
 
       const { provider, apiKey, baseUrl, model } = this.context.config.llm;
+      const resolvedModel = model === '${}' ? undefined : model;
+      const resolvedBaseUrl = baseUrl === '${}' ? undefined : baseUrl;
+
+      if (!resolvedModel) {
+        await this.logger.log('warn', 'No LLM model configured, will use simulation mode');
+        return;
+      }
 
       // 解析 API Key，支持环境变量占位符
       let resolvedApiKey = apiKey;
@@ -276,66 +314,140 @@ export class AgentRuntime {
         return;
       }
 
-      // Import ai-sdk modules
       try {
-        // Create provider instance
-        let providerInstance: any;
+        let modelInstance: LanguageModel;
         if (provider === 'anthropic') {
-          const anthropicMod = await import('@ai-sdk/anthropic');
-          const createAnthropic =
-            (anthropicMod as any).createAnthropic ??
-            (anthropicMod as any).anthropic;
-
-          if (typeof createAnthropic !== 'function') {
-            throw new Error('Failed to load Anthropic provider from @ai-sdk/anthropic');
-          }
-
-          providerInstance = createAnthropic({ apiKey: resolvedApiKey });
+          const anthropicProvider = createAnthropic({ apiKey: resolvedApiKey });
+          modelInstance = anthropicProvider(resolvedModel);
         } else if (provider === 'custom') {
-          // OpenAI-compatible provider with custom baseURL
-          const compatMod = await import('@ai-sdk/openai-compatible');
-          const createOpenAICompatible = (compatMod as any).createOpenAICompatible;
-
-          if (typeof createOpenAICompatible !== 'function') {
-            throw new Error('Failed to load OpenAI-compatible provider from @ai-sdk/openai-compatible');
-          }
-
-          providerInstance = createOpenAICompatible({
+          const compatProvider = createOpenAICompatible({
             name: 'custom',
             apiKey: resolvedApiKey,
-            baseURL: baseUrl || 'https://api.openai.com/v1',
+            baseURL: resolvedBaseUrl || 'https://api.openai.com/v1',
           });
+          modelInstance = compatProvider(resolvedModel);
         } else {
-          // Standard OpenAI provider
-          const openaiMod = await import('@ai-sdk/openai');
-          const createOpenAI =
-            (openaiMod as any).createOpenAI ??
-            (openaiMod as any).openai;
-
-          if (typeof createOpenAI !== 'function') {
-            throw new Error('Failed to load OpenAI provider from @ai-sdk/openai');
-          }
-
-          providerInstance = createOpenAI({
+          const openaiProvider = createOpenAI({
             apiKey: resolvedApiKey,
-            baseURL: baseUrl || 'https://api.openai.com/v1',
+            baseURL: resolvedBaseUrl || 'https://api.openai.com/v1',
           });
+          modelInstance = openaiProvider(resolvedModel);
         }
 
-        // Store model instance with configuration
-        this.agent = providerInstance(model, {
-          maxTokens: this.context.config.llm.maxTokens || 4096,
+        this.model = modelInstance;
+        this.agent = new ToolLoopAgent({
+          model: modelInstance,
+          instructions: this.context.agentMd,
+          tools: this.createToolSet(),
+          stopWhen: stepCountIs(20),
+          maxOutputTokens: this.context.config.llm.maxTokens || 4096,
           temperature: this.context.config.llm.temperature || 0.7,
+          topP: this.context.config.llm.topP,
+          frequencyPenalty: this.context.config.llm.frequencyPenalty,
+          presencePenalty: this.context.config.llm.presencePenalty,
         });
 
-        await this.logger.log('info', 'Agent Runtime initialized with legacy AI SDK');
+        await this.logger.log('info', 'Agent Runtime initialized with ToolLoopAgent');
         this.initialized = true;
       } catch (importError) {
-        await this.logger.log('warn', `ai-sdk import failed: ${String(importError)}, using simulation mode`);
+        await this.logger.log('warn', `ai-sdk initialization failed: ${String(importError)}, using simulation mode`);
       }
     } catch (error) {
       await this.logger.log('error', 'Agent Runtime initialization failed', { error: String(error) });
     }
+  }
+
+  private preflightExecShell(command: string): { allowed: boolean; deniedReason?: string; needsApproval: boolean } {
+    const execConfig = this.context.config.permissions.exec_shell;
+    if (!execConfig) {
+      return { allowed: false, deniedReason: 'Shell execution permission not configured', needsApproval: false };
+    }
+
+    const commandNames = extractExecShellCommandNames(command);
+    if (commandNames.length === 0) {
+      return { allowed: false, deniedReason: 'Empty command', needsApproval: false };
+    }
+
+    if (execConfig.deny && execConfig.deny.length > 0) {
+      const deniedNames = execConfig.deny
+        .map((d) => String(d).trim().split(/\s+/)[0] || '')
+        .filter(Boolean)
+        .map((d) => d.split('/').pop() || d);
+      const hit = commandNames.find((n) => deniedNames.includes(n));
+      if (hit) return { allowed: false, deniedReason: `Command denied by blacklist: ${hit}`, needsApproval: false };
+    } else if (execConfig.allow && execConfig.allow.length > 0) {
+      // Legacy allowlist fallback
+      const allowedNames = execConfig.allow
+        .map((a) => String(a).trim().split(/\s+/)[0] || '')
+        .filter(Boolean)
+        .map((a) => a.split('/').pop() || a);
+      const isAllowed = commandNames.every((n) => allowedNames.includes(n));
+      if (!isAllowed) return { allowed: false, deniedReason: 'Command not in allow list', needsApproval: false };
+    }
+
+    return { allowed: true, needsApproval: Boolean(execConfig.requiresApproval) };
+  }
+
+  private createToolSet() {
+    return {
+      exec_shell: tool({
+        description: `Execute a shell command. This is your ONLY tool for interacting with the filesystem and codebase.
+
+Use this tool for ALL operations:
+- Reading files: cat, head, tail, less
+- Writing files: echo >, cat > file << EOF, sed -i
+- Searching: grep -r, find, rg
+- Listing: ls, find, tree
+- File operations: cp, mv, rm, mkdir
+- Code analysis: grep, wc, awk
+- Git operations: git status, git diff, git log
+- Running tests: npm test, npm run build
+- Any other shell command
+
+Chain commands with && for sequential execution or ; for independent execution.`,
+        inputSchema: z.object({
+          command: z.string().describe('Shell command to execute. Can be a single command or multiple commands chained with && or ;'),
+          timeout: z.number().optional().default(30000).describe('Timeout in milliseconds (default: 30000)'),
+        }),
+        needsApproval: async ({ command }) => {
+          const preflight = this.preflightExecShell(command);
+          return preflight.allowed && preflight.needsApproval;
+        },
+        execute: async (
+          { command, timeout = 30000 }: { command: string; timeout?: number },
+          _options?: ToolExecutionOptions,
+        ) => {
+          const preflight = this.preflightExecShell(command);
+          if (!preflight.allowed) {
+            return { success: false, error: `No permission to execute: ${command} (${preflight.deniedReason || 'denied'})` };
+          }
+
+          try {
+            const result = await execa(command, {
+              cwd: this.context.projectRoot,
+              timeout,
+              reject: false,
+              shell: true,
+            });
+
+            await this.logger.log('info', `Executed command: ${command}`, {
+              exitCode: result.exitCode,
+              stdout: result.stdout?.slice(0, 1000),
+              stderr: result.stderr?.slice(0, 1000),
+            });
+
+            return {
+              success: result.exitCode === 0,
+              exitCode: result.exitCode,
+              stdout: result.stdout,
+              stderr: result.stderr,
+            };
+          } catch (error) {
+            return { success: false, error: `Command execution failed: ${String(error)}` };
+          }
+        },
+      }),
+    };
   }
 
   /**
@@ -372,7 +484,7 @@ export class AgentRuntime {
         if (!permission.allowed) {
           const commandName = String(command).trim().split(/\s+/)[0] || '';
           const allowHint = commandName
-            ? ` To allow it, add "${commandName} *" to ship.json -> permissions.exec_shell.allow (or set allow: [] to allow all commands).`
+            ? ` Configure ship.json -> permissions.exec_shell.deny (default blocks "rm"; set deny: [] to allow all).`
             : '';
           return {
             requiresApproval: false,
@@ -464,7 +576,6 @@ Chain commands with && for sequential execution or ; for independent execution.`
         execute: async ({ command, timeout = 30000 }: { command: string; timeout?: number }) => {
           // Approval already handled in tool loop, just execute
           try {
-            const { execa } = await import('execa');
             // Use shell mode to execute the full command string
             const result = await execa(command, {
               cwd: this.context.projectRoot,
@@ -534,6 +645,9 @@ Chain commands with && for sequential execution or ; for independent execution.`
       `- Project root: ${this.context.projectRoot}\n` +
       `- Session: ${sessionId}\n` +
       `- Request ID: ${requestId}\n` +
+      (context?.source ? `- Source: ${context.source}\n` : '') +
+      (context?.userId ? `- User/Chat ID: ${context.userId}\n` : '') +
+      (context?.actorId ? `- Actor ID: ${context.actorId}\n` : '') +
       `\nUser-facing output rules:\n` +
       `- Reply in natural language.\n` +
       `- Do NOT paste raw tool outputs or JSON logs; summarize them.\n`;
@@ -541,13 +655,243 @@ Chain commands with && for sequential execution or ; for independent execution.`
 
     // Frontends may optionally subscribe to onStep; default integrations do not emit step-by-step chat messages.
 
-    // If initialized with model, use generateText with tool loop
+    // If initialized with model, use ToolLoopAgent
     if (this.initialized && this.agent) {
-      return this.runWithGenerateText(fullPrompt, systemPrompt, startTime, context, sessionId, { onStep, requestId });
+      return this.runWithToolLoopAgent(fullPrompt, startTime, context, sessionId, { onStep, requestId });
     }
 
     // Otherwise use simulation mode
     return this.runSimulated(fullPrompt, startTime, toolCalls, context);
+  }
+
+  /**
+   * Run with ToolLoopAgent (AI SDK v6).
+   */
+  private async runWithToolLoopAgent(
+    prompt: string,
+    startTime: number,
+    context: AgentInput['context'] | undefined,
+    sessionId: string,
+    opts?: { addUserPrompt?: boolean; compactionAttempts?: number; onStep?: AgentInput['onStep']; requestId?: string }
+  ): Promise<AgentResult> {
+    const toolCalls: AgentResult['toolCalls'] = [];
+    let hadToolFailure = false;
+    const toolFailureSummaries: string[] = [];
+    const addUserPrompt = opts?.addUserPrompt !== false;
+    const compactionAttempts = opts?.compactionAttempts ?? 0;
+    const onStep = opts?.onStep;
+    const requestId = opts?.requestId;
+
+    const emitStep = async (type: string, text: string, data?: Record<string, unknown>) => {
+      if (!onStep) return;
+      try {
+        await onStep({ type, text, data });
+      } catch {
+        // ignore
+      }
+    };
+
+    try {
+      if (!this.agent) throw new Error('Agent not initialized');
+
+      const messages = this.getOrCreateSessionMessages(sessionId);
+      if (addUserPrompt && prompt) {
+        messages.push({ role: 'user', content: prompt });
+      }
+
+      const result = await this.agent.generate({
+        messages,
+        onStepFinish: async (step) => {
+          if (!onStep) return;
+          try {
+            for (const tr of step.toolResults || []) {
+              if (tr.type !== 'tool-result') continue;
+              if ((tr as any).toolName !== 'exec_shell') continue;
+              const command = String(((tr as any).input as any)?.command || '').trim();
+              const exitCode = ((tr as any).output as any)?.exitCode;
+              const stdout = String(((tr as any).output as any)?.stdout || '').trim();
+              const stderr = String(((tr as any).output as any)?.stderr || '').trim();
+              const snippet = (stdout || stderr).slice(0, 500);
+              await emitStep(
+                'step_finish',
+                `已执行：${command}${typeof exitCode === 'number' ? `（exitCode=${exitCode}）` : ''}${snippet ? `\n摘要：${snippet}${(stdout || stderr).length > 500 ? '…' : ''}` : ''}`,
+                { toolName: 'exec_shell', command, exitCode: typeof exitCode === 'number' ? exitCode : undefined, requestId, sessionId },
+              );
+            }
+          } catch {
+            // ignore
+          }
+        },
+      });
+
+      messages.push(...result.response.messages);
+
+      // Collect tool calls/results for auditing
+      for (const step of result.steps || []) {
+        for (const tr of step.toolResults || []) {
+          toolCalls.push({
+            tool: String((tr as any).toolName || 'unknown_tool'),
+            input: (((tr as any).input || {}) as Record<string, unknown>),
+            output: JSON.stringify((tr as any).output),
+          });
+
+          const out = (tr as any).output;
+          if (out && typeof out === 'object' && 'success' in out && !out.success) {
+            hadToolFailure = true;
+            const err = (out as any).error || (out as any).stderr || 'unknown error';
+            toolFailureSummaries.push(`${String((tr as any).toolName)}: ${String(err)}`.slice(0, 200));
+          }
+        }
+
+        for (const part of step.content || []) {
+          if ((part as any)?.type !== 'tool-error') continue;
+          toolCalls.push({
+            tool: String((part as any).toolName || 'unknown_tool'),
+            input: (((part as any).input || {}) as Record<string, unknown>),
+            output: JSON.stringify({ error: (part as any).error }),
+          });
+          hadToolFailure = true;
+          toolFailureSummaries.push(`${String((part as any).toolName)}: ${String((part as any).error)}`.slice(0, 200));
+        }
+      }
+
+      // Tool approval requests (AI SDK)
+      const approvalParts = (result.content || []).filter((p: any) => p && typeof p === 'object' && p.type === 'tool-approval-request') as Array<{
+        type: 'tool-approval-request';
+        approvalId: string;
+        toolCall: { toolName: string; input: unknown; toolCallId?: string };
+      }>;
+
+      if (approvalParts.length > 0) {
+        const created: Array<{ id: string; toolName: string; args: Record<string, unknown>; aiApprovalId: string }> = [];
+
+        for (const part of approvalParts) {
+          const toolName = part.toolCall.toolName;
+          const input = (part.toolCall as any).input || {};
+          const args = (input && typeof input === 'object') ? (input as Record<string, unknown>) : {};
+
+          if (toolName !== 'exec_shell') continue;
+
+          const command = String((args as any).command || '').trim();
+          const permission = await this.permissionEngine.checkExecShell(command);
+
+          if (!permission.requiresApproval || !(permission as any).approvalId) {
+            continue;
+          }
+
+          const approvalId = String((permission as any).approvalId);
+          await this.permissionEngine.updateApprovalRequest(approvalId, {
+            tool: toolName,
+            input: args,
+            messages: [...messages] as unknown[],
+            meta: {
+              sessionId,
+              source: context?.source,
+              userId: context?.userId,
+              actorId: context?.actorId,
+              initiatorId: context?.initiatorId ?? context?.actorId,
+              requestId,
+              aiApprovalId: part.approvalId,
+              runId: context?.runId,
+            },
+          });
+
+          created.push({ id: approvalId, toolName, args, aiApprovalId: part.approvalId });
+        }
+
+        if (created.length > 0) {
+          const first = created[0];
+          const cmd = String((first.args as any)?.command || '');
+          const pendingText =
+            `⏳ 需要你确认一下我接下来要做的操作（已发起审批请求）。\n` +
+            `操作: Execute command: ${cmd}\n\n` +
+            `你可以直接用自然语言回复，比如：\n` +
+            `- “可以” / “同意”\n` +
+            `- “不可以，因为 …” / “拒绝，因为 …”\n` +
+            `- “全部同意” / “全部拒绝”`;
+
+          return {
+            success: false,
+            output: pendingText,
+            toolCalls,
+            pendingApproval: {
+              id: first.id,
+              type: 'exec_shell',
+              description: `Execute command: ${cmd}`,
+              data: { toolName: first.toolName, args: first.args, aiApprovalId: first.aiApprovalId },
+            },
+          };
+        }
+      }
+
+      const duration = Date.now() - startTime;
+      await this.logger.log('info', 'Agent execution completed', {
+        duration,
+        toolCallsTotal: toolCalls.length,
+        context: context?.source,
+      });
+      await emitStep('done', 'done', { requestId, sessionId });
+
+      return {
+        success: !hadToolFailure,
+        output: [
+          result.text || 'Execution completed',
+          hadToolFailure ? `\n\nTool errors:\n${toolFailureSummaries.map((s) => `- ${s}`).join('\n')}` : '',
+        ].join(''),
+        toolCalls,
+      };
+    } catch (error) {
+      const errorMsg = String(error);
+
+      if (
+        errorMsg.includes('context_length') ||
+        errorMsg.includes('too long') ||
+        errorMsg.includes('maximum context') ||
+        errorMsg.includes('context window')
+      ) {
+        const currentHistory = this.getOrCreateSessionMessages(sessionId);
+        await this.logger.log('warn', 'Context length exceeded, compacting history', {
+          sessionId,
+          currentMessages: currentHistory.length,
+          error: errorMsg,
+          compactionAttempts,
+        });
+        await emitStep('compaction', '上下文过长，已自动压缩历史记录后继续。', { requestId, sessionId, compactionAttempts });
+
+        if (compactionAttempts >= 3) {
+          this.sessionMessages.delete(sessionId);
+          return {
+            success: false,
+            output: `Context length exceeded and compaction failed. History cleared. Please resend your question.`,
+            toolCalls,
+          };
+        }
+
+        const compacted = await this.compactConversationHistory(sessionId);
+        if (!compacted) {
+          this.sessionMessages.delete(sessionId);
+          return {
+            success: false,
+            output: `Context length exceeded and compaction was not possible. History cleared. Please resend your question.`,
+            toolCalls,
+          };
+        }
+
+        return this.runWithToolLoopAgent(prompt, startTime, context, sessionId, {
+          addUserPrompt: false,
+          compactionAttempts: compactionAttempts + 1,
+          onStep,
+          requestId,
+        });
+      }
+
+      await this.logger.log('error', 'Agent execution failed', { error: errorMsg });
+      return {
+        success: false,
+        output: `Execution failed: ${errorMsg}`,
+        toolCalls,
+      };
+    }
   }
 
   /**
@@ -578,9 +922,12 @@ Chain commands with && for sequential execution or ; for independent execution.`
       }
     };
 
+    // Legacy path: kept for backward compatibility; delegate to ToolLoopAgent.
+    return this.runWithToolLoopAgent(prompt, startTime, context, sessionId, opts);
+    /*
     try {
-      // Import generateText from AI SDK
-      const { generateText } = await import('ai');
+      // Import removed (no dynamic imports)
+      const { generateText } = { generateText: undefined as any };
 
       // Get tools
       const tools = await this.createTools();
@@ -613,7 +960,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
 
       for (let iteration = 0; iteration < maxIterations; iteration++) {
         // Call generateText
-        // Note: maxTokens 和 temperature 已在创建模型实例时配置
+        // Note: temperature 以及 maxOutputTokens（来自 llm.maxTokens，可选）已在 ToolLoopAgent 初始化时配置
         const result = await generateText({
           model: this.agent,
           system: systemPrompt,
@@ -749,6 +1096,8 @@ Chain commands with && for sequential execution or ; for independent execution.`
                 sessionId,
                 source: context?.source,
                 userId: context?.userId,
+                actorId: context?.actorId,
+                initiatorId: context?.initiatorId ?? context?.actorId,
                 requestId,
               },
             });
@@ -982,17 +1331,17 @@ Chain commands with && for sequential execution or ; for independent execution.`
         toolCalls,
       };
     }
+    */
   }
 
   async decideApprovals(
     userMessage: string,
     pendingApprovals: Array<{ id: string; type: string; action: string; tool?: string; input?: unknown; details?: unknown }>
   ): Promise<ApprovalDecisionResult> {
-    if (!this.initialized || !this.agent) {
+    if (!this.initialized || !this.model) {
       return { pass: Object.fromEntries(pendingApprovals.map((a) => [a.id, ''])) };
     }
 
-    const { generateText } = await import('ai');
     const compactList = pendingApprovals.map((a) => ({
       id: a.id,
       type: a.type,
@@ -1003,7 +1352,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
     }));
 
     const result = await generateText({
-      model: this.agent,
+      model: this.model,
       system: [
         'You are an approval-routing assistant.',
         'Given a user message and a list of pending approval requests, decide which approvals to approve, refuse, or pass.',
@@ -1077,9 +1426,16 @@ Chain commands with && for sequential execution or ; for independent execution.`
       refused: Object.keys(refused),
     });
 
+    // If these approvals belong to a background Run, copy runId into context so resume can update run record.
+    const runIds = Array.from(new Set(relevant.map((a: any) => (a as any)?.meta?.runId).filter(Boolean)));
+    const mergedContext: AgentInput['context'] | undefined =
+      runIds.length === 1
+        ? { ...(context || {}), runId: runIds[0] }
+        : context;
+
     return this.resumeFromApprovalActions({
       sessionId,
-      context,
+      context: mergedContext,
       approvals,
       refused,
       onStep,
@@ -1121,7 +1477,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
     const approvalsDir = getApprovalsDirPath(this.context.projectRoot);
 
     // Load snapshot from the first referenced approval that has messages.
-    let baseMessages: ConversationMessage[] | null = null;
+    let baseMessages: ModelMessage[] | null = null;
     const idsToTry = [...approvedIds, ...refusedEntries.map(([id]) => id)];
     for (const id of idsToTry) {
       const file = path.join(approvalsDir, `${id}.json`);
@@ -1129,7 +1485,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
       try {
         const data = (await fs.readJson(file)) as any;
         if (Array.isArray(data?.messages)) {
-          baseMessages = data.messages as ConversationMessage[];
+          baseMessages = this.coerceStoredMessagesToModelMessages(data.messages as unknown[]);
           break;
         }
       } catch {
@@ -1137,104 +1493,147 @@ Chain commands with && for sequential execution or ; for independent execution.`
       }
     }
     if (!baseMessages) {
-      baseMessages = this.getConversationHistory(sessionId);
+      baseMessages = [...this.getOrCreateSessionMessages(sessionId)];
     }
 
-    this.setConversationHistory(sessionId, baseMessages);
+    this.sessionMessages.set(sessionId, [...baseMessages]);
 
-    // Approve: execute tool(s) and append tool results.
-    if (approvedIds.length > 0) {
-      const tools = await this.createTools();
-      for (const approvalId of approvedIds) {
-        const file = path.join(approvalsDir, `${approvalId}.json`);
-        let toolName: string | undefined;
-        let toolInput: Record<string, unknown> | undefined;
+    const approvalResponses: ToolApprovalResponse[] = [];
 
-        if (fs.existsSync(file)) {
-          try {
-            const data = (await fs.readJson(file)) as any;
-            toolName = data.tool;
-            toolInput = data.input;
-          } catch {
-            // ignore
-          }
-        }
-
-        if (!toolName || typeof toolName !== 'string') continue;
-        const tool = (tools as any)[toolName];
-        if (!tool || typeof tool.execute !== 'function') continue;
-
-        const execInput = toolInput && typeof toolInput === 'object' ? toolInput : {};
-        if (toolName === 'exec_shell') {
-          const command = String((execInput as any)?.command || '').trim();
-          if (command) {
-            await emitStep('step_start', `我准备执行：${command}`, { toolName, command, approvalId, sessionId });
-          }
-        } else {
-          await emitStep('step_start', `我准备执行工具：${toolName}`, { toolName, approvalId, sessionId });
-        }
-        const toolResult = await tool.execute(execInput);
-
-        if (toolName === 'exec_shell') {
-          const command = String((execInput as any)?.command || '').trim();
-          const exitCode = (toolResult as any)?.exitCode;
-          const stdout = String((toolResult as any)?.stdout || (toolResult as any)?.output || '').trim();
-          const stderr = String((toolResult as any)?.stderr || '').trim();
-          const snippet = (stdout || stderr).slice(0, 500);
-          await emitStep(
-            'step_finish',
-            `已执行：${command}${typeof exitCode === 'number' ? `（exitCode=${exitCode}）` : ''}${snippet ? `\n摘要：${snippet}${(stdout || stderr).length > 500 ? '…' : ''}` : ''}`,
-            { toolName, command, exitCode: typeof exitCode === 'number' ? exitCode : undefined, approvalId, sessionId },
-          );
-        } else {
-          await emitStep('step_finish', `工具执行完成：${toolName}`, { toolName, approvalId, sessionId });
-        }
-
-        const formatted = this.formatToolResultForHistory(toolName, execInput, toolResult);
-        this.addToHistory({
-          role: 'tool',
-          content: formatted,
-          toolName,
-          timestamp: Date.now(),
-        }, sessionId);
-
-        await this.permissionEngine.updateApprovalRequest(approvalId, {
-          status: 'approved',
-          respondedAt: getTimestamp(),
-          response: approvals[approvalId] || 'Approved',
+    for (const approvalId of approvedIds) {
+      const file = path.join(approvalsDir, `${approvalId}.json`);
+      if (!fs.existsSync(file)) continue;
+      try {
+        const data = (await fs.readJson(file)) as any;
+        const aiApprovalId = data?.meta?.aiApprovalId;
+        if (!aiApprovalId) continue;
+        approvalResponses.push({
+          type: 'tool-approval-response',
+          approvalId: String(aiApprovalId),
+          approved: true,
+          reason: approvals[approvalId] || 'Approved',
         });
-        // Requirement: delete approval json after decision
-        await this.permissionEngine.deleteApprovalRequest(approvalId);
+      } catch {
+        // ignore
       }
     }
 
-    // Refuse: mark rejected and inject as a user message so the agent can continue.
-    if (refusedEntries.length > 0) {
-      for (const [approvalId, reason] of refusedEntries) {
-        await this.permissionEngine.updateApprovalRequest(approvalId, {
-          status: 'rejected',
-          respondedAt: getTimestamp(),
-          response: reason || 'Rejected',
+    for (const [approvalId, reason] of refusedEntries) {
+      const file = path.join(approvalsDir, `${approvalId}.json`);
+      if (!fs.existsSync(file)) continue;
+      try {
+        const data = (await fs.readJson(file)) as any;
+        const aiApprovalId = data?.meta?.aiApprovalId;
+        if (!aiApprovalId) continue;
+        approvalResponses.push({
+          type: 'tool-approval-response',
+          approvalId: String(aiApprovalId),
+          approved: false,
+          reason: reason || 'Rejected',
         });
-        await this.permissionEngine.deleteApprovalRequest(approvalId);
-
-        this.addToHistory({
-          role: 'user',
-          content: `Approval ${approvalId} was rejected. Reason: ${reason || 'no reason provided'}`,
-          timestamp: Date.now(),
-        }, sessionId);
+      } catch {
+        // ignore
       }
     }
 
-    const startTime = Date.now();
-    return this.runWithGenerateText('', this.context.agentMd, startTime, context, sessionId, { addUserPrompt: false });
+    // Persist decision state and delete approval files (ShipMyAgent requirement).
+    for (const approvalId of approvedIds) {
+      await this.permissionEngine.updateApprovalRequest(approvalId, {
+        status: 'approved',
+        respondedAt: getTimestamp(),
+        response: approvals[approvalId] || 'Approved',
+      });
+      await this.permissionEngine.deleteApprovalRequest(approvalId);
+    }
+    for (const [approvalId, reason] of refusedEntries) {
+      await this.permissionEngine.updateApprovalRequest(approvalId, {
+        status: 'rejected',
+        respondedAt: getTimestamp(),
+        response: reason || 'Rejected',
+      });
+      await this.permissionEngine.deleteApprovalRequest(approvalId);
+    }
+
+    if (approvalResponses.length === 0) {
+      return { success: true, output: 'No approval action taken.', toolCalls: [] };
+    }
+
+    // Add a tool message with approval responses and continue the agent loop.
+    const messages = this.getOrCreateSessionMessages(sessionId);
+    messages.push({ role: 'tool', content: approvalResponses as any });
+    await emitStep('approval', '已记录审批结果，继续执行。', { sessionId });
+
+    const resumeStart = Date.now();
+    const resumed = await this.runWithToolLoopAgent('', resumeStart, context, sessionId, { addUserPrompt: false, onStep });
+
+    // If this approval was part of a background Run, update the run record to reflect completion.
+    if (context?.runId) {
+      try {
+        const { loadRun, saveRun } = await import('./run-store.js');
+        const run = await loadRun(this.context.projectRoot, context.runId);
+        if (run) {
+          run.status = resumed.success ? 'succeeded' : 'failed';
+          run.finishedAt = getTimestamp();
+          run.output = { text: resumed.output };
+          run.pendingApproval = undefined;
+          run.notified = true;
+          if (!resumed.success) {
+            run.error = { message: resumed.output || 'Run failed' };
+          }
+          await saveRun(this.context.projectRoot, run);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return resumed;
+  }
+
+  /**
+   * Decide whether to run synchronously or enqueue a background Run.
+   * Returns { mode, reason }.
+   */
+  async decideExecutionMode(input: {
+    instructions: string;
+    context?: AgentInput['context'];
+  }): Promise<{ mode: 'sync' | 'async'; reason: string }> {
+    if (!this.model) return { mode: 'sync', reason: 'No model configured' };
+
+    const instructions = String(input.instructions || '').trim();
+    if (!instructions) return { mode: 'sync', reason: 'Empty instructions' };
+
+    const result = await generateText({
+      model: this.model,
+      system:
+        'You are an execution-mode router. Decide whether the user request should run synchronously or as a background run. ' +
+        'Prefer background for long-running, risky, approval-prone, or multi-step tasks. Output STRICT JSON only.',
+      prompt:
+        `Return JSON: {"mode":"sync"|"async","reason":"..."}.\n\n` +
+        `Context:\n` +
+        `- source: ${input.context?.source || 'unknown'}\n` +
+        `- sessionId: ${input.context?.sessionId || 'unknown'}\n` +
+        `- userId: ${input.context?.userId || 'unknown'}\n` +
+        `\nUser request:\n${instructions}\n`,
+    });
+
+    const text = (result.text || '').trim();
+    try {
+      const parsed = JSON.parse(text);
+      const mode = parsed?.mode === 'async' ? 'async' : 'sync';
+      const reason = typeof parsed?.reason === 'string' ? parsed.reason.slice(0, 200) : 'n/a';
+      return { mode, reason };
+    } catch {
+      // If model output is malformed, default to sync to preserve responsiveness.
+      return { mode: 'sync', reason: 'Failed to parse router output' };
+    }
   }
 
   /**
    * 构建对话上下文（将历史消息转换为提示词）
    */
   private buildConversationContext(sessionId: string): string {
-    const history = this.conversationHistories.get(sessionId) || [];
+    const history = this.sessionMessages.get(sessionId) || [];
 
     if (history.length === 0) {
       return '';
@@ -1242,14 +1641,19 @@ Chain commands with && for sequential execution or ; for independent execution.`
 
     // 构建对话历史文本
     const historyText = history.map((msg) => {
-      if (msg.role === 'user') {
-        return `User: ${msg.content}`;
-      } else if (msg.role === 'assistant') {
-        return `Assistant: ${msg.content}`;
-      } else if (msg.role === 'tool') {
-        return `Tool Result: ${msg.content}`;
-      }
-      return '';
+      const role = (msg as any).role;
+      const content = (msg as any).content;
+      const text =
+        typeof content === 'string'
+          ? content
+          : Array.isArray(content)
+            ? JSON.stringify(content).slice(0, 2000)
+            : String(content ?? '');
+
+      if (role === 'user') return `User: ${text}`;
+      if (role === 'assistant') return `Assistant: ${text}`;
+      if (role === 'tool') return `Tool: ${text}`;
+      return `Other: ${text}`;
     }).filter(Boolean).join('\n\n');
 
     return historyText;
@@ -1469,12 +1873,11 @@ You are a helpful project assistant.`;
       model: 'claude-sonnet-4-20250514',
       baseUrl: 'https://api.anthropic.com/v1',
       temperature: 0.7,
-      maxTokens: 4096,
     },
     permissions: {
       read_repo: true,
       write_repo: { requiresApproval: true },
-      exec_shell: { allow: [], requiresApproval: false },
+      exec_shell: { deny: ['rm'], requiresApproval: false },
     },
     integrations: {
       telegram: { enabled: false },
@@ -1485,6 +1888,8 @@ You are a helpful project assistant.`;
   const shipDir = getShipDirPath(projectRoot);
   fs.ensureDirSync(shipDir);
   fs.ensureDirSync(path.join(shipDir, 'tasks'));
+  fs.ensureDirSync(path.join(shipDir, 'runs'));
+  fs.ensureDirSync(path.join(shipDir, 'queue'));
   fs.ensureDirSync(path.join(shipDir, 'routes'));
   fs.ensureDirSync(path.join(shipDir, 'approvals'));
   fs.ensureDirSync(path.join(shipDir, 'logs'));
@@ -1511,12 +1916,14 @@ You are a helpful project assistant.`;
     // Use default
   }
 
-  // Combine user identity + system shell guide
-  const agentMd = `${userAgentMd}
-
----
-
-${DEFAULT_SHELL_GUIDE}`;
+  // Combine user identity + ship prompts + system shell guide
+  const agentMd = [
+    userAgentMd,
+    `---\n\n${DEFAULT_SHIP_PROMPTS}`,
+    `---\n\n${DEFAULT_SHELL_GUIDE}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 
   return new AgentRuntime({
     projectRoot,

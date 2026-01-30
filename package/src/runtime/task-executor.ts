@@ -12,6 +12,7 @@ export interface ExecutionResult {
   output: string;
   duration: number;
   error?: string;
+  pendingApproval?: any;
   toolCalls?: Array<{
     tool: string;
     args: Record<string, unknown>;
@@ -62,6 +63,7 @@ export class TaskExecutor {
           success: result.success,
           output: result.output,
           duration: Date.now() - startTime,
+          pendingApproval: (result as any).pendingApproval,
           toolCalls: result.toolCalls.map(tc => ({
             tool: tc.tool,
             args: tc.input,
@@ -85,6 +87,7 @@ export class TaskExecutor {
         success: result.success,
         output: result.output,
         duration: Date.now() - startTime,
+        pendingApproval: (result as any).pendingApproval,
         toolCalls: result.toolCalls.map(tc => ({
           tool: tc.tool,
           args: tc.input,
@@ -103,7 +106,7 @@ export class TaskExecutor {
     }
   }
 
-  async executeInstructions(instructions: string, sessionId?: string): Promise<ExecutionResult> {
+  async executeInstructions(instructions: string, context?: AgentInput['context']): Promise<ExecutionResult> {
     const startTime = Date.now();
     const toolCalls: ExecutionResult['toolCalls'] = [];
 
@@ -113,9 +116,7 @@ export class TaskExecutor {
       // Use Agent Runtime to execute instruction
       const agentInput: AgentInput = {
         instructions,
-        context: {
-          sessionId,
-        },
+        context,
       };
 
       const result = await this.agentRuntime.run(agentInput);
@@ -124,6 +125,7 @@ export class TaskExecutor {
         success: result.success,
         output: result.output,
         duration: Date.now() - startTime,
+        pendingApproval: (result as any).pendingApproval,
         toolCalls: result.toolCalls.map(tc => ({
           tool: tc.tool,
           args: tc.input,

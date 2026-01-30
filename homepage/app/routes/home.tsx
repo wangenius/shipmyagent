@@ -1,5 +1,6 @@
 import { HeroSection } from "@/components/sections/HeroSection";
 import { TutorialSection } from "@/components/sections/TutorialSection";
+import { PlatformsSection } from "@/components/sections/PlatformsSection";
 import { Footer } from "@/components/sections/Footer";
 import { Navbar } from "@/components/sections/navbar";
 import { product } from "@/lib/product";
@@ -86,6 +87,7 @@ export default function Home() {
       <main>
         <HeroSection />
         <TutorialSection />
+        <PlatformsSection />
       </main>
       <Footer />
     </div>

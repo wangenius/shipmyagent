@@ -94,7 +94,7 @@
 - 其他：`@ai-sdk/openai`（默认认为 OpenAI provider）  
   见：`package/src/runtime/agent.ts:215`
 
-最终以 `providerInstance(model, { maxTokens, temperature })` 生成 `this.agent`。见：`package/src/runtime/agent.ts:232`
+最终以 `providerInstance(model, { temperature })` 生成 `this.agent`；`maxTokens` 可选，未配置时会使用运行时默认值。见：`package/src/runtime/agent.ts:232`
 
 ---
 
@@ -157,7 +157,7 @@
 
 - `permissions.read_repo`：是否可读（可选按路径限制）  
 - `permissions.write_repo`：写入路径白名单 + 是否需要审批  
-- `permissions.exec_shell`：允许的命令白名单（allow）+ 是否需要审批
+- `permissions.exec_shell`：命令黑名单（deny，默认禁用 `rm`）+ 是否需要审批（另保留 legacy 的 allow）
 
 数据结构见：`package/src/runtime/permission.ts:27`
 
@@ -171,8 +171,10 @@
 
 `checkExecShell(command)`：
 
-- 若 `exec_shell.allow` 非空：只按“命令名（第一个 token）”判定是否允许。  
-  例如：`ls -la` 的命令名是 `ls`。见：`package/src/runtime/permission.ts:154`
+- 若 `exec_shell.deny` 非空：按“每段命令的命令名”做黑名单拦截（支持 `&&`/`|`/`;` 等分隔）。  
+  例如：`rm -rf a && ls -la` 会命中 `rm` 而被拒绝。
+- 否则若 `exec_shell.allow` 非空（legacy）：只允许 allow 里的命令名。  
+  例如：`ls -la` 的命令名是 `ls`。
 - 若 `exec_shell.requiresApproval=true`：创建审批请求并返回 `approvalId`，调用方进入等待。见：`package/src/runtime/permission.ts:171`
 - 否则直接允许。见：`package/src/runtime/permission.ts:184`
 
@@ -307,8 +309,8 @@ POST /api/execute
    - `createAgentRuntimeFromPath()` 会把 `Agent.md + DEFAULT_SHELL_GUIDE` 拼接。见：`package/src/runtime/agent.ts:1055`  
    这会导致“同项目不同启动通道”下，模型收到的 system prompt 不一致。
 
-2. **exec_shell allow-list 的安全边界较弱**：  
-   allow-list 只检查第一段命令名，而实际执行 `shell: true` 支持复杂链式命令。见：`package/src/runtime/permission.ts:154`、`package/src/runtime/agent.ts:376`
+2. **exec_shell 的安全边界**：  
+   当前黑名单是“按分隔符拆分后取每段命令名”的 best-effort 检查，仍可能被 `bash -c` 等方式绕过；高安全场景建议配合 `requiresApproval=true` 或更严格的命令解析/执行策略。
 
 3. **审批结构存在两套类型**：  
    `AgentRuntime.executeApproved()` 读取的 `ApprovalRequest` 结构与 `PermissionEngine` 写入的审批 JSON 结构不同，当前更像“遗留/未接入主流程”的能力。见：`package/src/runtime/agent.ts:898`、`package/src/runtime/permission.ts:15`
@@ -318,6 +320,6 @@ POST /api/execute
 ## 12. 快速排障索引
 
 - Telegram 侧“工具缺参 / missing command”：看 `normalizeToolArgs()` 是否生效。`package/src/runtime/agent.ts:298`
-- “Command not in allow list”：检查 `ship.json -> permissions.exec_shell.allow`，并确认命令名已放行。`package/src/runtime/permission.ts:146`
+- “Command denied by blacklist”：检查 `ship.json -> permissions.exec_shell.deny`（默认包含 `rm`）。
+- “Command not in allow list”（legacy）：检查 `ship.json -> permissions.exec_shell.allow`，并确认命令名已放行。
 - “Approval timeout”：看 `.ship/approvals` 中是否出现 pending 审批，以及 Telegram 是否配置了 `chatId` 并能推送审批。`package/src/runtime/permission.ts:295`、`package/src/integrations/telegram.ts:224`
-

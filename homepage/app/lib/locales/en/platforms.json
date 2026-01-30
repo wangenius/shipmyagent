@@ -1,0 +1,36 @@
+{
+  "title": "Supported Platforms",
+  "subtitle": "Interact with your Repo Agent through your favorite communication tools",
+  "defaultPlatforms": {
+    "telegram": {
+      "name": "Telegram",
+      "description": "Powerful bot integration with command support and interactive menus."
+    },
+    "discord": {
+      "name": "Discord",
+      "description": "Collaborate with your Agent directly in your team channels."
+    },
+    "feishu": {
+      "name": "Feishu / Lark",
+      "description": "Seamlessly integrate into your enterprise workflow."
+    },
+    "qq": {
+      "name": "QQ",
+      "description": "Interact with your Agent on the most popular social platform."
+    }
+  },
+  "otherTitle": "Need More?",
+  "otherSubtitle": "We are constantly expanding our supported platforms. If you don't see what you need, here are two ways to get it:",
+  "solutions": {
+    "discuss": {
+      "title": "Request on Discussions",
+      "description": "Submit a feature request in our GitHub Discussions. We prioritize platforms based on community demand.",
+      "button": "Join Discuss"
+    },
+    "skill": {
+      "title": "Encapsulate as Skill",
+      "description": "ShipMyAgent is highly extensible. You can implement any platform logic and encapsulate it as a custom Skill.",
+      "button": "Read Skill Docs"
+    }
+  }
+}

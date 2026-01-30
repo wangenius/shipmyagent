@@ -6,10 +6,13 @@ import {
   getShipJsonPath,
   getShipDirPath,
   getTasksDirPath,
+  getRunsDirPath,
+  getQueueDirPath,
   getRoutesDirPath,
   getApprovalsDirPath,
   getLogsDirPath,
   getCacheDirPath,
+  getChatsDirPath,
   ensureDir,
   saveJson,
   DEFAULT_SHIP_JSON,
@@ -23,6 +26,12 @@ interface InitOptions {
 
 export async function initCommand(cwd: string = '.', options: InitOptions = {}): Promise<void> {
   const projectRoot = path.resolve(cwd);
+  const LLM_API_KEY = '${LLM_API_KEY}';
+  const LLM_BASE_URL = '${LLM_BASE_URL}';
+  const LLM_MODEL = '${LLM_MODEL}';
+  const TELEGRAM_BOT_TOKEN = '${TELEGRAM_BOT_TOKEN}';
+  const FEISHU_APP_ID = '${FEISHU_APP_ID}';
+  const FEISHU_APP_SECRET = '${FEISHU_APP_SECRET}';
 
   console.log(`🚀 Initializing ShipMyAgent project: ${projectRoot}`);
 
@@ -116,11 +125,10 @@ Help users understand and work with their codebase by exploring, analyzing, and 
 
   const llmConfig = {
     provider: modelTemplate.provider,
-    model: selectedModel, // Use selector value directly as model name
-    baseUrl: modelTemplate.baseUrl,
-    apiKey: '${API_KEY}',
+    model: selectedModel === 'custom' ? LLM_MODEL : selectedModel, // custom needs env
+    baseUrl: selectedModel === 'custom' ? LLM_BASE_URL : modelTemplate.baseUrl,
+    apiKey: LLM_API_KEY,
     temperature: 0.7,
-    maxTokens: 4096,
   };
 
   const shipConfig: ShipConfig = {
@@ -131,13 +139,13 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     integrations: {
       telegram: {
         enabled: response.integration === 'telegram',
-        botToken: response.integration === 'telegram' ? '${TELEGRAM_BOT_TOKEN}' : undefined,
-        chatId: response.integration === 'telegram' ? '${TELEGRAM_CHAT_ID}' : undefined,
+        botToken: response.integration === 'telegram' ? TELEGRAM_BOT_TOKEN : undefined,
+        chatId: undefined,
       },
       feishu: {
         enabled: response.integration === 'feishu',
-        appId: response.integration === 'feishu' ? '${FEISHU_APP_ID}' : undefined,
-        appSecret: response.integration === 'feishu' ? '${FEISHU_APP_SECRET}' : undefined,
+        appId: response.integration === 'feishu' ? FEISHU_APP_ID : undefined,
+        appSecret: response.integration === 'feishu' ? FEISHU_APP_SECRET : undefined,
         domain: 'https://open.feishu.cn',
       },
     },
@@ -150,10 +158,13 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   const dirs = [
     getShipDirPath(projectRoot),
     getTasksDirPath(projectRoot),
+    getRunsDirPath(projectRoot),
+    getQueueDirPath(projectRoot),
     getRoutesDirPath(projectRoot),
     getApprovalsDirPath(projectRoot),
     getLogsDirPath(projectRoot),
     getCacheDirPath(projectRoot),
+    getChatsDirPath(projectRoot),
   ];
 
   for (const dir of dirs) {

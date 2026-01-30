@@ -9,9 +9,10 @@
     ]
   },
   "scripts": {
-    "build": "cd package && bun run build",
+    "build": "bash ./build.sh",
     "dev":"cd examples/server-agent && shipmyagent start",
-    "cli": "bun run examples/cli-interactive/src/index.ts"
+    "cli": "bun run examples/cli-interactive/src/index.ts",
+    "publish":"./publish.sh"
   },
   "devDependencies": {
     "@types/bun": "latest"

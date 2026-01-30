@@ -9,6 +9,8 @@ export interface TaskDefinition {
   name: string;
   cron: string;
   notify?: string;
+  source?: 'telegram' | 'feishu';
+  chatId?: string;
   description?: string;
   enabled?: boolean;
 }
@@ -99,6 +101,8 @@ export class TaskScheduler {
         name: metadata['name'] || id,
         cron: metadata['cron'] || '0 9 * * *',
         notify: metadata['notify'],
+        source: metadata['source'] === 'telegram' ? 'telegram' : metadata['source'] === 'feishu' ? 'feishu' : undefined,
+        chatId: metadata['chatId'] || metadata['chat_id'],
         description: content.replace(/^---\n[\s\S]*?\n---/, '').trim(),
         enabled: metadata['enabled'] !== 'false',
       };

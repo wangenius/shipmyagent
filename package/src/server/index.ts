@@ -6,6 +6,7 @@ import { createPermissionEngine, PermissionEngine } from '../runtime/permission.
 import { createTaskScheduler, TaskScheduler, TaskDefinition } from '../runtime/scheduler.js';
 import { createTaskExecutor, TaskExecutor } from '../runtime/task-executor.js';
 import { createToolExecutor, ToolExecutor } from '../runtime/tools.js';
+import { ChatStore } from '../runtime/chat-store.js';
 import http from 'node:http';
 import fs from 'fs-extra';
 import path from 'path';
@@ -29,10 +30,12 @@ export class AgentServer {
   private context: ServerContext;
   private server: ReturnType<typeof import('http').createServer> | null = null;
   private projectRoot: string;
+  private chatStore: ChatStore;
 
   constructor(context: ServerContext) {
     this.context = context;
     this.projectRoot = context.projectRoot;
+    this.chatStore = new ChatStore(this.projectRoot);
     this.app = new Hono();
 
     // Middleware
@@ -120,13 +123,49 @@ export class AgentServer {
       }
 
       const instructions = body?.instructions;
+      const chatId = (typeof body?.chatId === 'string' && body.chatId.trim())
+        ? body.chatId.trim()
+        : (typeof body?.sessionId === 'string' && body.sessionId.trim())
+          ? body.sessionId.trim()
+          : 'default';
+      const actorId = (typeof body?.userId === 'string' && body.userId.trim())
+        ? body.userId.trim()
+        : (typeof body?.actorId === 'string' && body.actorId.trim())
+          ? body.actorId.trim()
+          : 'api';
 
       if (!instructions) {
         return c.json({ success: false, message: 'Missing instructions field' }, 400);
       }
 
       try {
-        const result = await this.context.taskExecutor.executeInstructions(instructions);
+        const sessionId = `api:chat:${chatId}`;
+        await this.chatStore.append({
+          channel: 'api',
+          chatId,
+          chatKey: sessionId,
+          userId: actorId,
+          messageId: typeof body?.messageId === 'string' ? body.messageId : undefined,
+          role: 'user',
+          text: String(instructions),
+        });
+
+        const result = await this.context.taskExecutor.executeInstructions(
+          instructions,
+          { source: 'api', userId: chatId, sessionId, actorId },
+        );
+
+        await this.chatStore.append({
+          channel: 'api',
+          chatId,
+          chatKey: sessionId,
+          userId: 'bot',
+          messageId: typeof body?.messageId === 'string' ? body.messageId : undefined,
+          role: 'assistant',
+          text: String(result?.output || ''),
+          meta: { success: Boolean((result as any)?.success) },
+        });
+
         return c.json(result);
       } catch (error) {
         return c.json({ success: false, message: String(error) }, 500);

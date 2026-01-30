@@ -6,11 +6,15 @@ import { createTaskScheduler } from '../runtime/scheduler.js';
 import { createTaskExecutor } from '../runtime/task-executor.js';
 import { createToolExecutor } from '../runtime/tools.js';
 import { createAgentRuntime, AgentContext } from '../runtime/agent.js';
+import { RunManager } from '../runtime/run-manager.js';
+import { RunWorker } from '../runtime/run-worker.js';
 import { createServer, ServerContext } from '../server/index.js';
 import { createInteractiveServer } from '../server/interactive.js';
 import { createTelegramBot } from '../integrations/telegram.js';
 import { createFeishuBot } from '../integrations/feishu.js';
-import { getAgentMdPath, getShipJsonPath, loadShipConfig, ShipConfig } from '../utils.js';
+import { getAgentMdPath, getShipJsonPath, loadShipConfig, ShipConfig, DEFAULT_SHELL_GUIDE } from '../utils.js';
+import { DEFAULT_SHIP_PROMPTS } from '../runtime/ship-prompts.js';
+import { fileURLToPath } from 'url';
 
 interface StartOptions {
   port: number;
@@ -21,8 +25,19 @@ interface StartOptions {
 
 export async function startCommand(cwd: string = '.', options: StartOptions): Promise<void> {
   const projectRoot = path.resolve(cwd);
+  const isPlaceholder = (value?: string): boolean => value === '${}';
 
-  console.log(`🚀 Starting ShipMyAgent: ${projectRoot}`);
+  let version = 'unknown';
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const pkg = await fs.readJson(path.join(__dirname, '../../package.json'));
+    if (pkg && typeof (pkg as any).version === 'string') version = (pkg as any).version;
+  } catch {
+    // ignore
+  }
+
+  console.log(`🚀 Starting ShipMyAgent v${version}: ${projectRoot}`);
 
   // Check if initialized
   if (!fs.existsSync(getAgentMdPath(projectRoot))) {
@@ -64,7 +79,14 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
   logger.info('Tool executor initialized');
 
   // Create Agent Runtime
-  const agentMd = fs.readFileSync(getAgentMdPath(projectRoot), 'utf-8');
+  const userAgentMd = fs.readFileSync(getAgentMdPath(projectRoot), 'utf-8').trim();
+  const agentMd = [
+    userAgentMd || 'You are a helpful project assistant.',
+    `---\n\n${DEFAULT_SHIP_PROMPTS}`,
+    `---\n\n${DEFAULT_SHELL_GUIDE}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
   const agentContext: AgentContext = {
     projectRoot,
     config: shipConfig as ShipConfig,
@@ -78,12 +100,19 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
   const taskExecutor = createTaskExecutor(toolExecutor, logger, agentRuntime, projectRoot);
   logger.info('Task executor initialized');
 
+  // Create Run manager/worker (Tasks v2)
+  const runManager = new RunManager(projectRoot);
+  const runWorker = new RunWorker(projectRoot, logger, taskExecutor, { maxConcurrent: 1, pollIntervalMs: 1000 });
+  runWorker.start();
+  logger.info('Run worker started');
+
   // Create task scheduler
   const taskScheduler = createTaskScheduler(
     projectRoot,
     logger,
     async (task) => {
-      await taskExecutor.executeTask(task, task.description || '');
+      const run = await runManager.createAndEnqueueTaskRun(task);
+      logger.info(`Enqueued scheduled run: ${run.runId} (${task.id})`);
     }
   );
   logger.info('Task scheduler initialized');
@@ -120,9 +149,18 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
     // Read Feishu configuration from environment variables or config
     const feishuConfig = {
       enabled: true,
-      appId: shipConfig.integrations.feishu.appId || process.env.FEISHU_APP_ID || '',
-      appSecret: shipConfig.integrations.feishu.appSecret || process.env.FEISHU_APP_SECRET || '',
+      appId:
+        (shipConfig.integrations.feishu.appId && !isPlaceholder(shipConfig.integrations.feishu.appId)
+          ? shipConfig.integrations.feishu.appId
+          : undefined) || process.env.FEISHU_APP_ID || '',
+      appSecret:
+        (shipConfig.integrations.feishu.appSecret && !isPlaceholder(shipConfig.integrations.feishu.appSecret)
+          ? shipConfig.integrations.feishu.appSecret
+          : undefined) || process.env.FEISHU_APP_SECRET || '',
       domain: shipConfig.integrations.feishu.domain || 'https://open.feishu.cn',
+      adminUserIds: Array.isArray((shipConfig.integrations.feishu as any).adminUserIds)
+        ? (shipConfig.integrations.feishu as any).adminUserIds
+        : undefined,
     };
 
     feishuBot = await createFeishuBot(
@@ -137,7 +175,7 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
   if (options.interactiveWeb) {
     logger.info('交互式 Web 界面已启用');
     interactiveServer = createInteractiveServer({
-      agentApiUrl: `http://${options.host}:${options.port}`,
+      agentApiUrl: `http://${(options.host === '0.0.0.0' || options.host === '::') ? '127.0.0.1' : options.host}:${options.port}`,
     });
   }
 
@@ -158,6 +196,8 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
     if (feishuBot) {
       await feishuBot.stop();
     }
+
+    await runWorker.stop();
 
     // 停止交互式 Web 服务器
     if (interactiveServer) {

@@ -4,7 +4,7 @@ import { Command } from "commander";
 import { initCommand } from "./commands/init.js";
 import { startCommand } from "./commands/start.js";
 import { readFileSync } from "fs";
-import { join, dirname } from "path";
+import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
 
 // 在 ES 模块中获取 __dirname
@@ -19,7 +19,7 @@ const packageJson = JSON.parse(
 const program = new Command();
 
 program
-  .name("shipmyagent")
+  .name(basename(process.argv[1] || "shipmyagent"))
   .description(
     "把一个代码仓库，启动成一个可对话、可调度、可审计的 Agent Runtime",
   )

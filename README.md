@@ -88,6 +88,12 @@ your-project/
 
 ---
 
+## 设计文档
+
+- Agent-Native 架构设计草案（vNext）：`docs/agent-native-architecture-design.md`
+
+---
+
 ## 配置说明
 
 ### Agent.md - Agent 宪法

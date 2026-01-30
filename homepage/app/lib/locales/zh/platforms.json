@@ -1,0 +1,36 @@
+{
+  "title": "多平台支持",
+  "subtitle": "通过你最喜欢的通讯工具与你的 Repo Agent 进行交互",
+  "defaultPlatforms": {
+    "telegram": {
+      "name": "Telegram",
+      "description": "强大的机器人集成，支持命令和交互式菜单。"
+    },
+    "discord": {
+      "name": "Discord",
+      "description": "在你的团队频道中直接与 Agent 协作。"
+    },
+    "feishu": {
+      "name": "飞书 / Lark",
+      "description": "无缝集成到你的企业工作流程中。"
+    },
+    "qq": {
+      "name": "QQ",
+      "description": "在最受欢迎的社交平台上与你的 Agent 交互。"
+    }
+  },
+  "otherTitle": "还需要更多？",
+  "otherSubtitle": "我们正在不断扩展支持的平台。如果你没有看到所需的平台，可以通过以下两种方式获取：",
+  "solutions": {
+    "discuss": {
+      "title": "在讨论区申请",
+      "description": "在我们的 GitHub Discussions 中提交功能请求。我们会根据社区需求优先考虑支持的平台。",
+      "button": "加入讨论"
+    },
+    "skill": {
+      "title": "以 Skill 方式封装",
+      "description": "ShipMyAgent 具有高度的可扩展性。你可以实现任何平台逻辑并将其封装为自定义 Skill。",
+      "button": "阅读 Skill 文档"
+    }
+  }
+}
