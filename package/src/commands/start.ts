@@ -9,6 +9,7 @@ import { createAgentRuntime, AgentContext } from '../runtime/agent.js';
 import { createServer, ServerContext } from '../server/index.js';
 import { createTelegramBot } from '../integrations/telegram.js';
 import { createFeishuBot } from '../integrations/feishu.js';
+import { createQQBot } from '../integrations/qq.js';
 import { getAgentMdPath, getShipJsonPath, getProjectRoot, ShipConfig } from '../utils.js';
 
 interface StartOptions {
@@ -139,6 +140,36 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
     );
   }
 
+  // Create QQ Bot (if enabled)
+  let qqBot = null;
+  if (shipConfig.integrations?.qq?.enabled) {
+    logger.info('QQ integration enabled');
+
+    // Read QQ configuration from environment variables or config
+    const qqConfig = {
+      enabled: true,
+      appId: shipConfig.integrations.qq.appId || process.env.QQ_APP_ID || '',
+      appSecret: shipConfig.integrations.qq.appSecret || process.env.QQ_APP_SECRET || '',
+      sandbox: shipConfig.integrations.qq.sandbox || false,
+    };
+
+    // Replace environment variable placeholders
+    if (qqConfig.appId.startsWith('${') && qqConfig.appId.endsWith('}')) {
+      const envVar = qqConfig.appId.slice(2, -1);
+      qqConfig.appId = process.env[envVar] || '';
+    }
+    if (qqConfig.appSecret.startsWith('${') && qqConfig.appSecret.endsWith('}')) {
+      const envVar = qqConfig.appSecret.slice(2, -1);
+      qqConfig.appSecret = process.env[envVar] || '';
+    }
+
+    qqBot = await createQQBot(
+      projectRoot,
+      qqConfig,
+      logger
+    );
+  }
+
   // Handle process signals
   let isShuttingDown = false;
   const shutdown = async (signal: string) => {
@@ -155,6 +186,11 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
     // Stop Feishu Bot
     if (feishuBot) {
       await feishuBot.stop();
+    }
+
+    // Stop QQ Bot
+    if (qqBot) {
+      await qqBot.stop();
     }
 
     // Stop server
@@ -184,6 +220,11 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
   // Start Feishu Bot
   if (feishuBot) {
     await feishuBot.start();
+  }
+
+  // Start QQ Bot
+  if (qqBot) {
+    await qqBot.start();
   }
 
   logger.info('=== ShipMyAgent Started ===');
