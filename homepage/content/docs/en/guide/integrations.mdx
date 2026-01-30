@@ -93,6 +93,43 @@ Edit the `integrations.feishu` section of `ship.json`:
 - **Direct Chat**: Send a message to chat with the Agent in Feishu.
 - **Group Chat**: Add the bot to a group to enable team collaboration.
 
+## QQ Bot
+
+QQ is one of the most popular instant messaging platforms in China. You can integrate ShipMyAgent with QQ Bot to interact with your Agent.
+
+### Setup Steps
+
+1. **Create QQ Bot**
+   - Visit [QQ Open Platform](https://bot.q.qq.com/wiki)
+   - Follow the guide to create a new bot application
+   - Get your **App ID** and **App Secret**
+
+2. **Configure ship.json**
+
+Edit the `integrations.qq` section of `ship.json`:
+
+```json
+{
+  "integrations": {
+    "qq": {
+      "enabled": true,
+      "appId": "your_app_id_here",
+      "appSecret": "your_app_secret_here"
+    }
+  }
+}
+```
+
+> 🔒 **Security Tip**: Keep your App Secret secure. Never commit it to version control. Consider using environment variables.
+
+3. **Restart Service**
+   Run `shipmyagent start` to restart the service.
+
+### Usage
+
+- **Direct Chat**: Send a message to chat with the Agent in QQ.
+- **Group Chat**: Add the bot to a group to enable team collaboration.
+
 ## Upcoming Integrations
 
 - **Discord**: In development.
