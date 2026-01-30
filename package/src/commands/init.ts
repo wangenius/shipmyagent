@@ -89,6 +89,7 @@ export async function initCommand(cwd: string = '.', options: InitOptions = {}):
         { title: 'None', value: 'none' },
         { title: 'Telegram', value: 'telegram' },
         { title: 'Feishu', value: 'feishu' },
+        { title: 'QQ', value: 'qq' },
       ],
       initial: 0,
     },
@@ -148,6 +149,12 @@ Help users understand and work with their codebase by exploring, analyzing, and 
         appSecret: response.integration === 'feishu' ? FEISHU_APP_SECRET : undefined,
         domain: 'https://open.feishu.cn',
       },
+      qq: {
+        enabled: response.integration === 'qq',
+        appId: response.integration === 'qq' ? '${QQ_APP_ID}' : undefined,
+        appSecret: response.integration === 'qq' ? '${QQ_APP_SECRET}' : undefined,
+        sandbox: false,
+      },
     },
   };
 
@@ -200,6 +207,10 @@ Please scan the repository for TODO comments and generate a report.
     console.log('📱 Telegram integration enabled');
     console.log('   Please configure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID (optional) in ship.json');
     console.log('   or set environment variables: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID\n');
+  } else if (response.integration === 'qq') {
+    console.log('📱 QQ integration enabled');
+    console.log('   Please configure QQ_APP_ID and QQ_APP_SECRET in ship.json');
+    console.log('   or set environment variables: QQ_APP_ID and QQ_APP_SECRET\n');
   }
 
   console.log('Next steps:');
@@ -210,6 +221,9 @@ Please scan the repository for TODO comments and generate a report.
     console.log('  4. Run "shipmyagent start" to start the agent\n');
   } else if (response.integration === 'telegram') {
     console.log('  3. Configure Telegram Bot Token and Chat ID (optional)');
+    console.log('  4. Run "shipmyagent start" to start the agent\n');
+  } else if (response.integration === 'qq') {
+    console.log('  3. Configure QQ App ID and App Secret');
     console.log('  4. Run "shipmyagent start" to start the agent\n');
   } else {
     console.log('  3. Run "shipmyagent start" to start the agent\n');

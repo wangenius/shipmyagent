@@ -8,6 +8,6 @@
     "dev": "shipmyagent start -p 3000"
   },
   "dependencies": {
-    "shipmyagent": "workspace:*"
+    "shipmyagent": "file:../../package"
   }
 }

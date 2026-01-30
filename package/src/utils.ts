@@ -50,6 +50,12 @@ export interface ShipConfig {
       appSecret?: string;
       domain?: string;
     };
+    qq?: {
+      enabled: boolean;
+      appId?: string;      // 机器人ID
+      appSecret?: string;  // 密钥
+      sandbox?: boolean;   // 是否使用沙箱环境
+    };
   };
 }
 

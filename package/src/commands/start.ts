@@ -12,6 +12,7 @@ import { createServer, ServerContext } from '../server/index.js';
 import { createInteractiveServer } from '../server/interactive.js';
 import { createTelegramBot } from '../integrations/telegram.js';
 import { createFeishuBot } from '../integrations/feishu.js';
+import { createQQBot } from '../integrations/qq.js';
 import { getAgentMdPath, getShipJsonPath, loadShipConfig, ShipConfig, DEFAULT_SHELL_GUIDE } from '../utils.js';
 import { DEFAULT_SHIP_PROMPTS } from '../runtime/ship-prompts.js';
 import { fileURLToPath } from 'url';
@@ -170,6 +171,30 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
     );
   }
 
+  // Create QQ Bot (if enabled)
+  let qqBot = null;
+  if (shipConfig.integrations?.qq?.enabled) {
+    logger.info('QQ integration enabled');
+
+    const qqConfig = {
+      enabled: true,
+      appId:
+        (shipConfig.integrations.qq.appId && !isPlaceholder(shipConfig.integrations.qq.appId)
+          ? shipConfig.integrations.qq.appId
+          : undefined) || process.env.QQ_APP_ID || '',
+      appSecret:
+        (shipConfig.integrations.qq.appSecret && !isPlaceholder(shipConfig.integrations.qq.appSecret)
+          ? shipConfig.integrations.qq.appSecret
+          : undefined) || process.env.QQ_APP_SECRET || '',
+      sandbox:
+        typeof shipConfig.integrations.qq.sandbox === 'boolean'
+          ? shipConfig.integrations.qq.sandbox
+          : (process.env.QQ_SANDBOX || '').toLowerCase() === 'true',
+    };
+
+    qqBot = await createQQBot(projectRoot, qqConfig, logger);
+  }
+
   // 创建交互式 Web 服务器（如果已启用）
   let interactiveServer = null;
   if (options.interactiveWeb) {
@@ -195,6 +220,11 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
     // Stop Feishu Bot
     if (feishuBot) {
       await feishuBot.stop();
+    }
+
+    // Stop QQ Bot
+    if (qqBot) {
+      await qqBot.stop();
     }
 
     await runWorker.stop();
@@ -239,6 +269,11 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
   // Start Feishu Bot
   if (feishuBot) {
     await feishuBot.start();
+  }
+
+  // Start QQ Bot
+  if (qqBot) {
+    await qqBot.start();
   }
 
   logger.info('=== ShipMyAgent Started ===');

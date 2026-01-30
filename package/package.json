@@ -1,6 +1,6 @@
 {
   "name": "shipmyagent",
-  "version": "1.0.18",
+  "version": "1.0.19",
   "type": "module",
   "description": "把一个代码仓库，启动成一个可对话、可调度、可审计的 Agent Runtime",
   "bin": {
@@ -43,6 +43,7 @@
     "openai": "^4.0.0",
     "ora": "^8.2.0",
     "prompts": "^2.4.0",
+    "ws": "^8.19.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
@@ -52,6 +53,7 @@
     "@types/node": "^22.0.0",
     "@types/node-cron": "^3.0.0",
     "@types/prompts": "^2.4.0",
+    "@types/ws": "^8.18.1",
     "typescript": "^5.7.0"
   }
 }
