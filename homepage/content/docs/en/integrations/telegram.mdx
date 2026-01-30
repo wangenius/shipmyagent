@@ -1,0 +1,73 @@
+---
+title: Telegram
+description: Chat with your agent and receive notifications on Telegram
+---
+
+# Telegram integration
+
+Use Telegram to chat with ShipMyAgent (DM or group mention) and receive approval prompts/results.
+
+## Setup
+
+### 1) Create a Telegram bot
+
+1. Open Telegram and find `@BotFather`
+2. Send `/newbot`
+3. Follow the prompts
+4. Copy the **HTTP API Token**
+
+### 2) Configure your project
+
+Add the token to your project `.env` (same directory as `ship.json`):
+
+```bash
+TELEGRAM_BOT_TOKEN=123456:abc...
+```
+
+Enable Telegram in `ship.json`:
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}"
+    }
+  }
+}
+```
+
+### 3) Start ShipMyAgent
+
+```bash
+shipmyagent start
+```
+
+In logs you should see:
+
+- `Starting Telegram Bot...`
+- `Bot username: @...`
+- `Telegram Bot started`
+
+## How to use
+
+### Direct message (DM)
+
+Send `/start` (or any message) to your bot.
+
+### Group / supergroup
+
+- Add the bot to the group
+- Talk to it by mentioning: `@your_bot ...`
+- After you mention (or reply to the bot), you can send follow-up messages for a short time without mentioning again.
+
+Notes:
+- If your group uses **Topics**, replies are sent back to the same topic.
+- In groups, ShipMyAgent may restrict who can talk to the bot (e.g. initiator/admin), depending on the runtime’s policy.
+
+## Troubleshooting
+
+- **No response at all**: confirm the process is running and check `.ship/logs/integration/telegram.log`.
+- **Bot doesn’t receive group messages**: in BotFather run `/setprivacy` and set it to `Disable`, then make sure you’re mentioning the bot in the group.
+- **Polling doesn’t work**: if you previously set a webhook, polling (`getUpdates`) will conflict. ShipMyAgent clears webhook on startup; check logs for webhook-related errors.
+- **Bot can’t speak in the group**: check group permissions (the bot may be muted / not allowed to send messages).

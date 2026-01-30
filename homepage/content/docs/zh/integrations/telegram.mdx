@@ -1,0 +1,73 @@
+---
+title: Telegram
+description: 通过 Telegram 与 Agent 对话并接收审批/结果通知
+---
+
+# Telegram 集成
+
+使用 Telegram 和 ShipMyAgent 对话（私聊或群里 @），并接收审批提示与任务结果。
+
+## 配置步骤
+
+### 1）创建 Telegram 机器人
+
+1. 打开 Telegram，搜索 `@BotFather`
+2. 发送 `/newbot`
+3. 按提示设置名称与用户名
+4. 复制 **HTTP API Token**
+
+### 2）写入项目配置
+
+把 token 放到项目根目录的 `.env`（与 `ship.json` 同目录）：
+
+```bash
+TELEGRAM_BOT_TOKEN=123456:abc...
+```
+
+在 `ship.json` 启用 Telegram：
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}"
+    }
+  }
+}
+```
+
+### 3）启动 ShipMyAgent
+
+```bash
+shipmyagent start
+```
+
+日志里看到以下内容说明启动成功：
+
+- `Starting Telegram Bot...`
+- `Bot username: @...`
+- `Telegram Bot started`
+
+## 使用方式
+
+### 私聊
+
+给机器人发 `/start`（或任意消息）即可开始对话。
+
+### 群聊 / 超级群
+
+- 把机器人拉进群
+- 通过 `@你的机器人 用户名 ...` 的方式与它对话
+- 当你 `@bot`（或直接回复 bot 的消息）后，短时间内可以不再 `@` 继续追问，机器人仍会根据上下文回复。
+
+说明：
+- 如果群开启了 **Topics（话题）**，机器人会尽量在同一个话题里回复。
+- 群聊场景下，运行时可能会限制可对话的人（例如仅发起人/群管理员），以避免被滥用。
+
+## 常见问题排查
+
+- **完全没反应**：确认进程在跑，并查看 `.ship/logs/integration/telegram.log`。
+- **群里收不到消息**：在 BotFather 执行 `/setprivacy` 设为 `Disable`，并确认你是在群里 `@bot`。
+- **轮询收不到（getUpdates 冲突）**：如果之前配置过 webhook，会与轮询冲突。ShipMyAgent 启动时会尝试清理 webhook；留意日志里的 webhook/Conflict 报错。
+- **群里发不出消息**：检查群权限/管理员设置，机器人可能被禁言或不允许发消息。

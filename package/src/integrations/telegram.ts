@@ -20,6 +20,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 interface TelegramConfig {
   botToken?: string;
   chatId?: string;
+  followupWindowMs?: number;
   enabled: boolean;
 }
 
@@ -27,10 +28,15 @@ interface TelegramUpdate {
   update_id: number;
   message?: {
     message_id?: number;
+    message_thread_id?: number;
     text: string;
     chat: {
       id: number;
       type?: 'private' | 'group' | 'supergroup' | 'channel';
+    };
+    reply_to_message?: {
+      message_id?: number;
+      from?: { id: number; username?: string };
     };
     from?: {
       id: number;
@@ -48,6 +54,7 @@ interface TelegramUpdate {
     data: string;
     from?: { id: number; username?: string };
     message: {
+      message_thread_id?: number;
       chat: {
         id: number;
       };
@@ -138,6 +145,7 @@ function collapseChatHistoryToSingleAssistantFromEntries(
 export class TelegramBot {
   private botToken: string;
   private chatId?: string;
+  private followupWindowMs: number;
   private logger: Logger;
   private taskExecutor: TaskExecutor;
   private lastUpdateId: number = 0;
@@ -169,16 +177,22 @@ export class TelegramBot {
   private botId?: number;
   private chatStore: ChatStore;
   private runManager: RunManager;
+  private clearedWebhookOnce: boolean = false;
+  private followupExpiryByActorAndThread: Map<string, number> = new Map();
 
   constructor(
     botToken: string,
     chatId: string | undefined,
+    followupWindowMs: number | undefined,
     logger: Logger,
     taskExecutor: TaskExecutor,
     projectRoot: string,
   ) {
     this.botToken = botToken;
     this.chatId = chatId;
+    this.followupWindowMs = Number.isFinite(followupWindowMs as number) && (followupWindowMs as number) > 0
+      ? (followupWindowMs as number)
+      : 10 * 60 * 1000;
     this.logger = logger;
     this.taskExecutor = taskExecutor;
     this.projectRoot = projectRoot;
@@ -191,6 +205,55 @@ export class TelegramBot {
 
   private getThreadId(chatId: string): string {
     return `telegram:chat:${chatId}`;
+  }
+
+  private getThreadKey(chatId: string, messageThreadId?: number): string {
+    if (typeof messageThreadId === 'number' && Number.isFinite(messageThreadId) && messageThreadId > 0) {
+      return `telegram:chat:${chatId}:topic:${messageThreadId}`;
+    }
+    return this.getThreadId(chatId);
+  }
+
+  private getFollowupKey(threadKey: string, actorId: string): string {
+    return `${threadKey}|${actorId}`;
+  }
+
+  private isLikelyAddressedToBot(text: string): boolean {
+    const t = (text || '').trim();
+    if (!t) return false;
+
+    // If user explicitly mentions someone else, it's less likely to be for the bot.
+    if (/@[a-zA-Z0-9_]{2,}/.test(t) && !(this.botUsername && new RegExp(`@${this.escapeRegExp(this.botUsername)}\\b`, 'i').test(t))) {
+      return false;
+    }
+
+    // Strong signals
+    if (/[?？]/.test(t)) return true;
+    if (/(^|\s)(you|u|bot|agent|ai)(\s|$)/i.test(t)) return true;
+    if (/(你|您|机器人|助理|AI|同学|能不能|可以|帮我|帮忙)/.test(t)) return true;
+
+    // Short follow-ups like "继续/再来/然后呢/why/how"
+    if (/^(继续|再来|然后呢|为啥|为什么|怎么|如何|what|why|how|help)\b/i.test(t)) return true;
+
+    return false;
+  }
+
+  private isWithinFollowupWindow(threadKey: string, actorId?: string): boolean {
+    if (!actorId) return false;
+    const key = this.getFollowupKey(threadKey, actorId);
+    const exp = this.followupExpiryByActorAndThread.get(key);
+    if (!exp) return false;
+    if (Date.now() > exp) {
+      this.followupExpiryByActorAndThread.delete(key);
+      return false;
+    }
+    return true;
+  }
+
+  private touchFollowupWindow(threadKey: string, actorId?: string): void {
+    if (!actorId) return;
+    const key = this.getFollowupKey(threadKey, actorId);
+    this.followupExpiryByActorAndThread.set(key, Date.now() + this.followupWindowMs);
   }
 
   private async loadLastUpdateId(): Promise<void> {
@@ -515,6 +578,16 @@ export class TelegramBot {
     await this.loadThreadInitiators();
     await this.loadNotifiedRuns();
 
+    // Ensure polling works even if a webhook was previously configured.
+    // Telegram disallows getUpdates while a webhook is active.
+    try {
+      await this.sendRequest<boolean>("deleteWebhook", { drop_pending_updates: false });
+      this.clearedWebhookOnce = true;
+      this.logger.info("Telegram webhook cleared (polling mode)");
+    } catch (error) {
+      this.logger.warn("Failed to clear Telegram webhook (continuing)", { error: String(error) });
+    }
+
     // Get bot info
     try {
       const me = await this.sendRequest<{ id?: number; username?: string }>("getMe", {});
@@ -577,8 +650,23 @@ export class TelegramBot {
       });
     } catch (error) {
       // Polling timeout is normal
-      if (!(error as Error).message.includes("timeout")) {
-        this.logger.error("Telegram polling error", { error: String(error) });
+      const msg = (error as Error)?.message || String(error);
+      if (!msg.includes("timeout")) {
+        // Self-heal common setup issue: webhook enabled while using getUpdates polling.
+        const looksLikeWebhookConflict =
+          /webhook/i.test(msg) || /Conflict/i.test(msg) || /getUpdates/i.test(msg);
+        if (!this.clearedWebhookOnce && looksLikeWebhookConflict) {
+          try {
+            await this.sendRequest<boolean>("deleteWebhook", { drop_pending_updates: false });
+            this.clearedWebhookOnce = true;
+            this.logger.warn("Telegram polling conflict detected; cleared webhook and will retry", { error: msg });
+            return;
+          } catch (e) {
+            this.logger.error("Telegram polling conflict detected; failed to clear webhook", { error: msg, clearError: String(e) });
+          }
+        }
+
+        this.logger.error("Telegram polling error", { error: msg });
       }
     } finally {
       this.pollInFlight = false;
@@ -667,34 +755,66 @@ export class TelegramBot {
 
     const chatId = message.chat.id.toString();
     const text = message.text;
-    const threadId = this.getThreadId(chatId);
     const from = message.from;
     const messageId = typeof message.message_id === 'number' ? String(message.message_id) : undefined;
+    const messageThreadId = typeof message.message_thread_id === 'number' ? message.message_thread_id : undefined;
     const actorId = from?.id ? String(from.id) : undefined;
     const isGroup = this.isGroupChat(message.chat.type);
+    const threadKey = this.getThreadKey(chatId, messageThreadId);
+    const replyToFrom = message.reply_to_message?.from;
+    const isReplyToBot =
+      (!!this.botId && replyToFrom?.id === this.botId) ||
+      (!!this.botUsername && typeof replyToFrom?.username === 'string' && replyToFrom.username.toLowerCase() === this.botUsername.toLowerCase());
 
-    await this.runInThread(threadId, async () => {
+    await this.runInThread(threadKey, async () => {
+      this.logger.debug("Telegram message received", {
+        chatId,
+        chatType: message.chat.type,
+        isGroup,
+        actorId,
+        actorUsername: from?.username,
+        messageId,
+        messageThreadId,
+        threadKey,
+        isReplyToBot,
+        textPreview: text.length > 240 ? `${text.slice(0, 240)}…` : text,
+        entityTypes: (message.entities || []).map((e) => e.type),
+        botUsername: this.botUsername,
+        botId: this.botId,
+      });
+
       // Check if it's a command
       if (text.startsWith("/")) {
         if (isGroup && actorId) {
           const cmdName = (text.trim().split(/\s+/)[0] || '').split("@")[0]?.toLowerCase();
           const allowAny = cmdName === '/help' || cmdName === '/start';
           if (!allowAny) {
-            const ok = await this.isAllowedGroupActor(threadId, chatId, actorId);
+            const ok = await this.isAllowedGroupActor(threadKey, chatId, actorId);
             if (!ok) {
-              await this.sendMessage(chatId, '⛔️ 仅发起人或群管理员可以使用该命令。');
+              await this.sendMessage(chatId, '⛔️ 仅发起人或群管理员可以使用该命令。', { messageThreadId });
               return;
             }
           }
         }
+        if (isGroup) this.touchFollowupWindow(threadKey, actorId);
         await this.handleCommand(chatId, text, from);
       } else {
         if (isGroup) {
-          if (!this.isBotMentioned(text, message.entities)) return;
           if (!actorId) return;
-          const ok = await this.isAllowedGroupActor(threadId, chatId, actorId);
+
+          const isMentioned = this.isBotMentioned(text, message.entities);
+          const inWindow = this.isWithinFollowupWindow(threadKey, actorId);
+          const explicit = isMentioned || isReplyToBot;
+          const shouldConsider = explicit || inWindow;
+
+          if (!shouldConsider) {
+            this.logger.debug("Ignored group message (no mention/reply/window)", { chatId, messageId, threadKey });
+            return;
+          }
+
+          const ok = await this.isAllowedGroupActor(threadKey, chatId, actorId);
           if (!ok) {
-            await this.sendMessage(chatId, '⛔️ 仅发起人或群管理员可以与我对话。');
+            await this.sendMessage(chatId, '⛔️ 仅发起人或群管理员可以与我对话。', { messageThreadId });
             return;
           }
         }
@@ -702,8 +822,27 @@ export class TelegramBot {
         const cleaned = isGroup ? this.stripBotMention(text) : text;
         if (!cleaned) return;
 
+        if (isGroup && actorId) {
+          const isMentioned = this.isBotMentioned(text, message.entities);
+          const explicit = isMentioned || isReplyToBot;
+          const inWindow = this.isWithinFollowupWindow(threadKey, actorId);
+
+          // Follow-up messages inside the window still need intent confirmation.
+          if (!explicit && inWindow) {
+            const okIntent = this.isLikelyAddressedToBot(cleaned);
+            if (!okIntent) {
+              this.logger.debug("Ignored follow-up (intent gate: not addressed to bot)", { chatId, messageId, threadKey });
+              return;
+            }
+          }
+
+          // Only (re)open the follow-up window when we actually handle a message.
+          // Avoid opening a window for empty pings like "@bot".
+          if (explicit || inWindow) this.touchFollowupWindow(threadKey, actorId);
+        }
+
         // Regular message, execute instruction
-        await this.executeAndReply(chatId, cleaned, from, messageId, message.chat.type);
+        await this.executeAndReply(chatId, cleaned, from, messageId, message.chat.type, messageThreadId, threadKey);
       }
     });
   }
@@ -830,23 +969,27 @@ Available commands:
 
     const chatId = callbackQuery.message.chat.id.toString();
     const data = callbackQuery.data;
-    const threadId = this.getThreadId(chatId);
     const actorId = callbackQuery.from?.id ? String(callbackQuery.from.id) : undefined;
+    const messageThreadId =
+      typeof callbackQuery.message.message_thread_id === 'number'
+        ? callbackQuery.message.message_thread_id
+        : undefined;
+    const threadKey = this.getThreadKey(chatId, messageThreadId);
 
-    await this.runInThread(threadId, async () => {
+    await this.runInThread(threadKey, async () => {
       // Parse callback data
       const [action, approvalId] = data.split(":");
 
       if (action === "approve" || action === "reject") {
         const can = await this.canApproveTelegram(approvalId, actorId);
         if (!can.ok) {
-          await this.sendMessage(chatId, can.reason);
+          await this.sendMessage(chatId, can.reason, { messageThreadId });
           return;
         }
 
         // Resume execution immediately using the stored approval snapshot.
-        const sessionId = threadId;
-        const agentRuntime = this.getOrCreateSession(threadId);
+        const sessionId = threadKey;
+        const agentRuntime = this.getOrCreateSession(threadKey);
         if (!agentRuntime.isInitialized()) {
           await agentRuntime.initialize();
         }
@@ -858,7 +1001,7 @@ Available commands:
           refused: action === 'reject' ? { [approvalId]: 'Rejected via Telegram' } : {},
         });
 
-        await this.sendMessage(chatId, result.output);
+        await this.sendMessage(chatId, result.output, { messageThreadId });
       }
     });
   }
@@ -869,10 +1012,12 @@ Available commands:
     from?: { id: number; username?: string },
     messageId?: string,
     chatType?: NonNullable<TelegramUpdate['message']>['chat']['type'],
+    messageThreadId?: number,
+    threadKey?: string,
   ): Promise<void> {
     try {
-      const threadId = this.getThreadId(chatId);
-      const agentRuntime = this.getOrCreateSession(threadId);
+      const key = threadKey || this.getThreadKey(chatId, messageThreadId);
+      const agentRuntime = this.getOrCreateSession(key);
 
       // Initialize agent (if not already initialized)
       if (!agentRuntime.isInitialized()) {
@@ -880,7 +1025,7 @@ Available commands:
       }
 
       // Generate sessionId (thread-based: DM/group share the same thread)
-      const sessionId = threadId;
+      const sessionId = key;
       const actorId = from?.id ? String(from.id) : undefined;
       const actorUsername = from?.username ? String(from.username) : undefined;
 
@@ -917,7 +1062,7 @@ Available commands:
         if (pending.length > 0) {
           const can = await this.canApproveTelegram(String((pending[0] as any).id), actorId);
           if (!can.ok) {
-            await this.sendMessage(chatId, '⛔️ 当前有待审批操作，仅发起人或群管理员可以回复审批。');
+            await this.sendMessage(chatId, '⛔️ 当前有待审批操作，仅发起人或群管理员可以回复审批。', { messageThreadId });
             return;
           }
         }
@@ -937,7 +1082,7 @@ Available commands:
         sessionId,
       });
       if (approvalResult) {
-        await this.sendMessage(chatId, approvalResult.output);
+        await this.sendMessage(chatId, approvalResult.output, { messageThreadId });
         await this.chatStore.append({
           channel: 'telegram',
           chatId,
@@ -956,6 +1101,7 @@ Available commands:
         actorId,
         chatType,
         actorUsername,
+        messageThreadId,
       };
 
       // Let the agent decide whether to run sync or enqueue a background Run.
@@ -972,7 +1118,7 @@ Available commands:
           `我会在后台处理这个请求，完成后把结果发你。\n` +
           `runId=${run.runId}\n` +
           `（原因：${mode.reason || 'n/a'}）`;
-        await this.sendMessage(chatId, ack);
+        await this.sendMessage(chatId, ack, { messageThreadId });
         await this.chatStore.append({
           channel: 'telegram',
           chatId,
@@ -1011,7 +1157,7 @@ Available commands:
           for (const k of keep) sentProgress.add(k);
         }
 
-        await this.sendMessage(chatId, cleaned);
+        await this.sendMessage(chatId, cleaned, { messageThreadId });
         await this.chatStore.append({
           channel: 'telegram',
           chatId,
@@ -1074,7 +1220,7 @@ Available commands:
 
       const finalText = normalize(sanitizeChatText(result.output));
       if (finalText && !sentProgress.has(finalText)) {
-        await this.sendMessage(chatId, finalText);
+        await this.sendMessage(chatId, finalText, { messageThreadId });
         await this.chatStore.append({
           channel: 'telegram',
           chatId,
@@ -1085,19 +1231,26 @@ Available commands:
         });
       }
     } catch (error) {
-      await this.sendMessage(chatId, `❌ Execution error: ${String(error)}`);
+      await this.sendMessage(chatId, `❌ Execution error: ${String(error)}`, { messageThreadId });
     }
   }
 
-  async sendMessage(chatId: string, text: string): Promise<void> {
+  async sendMessage(
+    chatId: string,
+    text: string,
+    opts?: { messageThreadId?: number },
+  ): Promise<void> {
     text = sanitizeChatText(text);
     const chunks = splitTelegramMessage(text);
+    const message_thread_id =
+      typeof opts?.messageThreadId === 'number' ? opts.messageThreadId : undefined;
     for (const chunk of chunks) {
       try {
         await this.sendRequest("sendMessage", {
           chat_id: chatId,
           text: chunk,
           parse_mode: "Markdown",
+          ...(message_thread_id ? { message_thread_id } : {}),
         });
       } catch {
         // Fallback to plain text (Markdown is strict and often fails)
@@ -1105,6 +1258,7 @@ Available commands:
           await this.sendRequest("sendMessage", {
             chat_id: chatId,
             text: chunk,
+            ...(message_thread_id ? { message_thread_id } : {}),
           });
         } catch (error2) {
           this.logger.error(`Failed to send message: ${String(error2)}`);
@@ -1117,11 +1271,15 @@ Available commands:
     chatId: string,
     text: string,
     buttons: Array<{ text: string; callback_data: string }>,
+    opts?: { messageThreadId?: number },
   ): Promise<void> {
+    const message_thread_id =
+      typeof opts?.messageThreadId === 'number' ? opts.messageThreadId : undefined;
     try {
       await this.sendRequest("sendMessage", {
         chat_id: chatId,
         text,
+        ...(message_thread_id ? { message_thread_id } : {}),
         reply_markup: {
           inline_keyboard: buttons.map((btn) => [
             { text: btn.text, callback_data: btn.callback_data },
@@ -1220,6 +1378,7 @@ export function createTelegramBot(
   return new TelegramBot(
     config.botToken,
     config.chatId,
+    config.followupWindowMs,
     logger,
     taskExecutor,
     projectRoot, // 传递 projectRoot

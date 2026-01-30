@@ -57,6 +57,13 @@ export interface ShipConfig {
       enabled: boolean;
       botToken?: string;
       chatId?: string;
+      /**
+       * Group follow-up window in milliseconds.
+       * When a user has just talked to the bot (mention/reply/command), allow
+       * non-mention follow-up messages within this time window.
+       * Default: 10 minutes.
+       */
+      followupWindowMs?: number;
     };
     discord?: {
       enabled: boolean;
