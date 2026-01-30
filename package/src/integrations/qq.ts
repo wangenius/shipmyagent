@@ -315,15 +315,11 @@ export class QQBot {
     this.logger.info(`   沙箱模式: ${this.useSandbox ? '是' : '否'}`);
 
     try {
-      // 获取鉴权 Token (只使用 access_token 方式，token 已弃用)
-      const authToken = await this.getAuthToken();
-      this.logger.info('鉴权方式: Access Token (新版 API v2)');
-
       // 获取 Gateway 地址
       const gatewayUrl = await this.getGatewayUrl();
 
-      // 连接 WebSocket
-      await this.connectWebSocket(gatewayUrl, authToken);
+      // 连接 WebSocket（不再需要传递 authToken）
+      await this.connectWebSocket(gatewayUrl);
 
       // 启动消息缓存清理定时器
       this.messageCleanupInterval = setInterval(() => {
@@ -342,7 +338,7 @@ export class QQBot {
   /**
    * 连接 WebSocket
    */
-  private async connectWebSocket(gatewayUrl: string, authToken: string): Promise<void> {
+  private async connectWebSocket(gatewayUrl: string): Promise<void> {
     this.logger.info(`正在连接 WebSocket: ${gatewayUrl}`);
 
     return new Promise((resolve, reject) => {
@@ -357,7 +353,7 @@ export class QQBot {
         try {
           const payload = JSON.parse(data.toString());
           this.logger.debug(`收到 WebSocket 消息: op=${payload.op}, t=${payload.t || 'N/A'}`);
-          await this.handleWebSocketMessage(payload, authToken);
+          await this.handleWebSocketMessage(payload);
 
           // 首次连接成功后 resolve
           if (payload.op === OpCode.Hello) {
@@ -382,10 +378,9 @@ export class QQBot {
               // 清除缓存的 token，强制重新获取
               this.accessToken = '';
               this.accessTokenExpires = 0;
-              // 重新获取鉴权 Token 和 Gateway
-              const newAuthToken = await this.getAuthToken();
+              // 重新获取 Gateway
               const newGatewayUrl = await this.getGatewayUrl();
-              await this.connectWebSocket(newGatewayUrl, newAuthToken);
+              await this.connectWebSocket(newGatewayUrl);
             } catch (error) {
               this.logger.error('重连失败', { error: String(error) });
             }
@@ -403,7 +398,7 @@ export class QQBot {
   /**
    * 处理 WebSocket 消息
    */
-  private async handleWebSocketMessage(payload: any, authToken: string): Promise<void> {
+  private async handleWebSocketMessage(payload: any): Promise<void> {
     const { op, d, s, t } = payload;
 
     // 更新序列号
@@ -416,12 +411,12 @@ export class QQBot {
         // 收到 Hello，发送鉴权
         const heartbeatIntervalMs = d.heartbeat_interval;
         this.startHeartbeat(heartbeatIntervalMs);
-        await this.sendIdentify(authToken);
+        await this.sendIdentify();
         break;
 
       case OpCode.Dispatch:
         // 处理事件分发
-        await this.handleDispatch(t, d, authToken);
+        await this.handleDispatch(t, d);
         break;
 
       case OpCode.HeartbeatAck:
@@ -441,8 +436,7 @@ export class QQBot {
         // 等待一段时间后重新鉴权
         setTimeout(async () => {
           try {
-            const newAuthToken = await this.getAuthToken();
-            await this.sendIdentify(newAuthToken);
+            await this.sendIdentify();
           } catch (error) {
             this.logger.error('重新鉴权失败', { error: String(error) });
           }
@@ -455,7 +449,10 @@ export class QQBot {
    * 发送鉴权 (Identify)
    * 根据文档，token 字段直接传 "QQBot {access_token}" 格式
    */
-  private async sendIdentify(authToken: string): Promise<void> {
+  private async sendIdentify(): Promise<void> {
+    // 实时获取最新的 authToken
+    const authToken = await this.getAuthToken();
+
     const intents = this.getIntents();
     this.logger.info(`发送鉴权请求 (Identify)，intents: ${intents}`);
 
@@ -538,7 +535,7 @@ export class QQBot {
   /**
    * 处理事件分发
    */
-  private async handleDispatch(eventType: string, data: any, authToken: string): Promise<void> {
+  private async handleDispatch(eventType: string, data: any): Promise<void> {
     this.logger.info(`收到事件: ${eventType}`);
 
     switch (eventType) {
@@ -554,17 +551,17 @@ export class QQBot {
 
       case EventType.GROUP_AT_MESSAGE_CREATE:
         // 群聊 @机器人 消息
-        await this.handleGroupMessage(data, authToken);
+        await this.handleGroupMessage(data);
         break;
 
       case EventType.C2C_MESSAGE_CREATE:
         // C2C 私聊消息
-        await this.handleC2CMessage(data, authToken);
+        await this.handleC2CMessage(data);
         break;
 
       case EventType.AT_MESSAGE_CREATE:
         // 频道消息（可选）
-        await this.handleChannelMessage(data, authToken);
+        await this.handleChannelMessage(data);
         break;
 
       default:
@@ -575,7 +572,7 @@ export class QQBot {
   /**
    * 处理群聊消息
    */
-  private async handleGroupMessage(data: any, authToken: string): Promise<void> {
+  private async handleGroupMessage(data: any): Promise<void> {
     const { id: messageId, group_openid: groupId, content, author } = data;
 
     // 消息去重
@@ -592,16 +589,16 @@ export class QQBot {
 
     // 检查是否是命令
     if (userMessage.startsWith('/')) {
-      await this.handleCommand(groupId, 'group', messageId, userMessage, authToken);
+      await this.handleCommand(groupId, 'group', messageId, userMessage);
     } else {
-      await this.executeAndReply(groupId, 'group', messageId, userMessage, authToken);
+      await this.executeAndReply(groupId, 'group', messageId, userMessage);
     }
   }
 
   /**
    * 处理 C2C 私聊消息
    */
-  private async handleC2CMessage(data: any, authToken: string): Promise<void> {
+  private async handleC2CMessage(data: any): Promise<void> {
     const { id: messageId, author, content } = data;
     const userId = author?.user_openid || author?.id;
 
@@ -618,16 +615,16 @@ export class QQBot {
 
     // 检查是否是命令
     if (userMessage.startsWith('/')) {
-      await this.handleCommand(userId, 'c2c', messageId, userMessage, authToken);
+      await this.handleCommand(userId, 'c2c', messageId, userMessage);
     } else {
-      await this.executeAndReply(userId, 'c2c', messageId, userMessage, authToken);
+      await this.executeAndReply(userId, 'c2c', messageId, userMessage);
     }
   }
 
   /**
    * 处理频道消息（可选）
    */
-  private async handleChannelMessage(data: any, authToken: string): Promise<void> {
+  private async handleChannelMessage(data: any): Promise<void> {
     const { id: messageId, channel_id: channelId, content, author } = data;
 
     // 消息去重
@@ -641,9 +638,9 @@ export class QQBot {
     this.logger.info(`收到频道消息 [${channelId}]: ${userMessage}`);
 
     if (userMessage.startsWith('/')) {
-      await this.handleCommand(channelId, 'channel', messageId, userMessage, authToken);
+      await this.handleCommand(channelId, 'channel', messageId, userMessage);
     } else {
-      await this.executeAndReply(channelId, 'channel', messageId, userMessage, authToken);
+      await this.executeAndReply(channelId, 'channel', messageId, userMessage);
     }
   }
 
@@ -663,8 +660,7 @@ export class QQBot {
     chatId: string,
     chatType: string,
     messageId: string,
-    command: string,
-    authToken: string
+    command: string
   ): Promise<void> {
     this.logger.info(`收到命令: ${command}`);
 
@@ -703,7 +699,7 @@ export class QQBot {
         responseText = `未知命令: ${command}\n输入 /help 查看可用命令`;
     }
 
-    await this.sendMessage(chatId, chatType, messageId, responseText, authToken);
+    await this.sendMessage(chatId, chatType, messageId, responseText);
   }
 
   /**
@@ -713,12 +709,11 @@ export class QQBot {
     chatId: string,
     chatType: string,
     messageId: string,
-    instructions: string,
-    authToken: string
+    instructions: string
   ): Promise<void> {
     try {
       // 先发送处理中消息（msg_seq: 1）
-      await this.sendMessage(chatId, chatType, messageId, '🤔 正在处理您的请求...', authToken, 1);
+      await this.sendMessage(chatId, chatType, messageId, '🤔 正在处理您的请求...', 1);
 
       // 获取或创建会话
       const agentRuntime = this.getOrCreateSession(chatId, chatType);
@@ -746,9 +741,9 @@ export class QQBot {
         ? `✅ 执行成功\n\n${result.output}`
         : `❌ 执行失败\n\n${result.output}`;
 
-      await this.sendMessage(chatId, chatType, messageId, message, authToken, 2);
+      await this.sendMessage(chatId, chatType, messageId, message, 2);
     } catch (error) {
-      await this.sendMessage(chatId, chatType, messageId, `❌ 执行错误: ${String(error)}`, authToken, 2);
+      await this.sendMessage(chatId, chatType, messageId, `❌ 执行错误: ${String(error)}`, 2);
     }
   }
 
@@ -760,10 +755,12 @@ export class QQBot {
     chatType: string,
     messageId: string,
     text: string,
-    authToken: string,
     msgSeq: number = 1
   ): Promise<void> {
     try {
+      // 实时获取最新的 authToken
+      const authToken = await this.getAuthToken();
+
       const apiBase = this.getApiBase();
       let url = '';
       let body: any = {
