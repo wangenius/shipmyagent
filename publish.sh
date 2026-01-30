@@ -30,6 +30,25 @@ get_current_version() {
   node -p "require('./package/package.json').version"
 }
 
+set_new_version() {
+  local new_version=$1
+  node --input-type=module - "$new_version" <<'NODE'
+import fs from 'node:fs';
+
+const newVersion = process.argv[2];
+if (!newVersion) {
+  console.error('Missing new version');
+  process.exit(1);
+}
+
+const file = 'package/package.json';
+const raw = fs.readFileSync(file, 'utf8');
+const pkg = JSON.parse(raw);
+pkg.version = newVersion;
+fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+NODE
+}
+
 check_git_status() {
   local status
   status=$(git status --porcelain)
@@ -120,13 +139,23 @@ main() {
   echo
   print_status "执行发布..."
   
-  # 5. 执行版本提升
-  cd package
-  npm version "$bump_level" --no-git-tag-version
-  cd ..
+  # 5. 执行版本提升（避免 npm workspace 解析导致 workspace:* 报错）
+  local current_version
+  current_version=$(get_current_version)
   local new_version
-  new_version=$(get_current_version)
-  
+  case "$bump_level" in
+    "patch")
+      new_version=$(echo "$current_version" | awk -F. '{print $1"."$2"."($3+1)}')
+      ;;
+    "minor")
+      new_version=$(echo "$current_version" | awk -F. '{print $1"."($2+1)".0"}')
+      ;;
+    "major")
+      new_version=$(echo "$current_version" | awk -F. '{print ($1+1)".0.0"}')
+      ;;
+  esac
+  set_new_version "$new_version"
+
   # 6. 暂存所有变更
   git add -A
   
@@ -156,5 +185,4 @@ main() {
 trap 'print_error "发布过程中发生错误"; exit 1' ERR
 
 main "$@"
-
 
