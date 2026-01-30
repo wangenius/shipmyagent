@@ -27,6 +27,41 @@ export async function loadRun(projectRoot: string, runId: string): Promise<RunRe
   return (await fs.readJson(p)) as RunRecord;
 }
 
+export async function listRuns(
+  projectRoot: string,
+  opts?: { limit?: number; statuses?: RunRecord['status'][] },
+): Promise<RunRecord[]> {
+  await ensureRunsDir(projectRoot);
+  const dir = getRunsDirPath(projectRoot);
+  const files = (await fs.readdir(dir)).filter((f) => f.endsWith('.json'));
+
+  const withMtime = await Promise.all(
+    files.map(async (f) => {
+      const p = path.join(dir, f);
+      const st = await fs.stat(p);
+      return { f, p, t: st.mtimeMs };
+    }),
+  );
+  withMtime.sort((a, b) => b.t - a.t);
+
+  const limit = typeof opts?.limit === 'number' && opts.limit > 0 ? Math.floor(opts.limit) : 50;
+  const statuses = Array.isArray(opts?.statuses) && opts!.statuses.length > 0 ? new Set(opts!.statuses) : null;
+
+  const out: RunRecord[] = [];
+  for (const item of withMtime) {
+    if (out.length >= limit) break;
+    try {
+      const run = (await fs.readJson(item.p)) as RunRecord;
+      if (statuses && !statuses.has(run.status)) continue;
+      out.push(run);
+    } catch {
+      // ignore corrupted run file
+    }
+  }
+
+  return out;
+}
+
 export async function createRun(params: {
   projectRoot: string;
   trigger: RunTrigger;

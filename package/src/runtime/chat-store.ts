@@ -52,7 +52,7 @@ export class ChatStore {
     await fs.appendFile(file, JSON.stringify(full) + '\n', 'utf8');
   }
 
-  async loadRecentEntries(chatKey: string, limit: number = 120): Promise<ChatLogEntryV1[]> {
+  async loadRecentEntries(chatKey: string, limit: number = 20): Promise<ChatLogEntryV1[]> {
     const file = this.getChatFilePath(chatKey);
     if (!(await fs.pathExists(file))) return [];
 
@@ -79,7 +79,7 @@ export class ChatStore {
     return out;
   }
 
-  async loadRecentMessages(chatKey: string, limit: number = 120): Promise<ModelMessage[]> {
+  async loadRecentMessages(chatKey: string, limit: number = 20): Promise<ModelMessage[]> {
     const file = this.getChatFilePath(chatKey);
     if (!(await fs.pathExists(file))) return [];
 

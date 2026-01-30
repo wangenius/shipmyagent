@@ -16,6 +16,7 @@ import { loadRun, saveRun } from "../runtime/run-store.js";
 import type { ChatLogEntryV1 } from "../runtime/chat-store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const TELEGRAM_HISTORY_LIMIT = 20;
 
 interface TelegramConfig {
   botToken?: string;
@@ -79,6 +80,8 @@ interface TelegramApiResponse<T> {
   error_code?: number;
 }
 
+type TelegramAttachmentType = "photo" | "document" | "voice" | "audio";
+
 function sanitizeChatText(text: string): string {
   if (!text) return text;
 
@@ -93,6 +96,70 @@ function sanitizeChatText(text: string): string {
   }
 
   return out;
+}
+
+function guessMimeType(fileName: string): string | undefined {
+  const ext = (path.extname(fileName) || "").toLowerCase();
+  switch (ext) {
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".webp":
+      return "image/webp";
+    case ".gif":
+      return "image/gif";
+    case ".pdf":
+      return "application/pdf";
+    case ".zip":
+      return "application/zip";
+    case ".mp3":
+      return "audio/mpeg";
+    case ".m4a":
+      return "audio/mp4";
+    case ".ogg":
+      return "audio/ogg";
+    case ".opus":
+      return "audio/opus";
+    default:
+      return undefined;
+  }
+}
+
+function parseTelegramAttachments(text: string): {
+  text: string;
+  attachments: Array<{ type: TelegramAttachmentType; pathOrUrl: string; caption?: string }>;
+} {
+  const raw = String(text || "");
+  const lines = raw.split("\n");
+  const attachments: Array<{ type: TelegramAttachmentType; pathOrUrl: string; caption?: string }> = [];
+  const kept: string[] = [];
+
+  for (const line of lines) {
+    const m = line.match(/^\s*@attach\s+(photo|image|document|file|voice|audio)\s+(.+?)(?:\s*\|\s*(.+))?\s*$/i);
+    if (!m) {
+      kept.push(line);
+      continue;
+    }
+
+    const kindRaw = m[1].toLowerCase();
+    const type: TelegramAttachmentType =
+      kindRaw === "image" || kindRaw === "photo"
+        ? "photo"
+        : kindRaw === "file" || kindRaw === "document"
+          ? "document"
+          : kindRaw === "audio"
+            ? "audio"
+            : "voice";
+
+    const pathOrUrl = String(m[2] || "").trim();
+    const caption = typeof m[3] === "string" ? String(m[3]).trim() : undefined;
+    if (!pathOrUrl) continue;
+    attachments.push({ type, pathOrUrl, caption: caption || undefined });
+  }
+
+  return { text: kept.join("\n").trim(), attachments };
 }
 
 function formatActorName(name: string): string {
@@ -544,7 +611,7 @@ export class TelegramBot {
     this.resetSessionTimeout(sessionKey);
 
     // Hydrate from persisted chat history (best-effort)
-    this.chatStore.loadRecentEntries(sessionKey, 120).then((entries) => {
+    this.chatStore.loadRecentEntries(sessionKey, TELEGRAM_HISTORY_LIMIT).then((entries) => {
       const collapsed = collapseChatHistoryToSingleAssistantFromEntries(entries);
       if (collapsed.length > 0) {
         agentRuntime.setConversationHistory(sessionKey, collapsed as unknown[]);
@@ -1064,7 +1131,7 @@ Available commands:
 
       // Always rehydrate from persisted chat log, but collapse into ONE assistant message for context.
       try {
-        const recent = await this.chatStore.loadRecentEntries(sessionId, 120);
+        const recent = await this.chatStore.loadRecentEntries(sessionId, TELEGRAM_HISTORY_LIMIT);
         const collapsed = collapseChatHistoryToSingleAssistantFromEntries(recent);
         if (collapsed.length > 0) {
           agentRuntime.setConversationHistory(sessionId, collapsed as unknown[]);
@@ -1273,11 +1340,12 @@ Available commands:
     text: string,
     opts?: { messageThreadId?: number },
   ): Promise<void> {
-    text = sanitizeChatText(text);
-    const chunks = splitTelegramMessage(text);
+    const parsed = parseTelegramAttachments(sanitizeChatText(text));
+    const chunks = splitTelegramMessage(parsed.text);
     const message_thread_id =
       typeof opts?.messageThreadId === 'number' ? opts.messageThreadId : undefined;
     for (const chunk of chunks) {
+      if (!chunk) continue;
       try {
         await this.sendRequest("sendMessage", {
           chat_id: chatId,
@@ -1298,6 +1366,103 @@ Available commands:
         }
       }
     }
+
+    for (const att of parsed.attachments) {
+      try {
+        await this.sendAttachment(chatId, att, { messageThreadId: message_thread_id });
+      } catch (e) {
+        try {
+          await this.sendRequest("sendMessage", {
+            chat_id: chatId,
+            text: `❌ Failed to send ${att.type}: ${String(e)}`,
+            ...(message_thread_id ? { message_thread_id } : {}),
+          });
+        } catch (e2) {
+          this.logger.error(`Failed to send attachment error message: ${String(e2)}`);
+        }
+      }
+    }
+  }
+
+  private async sendAttachment(
+    chatId: string,
+    att: { type: TelegramAttachmentType; pathOrUrl: string; caption?: string },
+    opts?: { messageThreadId?: number },
+  ): Promise<void> {
+    const message_thread_id =
+      typeof opts?.messageThreadId === "number" ? opts.messageThreadId : undefined;
+    const caption =
+      typeof att.caption === "string" && att.caption.trim()
+        ? att.caption.trim().slice(0, 900)
+        : undefined;
+
+    const src = att.pathOrUrl.trim();
+    const isUrl = /^https?:\/\//i.test(src);
+
+    // URL mode: send via JSON request
+    if (isUrl) {
+      const method =
+        att.type === "photo"
+          ? "sendPhoto"
+          : att.type === "voice"
+            ? "sendVoice"
+            : att.type === "audio"
+              ? "sendAudio"
+              : "sendDocument";
+      const field =
+        att.type === "photo"
+          ? "photo"
+          : att.type === "voice"
+            ? "voice"
+            : att.type === "audio"
+              ? "audio"
+              : "document";
+      await this.sendRequest(method, {
+        chat_id: chatId,
+        [field]: src,
+        ...(caption ? { caption } : {}),
+        ...(message_thread_id ? { message_thread_id } : {}),
+      });
+      return;
+    }
+
+    const abs = path.isAbsolute(src) ? src : path.resolve(this.projectRoot, src);
+    const resolved = path.resolve(abs);
+    const root = path.resolve(this.projectRoot);
+    if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+      throw new Error(`Attachment path must be inside project root: ${src}`);
+    }
+    if (!(await fs.pathExists(resolved))) {
+      throw new Error(`Attachment not found: ${src}`);
+    }
+
+    const buf = await fs.readFile(resolved);
+    const mime = guessMimeType(resolved);
+    const blob = new Blob([buf], mime ? { type: mime } : undefined);
+    const form = new FormData();
+    form.set("chat_id", chatId);
+    if (caption) form.set("caption", caption);
+    if (message_thread_id) form.set("message_thread_id", String(message_thread_id));
+
+    const method =
+      att.type === "photo"
+        ? "sendPhoto"
+        : att.type === "voice"
+          ? "sendVoice"
+          : att.type === "audio"
+            ? "sendAudio"
+            : "sendDocument";
+    const field =
+      att.type === "photo"
+        ? "photo"
+        : att.type === "voice"
+          ? "voice"
+          : att.type === "audio"
+            ? "audio"
+            : "document";
+
+    form.set(field, blob, path.basename(resolved));
+    await this.sendRequestForm(method, form);
   }
 
   async sendMessageWithInlineKeyboard(
@@ -1333,6 +1498,29 @@ Available commands:
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
+    });
+
+    const payload = (await response.json()) as TelegramApiResponse<T>;
+
+    if (!response.ok) {
+      const details = payload?.description ? `: ${payload.description}` : "";
+      throw new Error(`Telegram API HTTP ${response.status}${details}`);
+    }
+
+    if (!payload?.ok) {
+      const code = payload?.error_code ? ` ${payload.error_code}` : "";
+      const desc = payload?.description ? `: ${payload.description}` : "";
+      throw new Error(`Telegram API error${code}${desc}`);
+    }
+
+    return payload.result as T;
+  }
+
+  private async sendRequestForm<T>(method: string, form: FormData): Promise<T> {
+    const url = `https://api.telegram.org/bot${this.botToken}/${method}`;
+    const response = await fetch(url, {
+      method: "POST",
+      body: form,
     });
 
     const payload = (await response.json()) as TelegramApiResponse<T>;

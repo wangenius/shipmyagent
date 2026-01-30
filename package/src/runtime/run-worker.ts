@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { Logger } from './logger.js';
 import { TaskExecutor } from './task-executor.js';
-import { getTasksDirPath, getTimestamp } from '../utils.js';
+import { getQueueDirPath, getTasksDirPath, getTimestamp } from '../utils.js';
 import type { RunRecord } from './run-types.js';
 import { loadRun, saveRun } from './run-store.js';
 import { listPendingRuns, tryClaimRun, markRunDone } from './run-queue.js';
@@ -49,6 +49,15 @@ export class RunWorker {
 
   private async tick(): Promise<void> {
     if (this.running.size >= this.maxConcurrent) return;
+
+    // Global pause switch for the queue (best-effort, filesystem-based).
+    // When present, do not pick up new pending runs.
+    try {
+      const pausedPath = path.join(getQueueDirPath(this.projectRoot), 'paused.json');
+      if (await fs.pathExists(pausedPath)) return;
+    } catch {
+      // ignore
+    }
 
     const pending = await listPendingRuns(this.projectRoot);
     for (const runId of pending) {

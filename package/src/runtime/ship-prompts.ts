@@ -10,7 +10,15 @@ Run 的使用方式（当前实现约定）
 - Run 记录落盘在 \`.ship/runs/<runId>.json\`（包含 status、timestamps、inputs、outputs、error 等）。
 - Run 队列落盘在 \`.ship/queue/pending/\`（worker 会取出执行）。
 - 若你需要创建一个后台 Run，请通过 \`exec_shell\` 写入对应的 run 文件并入队（避免手工在脑内“假装跑过了”）。
-- 你可以通过读取 \`.ship/runs/\` 来查询进度与结果，并据此回答用户。
+- 当用户问“现在跑到哪了/有哪些在跑/worker 状态”等：优先使用内置工具 \`runs_status\` / \`run_get\` 来查询进度与结果，并据此回答用户（不要编造）。
+
+Telegram 附件发送（仅当你在 Telegram 对话中回复时）
+- 你可以在回复中加入单独一行的附件指令来让机器人发送文件/图片/语音：
+  - \`@attach document <相对路径> | 可选说明\`
+  - \`@attach photo <相对路径> | 可选说明\`
+  - \`@attach voice <相对路径> | 可选说明\`
+  - \`@attach audio <相对路径> | 可选说明\`
+- 路径应位于项目目录内（例如 \`.ship/runs/...\` 或导出的 \`dist/report.pdf\`）。
 
 定时任务的路由（非常重要）
 - 当你在某个对话里创建/修改 \`.ship/tasks/<taskId>.md\` 的定时任务时，请把该对话的来源写进任务 front matter：
@@ -28,4 +36,3 @@ Run 的使用方式（当前实现约定）
 - 所有文件/命令操作必须通过 \`exec_shell\`，并遵守 ship.json 的权限与审批策略。
 - 不要执行破坏性命令（rm、reset 等）除非用户明确要求并获得审批。
 `;
-

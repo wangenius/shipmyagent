@@ -2,6 +2,8 @@ import fs from 'fs-extra';
 import path from 'path';
 import { getQueueDirPath } from '../utils.js';
 
+export type RunQueueState = 'pending' | 'running' | 'done';
+
 export async function ensureQueueDirs(projectRoot: string): Promise<void> {
   const base = getQueueDirPath(projectRoot);
   await fs.ensureDir(path.join(base, 'pending'));
@@ -53,3 +55,25 @@ export async function listPendingRuns(projectRoot: string): Promise<string[]> {
     .map((f) => f.replace(/\.json$/, ''));
 }
 
+export async function listQueueRuns(
+  projectRoot: string,
+  state: RunQueueState,
+  opts?: { limit?: number },
+): Promise<string[]> {
+  await ensureQueueDirs(projectRoot);
+  const dir = path.join(getQueueDirPath(projectRoot), state);
+  const files = (await fs.readdir(dir)).filter((f) => f.endsWith('.json'));
+
+  const withMtime = await Promise.all(
+    files.map(async (f) => {
+      const p = path.join(dir, f);
+      const st = await fs.stat(p);
+      return { f, t: st.mtimeMs };
+    }),
+  );
+
+  withMtime.sort((a, b) => b.t - a.t);
+  const limit = typeof opts?.limit === 'number' && opts.limit > 0 ? Math.floor(opts.limit) : undefined;
+  const sliced = typeof limit === 'number' ? withMtime.slice(0, limit) : withMtime;
+  return sliced.map(({ f }) => f.replace(/\.json$/, ''));
+}
