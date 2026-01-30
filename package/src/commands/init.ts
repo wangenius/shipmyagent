@@ -32,6 +32,8 @@ export async function initCommand(cwd: string = '.', options: InitOptions = {}):
   const TELEGRAM_BOT_TOKEN = '${TELEGRAM_BOT_TOKEN}';
   const FEISHU_APP_ID = '${FEISHU_APP_ID}';
   const FEISHU_APP_SECRET = '${FEISHU_APP_SECRET}';
+  const QQ_APP_ID = '${QQ_APP_ID}';
+  const QQ_APP_SECRET = '${QQ_APP_SECRET}';
 
   console.log(`🚀 Initializing ShipMyAgent project: ${projectRoot}`);
 
@@ -93,6 +95,12 @@ export async function initCommand(cwd: string = '.', options: InitOptions = {}):
       ],
       initial: 0,
     },
+    {
+      type: (prev, values) => (values.integration === 'qq' ? 'confirm' : null),
+      name: 'qqSandbox',
+      message: 'Use QQ sandbox environment?',
+      initial: false,
+    },
   ]);
 
   // Create configuration files
@@ -151,9 +159,9 @@ Help users understand and work with their codebase by exploring, analyzing, and 
       },
       qq: {
         enabled: response.integration === 'qq',
-        appId: response.integration === 'qq' ? '${QQ_APP_ID}' : undefined,
-        appSecret: response.integration === 'qq' ? '${QQ_APP_SECRET}' : undefined,
-        sandbox: false,
+        appId: response.integration === 'qq' ? QQ_APP_ID : undefined,
+        appSecret: response.integration === 'qq' ? QQ_APP_SECRET : undefined,
+        sandbox: response.integration === 'qq' ? Boolean(response.qqSandbox) : false,
       },
     },
   };
@@ -181,18 +189,21 @@ Help users understand and work with their codebase by exploring, analyzing, and 
 
   // Create sample task file
   const sampleTaskPath = path.join(getTasksDirPath(projectRoot), 'sample-task.md');
+  const notify = response.integration && response.integration !== 'none' ? response.integration : undefined;
   const sampleTaskContent = `---
 id: sample-task
 name: Sample Task
 cron: "0 9 * * *"
-notify: telegram
 ---
 
 This is a sample task.
 
 Please scan the repository for TODO comments and generate a report.
 `;
-  await fs.writeFile(sampleTaskPath, sampleTaskContent);
+  const finalSampleTaskContent = notify
+    ? sampleTaskContent.replace('---\n\n', `notify: ${notify}\n---\n\n`)
+    : sampleTaskContent;
+  await fs.writeFile(sampleTaskPath, finalSampleTaskContent);
   console.log(`✅ Created sample task file`);
 
   console.log('\n🎉 Initialization complete!\n');
@@ -211,6 +222,7 @@ Please scan the repository for TODO comments and generate a report.
     console.log('📱 QQ integration enabled');
     console.log('   Please configure QQ_APP_ID and QQ_APP_SECRET in ship.json');
     console.log('   or set environment variables: QQ_APP_ID and QQ_APP_SECRET\n');
+    console.log('   Optional: set QQ_SANDBOX=true to use sandbox environment\n');
   }
 
   console.log('Next steps:');

@@ -1,8 +1,5 @@
 import WebSocket from 'ws';
-import { createLogger, Logger } from '../runtime/logger.js';
-import { createPermissionEngine } from '../runtime/permission.js';
-import { createTaskExecutor, TaskExecutor } from '../runtime/task-executor.js';
-import { createToolExecutor } from '../runtime/tools.js';
+import { Logger } from '../runtime/logger.js';
 import { createAgentRuntimeFromPath, AgentRuntime } from '../runtime/agent.js';
 
 interface QQConfig {
@@ -40,7 +37,6 @@ export class QQBot {
   private appId: string;
   private appSecret: string;
   private logger: Logger;
-  private taskExecutor: TaskExecutor;
   private ws: any | null = null;
   private isRunning: boolean = false;
   private heartbeatInterval: NodeJS.Timeout | null = null;
@@ -75,14 +71,12 @@ export class QQBot {
     appId: string,
     appSecret: string,
     logger: Logger,
-    taskExecutor: TaskExecutor,
     projectRoot: string,
     useSandbox: boolean = false
   ) {
     this.appId = appId;
     this.appSecret = appSecret;
     this.logger = logger;
-    this.taskExecutor = taskExecutor;
     this.projectRoot = projectRoot;
     this.useSandbox = useSandbox;
   }
@@ -852,25 +846,10 @@ export async function createQQBot(
     return null;
   }
 
-  // 创建依赖组件
-  const permissionEngine = createPermissionEngine(projectRoot);
-  const toolExecutor = createToolExecutor({
-    projectRoot,
-    permissionEngine,
-    logger,
-  });
-  const agentRuntime = createAgentRuntimeFromPath(projectRoot);
-
-  // 初始化 Agent Runtime
-  await agentRuntime.initialize();
-
-  const taskExecutor = createTaskExecutor(toolExecutor, logger, agentRuntime, projectRoot);
-
   return new QQBot(
     config.appId,
     config.appSecret,
     logger,
-    taskExecutor,
     projectRoot,
     config.sandbox || false
   );

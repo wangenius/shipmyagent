@@ -52,6 +52,33 @@ export class ChatStore {
     await fs.appendFile(file, JSON.stringify(full) + '\n', 'utf8');
   }
 
+  async loadRecentEntries(chatKey: string, limit: number = 120): Promise<ChatLogEntryV1[]> {
+    const file = this.getChatFilePath(chatKey);
+    if (!(await fs.pathExists(file))) return [];
+
+    const raw = await fs.readFile(file, 'utf8');
+    const lines = raw.split('\n').filter(Boolean);
+    const out: ChatLogEntryV1[] = [];
+
+    for (let i = Math.max(0, lines.length - limit); i < lines.length; i++) {
+      const line = lines[i];
+      try {
+        const obj = JSON.parse(line) as Partial<ChatLogEntryV1>;
+        if (!obj || typeof obj !== 'object') continue;
+        if (obj.v !== 1) continue;
+        if (obj.chatKey !== chatKey) continue;
+        if (typeof obj.ts !== 'number') continue;
+        if (typeof obj.role !== 'string') continue;
+        if (typeof obj.text !== 'string') continue;
+        out.push(obj as ChatLogEntryV1);
+      } catch {
+        // ignore malformed line
+      }
+    }
+
+    return out;
+  }
+
   async loadRecentMessages(chatKey: string, limit: number = 120): Promise<ModelMessage[]> {
     const file = this.getChatFilePath(chatKey);
     if (!(await fs.pathExists(file))) return [];
@@ -103,4 +130,3 @@ export class ChatStore {
     this.hydrated.add(chatKey);
   }
 }
-
