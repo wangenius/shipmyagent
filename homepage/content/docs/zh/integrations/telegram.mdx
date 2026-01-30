@@ -37,6 +37,24 @@ TELEGRAM_BOT_TOKEN=123456:abc...
 }
 ```
 
+### 可选：群聊允许所有人使用
+
+默认情况下，群聊会限制为「发起人（在该群/话题里第一个和机器人说话的人）」或「群管理员」才能与机器人对话。
+
+如果你希望群里**任何成员**（在 `@bot` 或回复 bot 消息时）都可以和机器人聊天，配置：
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "groupAccess": "anyone"
+    }
+  }
+}
+```
+
 ### 3）启动 ShipMyAgent
 
 ```bash

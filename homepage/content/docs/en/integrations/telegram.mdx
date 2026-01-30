@@ -37,6 +37,24 @@ Enable Telegram in `ship.json`:
 }
 ```
 
+### Optional: allow anyone in a group
+
+By default, group chats are restricted to the initiator (the first person who talks to the bot in that chat/topic) or group admins.
+
+To allow **any group member** to talk to the bot (when they mention it / reply to it), set:
+
+```json
+{
+  "integrations": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "groupAccess": "anyone"
+    }
+  }
+}
+```
+
 ### 3) Start ShipMyAgent
 
 ```bash

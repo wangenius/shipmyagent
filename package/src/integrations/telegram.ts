@@ -21,6 +21,7 @@ interface TelegramConfig {
   botToken?: string;
   chatId?: string;
   followupWindowMs?: number;
+  groupAccess?: "initiator_or_admin" | "anyone";
   enabled: boolean;
 }
 
@@ -36,11 +37,13 @@ interface TelegramUpdate {
     };
     reply_to_message?: {
       message_id?: number;
-      from?: { id: number; username?: string };
+      from?: { id: number; username?: string; first_name?: string; last_name?: string };
     };
     from?: {
       id: number;
       username?: string;
+      first_name?: string;
+      last_name?: string;
     };
     entities?: Array<{
       type: string;
@@ -52,7 +55,7 @@ interface TelegramUpdate {
   callback_query?: {
     id: string;
     data: string;
-    from?: { id: number; username?: string };
+    from?: { id: number; username?: string; first_name?: string; last_name?: string };
     message: {
       message_thread_id?: number;
       chat: {
@@ -61,6 +64,13 @@ interface TelegramUpdate {
     };
   };
 }
+
+type TelegramUser = {
+  id: number;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+};
 
 interface TelegramApiResponse<T> {
   ok: boolean;
@@ -85,6 +95,18 @@ function sanitizeChatText(text: string): string {
   return out;
 }
 
+function formatActorName(name: string): string {
+  return name.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').replace(/[\[\]]/g, '').trim();
+}
+
+function getActorName(from?: { first_name?: string; last_name?: string }): string | undefined {
+  const first = typeof from?.first_name === 'string' ? from.first_name.trim() : '';
+  const last = typeof from?.last_name === 'string' ? from.last_name.trim() : '';
+  const raw = [first, last].filter(Boolean).join(' ').trim();
+  if (!raw) return undefined;
+  return formatActorName(raw);
+}
+
 function formatEntryBracket(e: ChatLogEntryV1): string {
   const pad = (n: number, width: number = 2): string => String(n).padStart(width, '0');
   const ts = typeof e.ts === 'number' ? new Date(e.ts) : new Date();
@@ -100,13 +122,17 @@ function formatEntryBracket(e: ChatLogEntryV1): string {
     typeof meta.actorUsername === 'string' && meta.actorUsername.trim()
       ? `@${meta.actorUsername.trim()}`
       : undefined;
+  const name =
+    !username && typeof meta.actorName === 'string' && meta.actorName.trim()
+      ? `name=${formatActorName(meta.actorName)}`
+      : undefined;
   const tag =
     meta?.from === 'run_notify'
       ? `tag=run_notify`
       : meta?.progress
         ? `tag=progress`
         : undefined;
-  return [t, role, uid, username, mid, tag].filter(Boolean).map((x) => `[${x}]`).join('');
+  return [t, role, uid, username, name, mid, tag].filter(Boolean).map((x) => `[${x}]`).join('');
 }
 
 function collapseChatHistoryToSingleAssistantFromEntries(
@@ -146,6 +172,7 @@ export class TelegramBot {
   private botToken: string;
   private chatId?: string;
   private followupWindowMs: number;
+  private groupAccess: "initiator_or_admin" | "anyone";
   private logger: Logger;
   private taskExecutor: TaskExecutor;
   private lastUpdateId: number = 0;
@@ -184,6 +211,7 @@ export class TelegramBot {
     botToken: string,
     chatId: string | undefined,
     followupWindowMs: number | undefined,
+    groupAccess: TelegramConfig["groupAccess"] | undefined,
     logger: Logger,
     taskExecutor: TaskExecutor,
     projectRoot: string,
@@ -193,6 +221,7 @@ export class TelegramBot {
     this.followupWindowMs = Number.isFinite(followupWindowMs as number) && (followupWindowMs as number) > 0
       ? (followupWindowMs as number)
       : 10 * 60 * 1000;
+    this.groupAccess = groupAccess === "anyone" ? "anyone" : "initiator_or_admin";
     this.logger = logger;
     this.taskExecutor = taskExecutor;
     this.projectRoot = projectRoot;
@@ -460,6 +489,7 @@ export class TelegramBot {
   }
 
   private async isAllowedGroupActor(threadId: string, originChatId: string, actorId: string): Promise<boolean> {
+    if (this.groupAccess === "anyone") return true;
     const existing = this.threadInitiators.get(threadId);
     if (!existing) {
       this.threadInitiators.set(threadId, actorId);
@@ -759,6 +789,7 @@ export class TelegramBot {
     const messageId = typeof message.message_id === 'number' ? String(message.message_id) : undefined;
     const messageThreadId = typeof message.message_thread_id === 'number' ? message.message_thread_id : undefined;
     const actorId = from?.id ? String(from.id) : undefined;
+    const actorName = getActorName(from);
     const isGroup = this.isGroupChat(message.chat.type);
     const threadKey = this.getThreadKey(chatId, messageThreadId);
     const replyToFrom = message.reply_to_message?.from;
@@ -773,6 +804,7 @@ export class TelegramBot {
         isGroup,
         actorId,
         actorUsername: from?.username,
+        actorName,
         messageId,
         messageThreadId,
         threadKey,
@@ -850,7 +882,7 @@ export class TelegramBot {
   private async handleCommand(
     chatId: string,
     command: string,
-    from?: { id: number; username?: string },
+    from?: TelegramUser,
   ): Promise<void> {
     const username = from?.username || "Unknown";
     this.logger.info(`Received command: ${command} (${username})`);
@@ -1009,7 +1041,7 @@ Available commands:
   private async executeAndReply(
     chatId: string,
     instructions: string,
-    from?: { id: number; username?: string },
+    from?: TelegramUser,
     messageId?: string,
     chatType?: NonNullable<TelegramUpdate['message']>['chat']['type'],
     messageThreadId?: number,
@@ -1028,6 +1060,7 @@ Available commands:
       const sessionId = key;
       const actorId = from?.id ? String(from.id) : undefined;
       const actorUsername = from?.username ? String(from.username) : undefined;
+      const actorName = getActorName(from);
 
       // Always rehydrate from persisted chat log, but collapse into ONE assistant message for context.
       try {
@@ -1049,7 +1082,7 @@ Available commands:
         messageId,
         role: 'user',
         text: instructions,
-        meta: { chatType, actorId, actorUsername },
+        meta: { chatType, actorId, actorUsername, actorName },
       });
 
       // If there are pending approvals for this session, only initiator/admin can reply.
@@ -1379,6 +1412,7 @@ export function createTelegramBot(
     config.botToken,
     config.chatId,
     config.followupWindowMs,
+    config.groupAccess,
     logger,
     taskExecutor,
     projectRoot, // 传递 projectRoot
