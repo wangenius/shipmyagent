@@ -1,5 +1,5 @@
 import WebSocket from 'ws';
-import { Logger } from '../runtime/logger.js';
+import { Logger } from "../runtime/logging/index.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type { IncomingChatMessage } from "./base-chat-adapter.js";
 import type { AdapterSendTextParams } from "./platform-adapter.js";

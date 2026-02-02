@@ -2,7 +2,7 @@ import fs from "fs-extra";
 import path from "path";
 import { z } from "zod";
 import { tool } from "ai";
-import { discoverClaudeSkillsSync } from "../runtime/skills.js";
+import { discoverClaudeSkillsSync } from "../runtime/skills/index.js";
 import { getToolRuntimeContext } from "./runtime-context.js";
 
 export const skills_list = tool({
@@ -76,4 +76,3 @@ export const skills_load = tool({
 });
 
 export const skillsTools = { skills_list, skills_load };
-

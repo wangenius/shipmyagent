@@ -1,10 +1,10 @@
 import * as Lark from '@larksuiteoapi/node-sdk';
 import fs from 'fs-extra';
 import path from 'path';
-import { createLogger, Logger } from '../runtime/logger.js';
-import { createPermissionEngine } from '../runtime/permission.js';
-import { createTaskExecutor, TaskExecutor } from '../runtime/task-executor.js';
-import { createToolExecutor } from '../runtime/tools.js';
+import { createLogger, Logger } from "../runtime/logging/index.js";
+import { createPermissionEngine } from "../runtime/permission/index.js";
+import { createTaskExecutor, TaskExecutor } from "../runtime/task/index.js";
+import { createToolExecutor } from "../runtime/tools/index.js";
 import { getCacheDirPath } from '../utils.js';
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type { IncomingChatMessage } from "./base-chat-adapter.js";

@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { createLogger, Logger } from '../runtime/logger.js';
-import { createPermissionEngine, PermissionEngine } from '../runtime/permission.js';
-import { createTaskScheduler, TaskScheduler, TaskDefinition } from '../runtime/scheduler.js';
-import { createTaskExecutor, TaskExecutor } from '../runtime/task-executor.js';
-import { createToolExecutor, ToolExecutor } from '../runtime/tools.js';
-import { ChatStore } from '../runtime/chat-store.js';
+import { createLogger, Logger } from "../runtime/logging/index.js";
+import { createPermissionEngine, PermissionEngine } from "../runtime/permission/index.js";
+import { createTaskScheduler, TaskScheduler, TaskDefinition } from "../runtime/scheduler/index.js";
+import { createTaskExecutor, TaskExecutor } from "../runtime/task/index.js";
+import { createToolExecutor, ToolExecutor } from "../runtime/tools/index.js";
+import { ChatStore } from "../runtime/chat/store.js";
 import http from 'node:http';
 import fs from 'fs-extra';
 import path from 'path';

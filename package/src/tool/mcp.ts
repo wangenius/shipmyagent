@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { tool } from "ai";
-import type { McpToolDefinition } from "../runtime/mcp-types.js";
-import type { McpManager } from "../runtime/mcp-manager.js";
+import type { McpToolDefinition, McpManager } from "../runtime/mcp/index.js";
 
 export function createMcpAiTool(params: {
   server: string;
@@ -49,4 +48,3 @@ export function createMcpAiTool(params: {
     },
   });
 }
-

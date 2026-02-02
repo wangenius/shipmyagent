@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tool } from "ai";
-import { cloudFileDelete, cloudFileUpload, cloudFileUrl } from "../runtime/cloud-files.js";
+import { cloudFileDelete, cloudFileUpload, cloudFileUrl } from "../runtime/storage/index.js";
 import { resolveOssFromConfig } from "./oss.js";
 import { getToolRuntimeContext } from "./runtime-context.js";
 
@@ -127,4 +127,3 @@ export const cloudFileTools = {
   cloud_file_url,
   cloud_file_delete,
 };
-

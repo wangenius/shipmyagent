@@ -1,6 +1,6 @@
 import { loadProjectDotenv, type ShipConfig } from "../utils.js";
-import type { PermissionEngine } from "../runtime/permission.js";
-import type { McpManager } from "../runtime/mcp-manager.js";
+import type { PermissionEngine } from "../runtime/permission/index.js";
+import type { McpManager } from "../runtime/mcp/index.js";
 import { resolveOssFromConfig } from "./oss.js";
 import { setToolRuntimeContext } from "./runtime-context.js";
 import { skillsTools } from "./skills.js";

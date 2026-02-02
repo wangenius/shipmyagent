@@ -1,18 +1,19 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs-extra";
-import { Logger } from "../runtime/logger.js";
-import { createPermissionEngine } from "../runtime/permission.js";
+import { Logger } from "../runtime/logging/index.js";
+import { createPermissionEngine } from "../runtime/permission/index.js";
 import {
-  createTaskExecutor, TaskExecutor
-} from "../runtime/task-executor.js";
-import { createToolExecutor } from "../runtime/tools.js";
-import type { AgentRuntime } from "../runtime/agent.js";
+  createTaskExecutor,
+  TaskExecutor,
+} from "../runtime/task/index.js";
+import { createToolExecutor } from "../runtime/tools/index.js";
+import type { AgentRuntime } from "../runtime/agent/index.js";
 import { getCacheDirPath, getRunsDirPath } from "../utils.js";
-import { RunManager } from "../runtime/run-manager.js";
-import type { RunRecord } from "../runtime/run-types.js";
-import { loadRun, saveRun } from "../runtime/run-store.js";
-import type { ChatLogEntryV1 } from "../runtime/chat-store.js";
+import { RunManager } from "../runtime/run/index.js";
+import type { RunRecord } from "../runtime/run/index.js";
+import { loadRun, saveRun } from "../runtime/run/index.js";
+import type { ChatLogEntryV1 } from "../runtime/chat/store.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type { IncomingChatMessage } from "./base-chat-adapter.js";
 import type { AdapterSendTextParams } from "./platform-adapter.js";

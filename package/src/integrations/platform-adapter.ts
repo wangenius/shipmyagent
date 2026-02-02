@@ -1,7 +1,7 @@
-import type { Logger } from "../runtime/logger.js";
-import { ChatStore } from "../runtime/chat-store.js";
-import type { ChatDispatchChannel } from "../runtime/chat-dispatcher.js";
-import { registerChatDispatcher } from "../runtime/chat-dispatcher.js";
+import type { Logger } from "../runtime/logging/index.js";
+import { ChatStore } from "../runtime/chat/store.js";
+import type { ChatDispatchChannel } from "../runtime/chat/dispatcher.js";
+import { registerChatDispatcher } from "../runtime/chat/dispatcher.js";
 
 export type AdapterSendTextParams = {
   chatId: string;
@@ -80,4 +80,3 @@ export abstract class PlatformAdapter {
     }
   }
 }
-

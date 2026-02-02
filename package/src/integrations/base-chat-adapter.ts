@@ -1,8 +1,8 @@
-import type { Logger } from "../runtime/logger.js";
-import type { AgentInput, AgentResult, AgentRuntime } from "../runtime/agent.js";
-import { createAgentRuntimeFromPath } from "../runtime/agent.js";
+import type { Logger } from "../runtime/logging/index.js";
+import type { AgentInput, AgentResult, AgentRuntime } from "../runtime/agent/index.js";
+import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
 import { PlatformAdapter } from "./platform-adapter.js";
-import type { ChatDispatchChannel } from "../runtime/chat-dispatcher.js";
+import type { ChatDispatchChannel } from "../runtime/chat/dispatcher.js";
 
 export type IncomingChatMessage = {
   chatId: string;

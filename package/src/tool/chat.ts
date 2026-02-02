@@ -1,10 +1,7 @@
 import { z } from "zod";
 import { tool } from "ai";
-import { chatRequestContext } from "../runtime/chat-request-context.js";
-import {
-  getChatDispatcher,
-  type ChatDispatchChannel,
-} from "../runtime/chat-dispatcher.js";
+import { chatRequestContext } from "../runtime/chat/request-context.js";
+import { getChatDispatcher, type ChatDispatchChannel } from "../runtime/chat/dispatcher.js";
 
 const chatSendInputSchema = z.object({
   text: z.string().describe("Text to send to the chat."),

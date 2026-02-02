@@ -1,4 +1,4 @@
-import type { PermissionEngine } from "../runtime/permission.js";
+import type { PermissionEngine } from "../runtime/permission/index.js";
 import type { ShipConfig } from "../utils.js";
 
 export interface ToolRuntimeContext {
@@ -19,4 +19,3 @@ export function getToolRuntimeContext(): ToolRuntimeContext {
   }
   return ctx;
 }
-

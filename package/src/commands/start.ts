@@ -1,13 +1,12 @@
 import path from "path";
 import fs from "fs-extra";
-import { createLogger } from "../runtime/logger.js";
-import { createPermissionEngine } from "../runtime/permission.js";
-import { createTaskScheduler } from "../runtime/scheduler.js";
-import { createTaskExecutor } from "../runtime/task-executor.js";
-import { createToolExecutor } from "../runtime/tools.js";
-import { createAgentRuntime, AgentContext } from "../runtime/agent.js";
-import { RunManager } from "../runtime/run-manager.js";
-import { RunWorker } from "../runtime/run-worker.js";
+import { createLogger } from "../runtime/logging/index.js";
+import { createPermissionEngine } from "../runtime/permission/index.js";
+import { createTaskScheduler } from "../runtime/scheduler/index.js";
+import { createTaskExecutor } from "../runtime/task/index.js";
+import { createToolExecutor } from "../runtime/tools/index.js";
+import { createAgentRuntime, type AgentContext } from "../runtime/agent/index.js";
+import { RunManager, RunWorker } from "../runtime/run/index.js";
 import { createServer, ServerContext } from "../server/index.js";
 import { createInteractiveServer } from "../server/interactive.js";
 import { createTelegramBot } from "../integrations/telegram.js";
@@ -19,7 +18,7 @@ import {
   loadShipConfig,
   ShipConfig,
 } from "../utils.js";
-import { DEFAULT_SHIP_PROMPTS } from "../runtime/ship-prompts.js";
+import { DEFAULT_SHIP_PROMPTS } from "../runtime/prompts/index.js";
 import { fileURLToPath } from "url";
 
 interface StartOptions {

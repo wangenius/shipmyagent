@@ -1,0 +1,254 @@
+import { generateText, type LanguageModel, type ModelMessage } from "ai";
+import { withLlmRequestContext } from "../llm-logging/index.js";
+import type { ConversationMessage } from "./types.js";
+
+export class AgentSessionStore {
+  private sessionMessages: Map<string, ModelMessage[]> = new Map();
+
+  getOrCreate(sessionId: string): ModelMessage[] {
+    const existing = this.sessionMessages.get(sessionId);
+    if (existing) return existing;
+    const fresh: ModelMessage[] = [];
+    this.sessionMessages.set(sessionId, fresh);
+    return fresh;
+  }
+
+  set(sessionId: string, messages: unknown[]): void {
+    this.sessionMessages.set(
+      sessionId,
+      this.coerceStoredMessagesToModelMessages(
+        Array.isArray(messages) ? (messages as unknown[]) : [],
+      ),
+    );
+  }
+
+  replace(sessionId: string, messages: ModelMessage[]): void {
+    this.sessionMessages.set(sessionId, messages);
+  }
+
+  delete(sessionId: string): void {
+    this.sessionMessages.delete(sessionId);
+  }
+
+  clear(sessionId?: string): void {
+    if (!sessionId) this.sessionMessages.clear();
+    else this.sessionMessages.delete(sessionId);
+  }
+
+  getConversationHistory(sessionId?: string): ConversationMessage[] {
+    const toLegacy = (m: ModelMessage): ConversationMessage => {
+      const role = (m as any).role as ConversationMessage["role"];
+      const content = (m as any).content;
+      const text =
+        typeof content === "string"
+          ? content
+          : Array.isArray(content)
+            ? JSON.stringify(content).slice(0, 2000)
+            : String(content ?? "");
+      return {
+        role:
+          role === "tool"
+            ? "tool"
+            : role === "assistant"
+              ? "assistant"
+              : "user",
+        content: text,
+        timestamp: Date.now(),
+      };
+    };
+
+    if (!sessionId) {
+      const all: ConversationMessage[] = [];
+      for (const messages of this.sessionMessages.values()) {
+        all.push(...messages.map(toLegacy));
+      }
+      return all;
+    }
+
+    return (this.sessionMessages.get(sessionId) || []).map(toLegacy);
+  }
+
+  formatModelMessagesForLog(
+    messages: ModelMessage[],
+    maxCharsTotal: number = 12000,
+  ): string {
+    const indent = (text: string): string =>
+      text
+        .split("\n")
+        .map((l) => `  ${l}`)
+        .join("\n");
+
+    const lines: string[] = [];
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i] as any;
+      const role = String(m?.role ?? "unknown");
+      const text = this.modelMessageContentToText(m?.content, 4000) || "(empty)";
+      lines.push([`[#${i}] role=${role}`, indent(text)].join("\n"));
+    }
+
+    const joined = lines.join("\n");
+    if (joined.length <= maxCharsTotal) return joined;
+    return (
+      joined.slice(0, maxCharsTotal) +
+      `…(truncated, ${joined.length} chars total)`
+    );
+  }
+
+  async compactConversationHistory(
+    sessionId: string,
+    model: LanguageModel | null,
+    requestId?: string,
+  ): Promise<boolean> {
+    const history = this.getOrCreate(sessionId);
+    if (history.length < 6) return false;
+    if (!model) return false;
+
+    const maxMessagesAfterCompaction = 50;
+    const cut = Math.max(1, Math.floor(history.length * 0.5));
+    const older = history.slice(0, cut);
+    const newer = history.slice(cut);
+
+    const input = this.extractTextForSummary(older, 12000);
+    const result = await withLlmRequestContext({ sessionId, requestId }, () =>
+      generateText({
+        model,
+        system:
+          "You are a summarization assistant. Summarize the conversation faithfully. Preserve key decisions, commands, file paths, IDs, and user intent. Output plain text.",
+        prompt: `Summarize the following earlier conversation into a compact summary (<= 400 words):\n\n${input}`,
+      }),
+    );
+
+    const summaryText =
+      (result.text || "").trim() ||
+      "[Auto-compact] Earlier conversation was summarized/omitted due to context limits.";
+    const summaryMessage: ModelMessage = {
+      role: "assistant",
+      content: `Summary of earlier messages:\n${summaryText}`,
+    };
+
+    const compacted = [summaryMessage, ...newer];
+    if (compacted.length > maxMessagesAfterCompaction) {
+      const keep = Math.max(0, maxMessagesAfterCompaction - 1);
+      const trimmedNewer = keep > 0 ? newer.slice(-keep) : [];
+      this.sessionMessages.set(sessionId, [summaryMessage, ...trimmedNewer]);
+    } else {
+      this.sessionMessages.set(sessionId, compacted);
+    }
+    return true;
+  }
+
+  coerceStoredMessagesToModelMessages(messages: unknown[]): ModelMessage[] {
+    if (
+      Array.isArray(messages) &&
+      messages.every(
+        (m) =>
+          m &&
+          typeof m === "object" &&
+          "role" in (m as any) &&
+          "content" in (m as any),
+      )
+    ) {
+      return messages as ModelMessage[];
+    }
+
+    const out: ModelMessage[] = [];
+    for (const raw of messages) {
+      if (!raw || typeof raw !== "object") continue;
+      const role = (raw as any).role;
+      const content = (raw as any).content;
+      if (role === "user" || role === "assistant") {
+        out.push({ role, content: String(content ?? "") });
+      } else if (role === "tool") {
+        out.push({
+          role: "assistant",
+          content: `Tool result:\n${String(content ?? "")}`,
+        });
+      }
+    }
+    return out;
+  }
+
+  private modelMessageContentToText(content: any, maxChars: number): string {
+    const truncate = (text: string): string =>
+      text.length <= maxChars
+        ? text
+        : text.slice(0, maxChars) + `…(truncated, ${text.length} chars total)`;
+
+    if (typeof content === "string") return truncate(content);
+    if (Array.isArray(content)) {
+      const parts = content
+        .map((p: any) => {
+          if (!p || typeof p !== "object") return "";
+          if (p.type === "text") return String(p.text ?? "");
+          if (p.type === "input_text") return String(p.text ?? "");
+          if (p.type === "tool-approval-request") {
+            const toolName = (p.toolCall as any)?.toolName;
+            return `Approval requested: ${String(toolName ?? "")}`;
+          }
+          if (p.type === "tool-call") return `Tool call: ${String(p.toolName ?? "")}`;
+          if (p.type === "tool-result")
+            return `Tool result: ${String(p.toolName ?? "")}`;
+          if (p.type === "tool-error") return `Tool error: ${String(p.toolName ?? "")}`;
+          return "";
+        })
+        .filter(Boolean)
+        .join("\n");
+      return truncate(parts);
+    }
+    if (content && typeof content === "object") {
+      try {
+        return truncate(JSON.stringify(content));
+      } catch {
+        return truncate(String(content));
+      }
+    }
+    return truncate(String(content ?? ""));
+  }
+
+  private extractTextForSummary(
+    messages: ModelMessage[],
+    maxChars: number = 12000,
+  ): string {
+    const lines: string[] = [];
+    for (const m of messages) {
+      const role =
+        (m as any).role === "assistant"
+          ? "Assistant"
+          : (m as any).role === "tool"
+            ? "Tool"
+            : (m as any).role === "user"
+              ? "User"
+              : "Other";
+
+      const content = (m as any).content;
+      if (typeof content === "string") {
+        lines.push(`${role}: ${content}`);
+        continue;
+      }
+
+      if (Array.isArray(content)) {
+        const parts = content
+          .map((p: any) => {
+            if (!p || typeof p !== "object") return "";
+            if (p.type === "text") return String(p.text ?? "");
+            if (p.type === "tool-approval-request") {
+              const toolName = (p.toolCall as any)?.toolName;
+              return `Approval requested for tool: ${String(toolName ?? "")}`;
+            }
+            if (p.type === "tool-result")
+              return `Tool result: ${String((p as any).toolName ?? "")}`;
+            if (p.type === "tool-error")
+              return `Tool error: ${String((p as any).toolName ?? "")}`;
+            return "";
+          })
+          .filter(Boolean)
+          .join("\n");
+        if (parts) lines.push(`${role}: ${parts}`);
+      }
+    }
+
+    const text = lines.join("\n\n");
+    if (text.length <= maxChars) return text;
+    return text.slice(0, maxChars) + "\n\n[TRUNCATED]";
+  }
+}

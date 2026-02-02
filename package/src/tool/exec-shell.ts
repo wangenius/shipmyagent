@@ -2,7 +2,7 @@ import { z } from "zod";
 import { tool } from "ai";
 import { execa } from "execa";
 import type { ShipConfig } from "../utils.js";
-import { extractExecShellCommandNames } from "../runtime/permission.js";
+import { extractExecShellCommandNames } from "../runtime/permission/index.js";
 import { getToolRuntimeContext } from "./runtime-context.js";
 
 function preflightExecShell(config: ShipConfig, command: string): {
@@ -124,4 +124,3 @@ Chain commands with && for sequential execution or ; for independent execution.`
 });
 
 export const execShellTools = { exec_shell };
-

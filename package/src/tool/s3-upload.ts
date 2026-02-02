@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tool } from "ai";
-import { uploadFileToS3 } from "../runtime/s3-upload.js";
+import { uploadFileToS3 } from "../runtime/storage/index.js";
 import { resolveOssFromConfig } from "./oss.js";
 import { getToolRuntimeContext } from "./runtime-context.js";
 
@@ -41,4 +41,3 @@ export const s3_upload = tool({
 });
 
 export const s3UploadTools = { s3_upload };
-

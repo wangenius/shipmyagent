@@ -3,9 +3,8 @@ import path from "path";
 import { z } from "zod";
 import { tool } from "ai";
 import { getQueueDirPath, getRunsDirPath, getTimestamp } from "../utils.js";
-import { listQueueRuns } from "../runtime/run-queue.js";
-import { listRuns, loadRun, saveRun } from "../runtime/run-store.js";
-import type { RunRecord } from "../runtime/run-types.js";
+import { listQueueRuns, listRuns, loadRun, saveRun } from "../runtime/run/index.js";
+import type { RunRecord } from "../runtime/run/index.js";
 import { getToolRuntimeContext } from "./runtime-context.js";
 
 export const runs_status = tool({
@@ -168,4 +167,3 @@ export const run_cancel = tool({
 });
 
 export const runTools = { runs_status, run_get, runs_pause, runs_resume, run_cancel };
-

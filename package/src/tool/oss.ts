@@ -1,5 +1,5 @@
 import type { ShipConfig } from "../utils.js";
-import type { S3StorageConfig } from "../runtime/s3-upload.js";
+import type { S3StorageConfig } from "../runtime/storage/index.js";
 
 export type OssResolved =
   | { enabled: false; storage?: undefined; bucket?: undefined }
@@ -25,4 +25,3 @@ export function resolveOssFromConfig(config: ShipConfig): OssResolved {
     bucket,
   };
 }
-
