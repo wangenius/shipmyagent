@@ -3,7 +3,7 @@ import path from 'path';
 import { diffLines, Change } from 'diff';
 import { generateId, getTimestamp, getApprovalsDirPath, getLogsDirPath, getProjectRoot, loadShipConfig } from '../utils.js';
 
-export type PermissionType = 'read_repo' | 'write_repo' | 'exec_shell' | 'open_pr' | 'merge';
+export type PermissionType = 'read_repo' | 'write_repo' | 'exec_shell' | 'open_pr' | 'merge' | 'mcp_tool';
 
 export function extractExecShellCommandNames(command: string): string[] {
   const trimmed = String(command || '').trim();
@@ -319,6 +319,37 @@ export class PermissionEngine {
       type,
       action,
       details,
+      status: 'pending',
+      createdAt: getTimestamp(),
+    };
+
+    this.approvalRequests.set(request.id, request);
+
+    // Save to filesystem
+    const approvalsDir = getApprovalsDirPath(this.projectRoot);
+    const filePath = path.join(approvalsDir, `${request.id}.json`);
+    await fs.writeJson(filePath, request, { spaces: 2 });
+
+    return request;
+  }
+
+  /**
+   * Create a generic approval request (public method for MCP tools and other use cases)
+   */
+  async createGenericApprovalRequest(params: {
+    type: PermissionType;
+    action: string;
+    details: Record<string, unknown>;
+    tool?: string;
+    input?: Record<string, unknown>;
+  }): Promise<ApprovalRequest> {
+    const request: ApprovalRequest = {
+      id: generateId(),
+      type: params.type,
+      action: params.action,
+      details: params.details,
+      tool: params.tool,
+      input: params.input,
       status: 'pending',
       createdAt: getTimestamp(),
     };

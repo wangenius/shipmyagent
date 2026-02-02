@@ -23,10 +23,10 @@ export interface ExecutionResult {
 export class TaskExecutor {
   private toolExecutor: ToolExecutor;
   private logger: Logger;
-  private agentRuntime: AgentRuntime;
+  private agentRuntime: AgentRuntime | null;
   private projectRoot: string;
 
-  constructor(toolExecutor: ToolExecutor, logger: Logger, agentRuntime: AgentRuntime, projectRoot: string) {
+  constructor(toolExecutor: ToolExecutor, logger: Logger, agentRuntime: AgentRuntime | null, projectRoot: string) {
     this.toolExecutor = toolExecutor;
     this.logger = logger;
     this.agentRuntime = agentRuntime;
@@ -39,6 +39,16 @@ export class TaskExecutor {
 
     this.logger.info(`Executing task: ${task.name}`);
     this.logger.debug(`Task instructions: ${instructions}`);
+
+    // TaskExecutor 需要 agentRuntime 才能执行任务
+    if (!this.agentRuntime) {
+      return {
+        success: false,
+        output: 'TaskExecutor requires an AgentRuntime instance to execute tasks',
+        duration: Date.now() - startTime,
+        toolCalls,
+      };
+    }
 
     try {
       // Read task definition file
@@ -112,6 +122,16 @@ export class TaskExecutor {
 
     this.logger.action(`Executing instruction: ${instructions}`);
 
+    // TaskExecutor 需要 agentRuntime 才能执行指令
+    if (!this.agentRuntime) {
+      return {
+        success: false,
+        output: 'TaskExecutor requires an AgentRuntime instance to execute instructions',
+        duration: Date.now() - startTime,
+        toolCalls,
+      };
+    }
+
     try {
       // Use Agent Runtime to execute instruction
       const agentInput: AgentInput = {
@@ -148,7 +168,7 @@ export class TaskExecutor {
 export function createTaskExecutor(
   toolExecutor: ToolExecutor,
   logger: Logger,
-  agentRuntime: AgentRuntime,
+  agentRuntime: AgentRuntime | null,
   projectRoot: string
 ): TaskExecutor {
   return new TaskExecutor(toolExecutor, logger, agentRuntime, projectRoot);

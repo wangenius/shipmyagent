@@ -1588,11 +1588,13 @@ export function createTelegramBot(
     permissionEngine,
     logger,
   });
-  const agentRuntime = createAgentRuntimeFromPath(projectRoot);
+
+  // 注意：不在这里创建 AgentRuntime，因为 Telegram Bot 使用会话级的 AgentRuntime
+  // 会话级 AgentRuntime 在 getOrCreateSession 方法中按需创建
   const taskExecutor = createTaskExecutor(
     toolExecutor,
     logger,
-    agentRuntime,
+    null,
     projectRoot,
   );
 

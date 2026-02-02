@@ -13,6 +13,7 @@ import {
   getLogsDirPath,
   getCacheDirPath,
   getChatsDirPath,
+  getMcpDirPath,
   ensureDir,
   saveJson,
   DEFAULT_SHIP_JSON,
@@ -186,6 +187,7 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     getLogsDirPath(projectRoot),
     getCacheDirPath(projectRoot),
     getChatsDirPath(projectRoot),
+    getMcpDirPath(projectRoot),
   ];
 
   for (const dir of dirs) {
@@ -212,6 +214,14 @@ Please scan the repository for TODO comments and generate a report.
   await fs.writeFile(sampleTaskPath, finalSampleTaskContent);
   console.log(`✅ Created sample task file`);
 
+  // Create default mcp.json file in .ship/mcp/ directory
+  const mcpJsonPath = path.join(getMcpDirPath(projectRoot), 'mcp.json');
+  const defaultMcpConfig = {
+    servers: {}
+  };
+  await saveJson(mcpJsonPath, defaultMcpConfig);
+  console.log(`✅ Created .ship/mcp/mcp.json (MCP configuration)`);
+
   console.log('\n🎉 Initialization complete!\n');
   console.log(`📦 Current model: ${llmConfig.provider} / ${llmConfig.model}`);
   console.log(`🌐 API URL: ${llmConfig.baseUrl}\n`);
@@ -234,18 +244,21 @@ Please scan the repository for TODO comments and generate a report.
   console.log('Next steps:');
   console.log('  1. Edit Agent.md to customize agent behavior');
   console.log('  2. Edit ship.json to modify LLM configuration (baseUrl, apiKey, temperature, etc.)');
+  console.log('  3. (Optional) Edit .ship/mcp/mcp.json to configure MCP servers for extended capabilities');
   if (response.integration === 'feishu') {
-    console.log('  3. Configure Feishu App ID and App Secret');
-    console.log('  4. Run "shipmyagent start" to start the agent\n');
+    console.log('  4. Configure Feishu App ID and App Secret');
+    console.log('  5. Run "shipmyagent start" to start the agent\n');
   } else if (response.integration === 'telegram') {
-    console.log('  3. Configure Telegram Bot Token and Chat ID (optional)');
-    console.log('  4. Run "shipmyagent start" to start the agent\n');
+    console.log('  4. Configure Telegram Bot Token and Chat ID (optional)');
+    console.log('  5. Run "shipmyagent start" to start the agent\n');
   } else if (response.integration === 'qq') {
-    console.log('  3. Configure QQ App ID and App Secret');
-    console.log('  4. Run "shipmyagent start" to start the agent\n');
+    console.log('  4. Configure QQ App ID and App Secret');
+    console.log('  5. Run "shipmyagent start" to start the agent\n');
   } else {
-    console.log('  3. Run "shipmyagent start" to start the agent\n');
+    console.log('  4. Run "shipmyagent start" to start the agent\n');
   }
   console.log('💡 Tip: API Key is recommended to use environment variables (e.g. ${ANTHROPIC_API_KEY} or ${OPENAI_API_KEY})\n');
+  console.log('🔌 MCP Support: Configure MCP servers in .ship/mcp/mcp.json to connect to databases, APIs, and more');
+  console.log('   Learn more: https://modelcontextprotocol.io\n');
   console.log('To switch models or modify configuration, edit the llm field in ship.json directly.\n');
 }

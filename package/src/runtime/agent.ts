@@ -29,6 +29,7 @@ import {
   getAgentMdPath,
   getShipJsonPath,
   getShipDirPath,
+  getMcpDirPath,
   getApprovalsDirPath,
   getLogsDirPath,
   getRunsDirPath,
@@ -55,6 +56,8 @@ import {
   discoverClaudeSkillsSync,
   renderClaudeSkillsPromptSection,
 } from "./skills.js";
+import { McpManager } from './mcp-manager.js';
+import type { McpConfig } from './mcp-types.js';
 
 // ==================== Types ====================
 
@@ -154,6 +157,7 @@ export class AgentRuntime {
   private logger: AgentLogger;
   private permissionEngine: PermissionEngine;
   private skills: ClaudeSkill[] = [];
+  private mcpManager: McpManager | null = null;
 
   private model: LanguageModel | null = null;
   private agent: ToolLoopAgent<never, any, any> | null = null;
@@ -166,6 +170,7 @@ export class AgentRuntime {
     this.logger = new AgentLogger(context.projectRoot);
     this.permissionEngine = createPermissionEngine(context.projectRoot);
     this.skills = discoverClaudeSkillsSync(context.projectRoot, context.config);
+    this.mcpManager = new McpManager(context.projectRoot, this.logger);
   }
 
   private refreshSkills(): ClaudeSkill[] {
@@ -457,6 +462,9 @@ export class AgentRuntime {
         `Agent.md content length: ${this.context.agentMd?.length || 0} chars`,
       );
 
+      // 初始化 MCP 管理器
+      await this.initializeMcp();
+
       const { provider, apiKey, baseUrl, model } = this.context.config.llm;
       const resolvedModel = model === "${}" ? undefined : model;
       const resolvedBaseUrl = baseUrl === "${}" ? undefined : baseUrl;
@@ -562,6 +570,34 @@ export class AgentRuntime {
     }
   }
 
+  /**
+   * 初始化 MCP 管理器
+   */
+  private async initializeMcp(): Promise<void> {
+    try {
+      // 读取 MCP 配置文件
+      const mcpConfigPath = path.join(getMcpDirPath(this.context.projectRoot), 'mcp.json');
+
+      if (!await fs.pathExists(mcpConfigPath)) {
+        await this.logger.log('info', 'No MCP configuration found, skipping MCP initialization');
+        return;
+      }
+
+      const mcpConfigContent = await fs.readFile(mcpConfigPath, 'utf-8');
+      const mcpConfig: McpConfig = JSON.parse(mcpConfigContent);
+
+      if (!mcpConfig.servers || Object.keys(mcpConfig.servers).length === 0) {
+        await this.logger.log('info', 'No MCP servers configured');
+        return;
+      }
+
+      // 初始化 MCP 管理器
+      await this.mcpManager?.initialize(mcpConfig);
+    } catch (error) {
+      await this.logger.log('warn', `Failed to initialize MCP: ${String(error)}`);
+    }
+  }
+
   private preflightExecShell(command: string): {
     allowed: boolean;
     deniedReason?: string;
@@ -619,7 +655,7 @@ export class AgentRuntime {
   }
 
   private createToolSet() {
-    return {
+    const tools: Record<string, any> = {
       skills_list: tool({
         description:
           "List Claude Code-compatible skills (from .claude/skills and any configured skill roots). Use this to discover available skills before loading one.",
@@ -923,6 +959,65 @@ Chain commands with && for sequential execution or ; for independent execution.`
         },
       }),
     };
+
+    // 添加 MCP 工具
+    if (this.mcpManager) {
+      const mcpTools = this.mcpManager.getAllTools();
+
+      for (const { server, tool: mcpTool } of mcpTools) {
+        const toolName = `${server}:${mcpTool.name}`;
+
+        tools[toolName] = tool({
+          description: mcpTool.description || `MCP tool: ${mcpTool.name} from ${server}`,
+          inputSchema: z.object(
+            Object.fromEntries(
+              Object.entries(mcpTool.inputSchema.properties || {}).map(([key, value]) => [
+                key,
+                z.any().describe((value as any).description || key),
+              ])
+            )
+          ),
+          // 所有 MCP 工具默认需要审批
+          needsApproval: async () => true,
+          execute: async (args: Record<string, unknown>) => {
+            try {
+              const result = await this.mcpManager!.callTool(server, mcpTool.name, args);
+
+              // 将 MCP 结果转换为字符串
+              const output = result.content
+                .map(item => {
+                  if (item.type === 'text') {
+                    return item.text || '';
+                  } else if (item.type === 'image') {
+                    return `[Image: ${item.mimeType || 'unknown'}]`;
+                  } else if (item.type === 'resource') {
+                    return `[Resource: ${item.mimeType || 'unknown'}]`;
+                  }
+                  return '';
+                })
+                .join('\n');
+
+              return {
+                success: !result.isError,
+                output,
+                isError: result.isError,
+              };
+            } catch (error) {
+              return {
+                success: false,
+                error: `MCP tool execution failed: ${String(error)}`,
+              };
+            }
+          },
+        });
+      }
+
+      if (mcpTools.length > 0) {
+        this.logger.log('info', `Registered ${mcpTools.length} MCP tool(s)`);
+      }
+    }
+
+    return tools;
   }
 
 
@@ -1271,31 +1366,32 @@ Chain commands with && for sequential execution or ; for independent execution.`
             if (!onStep) return;
             try {
               for (const tr of step.toolResults || []) {
-                if (tr.type !== "tool-result") continue;
-                if ((tr as any).toolName !== "exec_shell") continue;
-                const command = String(
-                  ((tr as any).input as any)?.command || "",
-                ).trim();
-                const exitCode = ((tr as any).output as any)?.exitCode;
-                const stdout = String(
-                  ((tr as any).output as any)?.stdout || "",
-                ).trim();
-                const stderr = String(
-                  ((tr as any).output as any)?.stderr || "",
-                ).trim();
-                const snippet = (stdout || stderr).slice(0, 500);
-                await emitStep(
-                  "step_finish",
-                  `已执行：${command}${typeof exitCode === "number" ? `（exitCode=${exitCode}）` : ""}${snippet ? `\n摘要：${snippet}${(stdout || stderr).length > 500 ? "…" : ""}` : ""}`,
-                  {
-                    toolName: "exec_shell",
-                    command,
-                    exitCode:
-                      typeof exitCode === "number" ? exitCode : undefined,
-                    requestId,
-                    sessionId,
-                  },
-                );
+                if (tr.type !== 'tool-result') continue;
+                const toolName = (tr as any).toolName;
+
+                // 处理 exec_shell 工具
+                if (toolName === 'exec_shell') {
+                  const command = String(((tr as any).input as any)?.command || '').trim();
+                  const exitCode = ((tr as any).output as any)?.exitCode;
+                  const stdout = String(((tr as any).output as any)?.stdout || '').trim();
+                  const stderr = String(((tr as any).output as any)?.stderr || '').trim();
+                  const snippet = (stdout || stderr).slice(0, 500);
+                  await emitStep(
+                    'step_finish',
+                    `已执行：${command}${typeof exitCode === 'number' ? `（exitCode=${exitCode}）` : ''}${snippet ? `\n摘要：${snippet}${(stdout || stderr).length > 500 ? '…' : ''}` : ''}`,
+                    { toolName: 'exec_shell', command, exitCode: typeof exitCode === 'number' ? exitCode : undefined, requestId, sessionId },
+                  );
+                }
+                // 处理 MCP 工具
+                else if (toolName && String(toolName).includes(':')) {
+                  const output = ((tr as any).output as any)?.output || '';
+                  const snippet = String(output).slice(0, 500);
+                  await emitStep(
+                    'step_finish',
+                    `已执行 MCP 工具：${toolName}${snippet ? `\n结果：${snippet}${String(output).length > 500 ? '…' : ''}` : ''}`,
+                    { toolName, requestId, sessionId },
+                  );
+                }
               }
             } catch {
               // ignore
@@ -1404,17 +1500,37 @@ Chain commands with && for sequential execution or ; for independent execution.`
               ? (input as Record<string, unknown>)
               : {};
 
-          if (toolName !== "exec_shell") continue;
+          let approvalId: string | undefined;
+          let requiresApproval = false;
 
-          const command = String((args as any).command || "").trim();
-          const permission =
-            await this.permissionEngine.checkExecShell(command);
+          // 处理 exec_shell 工具
+          if (toolName === 'exec_shell') {
+            const command = String((args as any).command || '').trim();
+            const permission = await this.permissionEngine.checkExecShell(command);
 
-          if (!permission.requiresApproval || !(permission as any).approvalId) {
+            if (permission.requiresApproval && (permission as any).approvalId) {
+              approvalId = String((permission as any).approvalId);
+              requiresApproval = true;
+            }
+          }
+          // 处理 MCP 工具（格式：server:toolName）
+          else if (toolName && String(toolName).includes(':')) {
+            const approvalRequest = await this.permissionEngine.createGenericApprovalRequest({
+              type: 'mcp_tool',
+              action: `Call MCP tool: ${toolName}`,
+              details: { toolName, args },
+              tool: toolName,
+              input: args,
+            });
+            approvalId = approvalRequest.id;
+            requiresApproval = true;
+          }
+
+          if (!requiresApproval || !approvalId) {
             continue;
           }
 
-          const approvalId = String((permission as any).approvalId);
+          // 保存审批请求的元数据
           await this.permissionEngine.updateApprovalRequest(approvalId, {
             tool: toolName,
             input: args,
@@ -1441,14 +1557,17 @@ Chain commands with && for sequential execution or ; for independent execution.`
 
         if (created.length > 0) {
           const first = created[0];
-          const cmd = String((first.args as any)?.command || "");
+          const description = first.toolName === 'exec_shell'
+            ? `Execute command: ${String((first.args as any)?.command || '')}`
+            : `Call tool: ${first.toolName}`;
+
           const pendingText =
             `⏳ 需要你确认一下我接下来要做的操作（已发起审批请求）。\n` +
-            `操作: Execute command: ${cmd}\n\n` +
+            `操作: ${description}\n\n` +
             `你可以直接用自然语言回复，比如：\n` +
-            `- “可以” / “同意”\n` +
-            `- “不可以，因为 …” / “拒绝，因为 …”\n` +
-            `- “全部同意” / “全部拒绝”`;
+            `- "可以" / "同意"\n` +
+            `- "不可以，因为 …" / "拒绝，因为 …"\n` +
+            `- "全部同意" / "全部拒绝"`;
 
           return {
             success: false,
@@ -1456,13 +1575,9 @@ Chain commands with && for sequential execution or ; for independent execution.`
             toolCalls,
             pendingApproval: {
               id: first.id,
-              type: "exec_shell",
-              description: `Execute command: ${cmd}`,
-              data: {
-                toolName: first.toolName,
-                args: first.args,
-                aiApprovalId: first.aiApprovalId,
-              },
+              type: first.toolName === 'exec_shell' ? 'exec_shell' : 'other',
+              description,
+              data: { toolName: first.toolName, args: first.args, aiApprovalId: first.aiApprovalId },
             },
           };
         }
@@ -2068,6 +2183,15 @@ No pending approval requests.`;
   isInitialized(): boolean {
     return this.initialized;
   }
+
+  /**
+   * 清理资源（关闭 MCP 连接等）
+   */
+  async cleanup(): Promise<void> {
+    if (this.mcpManager) {
+      await this.mcpManager.close();
+    }
+  }
 }
 
 // ==================== Logger ====================
@@ -2094,14 +2218,12 @@ class AgentLogger {
       ...(data || {}),
     };
 
-    const today = new Date().toISOString().split("T")[0];
-    const logFile = path.join(logsDir, `${today}.json`);
+    const today = new Date().toISOString().split('T')[0];
+    const logFile = path.join(logsDir, `${today}.jsonl`);
 
-    const existingLogs: unknown[] = fs.existsSync(logFile)
-      ? await fs.readJson(logFile)
-      : [];
-    existingLogs.push(logEntry);
-    await fs.writeJson(logFile, existingLogs, { spaces: 2 });
+    // Use JSONL format (one JSON object per line) to avoid concurrent write issues
+    const logLine = JSON.stringify(logEntry) + '\n';
+    await fs.appendFile(logFile, logLine, 'utf-8');
 
     const colors: Record<string, string> = {
       info: "\x1b[32m",
@@ -2111,6 +2233,18 @@ class AgentLogger {
     };
     const color = colors[level] || "\x1b[0m";
     console.log(`${color}[${level.toUpperCase()}]${"\x1b[0m"} ${message}`);
+  }
+
+  info(message: string): void {
+    console.log(`\x1b[32m[INFO]\x1b[0m ${message}`);
+  }
+
+  warn(message: string): void {
+    console.log(`\x1b[33m[WARN]\x1b[0m ${message}`);
+  }
+
+  error(message: string): void {
+    console.log(`\x1b[31m[ERROR]\x1b[0m ${message}`);
   }
 }
 
