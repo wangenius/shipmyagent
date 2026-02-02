@@ -152,8 +152,6 @@ export const MODEL_CONFIGS = {
   },
 };
 
-export const DEFAULT_SHELL_GUIDE = "";
-
 export const DEFAULT_SHIP_JSON: ShipConfig = {
   $schema: "./.ship/schema/ship.schema.json",
   name: "shipmyagent",
@@ -315,5 +313,5 @@ export function getChatsDirPath(cwd: string): string {
 }
 
 export function getMcpDirPath(cwd: string): string {
-  return path.join(cwd, '.ship', 'mcp');
+  return path.join(cwd, ".ship", "mcp");
 }

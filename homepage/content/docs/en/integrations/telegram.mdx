@@ -73,6 +73,15 @@ In logs you should see:
 
 Send `/start` (or any message) to your bot.
 
+### Send files (PDF / images / audio)
+
+You can send a file directly to the bot (document/photo/voice/audio).
+
+- If you add text while sending the file, Telegram treats it as a **caption** — ShipMyAgent will read that caption as your instruction.
+- ShipMyAgent saves the file under `.ship/.cache/telegram/` and passes it to the agent as an `@attach ...` line.
+
+Example: send a PDF with caption: `Summarize this PDF and list action items.`
+
 ### Group / supergroup
 
 - Add the bot to the group
@@ -82,6 +91,7 @@ Send `/start` (or any message) to your bot.
 Notes:
 - If your group uses **Topics**, replies are sent back to the same topic.
 - In groups, ShipMyAgent may restrict who can talk to the bot (e.g. initiator/admin), depending on the runtime’s policy.
+- For file messages in groups, the mention (if needed) must be in the **caption**, or send the file as a reply to the bot.
 
 ## Troubleshooting
 

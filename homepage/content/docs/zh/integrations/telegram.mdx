@@ -73,6 +73,15 @@ shipmyagent start
 
 给机器人发 `/start`（或任意消息）即可开始对话。
 
+### 发送文件（PDF / 图片 / 音频）
+
+你可以直接给机器人发送文件（document/photo/voice/audio）。
+
+- 如果你在发送文件时同时输入文字，Telegram 会把这段文字当作 **caption（附件说明）** —— ShipMyAgent 会把 caption 当作你的指令来处理。
+- ShipMyAgent 会把文件保存到 `.ship/.cache/telegram/`，并以 `@attach ...` 的形式传给 Agent。
+
+示例：发送一个 PDF，并在 caption 写：`帮我总结这个 PDF，并列出待办事项。`
+
 ### 群聊 / 超级群
 
 - 把机器人拉进群
@@ -82,6 +91,7 @@ shipmyagent start
 说明：
 - 如果群开启了 **Topics（话题）**，机器人会尽量在同一个话题里回复。
 - 群聊场景下，运行时可能会限制可对话的人（例如仅发起人/群管理员），以避免被滥用。
+- 群里发送文件时，如需 `@bot`，请把 `@bot` 写在 **caption** 里，或直接用“回复 bot 消息”的方式发送文件。
 
 ## 常见问题排查
 

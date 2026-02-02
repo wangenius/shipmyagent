@@ -1,0 +1,101 @@
+---
+title: MCP 配置
+description: 配置 .ship/mcp/mcp.json 接入外部工具（Model Context Protocol）
+---
+
+# MCP 配置
+
+ShipMyAgent 支持通过 MCP（Model Context Protocol）接入外部工具/数据源（数据库、第三方 API、内部服务等）。
+
+## 配置文件位置
+
+MCP 配置**不在** `ship.json`，而在：
+
+`/.ship/mcp/mcp.json`
+
+`shipmyagent init` 会自动生成：
+
+- `/.ship/mcp/mcp.json`
+- `/.ship/mcp/mcp.schema.json`（并在 `mcp.json` 里写入 `$schema`，用于 IDE 校验/补全）
+
+## 配置格式
+
+```json
+{
+  "$schema": "./mcp.schema.json",
+  "servers": {
+    "my-server": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["path/to/mcp-server.js"],
+      "env": {
+        "API_KEY": "${API_KEY}"
+      }
+    }
+  }
+}
+```
+
+支持的 `type`：
+
+- `stdio`: 本地命令（`command` + `args`）
+- `sse`: `url`
+- `http`: `url`（可选 `headers`）
+
+## stdio 示例（本地命令）
+
+```json
+{
+  "$schema": "./mcp.schema.json",
+  "servers": {
+    "local-tools": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["./scripts/mcp-server.js"],
+      "env": {
+        "TOKEN": "${TOKEN}"
+      }
+    }
+  }
+}
+```
+
+## sse 示例
+
+```json
+{
+  "$schema": "./mcp.schema.json",
+  "servers": {
+    "my-sse": {
+      "type": "sse",
+      "url": "http://127.0.0.1:3002/sse"
+    }
+  }
+}
+```
+
+## http 示例（带 headers）
+
+```json
+{
+  "$schema": "./mcp.schema.json",
+  "servers": {
+    "my-http": {
+      "type": "http",
+      "url": "http://127.0.0.1:3003",
+      "headers": {
+        "Authorization": "Bearer ${MCP_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+## 环境变量占位符
+
+在 `env` / `headers` / `url` 中可以使用 `${VAR_NAME}`，启动连接时会被替换为当前环境变量的值。
+
+## 审批说明
+
+MCP 工具会以 `server:toolName` 的形式暴露给 Agent；当 Agent 调用 MCP 工具时，会进入审批流程（类型为 `mcp_tool`）。
+

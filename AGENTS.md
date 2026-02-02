@@ -1,0 +1,1 @@
+1. 如果 package 更新新特性和用户使用相关， 则需要 更新 homepage 当中的 docs。

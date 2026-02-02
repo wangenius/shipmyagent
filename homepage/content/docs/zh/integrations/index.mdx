@@ -19,6 +19,8 @@ description: 将 ShipMyAgent 与外部服务和工具连接
 
 - [Web 界面](#web-界面) - 交互式浏览器控制台
 - [Telegram](/docs/integrations/telegram) - 聊天和通知
+- [飞书机器人](/docs/integrations/feishu) - 群聊/私聊对话与通知
+- [QQ 机器人](/docs/integrations/qq) - 群聊/私聊对话与通知
 - [GitHub](#github) - PR 自动化和 issue 管理
 - [Slack](#slack) - 团队通知
 - [Discord](#discord) - 社区参与
@@ -77,10 +79,10 @@ shipmyagent start -p 8080 --interactive-web --interactive-port 8081
 
 ```bash
 # 监听所有网络接口（团队访问）
-shipmyagent start -H 0.0.0.0 --interactive-web
+shipmyagent start -h 0.0.0.0 --interactive-web
 
 # 只监听本地（开发环境）
-shipmyagent start -H 127.0.0.1 --interactive-web
+shipmyagent start -h 127.0.0.1 --interactive-web
 ```
 
 ### 架构说明

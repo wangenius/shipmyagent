@@ -13,6 +13,7 @@ Complete reference for all ShipMyAgent CLI commands.
 |---------|-------------|
 | `shipmyagent init` | Initialize a new project |
 | `shipmyagent start` | Start the agent server |
+| `shipmyagent alias` | Install shell alias `sma` |
 | `shipmyagent stop` | Stop the agent server |
 | `shipmyagent restart` | Restart the agent server |
 | `shipmyagent chat` | Send a message to the agent |
@@ -84,7 +85,7 @@ shipmyagent .
 | Option | Alias | Description |
 |--------|-------|-------------|
 | `--port <port>` | `-p` | Server port (default: 3000) |
-| `--host <host>` | `-H` | Server host (default: 0.0.0.0) |
+| `--host <host>` | `-h` | Server host (default: 0.0.0.0) |
 | `--interactive-web [enabled]` |  | Enable interactive web UI (default: false) |
 | `--interactive-port <port>` |  | Interactive web UI port (default: 3001) |
 | `--daemon` | `-d` | Run as background process |
@@ -108,6 +109,22 @@ shipmyagent start --daemon
 
 # Enable debug logging
 shipmyagent start --log-level debug --verbose
+```
+
+---
+
+### `shipmyagent alias`
+
+Write `alias sma="shipmyagent"` into `~/.zshrc` and/or `~/.bashrc` (idempotent). Note: a CLI process cannot refresh your current shell session; run `source ~/.zshrc` / `source ~/.bashrc` (or open a new terminal).
+
+```bash
+shipmyagent alias
+
+# Only print alias line (for eval)
+shipmyagent alias --print
+
+# Dry run
+shipmyagent alias --dry-run
 ```
 
 ---
@@ -457,7 +474,7 @@ Show version information.
 
 ```bash
 shipmyagent --version
-shipmyagent -V
+shipmyagent -v
 ```
 
 **Output**:
@@ -475,7 +492,6 @@ Show help information.
 
 ```bash
 shipmyagent --help
-shipmyagent -h
 
 # Help for specific command
 shipmyagent start --help

@@ -1,0 +1,101 @@
+---
+title: MCP Configuration
+description: Configure .ship/mcp/mcp.json to connect external tools (Model Context Protocol)
+---
+
+# MCP Configuration
+
+ShipMyAgent supports MCP (Model Context Protocol) to connect external tools/data sources (databases, APIs, internal services).
+
+## File location
+
+MCP config is **not** in `ship.json`. It lives at:
+
+`/.ship/mcp/mcp.json`
+
+`shipmyagent init` generates:
+
+- `/.ship/mcp/mcp.json`
+- `/.ship/mcp/mcp.schema.json` (and sets `$schema` in `mcp.json` for IDE validation/autocomplete)
+
+## Format
+
+```json
+{
+  "$schema": "./mcp.schema.json",
+  "servers": {
+    "my-server": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["path/to/mcp-server.js"],
+      "env": {
+        "API_KEY": "${API_KEY}"
+      }
+    }
+  }
+}
+```
+
+Supported `type` values:
+
+- `stdio`: local command (`command` + `args`)
+- `sse`: `url`
+- `http`: `url` (optional `headers`)
+
+## stdio example
+
+```json
+{
+  "$schema": "./mcp.schema.json",
+  "servers": {
+    "local-tools": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["./scripts/mcp-server.js"],
+      "env": {
+        "TOKEN": "${TOKEN}"
+      }
+    }
+  }
+}
+```
+
+## sse example
+
+```json
+{
+  "$schema": "./mcp.schema.json",
+  "servers": {
+    "my-sse": {
+      "type": "sse",
+      "url": "http://127.0.0.1:3002/sse"
+    }
+  }
+}
+```
+
+## http example (with headers)
+
+```json
+{
+  "$schema": "./mcp.schema.json",
+  "servers": {
+    "my-http": {
+      "type": "http",
+      "url": "http://127.0.0.1:3003",
+      "headers": {
+        "Authorization": "Bearer ${MCP_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+## Env placeholders
+
+You can use `${VAR_NAME}` in `env` / `headers` / `url`. Values are resolved from process env during connection setup.
+
+## Approvals
+
+MCP tools are exposed as `server:toolName`. When the Agent calls an MCP tool, it goes through approval flow (type `mcp_tool`).
+

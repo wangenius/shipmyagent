@@ -22,6 +22,7 @@ import {
   ShipConfig,
 } from '../utils.js';
 import { SHIP_JSON_SCHEMA } from '../schemas/ship.schema.js';
+import { MCP_JSON_SCHEMA } from '../schemas/mcp.schema.js';
 
 interface InitOptions {
   force?: boolean;
@@ -224,11 +225,11 @@ Please scan the repository for TODO comments and generate a report.
   console.log(`✅ Created sample task file`);
 
   // Create default mcp.json file in .ship/mcp/ directory
-  const mcpJsonPath = path.join(getMcpDirPath(projectRoot), 'mcp.json');
-  const defaultMcpConfig = {
-    servers: {}
-  };
-  await saveJson(mcpJsonPath, defaultMcpConfig);
+  const mcpDirPath = getMcpDirPath(projectRoot);
+  const mcpSchemaPath = path.join(mcpDirPath, 'mcp.schema.json');
+  const mcpJsonPath = path.join(mcpDirPath, 'mcp.json');
+  await saveJson(mcpSchemaPath, MCP_JSON_SCHEMA);
+  await saveJson(mcpJsonPath, { $schema: './mcp.schema.json', servers: {} });
   console.log(`✅ Created .ship/mcp/mcp.json (MCP configuration)`);
 
   console.log('\n🎉 Initialization complete!\n');

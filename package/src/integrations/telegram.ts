@@ -31,10 +31,36 @@ interface TelegramUpdate {
   message?: {
     message_id?: number;
     message_thread_id?: number;
-    text: string;
+    text?: string;
+    caption?: string;
     chat: {
       id: number;
       type?: 'private' | 'group' | 'supergroup' | 'channel';
+    };
+    document?: {
+      file_id: string;
+      file_name?: string;
+      mime_type?: string;
+      file_size?: number;
+    };
+    photo?: Array<{
+      file_id: string;
+      width?: number;
+      height?: number;
+      file_size?: number;
+    }>;
+    voice?: {
+      file_id: string;
+      mime_type?: string;
+      file_size?: number;
+      duration?: number;
+    };
+    audio?: {
+      file_id: string;
+      file_name?: string;
+      mime_type?: string;
+      file_size?: number;
+      duration?: number;
     };
     reply_to_message?: {
       message_id?: number;
@@ -47,6 +73,12 @@ interface TelegramUpdate {
       last_name?: string;
     };
     entities?: Array<{
+      type: string;
+      offset: number;
+      length: number;
+      user?: { id: number; username?: string };
+    }>;
+    caption_entities?: Array<{
       type: string;
       offset: number;
       length: number;
@@ -848,10 +880,18 @@ export class TelegramBot {
   private async handleMessage(
     message: TelegramUpdate["message"],
   ): Promise<void> {
-    if (!message || !message.text || !message.chat) return;
+    if (!message || !message.chat) return;
 
     const chatId = message.chat.id.toString();
-    const text = message.text;
+    const rawText =
+      typeof message.text === "string"
+        ? message.text
+        : typeof message.caption === "string"
+          ? message.caption
+          : "";
+    const entities = message.entities || message.caption_entities;
+    const hasIncomingAttachment =
+      !!message.document || (Array.isArray(message.photo) && message.photo.length > 0) || !!message.voice || !!message.audio;
     const from = message.from;
     const messageId = typeof message.message_id === 'number' ? String(message.message_id) : undefined;
     const messageThreadId = typeof message.message_thread_id === 'number' ? message.message_thread_id : undefined;
@@ -876,16 +916,20 @@ export class TelegramBot {
         messageThreadId,
         threadKey,
         isReplyToBot,
-        textPreview: text.length > 240 ? `${text.slice(0, 240)}…` : text,
-        entityTypes: (message.entities || []).map((e) => e.type),
+        hasIncomingAttachment,
+        textPreview: rawText.length > 240 ? `${rawText.slice(0, 240)}…` : rawText,
+        entityTypes: (entities || []).map((e) => e.type),
         botUsername: this.botUsername,
         botId: this.botId,
       });
 
+      // If neither text/caption nor attachments exist, ignore.
+      if (!rawText && !hasIncomingAttachment) return;
+
       // Check if it's a command
-      if (text.startsWith("/")) {
+      if (rawText.startsWith("/")) {
         if (isGroup && actorId) {
-          const cmdName = (text.trim().split(/\s+/)[0] || '').split("@")[0]?.toLowerCase();
+          const cmdName = (rawText.trim().split(/\s+/)[0] || '').split("@")[0]?.toLowerCase();
           const allowAny = cmdName === '/help' || cmdName === '/start';
           if (!allowAny) {
             const ok = await this.isAllowedGroupActor(threadKey, chatId, actorId);
@@ -896,12 +940,12 @@ export class TelegramBot {
           }
         }
         if (isGroup) this.touchFollowupWindow(threadKey, actorId);
-        await this.handleCommand(chatId, text, from);
+        await this.handleCommand(chatId, rawText, from);
       } else {
         if (isGroup) {
           if (!actorId) return;
 
-          const isMentioned = this.isBotMentioned(text, message.entities);
+          const isMentioned = this.isBotMentioned(rawText, entities);
           const inWindow = this.isWithinFollowupWindow(threadKey, actorId);
           const explicit = isMentioned || isReplyToBot;
           const shouldConsider = explicit || inWindow;
@@ -918,16 +962,16 @@ export class TelegramBot {
           }
         }
 
-        const cleaned = isGroup ? this.stripBotMention(text) : text;
-        if (!cleaned) return;
+        const cleaned = isGroup ? this.stripBotMention(rawText) : rawText;
+        if (!cleaned && !hasIncomingAttachment) return;
 
         if (isGroup && actorId) {
-          const isMentioned = this.isBotMentioned(text, message.entities);
+          const isMentioned = this.isBotMentioned(rawText, entities);
           const explicit = isMentioned || isReplyToBot;
           const inWindow = this.isWithinFollowupWindow(threadKey, actorId);
 
           // Follow-up messages inside the window still need intent confirmation.
-          if (!explicit && inWindow) {
+          if (!explicit && inWindow && cleaned) {
             const okIntent = this.isLikelyAddressedToBot(cleaned);
             if (!okIntent) {
               this.logger.debug("Ignored follow-up (intent gate: not addressed to bot)", { chatId, messageId, threadKey });
@@ -940,10 +984,112 @@ export class TelegramBot {
           if (explicit || inWindow) this.touchFollowupWindow(threadKey, actorId);
         }
 
+        const attachmentLines: string[] = [];
+        try {
+          const incoming = await this.saveIncomingAttachments(message);
+          for (const att of incoming) {
+            const rel = path.relative(this.projectRoot, att.path);
+            const desc = att.desc ? ` | ${att.desc}` : "";
+            attachmentLines.push(`@attach ${att.type} ${rel}${desc}`);
+          }
+        } catch (e) {
+          this.logger.warn("Failed to save incoming Telegram attachment(s)", { error: String(e), chatId, messageId, threadKey });
+        }
+
+        const instructions = [
+          attachmentLines.length > 0 ? attachmentLines.join("\n") : undefined,
+          cleaned ? cleaned.trim() : undefined,
+        ]
+          .filter(Boolean)
+          .join("\n\n")
+          .trim() || (attachmentLines.length > 0 ? `${attachmentLines.join("\n")}\n\n请查看以上附件。` : "");
+
+        if (!instructions) return;
+
         // Regular message, execute instruction
-        await this.executeAndReply(chatId, cleaned, from, messageId, message.chat.type, messageThreadId, threadKey);
+        await this.executeAndReply(chatId, instructions, from, messageId, message.chat.type, messageThreadId, threadKey);
       }
     });
+  }
+
+  private pickBestPhotoFileId(
+    photo?: Array<{ file_id?: string; file_size?: number }>,
+  ): string | undefined {
+    if (!Array.isArray(photo) || photo.length === 0) return undefined;
+    // Prefer largest file_size, fall back to last item (often the highest resolution).
+    const sorted = [...photo].sort((a, b) => Number(a?.file_size || 0) - Number(b?.file_size || 0));
+    const best = sorted[sorted.length - 1];
+    return typeof best?.file_id === 'string' ? best.file_id : undefined;
+  }
+
+  private async saveIncomingAttachments(
+    message: TelegramUpdate["message"],
+  ): Promise<Array<{ type: TelegramAttachmentType; path: string; desc?: string }>> {
+    if (!message) return [];
+    const items: Array<{ type: TelegramAttachmentType; fileId: string; fileName?: string; desc?: string }> = [];
+
+    if (message.document?.file_id) {
+      items.push({
+        type: "document",
+        fileId: message.document.file_id,
+        fileName: message.document.file_name,
+        desc: message.document.file_name,
+      });
+    }
+
+    const bestPhotoId = this.pickBestPhotoFileId(message.photo);
+    if (bestPhotoId) {
+      items.push({ type: "photo", fileId: bestPhotoId, fileName: "photo.jpg", desc: "photo" });
+    }
+
+    if (message.voice?.file_id) {
+      items.push({ type: "voice", fileId: message.voice.file_id, fileName: "voice.ogg", desc: "voice" });
+    }
+
+    if (message.audio?.file_id) {
+      items.push({
+        type: "audio",
+        fileId: message.audio.file_id,
+        fileName: message.audio.file_name || "audio",
+        desc: message.audio.file_name || "audio",
+      });
+    }
+
+    if (items.length === 0) return [];
+
+    const out: Array<{ type: TelegramAttachmentType; path: string; desc?: string }> = [];
+    for (const item of items) {
+      const saved = await this.downloadTelegramFile(item.fileId, item.fileName);
+      out.push({ type: item.type, path: saved, desc: item.desc });
+    }
+
+    return out;
+  }
+
+  private async downloadTelegramFile(fileId: string, suggestedName?: string): Promise<string> {
+    const file = await this.sendRequest<{ file_path?: string }>("getFile", { file_id: fileId });
+    const filePath = typeof (file as any)?.file_path === "string" ? String((file as any).file_path) : "";
+    if (!filePath) {
+      throw new Error("Telegram getFile returned empty file_path");
+    }
+
+    const url = `https://api.telegram.org/file/bot${this.botToken}/${filePath}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Telegram file download failed: HTTP ${res.status}`);
+    }
+
+    const buf = Buffer.from(await res.arrayBuffer());
+    const baseFromTelegram = path.basename(filePath);
+    const base = (suggestedName && path.basename(suggestedName)) || baseFromTelegram || `tg-${fileId}`;
+    const safeBase = base.replace(/[^\w.\-()@\u4e00-\u9fff]+/g, "_").slice(0, 160) || `tg-${fileId}`;
+
+    const dir = path.join(getCacheDirPath(this.projectRoot), "telegram");
+    await fs.ensureDir(dir);
+    const uniq = `${Date.now()}-${fileId.slice(0, 8)}`;
+    const outPath = path.join(dir, `${uniq}-${safeBase}`);
+    await fs.writeFile(outPath, buf);
+    return outPath;
   }
 
   private async handleCommand(

@@ -38,17 +38,14 @@ import {
   loadShipConfig,
   ShipConfig,
   getTimestamp,
-  generateId,
-  DEFAULT_SHELL_GUIDE,
+  generateId
 } from "../utils.js";
 import type { RunRecord } from "./run-types.js";
 import { listRuns, loadRun } from "./run-store.js";
 import { listQueueRuns } from "./run-queue.js";
 import {
   createPermissionEngine,
-  PermissionEngine,
-  PermissionCheckResult,
-  extractExecShellCommandNames,
+  PermissionEngine, extractExecShellCommandNames
 } from "./permission.js";
 import { DEFAULT_SHIP_PROMPTS } from "./ship-prompts.js";
 import {
@@ -182,7 +179,9 @@ export class AgentRuntime {
   }
 
   private findSkill(nameOrId: string): ClaudeSkill | null {
-    const q = String(nameOrId || "").trim().toLowerCase();
+    const q = String(nameOrId || "")
+      .trim()
+      .toLowerCase();
     if (!q) return null;
     const skills = this.skills;
     return (
@@ -576,25 +575,34 @@ export class AgentRuntime {
   private async initializeMcp(): Promise<void> {
     try {
       // 读取 MCP 配置文件
-      const mcpConfigPath = path.join(getMcpDirPath(this.context.projectRoot), 'mcp.json');
+      const mcpConfigPath = path.join(
+        getMcpDirPath(this.context.projectRoot),
+        "mcp.json",
+      );
 
-      if (!await fs.pathExists(mcpConfigPath)) {
-        await this.logger.log('info', 'No MCP configuration found, skipping MCP initialization');
+      if (!(await fs.pathExists(mcpConfigPath))) {
+        await this.logger.log(
+          "info",
+          "No MCP configuration found, skipping MCP initialization",
+        );
         return;
       }
 
-      const mcpConfigContent = await fs.readFile(mcpConfigPath, 'utf-8');
+      const mcpConfigContent = await fs.readFile(mcpConfigPath, "utf-8");
       const mcpConfig: McpConfig = JSON.parse(mcpConfigContent);
 
       if (!mcpConfig.servers || Object.keys(mcpConfig.servers).length === 0) {
-        await this.logger.log('info', 'No MCP servers configured');
+        await this.logger.log("info", "No MCP servers configured");
         return;
       }
 
       // 初始化 MCP 管理器
       await this.mcpManager?.initialize(mcpConfig);
     } catch (error) {
-      await this.logger.log('warn', `Failed to initialize MCP: ${String(error)}`);
+      await this.logger.log(
+        "warn",
+        `Failed to initialize MCP: ${String(error)}`,
+      );
     }
   }
 
@@ -688,7 +696,13 @@ export class AgentRuntime {
             .optional()
             .describe("Refresh the skills index from disk (default: true)"),
         }),
-        execute: async ({ name, refresh }: { name: string; refresh?: boolean }) => {
+        execute: async ({
+          name,
+          refresh,
+        }: {
+          name: string;
+          refresh?: boolean;
+        }) => {
           if (refresh !== false) this.refreshSkills();
           const skill = this.findSkill(name);
           if (!skill) {
@@ -700,8 +714,14 @@ export class AgentRuntime {
 
           try {
             const content = fs.readFileSync(skill.skillMdPath, "utf-8");
-            const relDir = path.relative(this.context.projectRoot, skill.directoryPath);
-            const relMd = path.relative(this.context.projectRoot, skill.skillMdPath);
+            const relDir = path.relative(
+              this.context.projectRoot,
+              skill.directoryPath,
+            );
+            const relMd = path.relative(
+              this.context.projectRoot,
+              skill.skillMdPath,
+            );
             return {
               success: true,
               skill: {
@@ -819,20 +839,36 @@ Chain commands with && for sequential execution or ; for independent execution.`
             counts[r.status] = (counts[r.status] || 0) + 1;
           }
 
-          const pending = await listQueueRuns(this.context.projectRoot, "pending", {
-            limit: safeLimit,
-          });
-          const running = await listQueueRuns(this.context.projectRoot, "running", {
-            limit: safeLimit,
-          });
-          const pausedPath = path.join(getQueueDirPath(this.context.projectRoot), "paused.json");
+          const pending = await listQueueRuns(
+            this.context.projectRoot,
+            "pending",
+            {
+              limit: safeLimit,
+            },
+          );
+          const running = await listQueueRuns(
+            this.context.projectRoot,
+            "running",
+            {
+              limit: safeLimit,
+            },
+          );
+          const pausedPath = path.join(
+            getQueueDirPath(this.context.projectRoot),
+            "paused.json",
+          );
           const paused = await fs.pathExists(pausedPath);
-          const pausedInfo = paused ? await fs.readJson(pausedPath).catch(() => null) : null;
+          const pausedInfo = paused
+            ? await fs.readJson(pausedPath).catch(() => null)
+            : null;
 
           return {
             success: true,
             summary: {
-              runsDir: path.relative(this.context.projectRoot, getRunsDirPath(this.context.projectRoot)),
+              runsDir: path.relative(
+                this.context.projectRoot,
+                getRunsDirPath(this.context.projectRoot),
+              ),
               recentCountsByStatus: counts,
               queue: {
                 paused,
@@ -852,8 +888,16 @@ Chain commands with && for sequential execution or ; for independent execution.`
               startedAt: r.startedAt,
               finishedAt: r.finishedAt,
               trigger: r.trigger,
-              pendingApproval: r.pendingApproval ? { id: (r.pendingApproval as any)?.id, type: (r.pendingApproval as any)?.type } : undefined,
-              outputPreview: (r.output?.text || r.error?.message || "").slice(0, 400),
+              pendingApproval: r.pendingApproval
+                ? {
+                    id: (r.pendingApproval as any)?.id,
+                    type: (r.pendingApproval as any)?.type,
+                  }
+                : undefined,
+              outputPreview: (r.output?.text || r.error?.message || "").slice(
+                0,
+                400,
+              ),
             })),
           };
         },
@@ -863,12 +907,17 @@ Chain commands with && for sequential execution or ; for independent execution.`
         description:
           "Load a single run record by runId from .ship/runs. Use this when the user asks about a specific run.",
         inputSchema: z.object({
-          runId: z.string().describe("Run id, e.g. run_20260130101010_abcd1234"),
+          runId: z
+            .string()
+            .describe("Run id, e.g. run_20260130101010_abcd1234"),
         }),
         execute: async ({ runId }: { runId: string }) => {
           const id = String(runId || "").trim();
           if (!id) return { success: false, error: "Missing runId" };
-          const run = (await loadRun(this.context.projectRoot, id)) as RunRecord | null;
+          const run = (await loadRun(
+            this.context.projectRoot,
+            id,
+          )) as RunRecord | null;
           if (!run) return { success: false, error: `Run not found: ${id}` };
           return { success: true, run };
         },
@@ -887,10 +936,15 @@ Chain commands with && for sequential execution or ; for independent execution.`
           const payload = {
             paused: true,
             pausedAt: getTimestamp(),
-            reason: typeof reason === "string" ? reason.slice(0, 500) : undefined,
+            reason:
+              typeof reason === "string" ? reason.slice(0, 500) : undefined,
           };
           await fs.writeJson(pausedPath, payload, { spaces: 2 });
-          return { success: true, pausedPath: path.relative(this.context.projectRoot, pausedPath), ...payload };
+          return {
+            success: true,
+            pausedPath: path.relative(this.context.projectRoot, pausedPath),
+            ...payload,
+          };
         },
       }),
 
@@ -912,17 +966,38 @@ Chain commands with && for sequential execution or ; for independent execution.`
           "Cancel a background run by runId. If the run is pending it will not execute. If it's already running, cancellation is best-effort (it may finish anyway).",
         inputSchema: z.object({
           runId: z.string().describe("Run id to cancel"),
-          reason: z.string().optional().describe("Optional cancellation reason"),
+          reason: z
+            .string()
+            .optional()
+            .describe("Optional cancellation reason"),
         }),
-        execute: async ({ runId, reason }: { runId: string; reason?: string }) => {
+        execute: async ({
+          runId,
+          reason,
+        }: {
+          runId: string;
+          reason?: string;
+        }) => {
           const id = String(runId || "").trim();
           if (!id) return { success: false, error: "Missing runId" };
 
-          const run = (await loadRun(this.context.projectRoot, id)) as RunRecord | null;
+          const run = (await loadRun(
+            this.context.projectRoot,
+            id,
+          )) as RunRecord | null;
           if (!run) return { success: false, error: `Run not found: ${id}` };
 
-          if (run.status === "succeeded" || run.status === "failed" || run.status === "canceled") {
-            return { success: true, runId: id, status: run.status, note: "No-op (already finished)" };
+          if (
+            run.status === "succeeded" ||
+            run.status === "failed" ||
+            run.status === "canceled"
+          ) {
+            return {
+              success: true,
+              runId: id,
+              status: run.status,
+              note: "No-op (already finished)",
+            };
           }
 
           run.status = "canceled";
@@ -931,7 +1006,9 @@ Chain commands with && for sequential execution or ; for independent execution.`
             message: `Canceled${reason ? `: ${String(reason).slice(0, 500)}` : ""}`,
           };
           run.pendingApproval = undefined;
-          await (await import("./run-store.js")).saveRun(this.context.projectRoot, run);
+          await (
+            await import("./run-store.js")
+          ).saveRun(this.context.projectRoot, run);
 
           const queueDir = getQueueDirPath(this.context.projectRoot);
           const pendingToken = path.join(queueDir, "pending", `${id}.json`);
@@ -968,34 +1045,41 @@ Chain commands with && for sequential execution or ; for independent execution.`
         const toolName = `${server}:${mcpTool.name}`;
 
         tools[toolName] = tool({
-          description: mcpTool.description || `MCP tool: ${mcpTool.name} from ${server}`,
+          description:
+            mcpTool.description || `MCP tool: ${mcpTool.name} from ${server}`,
           inputSchema: z.object(
             Object.fromEntries(
-              Object.entries(mcpTool.inputSchema.properties || {}).map(([key, value]) => [
-                key,
-                z.any().describe((value as any).description || key),
-              ])
-            )
+              Object.entries(mcpTool.inputSchema.properties || {}).map(
+                ([key, value]) => [
+                  key,
+                  z.any().describe((value as any).description || key),
+                ],
+              ),
+            ),
           ),
           // 所有 MCP 工具默认需要审批
           needsApproval: async () => true,
           execute: async (args: Record<string, unknown>) => {
             try {
-              const result = await this.mcpManager!.callTool(server, mcpTool.name, args);
+              const result = await this.mcpManager!.callTool(
+                server,
+                mcpTool.name,
+                args,
+              );
 
               // 将 MCP 结果转换为字符串
               const output = result.content
-                .map(item => {
-                  if (item.type === 'text') {
-                    return item.text || '';
-                  } else if (item.type === 'image') {
-                    return `[Image: ${item.mimeType || 'unknown'}]`;
-                  } else if (item.type === 'resource') {
-                    return `[Resource: ${item.mimeType || 'unknown'}]`;
+                .map((item) => {
+                  if (item.type === "text") {
+                    return item.text || "";
+                  } else if (item.type === "image") {
+                    return `[Image: ${item.mimeType || "unknown"}]`;
+                  } else if (item.type === "resource") {
+                    return `[Resource: ${item.mimeType || "unknown"}]`;
                   }
-                  return '';
+                  return "";
                 })
-                .join('\n');
+                .join("\n");
 
               return {
                 success: !result.isError,
@@ -1013,16 +1097,12 @@ Chain commands with && for sequential execution or ; for independent execution.`
       }
 
       if (mcpTools.length > 0) {
-        this.logger.log('info', `Registered ${mcpTools.length} MCP tool(s)`);
+        this.logger.log("info", `Registered ${mcpTools.length} MCP tool(s)`);
       }
     }
 
     return tools;
   }
-
-
-
-
 
   /**
    * Create legacy-style tools with permission checks and approval workflow
@@ -1061,7 +1141,13 @@ Chain commands with && for sequential execution or ; for independent execution.`
             .optional()
             .describe("Refresh the skills index from disk (default: true)"),
         }),
-        execute: async ({ name, refresh }: { name: string; refresh?: boolean }) => {
+        execute: async ({
+          name,
+          refresh,
+        }: {
+          name: string;
+          refresh?: boolean;
+        }) => {
           if (refresh !== false) this.refreshSkills();
           const skill = this.findSkill(name);
           if (!skill) {
@@ -1073,8 +1159,14 @@ Chain commands with && for sequential execution or ; for independent execution.`
 
           try {
             const content = fs.readFileSync(skill.skillMdPath, "utf-8");
-            const relDir = path.relative(this.context.projectRoot, skill.directoryPath);
-            const relMd = path.relative(this.context.projectRoot, skill.skillMdPath);
+            const relDir = path.relative(
+              this.context.projectRoot,
+              skill.directoryPath,
+            );
+            const relMd = path.relative(
+              this.context.projectRoot,
+              skill.skillMdPath,
+            );
             return {
               success: true,
               skill: {
@@ -1214,17 +1306,19 @@ Chain commands with && for sequential execution or ; for independent execution.`
       (context?.source ? `- Source: ${context.source}\n` : "") +
       (context?.userId ? `- User/Chat ID: ${context.userId}\n` : "") +
       (context?.actorId ? `- Actor ID: ${context.actorId}\n` : "") +
-      (context?.actorUsername ? `- Actor username: ${context.actorUsername}\n` : "") +
+      (context?.actorUsername
+        ? `- Actor username: ${context.actorUsername}\n`
+        : "") +
       (context?.chatType ? `- Chat type: ${context.chatType}\n` : "") +
       `\nUser-facing output rules:\n` +
       `- Reply in natural language.\n` +
       `- Do NOT paste raw tool outputs or JSON logs; summarize them.\n` +
       (context?.source === "telegram" || context?.source === "feishu"
-        ? `- When you need to use tools in multiple steps, include short progress updates as plain text before/around tool usage (no tool names/commands).\n`
-        + (((context?.chatType || "").toLowerCase().includes("group"))
-          ? `- This is a group chat. Prefer addressing the current actor (use @<Actor username> if available) so readers know who you're responding to.\n`
-          + `- In a group chat, start your reply with 1 short line that says who you are replying to (the current actor) and that you are the project assistant.\n`
-          : "")
+        ? `- When you need to use tools in multiple steps, include short progress updates as plain text before/around tool usage (no tool names/commands).\n` +
+          ((context?.chatType || "").toLowerCase().includes("group")
+            ? `- This is a group chat. Prefer addressing the current actor (use @<Actor username> if available) so readers know who you're responding to.\n` +
+              `- In a group chat, start your reply with 1 short line that says who you are replying to (the current actor) and that you are the project assistant.\n`
+            : "")
         : "");
     fullPrompt = `${runtimePrefix}\n${fullPrompt}`;
 
@@ -1310,7 +1404,8 @@ Chain commands with && for sequential execution or ; for independent execution.`
           .trim();
 
       const candidates: string[] = [];
-      const stepText = typeof step?.text === "string" ? normalize(step.text) : "";
+      const stepText =
+        typeof step?.text === "string" ? normalize(step.text) : "";
       if (stepText) candidates.push(stepText);
 
       const contentTextRaw = extractUserFacingTextFromContent(step?.content);
@@ -1366,29 +1461,42 @@ Chain commands with && for sequential execution or ; for independent execution.`
             if (!onStep) return;
             try {
               for (const tr of step.toolResults || []) {
-                if (tr.type !== 'tool-result') continue;
+                if (tr.type !== "tool-result") continue;
                 const toolName = (tr as any).toolName;
 
                 // 处理 exec_shell 工具
-                if (toolName === 'exec_shell') {
-                  const command = String(((tr as any).input as any)?.command || '').trim();
+                if (toolName === "exec_shell") {
+                  const command = String(
+                    ((tr as any).input as any)?.command || "",
+                  ).trim();
                   const exitCode = ((tr as any).output as any)?.exitCode;
-                  const stdout = String(((tr as any).output as any)?.stdout || '').trim();
-                  const stderr = String(((tr as any).output as any)?.stderr || '').trim();
+                  const stdout = String(
+                    ((tr as any).output as any)?.stdout || "",
+                  ).trim();
+                  const stderr = String(
+                    ((tr as any).output as any)?.stderr || "",
+                  ).trim();
                   const snippet = (stdout || stderr).slice(0, 500);
                   await emitStep(
-                    'step_finish',
-                    `已执行：${command}${typeof exitCode === 'number' ? `（exitCode=${exitCode}）` : ''}${snippet ? `\n摘要：${snippet}${(stdout || stderr).length > 500 ? '…' : ''}` : ''}`,
-                    { toolName: 'exec_shell', command, exitCode: typeof exitCode === 'number' ? exitCode : undefined, requestId, sessionId },
+                    "step_finish",
+                    `已执行：${command}${typeof exitCode === "number" ? `（exitCode=${exitCode}）` : ""}${snippet ? `\n摘要：${snippet}${(stdout || stderr).length > 500 ? "…" : ""}` : ""}`,
+                    {
+                      toolName: "exec_shell",
+                      command,
+                      exitCode:
+                        typeof exitCode === "number" ? exitCode : undefined,
+                      requestId,
+                      sessionId,
+                    },
                   );
                 }
                 // 处理 MCP 工具
-                else if (toolName && String(toolName).includes(':')) {
-                  const output = ((tr as any).output as any)?.output || '';
+                else if (toolName && String(toolName).includes(":")) {
+                  const output = ((tr as any).output as any)?.output || "";
                   const snippet = String(output).slice(0, 500);
                   await emitStep(
-                    'step_finish',
-                    `已执行 MCP 工具：${toolName}${snippet ? `\n结果：${snippet}${String(output).length > 500 ? '…' : ''}` : ''}`,
+                    "step_finish",
+                    `已执行 MCP 工具：${toolName}${snippet ? `\n结果：${snippet}${String(output).length > 500 ? "…" : ""}` : ""}`,
                     { toolName, requestId, sessionId },
                   );
                 }
@@ -1504,9 +1612,10 @@ Chain commands with && for sequential execution or ; for independent execution.`
           let requiresApproval = false;
 
           // 处理 exec_shell 工具
-          if (toolName === 'exec_shell') {
-            const command = String((args as any).command || '').trim();
-            const permission = await this.permissionEngine.checkExecShell(command);
+          if (toolName === "exec_shell") {
+            const command = String((args as any).command || "").trim();
+            const permission =
+              await this.permissionEngine.checkExecShell(command);
 
             if (permission.requiresApproval && (permission as any).approvalId) {
               approvalId = String((permission as any).approvalId);
@@ -1514,14 +1623,15 @@ Chain commands with && for sequential execution or ; for independent execution.`
             }
           }
           // 处理 MCP 工具（格式：server:toolName）
-          else if (toolName && String(toolName).includes(':')) {
-            const approvalRequest = await this.permissionEngine.createGenericApprovalRequest({
-              type: 'mcp_tool',
-              action: `Call MCP tool: ${toolName}`,
-              details: { toolName, args },
-              tool: toolName,
-              input: args,
-            });
+          else if (toolName && String(toolName).includes(":")) {
+            const approvalRequest =
+              await this.permissionEngine.createGenericApprovalRequest({
+                type: "mcp_tool",
+                action: `Call MCP tool: ${toolName}`,
+                details: { toolName, args },
+                tool: toolName,
+                input: args,
+              });
             approvalId = approvalRequest.id;
             requiresApproval = true;
           }
@@ -1557,9 +1667,10 @@ Chain commands with && for sequential execution or ; for independent execution.`
 
         if (created.length > 0) {
           const first = created[0];
-          const description = first.toolName === 'exec_shell'
-            ? `Execute command: ${String((first.args as any)?.command || '')}`
-            : `Call tool: ${first.toolName}`;
+          const description =
+            first.toolName === "exec_shell"
+              ? `Execute command: ${String((first.args as any)?.command || "")}`
+              : `Call tool: ${first.toolName}`;
 
           const pendingText =
             `⏳ 需要你确认一下我接下来要做的操作（已发起审批请求）。\n` +
@@ -1575,9 +1686,13 @@ Chain commands with && for sequential execution or ; for independent execution.`
             toolCalls,
             pendingApproval: {
               id: first.id,
-              type: first.toolName === 'exec_shell' ? 'exec_shell' : 'other',
+              type: first.toolName === "exec_shell" ? "exec_shell" : "other",
               description,
-              data: { toolName: first.toolName, args: first.args, aiApprovalId: first.aiApprovalId },
+              data: {
+                toolName: first.toolName,
+                args: first.args,
+                aiApprovalId: first.aiApprovalId,
+              },
             },
           };
         }
@@ -1991,10 +2106,14 @@ Chain commands with && for sequential execution or ; for independent execution.`
     // Sync-first: only run in background when the user explicitly asks for it.
     // This avoids "surprise async" behavior in chats.
     const explicitAsync =
-      /(后台|异步|不用等|稍后|晚点|慢慢来|你先跑着|跑起来|排队|队列)/.test(instructions) ||
-      /\b(background|async|later|queue|enqueue)\b/i.test(instructions);
+      /(后台|异步|不用等|稍后|晚点|慢慢来|你先跑着|跑起来|排队|队列)/.test(
+        instructions,
+      ) || /\b(background|async|later|queue|enqueue)\b/i.test(instructions);
     if (!explicitAsync) {
-      return { mode: "sync", reason: "Default sync (no explicit async request)" };
+      return {
+        mode: "sync",
+        reason: "Default sync (no explicit async request)",
+      };
     }
 
     // If explicitly requested, still ask the model for a short reason (best-effort),
@@ -2007,7 +2126,7 @@ Chain commands with && for sequential execution or ; for independent execution.`
             model: this.model!,
             system:
               "You are an execution-mode router. The user explicitly asked for background execution. " +
-              "Return STRICT JSON only: {\"mode\":\"async\",\"reason\":\"...\"}.",
+              'Return STRICT JSON only: {"mode":"async","reason":"..."}.',
             prompt:
               `Return JSON: {"mode":"async","reason":"..."}.\n\n` +
               `Context:\n` +
@@ -2029,7 +2148,6 @@ Chain commands with && for sequential execution or ; for independent execution.`
       return { mode: "async", reason: "User requested async" };
     }
   }
-
 
   /**
    * Simulation mode for when AI is not available
@@ -2218,12 +2336,12 @@ class AgentLogger {
       ...(data || {}),
     };
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split("T")[0];
     const logFile = path.join(logsDir, `${today}.jsonl`);
 
     // Use JSONL format (one JSON object per line) to avoid concurrent write issues
-    const logLine = JSON.stringify(logEntry) + '\n';
-    await fs.appendFile(logFile, logLine, 'utf-8');
+    const logLine = JSON.stringify(logEntry) + "\n";
+    await fs.appendFile(logFile, logLine, "utf-8");
 
     const colors: Record<string, string> = {
       info: "\x1b[32m",
@@ -2318,11 +2436,7 @@ You are a helpful project assistant.`;
   }
 
   // Combine user identity + ship prompts + system shell guide
-  const baseAgentMd = [
-    userAgentMd,
-    `---\n\n${DEFAULT_SHIP_PROMPTS}`,
-    `---\n\n${DEFAULT_SHELL_GUIDE}`,
-  ]
+  const baseAgentMd = [userAgentMd, `---\n\n${DEFAULT_SHIP_PROMPTS}`]
     .filter(Boolean)
     .join("\n\n");
 

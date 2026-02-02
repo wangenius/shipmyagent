@@ -3,6 +3,7 @@
 import { Command } from "commander";
 import { initCommand } from "./commands/init.js";
 import { startCommand } from "./commands/start.js";
+import { aliasCommand } from "./commands/alias.js";
 import { readFileSync } from "fs";
 import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
@@ -39,20 +40,24 @@ program
   .description(
     "把一个代码仓库，启动成一个可对话、可调度、可审计的 Agent Runtime",
   )
-  .version(packageJson.version);
+  .version(packageJson.version, "-v, --version");
+
+// Avoid -h (reserved for host), use --help only.
+program.helpOption("--help", "display help for command");
 
 // Init command
-program
+const init = program
   .command("init [path]")
   .description("初始化 ShipMyAgent 项目")
+  .helpOption("--help", "display help for command")
   .action(initCommand);
 
 // Start command
-program
+const start = program
   .command("start [path]")
   .description("启动 Agent Runtime")
   .option("-p, --port <port>", "服务端口（可在 ship.json 的 start.port 配置）", parsePort)
-  .option("-H, --host <host>", "服务主机（可在 ship.json 的 start.host 配置）")
+  .option("-h, --host <host>", "服务主机（可在 ship.json 的 start.host 配置）")
   .option(
     "--interactive-web [enabled]",
     "启动交互式 Web 界面（可在 ship.json 的 start.interactiveWeb 配置）",
@@ -63,13 +68,24 @@ program
     "交互式 Web 界面端口（可在 ship.json 的 start.interactivePort 配置）",
     parsePort,
   )
+  .helpOption("--help", "display help for command")
   .action(startCommand);
 
-// Default: `shipmyagent` / `shipmyagent .` => `shipmyagent start [path]`
+const alias = program
+  .command("alias")
+  .description("在 .zshrc / .bashrc 中写入 `alias sma=\"shipmyagent\"`")
+  .option("--shell <shell>", "指定写入的 shell: zsh | bash | both", "both")
+  .option("--dry-run", "只打印将要修改的文件，不实际写入", false)
+  .option("--print", "仅打印 alias 内容（用于 eval）", false)
+  .helpOption("--help", "display help for command")
+  .action(aliasCommand);
+
+// Default: `shipmyagent` / `shipmyagent .` / `shipmyagent [start-options]` => `shipmyagent start [path]`
 const firstArg = process.argv[2];
 if (
   !firstArg ||
-  (!firstArg.startsWith("-") && firstArg !== "init" && firstArg !== "start" && firstArg !== "help")
+  (![init.name(), start.name(), alias.name(), "help"].includes(firstArg) &&
+    !["--help", "-v", "--version"].includes(firstArg))
 ) {
   process.argv.splice(2, 0, "start");
 }

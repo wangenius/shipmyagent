@@ -56,10 +56,10 @@ shipmyagent start --interactive-web --interactive-port 9001
 
 ```bash
 # 监听所有网络接口
-shipmyagent start -H 0.0.0.0 --interactive-web
+shipmyagent start -h 0.0.0.0 --interactive-web
 
 # 只监听本地
-shipmyagent start -H 127.0.0.1 --interactive-web
+shipmyagent start -h 127.0.0.1 --interactive-web
 ```
 
 ## 架构说明
@@ -102,7 +102,7 @@ shipmyagent start [options] [path]
 
 Options:
   -p, --port <port>          主 API 服务器端口（可在 ship.json 的 start.port 配置）
-  -H, --host <host>          监听主机地址（可在 ship.json 的 start.host 配置）
+  -h, --host <host>          监听主机地址（可在 ship.json 的 start.host 配置）
   --interactive-web [enabled] 启动交互式 Web 界面（可在 ship.json 的 start.interactiveWeb 配置）
   --interactive-port <port>  交互式 Web 界面端口（可在 ship.json 的 start.interactivePort 配置）
 ```
@@ -257,7 +257,7 @@ shipmyagent start --interactive-web
 
 ```bash
 # 启动并监听所有接口
-shipmyagent start -H 0.0.0.0 --interactive-web
+shipmyagent start -h 0.0.0.0 --interactive-web
 
 # 团队成员通过 http://your-server-ip:3001 访问
 ```

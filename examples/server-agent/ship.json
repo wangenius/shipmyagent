@@ -41,8 +41,10 @@
       "domain": "https://open.feishu.cn"
     },
     "qq": {
-      "enabled": false,
-      "sandbox": false
+      "enabled": true,
+      "sandbox": true,
+      "appId": "${QQ_APP_ID}",
+      "appSecret": "${QQ_APP_SECRET}"
     }
   }
 }

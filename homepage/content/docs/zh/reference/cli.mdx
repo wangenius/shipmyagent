@@ -13,6 +13,7 @@ description: ShipMyAgent 命令行界面完整参考
 |------|------|
 | `shipmyagent init` | 初始化新项目 |
 | `shipmyagent start` | 启动 agent 服务器 |
+| `shipmyagent alias` | 安装 shell alias `sma` |
 | `shipmyagent stop` | 停止 agent 服务器 |
 | `shipmyagent restart` | 重启 agent 服务器 |
 | `shipmyagent chat` | 向 agent 发送消息 |
@@ -84,7 +85,7 @@ shipmyagent .
 | 选项 | 简写 | 描述 |
 |------|------|------|
 | `--port <port>` | `-p` | 服务器端口（默认：3000）|
-| `--host <host>` | `-H` | 服务器主机（默认：0.0.0.0）|
+| `--host <host>` | `-h` | 服务器主机（默认：0.0.0.0）|
 | `--interactive-web [enabled]` |  | 启动交互式 Web 界面（默认：false）|
 | `--interactive-port <port>` |  | 交互式 Web 界面端口（默认：3001）|
 | `--daemon` | `-d` | 作为后台进程运行 |
@@ -108,6 +109,22 @@ shipmyagent start --daemon
 
 # 启用调试日志
 shipmyagent start --log-level debug --verbose
+```
+
+---
+
+### `shipmyagent alias`
+
+在 `~/.zshrc` 和/或 `~/.bashrc` 中写入 `alias sma="shipmyagent"`（幂等）。注意：CLI 进程无法直接刷新你当前的 shell 会话；请手动执行 `source ~/.zshrc` / `source ~/.bashrc`（或重新打开终端）。
+
+```bash
+shipmyagent alias
+
+# 仅打印 alias 内容（用于 eval）
+shipmyagent alias --print
+
+# 只预览不写入
+shipmyagent alias --dry-run
 ```
 
 ---
@@ -457,7 +474,7 @@ shipmyagent test permissions
 
 ```bash
 shipmyagent --version
-shipmyagent -V
+shipmyagent -v
 ```
 
 **输出**：
@@ -475,7 +492,6 @@ Node.js v18.17.0
 
 ```bash
 shipmyagent --help
-shipmyagent -h
 
 # 特定命令的帮助
 shipmyagent start --help
