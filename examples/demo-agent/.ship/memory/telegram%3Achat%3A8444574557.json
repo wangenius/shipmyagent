@@ -1,0 +1,40 @@
+{
+  "chatKey": "telegram:chat:8444574557",
+  "entries": [
+    {
+      "type": "entity",
+      "content": "用户 Telegram 用户名：wangenius",
+      "importance": 6,
+      "tags": [
+        "user",
+        "telegram",
+        "username"
+      ],
+      "metadata": {
+        "source": "assistant_reply",
+        "session": "telegram:chat:8444574557"
+      },
+      "id": "mem_1770029050974_knxr87w05",
+      "createdAt": 1770029050975,
+      "updatedAt": 1770029050975
+    },
+    {
+      "type": "fact",
+      "content": "项目根目录：/Users/wangenius/Documents/github/shipmyagent/examples/demo-agent",
+      "importance": 8,
+      "tags": [
+        "project",
+        "path",
+        "demo-agent"
+      ],
+      "metadata": {
+        "source": "runtime_context"
+      },
+      "id": "mem_1770029050975_v3sq3sgbm",
+      "createdAt": 1770029050975,
+      "updatedAt": 1770029050975
+    }
+  ],
+  "version": 1,
+  "updatedAt": 1770029050976
+}
