@@ -68,6 +68,7 @@ interface TelegramUpdate {
     };
     from?: {
       id: number;
+      is_bot?: boolean;
       username?: string;
       first_name?: string;
       last_name?: string;
@@ -100,6 +101,7 @@ interface TelegramUpdate {
 
 type TelegramUser = {
   id: number;
+  is_bot?: boolean;
   username?: string;
   first_name?: string;
   last_name?: string;
@@ -893,6 +895,22 @@ export class TelegramBot {
     const hasIncomingAttachment =
       !!message.document || (Array.isArray(message.photo) && message.photo.length > 0) || !!message.voice || !!message.audio;
     const from = message.from;
+    const fromIsBot =
+      (from as any)?.is_bot === true ||
+      (!!this.botId && typeof from?.id === "number" && from.id === this.botId) ||
+      (!!this.botUsername &&
+        typeof from?.username === "string" &&
+        from.username.toLowerCase() === this.botUsername.toLowerCase());
+    if (fromIsBot) {
+      this.logger.debug("Ignored bot-originated message", {
+        chatId,
+        chatType: message.chat.type,
+        messageId: typeof message.message_id === "number" ? String(message.message_id) : undefined,
+        fromId: from?.id,
+        fromUsername: from?.username,
+      });
+      return;
+    }
     const messageId = typeof message.message_id === 'number' ? String(message.message_id) : undefined;
     const messageThreadId = typeof message.message_thread_id === 'number' ? message.message_thread_id : undefined;
     const actorId = from?.id ? String(from.id) : undefined;
