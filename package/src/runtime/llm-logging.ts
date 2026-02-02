@@ -150,7 +150,8 @@ export function createLlmLoggingFetch(args: {
             messageTextParts.push(['system:', indentBlock(truncate(system, 4000), '  ')].join('\n'));
           }
           if (messages && Array.isArray(messages)) {
-            messageTextParts.push(`messages: (n=${messages.length})\n${formatMessagesForLog(messages, maxChars)}`);
+            messageTextParts.push(`messages: (n=${messages.length})`);
+            // messageTextParts.push(`messages: (n=${messages.length})\n${formatMessagesForLog(messages, maxChars)}`);
           } else {
             messageTextParts.push(['payload:', indentBlock(stringifyCompact(payload, maxChars), '  ')].join('\n'));
           }

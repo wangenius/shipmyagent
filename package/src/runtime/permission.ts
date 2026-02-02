@@ -427,8 +427,29 @@ export class PermissionEngine {
 
     const approvalsDir = getApprovalsDirPath(this.projectRoot);
     const filePath = path.join(approvalsDir, `${requestId}.json`);
-    await fs.writeJson(filePath, updated, { spaces: 2 });
-    return true;
+
+    // 使用临时文件 + 原子重命名模式，避免并发写入冲突
+    const tempFilePath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`;
+
+    try {
+      // 写入临时文件
+      await fs.writeJson(tempFilePath, updated, { spaces: 2 });
+
+      // 原子重命名（在大多数文件系统上是原子操作）
+      await fs.rename(tempFilePath, filePath);
+
+      return true;
+    } catch (error) {
+      // 清理临时文件
+      try {
+        if (await fs.pathExists(tempFilePath)) {
+          await fs.remove(tempFilePath);
+        }
+      } catch {
+        // ignore cleanup errors
+      }
+      throw error;
+    }
   }
 
   async deleteApprovalRequest(requestId: string): Promise<boolean> {

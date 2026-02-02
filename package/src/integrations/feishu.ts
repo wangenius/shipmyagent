@@ -8,6 +8,7 @@ import { createToolExecutor } from '../runtime/tools.js';
 import { createAgentRuntimeFromPath, AgentRuntime } from '../runtime/agent.js';
 import { getCacheDirPath } from '../utils.js';
 import { ChatStore } from '../runtime/chat-store.js';
+import { SessionManager } from '../runtime/session-manager.js';
 
 interface FeishuConfig {
   appId: string;
@@ -51,10 +52,8 @@ export class FeishuBot {
   private adminUserIds: Set<string>;
   private chatStore: ChatStore;
 
-  // 会话管理：为每个聊天维护独立的 Agent 实例
-  private sessions: Map<string, AgentRuntime> = new Map();
-  private sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
-  private readonly SESSION_TIMEOUT = 30 * 60 * 1000; // 30分钟超时
+  // 使用统一的 SessionManager
+  private sessionManager: SessionManager;
   private projectRoot: string;
   private knownChats: Map<string, { chatId: string; chatType: string }> = new Map();
 
@@ -77,6 +76,15 @@ export class FeishuBot {
     this.threadInitiatorsFile = path.join(getCacheDirPath(projectRoot), 'feishu', 'threadInitiators.json');
     this.adminUserIds = new Set((adminUserIds || []).map((x) => String(x)));
     this.chatStore = new ChatStore(projectRoot);
+
+    // 初始化 SessionManager
+    this.sessionManager = new SessionManager({
+      sessionTimeout: 30 * 60 * 1000, // 30分钟
+      enableAutoCleanup: true,
+      cleanupInterval: 5 * 60 * 1000, // 5分钟
+    });
+    this.sessionManager.setLogger(logger);
+    this.sessionManager.setChatStore(this.chatStore);
   }
 
   private getThreadId(chatId: string, _chatType: string): string {
@@ -217,45 +225,17 @@ export class FeishuBot {
    */
   private getOrCreateSession(chatId: string, chatType: string): AgentRuntime {
     const sessionKey = this.getThreadId(chatId, chatType);
-
-    // If session exists, reset timeout
-    if (this.sessions.has(sessionKey)) {
-      this.resetSessionTimeout(sessionKey);
-      return this.sessions.get(sessionKey)!;
-    }
-
-    // Create new session
-    const agentRuntime = createAgentRuntimeFromPath(this.projectRoot);
-    this.sessions.set(sessionKey, agentRuntime);
-    this.resetSessionTimeout(sessionKey);
-
-    // Hydrate from persisted chat history (best-effort)
-    this.chatStore.hydrateOnce(sessionKey, (msgs) => {
-      agentRuntime.setConversationHistory(sessionKey, msgs);
-    }).catch(() => {});
-
-    this.logger.debug(`Created new session: ${sessionKey}`);
-    return agentRuntime;
+    return this.sessionManager.getOrCreateSession(
+      sessionKey,
+      () => createAgentRuntimeFromPath(this.projectRoot)
+    );
   }
 
   /**
    * Reset session timeout
    */
   private resetSessionTimeout(sessionKey: string): void {
-    // Clear old timeout
-    const oldTimeout = this.sessionTimeouts.get(sessionKey);
-    if (oldTimeout) {
-      clearTimeout(oldTimeout);
-    }
-
-    // Set new timeout
-    const timeout = setTimeout(() => {
-      this.sessions.delete(sessionKey);
-      this.sessionTimeouts.delete(sessionKey);
-      this.logger.debug(`Session timeout cleanup: ${sessionKey}`);
-    }, this.SESSION_TIMEOUT);
-
-    this.sessionTimeouts.set(sessionKey, timeout);
+    // SessionManager 会自动处理超时重置
   }
 
   /**
@@ -263,20 +243,8 @@ export class FeishuBot {
    */
   clearSession(chatId: string, chatType: string): void {
     const sessionKey = this.getThreadId(chatId, chatType);
-    const session = this.sessions.get(sessionKey);
-
-    if (session) {
-      session.clearConversationHistory();
-      this.sessions.delete(sessionKey);
-
-      const timeout = this.sessionTimeouts.get(sessionKey);
-      if (timeout) {
-        clearTimeout(timeout);
-        this.sessionTimeouts.delete(sessionKey);
-      }
-
-      this.logger.info(`Cleared session: ${sessionKey}`);
-    }
+    this.sessionManager.clearSession(sessionKey);
+    this.logger.info(`Session cleared: ${sessionKey}`);
   }
 
   async start(): Promise<void> {

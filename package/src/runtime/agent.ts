@@ -49,6 +49,8 @@ import {
 import { McpManager } from './mcp-manager.js';
 import type { McpConfig } from './mcp-types.js';
 import { createAgentToolSet } from "../tool/toolset.js";
+import { MemoryStoreManager } from './memory-store.js';
+import { ContextCompressor } from './context-compressor.js';
 
 // ==================== Types ====================
 
@@ -148,26 +150,70 @@ export class AgentRuntime {
   private logger: AgentLogger;
   private permissionEngine: PermissionEngine;
   private mcpManager: McpManager | null = null;
+  private memoryStore: MemoryStoreManager;
+  private contextCompressor: ContextCompressor | null = null;
 
   private model: LanguageModel | null = null;
   private agent: ToolLoopAgent<never, any, any> | null = null;
 
   // 对话历史（AI SDK ModelMessage），按 session 隔离
+  // 作为热缓存使用，限制大小防止内存泄漏
   private sessionMessages: Map<string, ModelMessage[]> = new Map();
+  private readonly MAX_SESSION_MESSAGES = 100; // 单个会话最多缓存 100 条消息
+  private readonly MAX_SESSIONS_IN_MEMORY = 50; // 最多缓存 50 个会话
+
+  // 记忆提取相关
+  private lastMemoryExtraction: Map<string, number> = new Map();
+  private readonly MEMORY_EXTRACTION_INTERVAL = 5 * 60 * 1000; // 5分钟
 
   constructor(context: AgentContext) {
     this.context = context;
     this.logger = new AgentLogger(context.projectRoot);
     this.permissionEngine = createPermissionEngine(context.projectRoot);
     this.mcpManager = new McpManager(context.projectRoot, this.logger);
+    this.memoryStore = new MemoryStoreManager(context.projectRoot);
   }
 
   private getOrCreateSessionMessages(sessionId: string): ModelMessage[] {
     const existing = this.sessionMessages.get(sessionId);
     if (existing) return existing;
+
+    // 检查全局会话数量限制，淘汰最老的会话
+    this.evictOldestSessionIfNeeded();
+
     const fresh: ModelMessage[] = [];
     this.sessionMessages.set(sessionId, fresh);
     return fresh;
+  }
+
+  /**
+   * 淘汰最老的会话（FIFO），防止内存无限增长
+   */
+  private evictOldestSessionIfNeeded(): void {
+    if (this.sessionMessages.size >= this.MAX_SESSIONS_IN_MEMORY) {
+      // 找到第一个（最老的）session
+      const oldest = this.sessionMessages.keys().next().value;
+      if (oldest) {
+        // 清理所有相关的 Map，防止内存泄漏
+        this.sessionMessages.delete(oldest);
+        this.lastMemoryExtraction.delete(oldest);
+        // 注意：如果未来添加了其他与 session 相关的 Map，也需要在这里清理
+        this.logger.log('debug', `淘汰最老的会话缓存: ${oldest}`);
+      }
+    }
+  }
+
+  /**
+   * 淘汰单个会话中过多的消息，保留最近的消息
+   */
+  private async evictSessionMessagesIfNeeded(sessionId: string): Promise<void> {
+    const messages = this.sessionMessages.get(sessionId);
+    if (messages && messages.length > this.MAX_SESSION_MESSAGES) {
+      // 保留最近 50 条，其余已在 ChatStore 中持久化
+      const kept = messages.slice(-50);
+      this.sessionMessages.set(sessionId, kept);
+      await this.logger.log('debug', `会话消息缓存已淘汰: ${sessionId}, 保留最近 50 条`);
+    }
   }
 
   private modelMessageContentToText(content: any, maxChars: number): string {
@@ -373,20 +419,116 @@ export class AgentRuntime {
     return text.slice(0, maxChars) + "\n\n[TRUNCATED]";
   }
 
-  private async compactConversationHistory(
+  /**
+   * 从对话历史中提取并存储长期记忆
+   * 每次对话后异步调用，不阻塞响应
+   */
+  private async extractAndStoreMemories(sessionId: string): Promise<void> {
+    const now = Date.now();
+    const last = this.lastMemoryExtraction.get(sessionId) || 0;
+
+    // 频率控制：5分钟内不重复提取
+    if (now - last < this.MEMORY_EXTRACTION_INTERVAL) {
+      return;
+    }
+
+    // 需要 model 才能提取
+    if (!this.model) {
+      return;
+    }
+
+    try {
+      // 从 sessionMessages 获取最近的消息
+      const messages = this.sessionMessages.get(sessionId);
+      if (!messages || messages.length < 3) {
+        // 消息太少，不值得提取
+        return;
+      }
+
+      // 转换为 ChatLogEntryV1 格式（MemoryExtractor 需要）
+      const entries = messages.slice(-20).map((m, idx) => ({
+        v: 1 as const,
+        ts: Date.now() - (messages.length - idx) * 1000,
+        channel: 'api' as const,
+        chatId: sessionId,
+        chatKey: sessionId,
+        role: (m as any).role === 'assistant' ? 'assistant' as const : 'user' as const,
+        text: this.modelMessageContentToText((m as any).content, 2000),
+      }));
+
+      // 使用 MemoryExtractor 提取
+      const { MemoryExtractor } = await import('./memory-extractor.js');
+      const extractor = new MemoryExtractor(this.model);
+      const result = await extractor.extractFromHistory(entries);
+
+      if (result.memories.length > 0) {
+        // 去重：与现有记忆对比
+        const existing = await this.memoryStore.query(sessionId, {});
+        const deduplicated = await extractor.deduplicateMemories(existing, result.memories);
+
+        // 存储新记忆
+        for (const mem of deduplicated) {
+          await this.memoryStore.add(sessionId, mem);
+        }
+
+        await this.logger.log('info', `✓ 提取了 ${deduplicated.length} 条新记忆 (置信度: ${result.confidence.toFixed(2)})`);
+      }
+
+      this.lastMemoryExtraction.set(sessionId, now);
+    } catch (error) {
+      await this.logger.log('warn', `记忆提取失败: ${String(error)}`);
+    }
+  }
+
+  /**
+   * 统一的上下文压缩方法
+   * 优先使用 ContextCompressor，失败时回退到旧方法
+   */
+  private async compressIfNeeded(
     sessionId: string,
-  ): Promise<boolean> {
-    const history = this.getOrCreateSessionMessages(sessionId);
-    if (history.length < 6) return false;
-    if (!this.model) return false;
+    messages: ModelMessage[],
+    reason: 'proactive' | 'token_limit'
+  ): Promise<ModelMessage[]> {
+    // 检查是否需要压缩
+    if (reason === 'proactive' && messages.length <= 30) {
+      return messages;
+    }
 
-    // Keep the post-compaction history bounded so we don't repeatedly exceed
-    // context length when a session gets very long.
+    try {
+      if (this.contextCompressor) {
+        const result = reason === 'token_limit'
+          ? await this.contextCompressor.compressByTokenLimit(messages, 8000)
+          : await this.contextCompressor.compress(messages, { windowSize: 20 });
+
+        if (result.compressed) {
+          await this.logger.log('info',
+            `✓ 上下文已压缩 (${reason}): ${result.originalCount} → ${result.compressedCount} 条消息`);
+          return result.messages;
+        }
+      }
+    } catch (error) {
+      await this.logger.log('warn', `ContextCompressor 压缩失败，使用回退方案: ${String(error)}`);
+    }
+
+    // 回退：使用旧的压缩方法
+    const compacted = await this.compactConversationHistoryLegacy(sessionId, messages);
+    return compacted || messages;
+  }
+
+  /**
+   * 旧的压缩方法（回退方案）
+   */
+  private async compactConversationHistoryLegacy(
+    sessionId: string,
+    messages: ModelMessage[],
+  ): Promise<ModelMessage[] | null> {
+    if (messages.length < 6) return null;
+    if (!this.model) return null;
+
     const maxMessagesAfterCompaction = 50;
-
-    const cut = Math.max(1, Math.floor(history.length * 0.5));
-    const older = history.slice(0, cut);
-    const newer = history.slice(cut);
+    const cut = Math.max(1, Math.floor(messages.length * 0.5));
+    const older = messages.slice(0, cut);
+    const newer = messages.slice(cut);
 
     const input = this.extractTextForSummary(older, 12000);
     const result = await withLlmRequestContext({ sessionId }, () =>
@@ -410,11 +552,24 @@ export class AgentRuntime {
     if (compacted.length > maxMessagesAfterCompaction) {
       const keep = Math.max(0, maxMessagesAfterCompaction - 1);
       const trimmedNewer = keep > 0 ? newer.slice(-keep) : [];
-      this.sessionMessages.set(sessionId, [summaryMessage, ...trimmedNewer]);
-    } else {
-      this.sessionMessages.set(sessionId, compacted);
+      return [summaryMessage, ...trimmedNewer];
     }
-    return true;
+    return compacted;
+  }
+
+  /**
+   * @deprecated 使用 compressIfNeeded 替代
+   */
+  private async compactConversationHistory(
+    sessionId: string,
+  ): Promise<boolean> {
+    const history = this.getOrCreateSessionMessages(sessionId);
+    const compressed = await this.compactConversationHistoryLegacy(sessionId, history);
+    if (compressed) {
+      this.sessionMessages.set(sessionId, compressed);
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -484,13 +639,26 @@ export class AgentRuntime {
           enabled: logLlmMessages,
         });
 
+        // 创建不带日志的 fetch（用于内部操作如摘要生成）
+        const silentFetch = createLlmLoggingFetch({
+          logger: this.logger,
+          enabled: false, // 禁用日志
+        });
+
         let modelInstance: LanguageModel;
+        let silentModelInstance: LanguageModel;
+
         if (provider === "anthropic") {
           const anthropicProvider = createAnthropic({
             apiKey: resolvedApiKey,
             fetch: loggingFetch as any,
           });
+          const silentAnthropicProvider = createAnthropic({
+            apiKey: resolvedApiKey,
+            fetch: silentFetch as any,
+          });
           modelInstance = anthropicProvider(resolvedModel);
+          silentModelInstance = silentAnthropicProvider(resolvedModel);
         } else if (provider === "custom") {
           const compatProvider = createOpenAICompatible({
             name: "custom",
@@ -498,20 +666,45 @@ export class AgentRuntime {
             baseURL: resolvedBaseUrl || "https://api.openai.com/v1",
             fetch: loggingFetch as any,
           });
+          const silentCompatProvider = createOpenAICompatible({
+            name: "custom",
+            apiKey: resolvedApiKey,
+            baseURL: resolvedBaseUrl || "https://api.openai.com/v1",
+            fetch: silentFetch as any,
+          });
           modelInstance = compatProvider(resolvedModel);
+          silentModelInstance = silentCompatProvider(resolvedModel);
         } else {
           const openaiProvider = createOpenAI({
             apiKey: resolvedApiKey,
             baseURL: resolvedBaseUrl || "https://api.openai.com/v1",
             fetch: loggingFetch as any,
           });
+          const silentOpenaiProvider = createOpenAI({
+            apiKey: resolvedApiKey,
+            baseURL: resolvedBaseUrl || "https://api.openai.com/v1",
+            fetch: silentFetch as any,
+          });
           modelInstance = openaiProvider(resolvedModel);
+          silentModelInstance = silentOpenaiProvider(resolvedModel);
         }
 
         this.model = modelInstance;
+
+        // 初始化上下文压缩器（使用静默模型）
+        this.contextCompressor = new ContextCompressor(silentModelInstance, {
+          windowSize: 20,
+          enableSummary: true,
+          maxSummaryChars: 2000,
+        });
+
+        // 生成工具列表描述并添加到 instructions
+        const toolsDescription = this.generateToolsDescription();
+        const fullInstructions = `${this.context.agentMd}\n\n---\n\n${toolsDescription}`;
+
         this.agent = new ToolLoopAgent({
           model: modelInstance,
-          instructions: this.context.agentMd,
+          instructions: fullInstructions,
           tools: this.createToolSet(),
           stopWhen: stepCountIs(20),
           maxOutputTokens: this.context.config.llm.maxTokens || 4096,
@@ -576,6 +769,56 @@ export class AgentRuntime {
     }
   }
 
+  private generateToolsDescription(): string {
+    const tools = this.createToolSet();
+    const toolsList: string[] = [];
+
+    toolsList.push('# 可用工具列表\n');
+    toolsList.push('你有以下工具可以使用：\n');
+
+    // 内置工具
+    const builtinTools: string[] = [];
+    const mcpTools: string[] = [];
+
+    for (const [name, toolDef] of Object.entries(tools)) {
+      if (name.includes(':')) {
+        // MCP 工具
+        mcpTools.push(name);
+      } else {
+        // 内置工具
+        builtinTools.push(name);
+      }
+    }
+
+    if (builtinTools.length > 0) {
+      toolsList.push('## 内置工具\n');
+      for (const name of builtinTools) {
+        const toolDef = tools[name];
+        const desc = (toolDef as any).description || '无描述';
+        toolsList.push(`### ${name}`);
+        toolsList.push(desc.split('\n')[0]); // 只取第一行描述
+        toolsList.push('');
+      }
+    }
+
+    // MCP 工具
+    if (mcpTools.length > 0) {
+      toolsList.push('## MCP 工具\n');
+      toolsList.push(`已连接 ${mcpTools.length} 个 MCP 工具：\n`);
+
+      for (const name of mcpTools) {
+        const toolDef = tools[name];
+        const desc = (toolDef as any).description || '无描述';
+        toolsList.push(`### ${name}`);
+        toolsList.push(desc.split('\n')[0]); // 只取第一行描述
+        toolsList.push('');
+      }
+    }
+
+    return toolsList.join('\n');
+  }
+
+
   private createToolSet() {
     return createAgentToolSet({
       projectRoot: this.context.projectRoot,
@@ -620,6 +863,31 @@ export class AgentRuntime {
       fullPrompt = `${context.taskDescription}\n\n${instructions}`;
     }
 
+    // 加载 Memory 并注入到 prompt
+    let memoryContext = '';
+    try {
+      const memories = await this.memoryStore.query(sessionId, {
+        minImportance: 5, // 只加载重要性 >= 5 的记忆
+        limit: 10,
+      });
+
+      if (memories.length > 0) {
+        await this.logger.log('debug', `加载了 ${memories.length} 条长期记忆`);
+        const memoryLines = memories.map((m) => {
+          const typeLabel = {
+            preference: '偏好',
+            fact: '事实',
+            entity: '实体',
+            task: '任务',
+          }[m.type];
+          return `- [${typeLabel}] ${m.content}`;
+        });
+        memoryContext = `\n长期记忆（重要信息）：\n${memoryLines.join('\n')}\n`;
+      }
+    } catch (error) {
+      await this.logger.log('warn', `加载记忆失败: ${error}`);
+    }
+
     // Provide a stable runtime context prefix so the model doesn't guess paths.
     // Also: avoid leaking tool logs into user-facing chat replies.
     const runtimePrefix =
@@ -634,6 +902,7 @@ export class AgentRuntime {
         ? `- Actor username: ${context.actorUsername}\n`
         : "") +
       (context?.chatType ? `- Chat type: ${context.chatType}\n` : "") +
+      memoryContext +
       `\nUser-facing output rules:\n` +
       `- Reply in natural language.\n` +
       `- Do NOT paste raw tool outputs or JSON logs; summarize them.\n` +
@@ -762,9 +1031,15 @@ export class AgentRuntime {
     try {
       if (!this.agent) throw new Error("Agent not initialized");
 
-      const messages = this.getOrCreateSessionMessages(sessionId);
+      let messages = this.getOrCreateSessionMessages(sessionId);
       if (addUserPrompt && prompt) {
         messages.push({ role: "user", content: prompt });
+      }
+
+      // 使用统一的压缩策略（主动压缩）
+      if (messages.length > 30) {
+        messages = await this.compressIfNeeded(sessionId, messages, 'proactive');
+        this.sessionMessages.set(sessionId, messages);
       }
 
       const beforeLen = messages.length;
@@ -1030,6 +1305,12 @@ export class AgentRuntime {
       });
       await emitStep("done", "done", { requestId, sessionId });
 
+      // 异步提取记忆（不阻塞响应）
+      this.extractAndStoreMemories(sessionId).catch(() => {});
+
+      // 异步淘汰过多的消息缓存（不阻塞响应）
+      this.evictSessionMessagesIfNeeded(sessionId).catch(() => {});
+
       return {
         success: !hadToolFailure,
         output: [
@@ -1052,7 +1333,7 @@ export class AgentRuntime {
         const currentHistory = this.getOrCreateSessionMessages(sessionId);
         await this.logger.log(
           "warn",
-          "Context length exceeded, compacting history",
+          "Context length exceeded, attempting compression",
           {
             sessionId,
             currentMessages: currentHistory.length,
@@ -1070,20 +1351,14 @@ export class AgentRuntime {
           this.sessionMessages.delete(sessionId);
           return {
             success: false,
-            output: `Context length exceeded and compaction failed. History cleared. Please resend your question.`,
+            output: `上下文长度超限且压缩失败。历史已清空，请重新发送您的问题。`,
             toolCalls,
           };
         }
 
-        const compacted = await this.compactConversationHistory(sessionId);
-        if (!compacted) {
-          this.sessionMessages.delete(sessionId);
-          return {
-            success: false,
-            output: `Context length exceeded and compaction was not possible. History cleared. Please resend your question.`,
-            toolCalls,
-          };
-        }
+        // 使用统一的压缩策略（token 超限压缩）
+        const compressed = await this.compressIfNeeded(sessionId, currentHistory, 'token_limit');
+        this.sessionMessages.set(sessionId, compressed);
 
         return this.runWithToolLoopAgent(
           prompt,

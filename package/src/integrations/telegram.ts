@@ -14,6 +14,7 @@ import { RunManager } from "../runtime/run-manager.js";
 import type { RunRecord } from "../runtime/run-types.js";
 import { loadRun, saveRun } from "../runtime/run-store.js";
 import type { ChatLogEntryV1 } from "../runtime/chat-store.js";
+import { SessionManager } from "../runtime/session-manager.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TELEGRAM_HISTORY_LIMIT = 20;
@@ -284,15 +285,14 @@ export class TelegramBot {
   private pollInFlight: boolean = false;
   private notifiedApprovalKeys: Set<string> = new Set();
 
-  // 会话管理：按 thread（chat）维护独立的 Agent 实例
-  private sessions: Map<string, AgentRuntime> = new Map();
-  private sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
-  private readonly SESSION_TIMEOUT = 30 * 60 * 1000; // 30分钟超时
+  // 使用统一的 SessionManager
+  private sessionManager: SessionManager;
   private projectRoot: string;
 
   // 并发控制
   private readonly MAX_CONCURRENT = 5; // 最大并发数
   private currentConcurrent = 0; // 当前并发数
+  private concurrencyQueue: Array<() => void> = []; // 并发队列
   private threadLocks: Map<string, Promise<void>> = new Map();
 
   private lastUpdateIdFile: string;
@@ -331,6 +331,15 @@ export class TelegramBot {
     this.threadInitiatorsFile = path.join(getCacheDirPath(projectRoot), "telegram", "threadInitiators.json");
     this.chatStore = new ChatStore(projectRoot);
     this.runManager = new RunManager(projectRoot);
+
+    // 初始化 SessionManager
+    this.sessionManager = new SessionManager({
+      sessionTimeout: 30 * 60 * 1000, // 30分钟
+      enableAutoCleanup: true,
+      cleanupInterval: 5 * 60 * 1000, // 5分钟
+    });
+    this.sessionManager.setLogger(logger);
+    this.sessionManager.setChatStore(this.chatStore);
   }
 
   private getThreadId(chatId: string): string {
@@ -631,49 +640,10 @@ export class TelegramBot {
    * 获取或创建会话
    */
   private getOrCreateSession(threadId: string): AgentRuntime {
-    const sessionKey = threadId;
-
-    // 如果会话已存在，重置超时
-    if (this.sessions.has(sessionKey)) {
-      this.resetSessionTimeout(sessionKey);
-      return this.sessions.get(sessionKey)!;
-    }
-
-    // 创建新会话
-    const agentRuntime = createAgentRuntimeFromPath(this.projectRoot);
-    this.sessions.set(sessionKey, agentRuntime);
-    this.resetSessionTimeout(sessionKey);
-
-    // Hydrate from persisted chat history (best-effort)
-    this.chatStore.loadRecentEntries(sessionKey, TELEGRAM_HISTORY_LIMIT).then((entries) => {
-      const collapsed = collapseChatHistoryToSingleAssistantFromEntries(entries);
-      if (collapsed.length > 0) {
-        agentRuntime.setConversationHistory(sessionKey, collapsed as unknown[]);
-      }
-    }).catch(() => {});
-
-    this.logger.debug(`Created new session: ${sessionKey}`);
-    return agentRuntime;
-  }
-
-  /**
-   * Reset session timeout
-   */
-  private resetSessionTimeout(sessionKey: string): void {
-    // Clear old timeout
-    const oldTimeout = this.sessionTimeouts.get(sessionKey);
-    if (oldTimeout) {
-      clearTimeout(oldTimeout);
-    }
-
-    // Set new timeout
-    const timeout = setTimeout(() => {
-      this.sessions.delete(sessionKey);
-      this.sessionTimeouts.delete(sessionKey);
-      this.logger.debug(`Session timeout cleanup: ${sessionKey}`);
-    }, this.SESSION_TIMEOUT);
-
-    this.sessionTimeouts.set(sessionKey, timeout);
+    return this.sessionManager.getOrCreateSession(
+      threadId,
+      () => createAgentRuntimeFromPath(this.projectRoot)
+    );
   }
 
   /**
@@ -681,20 +651,8 @@ export class TelegramBot {
    */
   clearSession(chatId: string): void {
     const sessionKey = this.getThreadId(chatId);
-    const session = this.sessions.get(sessionKey);
-
-    if (session) {
-      session.clearConversationHistory();
-      this.sessions.delete(sessionKey);
-
-      const timeout = this.sessionTimeouts.get(sessionKey);
-      if (timeout) {
-        clearTimeout(timeout);
-        this.sessionTimeouts.delete(sessionKey);
-      }
-
-      this.logger.info(`Cleared session: ${sessionKey}`);
-    }
+    this.sessionManager.clearSession(sessionKey);
+    this.logger.info(`Session cleared: ${sessionKey}`);
   }
 
   async start(): Promise<void> {
@@ -858,15 +816,40 @@ export class TelegramBot {
   }
 
   /**
+   * 获取并发槽位（使用信号量模式）
+   */
+  private async acquireConcurrencySlot(): Promise<void> {
+    if (this.currentConcurrent < this.MAX_CONCURRENT) {
+      this.currentConcurrent++;
+      return;
+    }
+
+    // 等待队列中的槽位
+    return new Promise((resolve) => {
+      this.concurrencyQueue.push(resolve);
+    });
+  }
+
+  /**
+   * 释放并发槽位
+   */
+  private releaseConcurrencySlot(): void {
+    const next = this.concurrencyQueue.shift();
+    if (next) {
+      // 有等待的任务，直接唤醒它
+      next();
+    } else {
+      // 没有等待的任务，减少计数
+      this.currentConcurrent--;
+    }
+  }
+
+  /**
    * 带并发限制的消息处理
    */
   private async processUpdateWithLimit(update: TelegramUpdate): Promise<void> {
-    // 等待直到有可用的并发槽位
-    while (this.currentConcurrent >= this.MAX_CONCURRENT) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-
-    this.currentConcurrent++;
+    // 获取并发槽位
+    await this.acquireConcurrencySlot();
 
     try {
       if (update.message) {
@@ -875,7 +858,8 @@ export class TelegramBot {
         await this.handleCallbackQuery(update.callback_query);
       }
     } finally {
-      this.currentConcurrent--;
+      // 释放并发槽位
+      this.releaseConcurrencySlot();
     }
   }
 
@@ -1293,16 +1277,17 @@ Available commands:
       const actorUsername = from?.username ? String(from.username) : undefined;
       const actorName = getActorName(from);
 
-      // Always rehydrate from persisted chat log, but collapse into ONE assistant message for context.
-      try {
-        const recent = await this.chatStore.loadRecentEntries(sessionId, TELEGRAM_HISTORY_LIMIT);
-        const collapsed = collapseChatHistoryToSingleAssistantFromEntries(recent);
-        if (collapsed.length > 0) {
-          agentRuntime.setConversationHistory(sessionId, collapsed as unknown[]);
-        }
-      } catch {
-        // ignore
-      }
+      // 历史加载已由 AgentRuntime 统一处理（从 ChatStore 懒加载）
+      // 不再需要手动压缩为单条消息，让 AgentRuntime 的压缩策略统一处理
+      // try {
+      //   const recent = await this.chatStore.loadRecentEntries(sessionId, TELEGRAM_HISTORY_LIMIT);
+      //   const collapsed = collapseChatHistoryToSingleAssistantFromEntries(recent);
+      //   if (collapsed.length > 0) {
+      //     agentRuntime.setConversationHistory(sessionId, collapsed as unknown[]);
+      //   }
+      // } catch {
+      //   // ignore
+      // }
 
       // Persist user message into chat history (append-only)
       await this.chatStore.append({
