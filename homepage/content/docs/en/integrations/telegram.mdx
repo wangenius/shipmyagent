@@ -7,6 +7,8 @@ description: Chat with your agent and receive notifications on Telegram
 
 Use Telegram to chat with ShipMyAgent (DM or group mention) and receive approval prompts/results.
 
+> Want the internal flow? See: [/docs/integrations/telegram-message-flow](/docs/integrations/telegram-message-flow)
+
 ## Setup
 
 ### 1) Create a Telegram bot
@@ -36,6 +38,8 @@ Enable Telegram in `ship.json`:
   }
 }
 ```
+
+> ShipMyAgent uses a tool-strict chat mode: the agent should use the `chat_send` tool to decide when/how to send replies (multiple/staged messages are allowed).
 
 ### Optional: allow anyone in a group
 

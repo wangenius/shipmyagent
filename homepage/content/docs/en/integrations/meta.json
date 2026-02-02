@@ -1,5 +1,4 @@
 {
   "title": "Integrations",
-  "pages": ["telegram"]
+  "pages": ["telegram", "telegram-message-flow"]
 }
-

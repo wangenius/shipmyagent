@@ -7,6 +7,8 @@ description: 通过 Telegram 与 Agent 对话并接收审批/结果通知
 
 使用 Telegram 和 ShipMyAgent 对话（私聊或群里 @），并接收审批提示与任务结果。
 
+> 想了解内部怎么跑起来的？看这篇：[/docs/integrations/telegram-message-flow](/docs/integrations/telegram-message-flow)
+
 ## 配置步骤
 
 ### 1）创建 Telegram 机器人
@@ -36,6 +38,8 @@ TELEGRAM_BOT_TOKEN=123456:abc...
   }
 }
 ```
+
+> ShipMyAgent 的聊天回复采用 tool-strict：Agent 需要使用 `chat_send` 工具自行决定何时发消息（可以分多条、分阶段发送）。
 
 ### 可选：群聊允许所有人使用
 

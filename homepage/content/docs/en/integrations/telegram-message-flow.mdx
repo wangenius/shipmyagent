@@ -1,0 +1,124 @@
+---
+title: Telegram message flow & agent execution
+description: End-to-end flow from a Telegram message to agent execution, replies, and approval prompts
+---
+
+# Telegram: end-to-end message → agent → replies
+
+This page explains how a Telegram message is translated into ShipMyAgent instructions, how `AgentRuntime` executes them, and how replies are delivered via the `chat_send` tool.
+
+> Code references: `package/src/integrations/telegram.ts`, `package/src/runtime/agent.ts`, `package/src/runtime/permission.ts`, `package/src/runtime/chat-store.ts`
+
+## Overview
+
+```mermaid
+sequenceDiagram
+  participant U as User (Telegram)
+  participant TG as Telegram API
+  participant BOT as ShipMyAgent TelegramBot
+  participant CS as ChatStore (.ship/chats/*.jsonl)
+  participant RT as AgentRuntime
+  participant PE as PermissionEngine (.ship/approvals/*.json)
+  participant T as chat_send tool
+
+  U->>TG: Send message / attachment / command
+  BOT->>TG: Poll getUpdates
+  TG-->>BOT: update(message/callback_query)
+
+  BOT->>BOT: Parse text/caption, mentions, replies, attachments
+  BOT->>CS: append(user message)
+  BOT->>RT: handleApprovalReply(if pending approvals)
+  alt Treated as approval reply
+    RT->>PE: Update + delete approval files
+    RT->>RT: Resume tool loop
+    RT->>T: chat_send(...)
+    T->>TG: sendMessage / attachments
+  else Normal instruction
+    BOT->>RT: run(instructions)
+    RT->>T: chat_send(...)
+    T->>TG: sendMessage / attachments
+  end
+
+  Note over BOT,PE: Approval prompts are pushed by BOT polling pending approvals
+```
+
+## Input: Telegram update → executable instructions
+
+### Sessions / threads
+
+ShipMyAgent uses a session key to isolate context:
+
+- DM / regular group: `telegram:chat:<chatId>`
+- Group topics: `telegram:chat:<chatId>:topic:<messageThreadId>`
+
+### Group gating: mention / reply / follow-up window
+
+In groups, messages are only considered when:
+
+- Explicit: mention `@bot` or reply-to-bot
+- Follow-up window: short period after an explicit trigger (so you can ask follow-ups without mentioning again)
+
+There is also an access policy (`groupAccess`):
+
+- Default: initiator of the thread or group admins
+- Optional `"anyone"`: any group member can talk to the bot
+
+### Attachments: local cache + `@attach` lines
+
+Incoming files (document/photo/voice/audio) are downloaded and stored under:
+
+- `.ship/.cache/telegram/`
+
+Then the final `instructions` passed to the agent are prefixed with `@attach ...` lines, e.g.:
+
+```text
+@attach document .ship/.cache/telegram/1738...-report.pdf | report.pdf
+
+Summarize this PDF and list action items.
+```
+
+## Persistence: ChatStore
+
+Every incoming message is appended to a per-session JSONL file:
+
+- `.ship/chats/<encode(sessionId)>.jsonl`
+
+Before execution, recent entries are loaded and collapsed into a compact “assistant context” that is injected back into the in-memory session.
+
+## Execution: sync vs async
+
+### Approval reply first
+
+If the session has pending approvals, ShipMyAgent tries to interpret the message as an approval reply first via:
+
+- `agentRuntime.handleApprovalReply(...)`
+
+This supports natural-language responses like “approve”, “reject because …”, “approve all”, etc.
+
+### Tool-strict (agent-controlled sending)
+
+ShipMyAgent integrations use a tool-strict pattern:
+
+- The agent uses the `chat_send` tool to deliver replies (multiple messages, staged updates, etc.)
+- The integration does not automatically forward the agent’s plain text output as chat messages
+
+### Sync
+
+In sync mode, ShipMyAgent runs `agentRuntime.run(...)` and forwards user-facing assistant text:
+
+- Progress updates are only forwarded after real work signals (step/tool/approval events) to avoid “streaming spam”.
+- Output is chunked (Telegram size limits), tries Markdown first, then falls back to plain text.
+- `@attach ...` lines in output are converted into actual Telegram attachments (local paths or URLs).
+
+### Async runs + completion notifications
+
+In async mode, ShipMyAgent enqueues a background run, immediately replies with an ACK containing `runId`, and later pushes completion summaries by scanning `.ship/runs/*.json`.
+
+## Approvals (human-in-the-loop)
+
+When a tool requires approval:
+
+1. PermissionEngine writes `.ship/approvals/<id>.json` (including `meta` such as `source=telegram`, `userId`, `sessionId`, `initiatorId`)
+2. TelegramBot periodically notifies the originating chat
+3. User replies either with natural language (handled by `handleApprovalReply`) or explicit commands/buttons
+4. AgentRuntime resumes via `resumeFromApprovalActions()`, injects `ToolApprovalResponse`, deletes approval files, and continues execution

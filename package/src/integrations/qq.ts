@@ -1,6 +1,8 @@
 import WebSocket from 'ws';
 import { Logger } from '../runtime/logger.js';
-import { createAgentRuntimeFromPath, AgentRuntime } from '../runtime/agent.js';
+import { BaseChatAdapter } from "./base-chat-adapter.js";
+import type { IncomingChatMessage } from "./base-chat-adapter.js";
+import type { AdapterSendTextParams } from "./platform-adapter.js";
 
 interface QQConfig {
   appId: string;
@@ -33,10 +35,9 @@ const EventType = {
   AT_MESSAGE_CREATE: 'AT_MESSAGE_CREATE',
 };
 
-export class QQBot {
+export class QQBot extends BaseChatAdapter {
   private appId: string;
   private appSecret: string;
-  private logger: Logger;
   private ws: any | null = null;
   private isRunning: boolean = false;
   private heartbeatInterval: NodeJS.Timeout | null = null;
@@ -51,12 +52,6 @@ export class QQBot {
   private accessToken: string = '';
   private accessTokenExpires: number = 0;
 
-  // 会话管理：为每个聊天维护独立的 Agent 实例
-  private sessions: Map<string, AgentRuntime> = new Map();
-  private sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
-  private readonly SESSION_TIMEOUT = 30 * 60 * 1000; // 30分钟超时
-  private projectRoot: string;
-
   // API 基础地址
   // 鉴权 API 使用 bots.qq.com
   // 其他 API 使用 api.sgroup.qq.com
@@ -66,6 +61,7 @@ export class QQBot {
 
   // 是否使用沙箱环境
   private useSandbox: boolean = false;
+  private msgSeqByMessageKey: Map<string, number> = new Map();
 
   constructor(
     appId: string,
@@ -74,11 +70,28 @@ export class QQBot {
     projectRoot: string,
     useSandbox: boolean = false
   ) {
+    super({ channel: "qq", projectRoot, logger });
     this.appId = appId;
     this.appSecret = appSecret;
-    this.logger = logger;
-    this.projectRoot = projectRoot;
     this.useSandbox = useSandbox;
+  }
+
+  protected getChatKey(params: AdapterSendTextParams): string {
+    const chatType = typeof params.chatType === "string" && params.chatType ? params.chatType : "unknown";
+    return `qq:${chatType}:${params.chatId}`;
+  }
+
+  protected async sendTextToPlatform(params: AdapterSendTextParams): Promise<void> {
+    const chatType = typeof params.chatType === "string" ? params.chatType : "";
+    const messageId = typeof params.messageId === "string" ? params.messageId : "";
+    if (!chatType || !messageId) {
+      throw new Error("QQ requires chatType + messageId to send a reply");
+    }
+
+    const key = `${chatType}:${params.chatId}:${messageId}`;
+    const nextSeq = (this.msgSeqByMessageKey.get(key) ?? 0) + 1;
+    this.msgSeqByMessageKey.set(key, nextSeq);
+    await this.sendMessage(params.chatId, chatType, messageId, String(params.text ?? ""), nextSeq);
   }
 
   /**
@@ -100,63 +113,9 @@ export class QQBot {
   /**
    * 获取或创建会话
    */
-  private getOrCreateSession(chatId: string, chatType: string): AgentRuntime {
-    const sessionKey = `${chatType}:${chatId}`;
-
-    // 如果会话存在，重置超时
-    if (this.sessions.has(sessionKey)) {
-      this.resetSessionTimeout(sessionKey);
-      return this.sessions.get(sessionKey)!;
-    }
-
-    // 创建新会话
-    const agentRuntime = createAgentRuntimeFromPath(this.projectRoot);
-    this.sessions.set(sessionKey, agentRuntime);
-    this.resetSessionTimeout(sessionKey);
-
-    this.logger.debug(`创建新会话: ${sessionKey}`);
-    return agentRuntime;
-  }
-
-  /**
-   * 重置会话超时
-   */
-  private resetSessionTimeout(sessionKey: string): void {
-    // 清除旧的超时
-    const oldTimeout = this.sessionTimeouts.get(sessionKey);
-    if (oldTimeout) {
-      clearTimeout(oldTimeout);
-    }
-
-    // 设置新的超时
-    const timeout = setTimeout(() => {
-      this.sessions.delete(sessionKey);
-      this.sessionTimeouts.delete(sessionKey);
-      this.logger.debug(`会话超时清理: ${sessionKey}`);
-    }, this.SESSION_TIMEOUT);
-
-    this.sessionTimeouts.set(sessionKey, timeout);
-  }
-
-  /**
-   * 清除会话
-   */
-  clearSession(chatId: string, chatType: string): void {
-    const sessionKey = `${chatType}:${chatId}`;
-    const session = this.sessions.get(sessionKey);
-
-    if (session) {
-      session.clearConversationHistory();
-      this.sessions.delete(sessionKey);
-
-      const timeout = this.sessionTimeouts.get(sessionKey);
-      if (timeout) {
-        clearTimeout(timeout);
-        this.sessionTimeouts.delete(sessionKey);
-      }
-
-      this.logger.info(`已清除会话: ${sessionKey}`);
-    }
+  protected getSessionKey(msg: Pick<IncomingChatMessage, "chatId" | "chatType">): string {
+    const chatType = typeof msg.chatType === "string" ? msg.chatType : "unknown";
+    return `${chatType}:${msg.chatId}`;
   }
 
   /**
@@ -687,7 +646,7 @@ export class QQBot {
 
       case '/clear':
       case '/清除':
-        this.clearSession(chatId, chatType);
+        this.clearSession(`${chatType}:${chatId}`);
         responseText = '✅ 对话历史已清除';
         break;
 
@@ -708,11 +667,8 @@ export class QQBot {
     instructions: string
   ): Promise<void> {
     try {
-      // 先发送处理中消息（msg_seq: 1）
-      await this.sendMessage(chatId, chatType, messageId, '🤔 正在处理您的请求...', 1);
-
       // 获取或创建会话
-      const agentRuntime = this.getOrCreateSession(chatId, chatType);
+      const agentRuntime = this.getOrCreateSession(`${chatType}:${chatId}`);
 
       // 初始化 agent（如果尚未初始化）
       if (!agentRuntime.isInitialized()) {
@@ -729,17 +685,20 @@ export class QQBot {
           source: 'qq' as any,
           userId: chatId,
           sessionId,
+          chatType,
+          messageId,
+          replyMode: "tool",
         },
       });
 
-      // 发送执行结果（msg_seq: 2）
-      const message = result.success
-        ? `✅ 执行成功\n\n${result.output}`
-        : `❌ 执行失败\n\n${result.output}`;
-
-      await this.sendMessage(chatId, chatType, messageId, message, 2);
+      // If agent requested approval, surface a system prompt (QQ currently has no interactive approval UI).
+      if ((result as any).pendingApproval) {
+        const pa = (result as any).pendingApproval;
+        const text = `⏳ 需要审批后才能继续：${String(pa?.description || pa?.id || "").trim()}`.trim();
+        await this.sendMessage(chatId, chatType, messageId, text, 1);
+      }
     } catch (error) {
-      await this.sendMessage(chatId, chatType, messageId, `❌ 执行错误: ${String(error)}`, 2);
+      await this.sendMessage(chatId, chatType, messageId, `❌ 执行错误: ${String(error)}`, 1);
     }
   }
 
@@ -846,11 +805,12 @@ export async function createQQBot(
     return null;
   }
 
-  return new QQBot(
+  const bot = new QQBot(
     config.appId,
     config.appSecret,
     logger,
     projectRoot,
     config.sandbox || false
   );
+  return bot;
 }

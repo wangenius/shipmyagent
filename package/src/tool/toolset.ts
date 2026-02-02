@@ -9,6 +9,7 @@ import { runTools } from "./runs.js";
 import { cloudFileTools } from "./cloud-files.js";
 import { s3UploadTools } from "./s3-upload.js";
 import { createMcpAiTool } from "./mcp.js";
+import { chatTools } from "./chat.js";
 
 export interface AgentToolSetLogger {
   log(
@@ -34,6 +35,7 @@ export function createAgentToolSet(params: {
 
   const ossResolved = resolveOssFromConfig(params.config);
   const tools: Record<string, any> = {
+    ...chatTools,
     ...skillsTools,
     ...execShellTools,
     ...runTools,

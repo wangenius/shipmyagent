@@ -13,6 +13,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { createLlmLoggingFetch, withLlmRequestContext } from "./llm-logging.js";
+import { withChatRequestContext } from "./chat-request-context.js";
 import {
   ToolLoopAgent,
   generateText,
@@ -79,7 +80,7 @@ export interface AgentInput {
   context?: {
     taskId?: string;
     taskDescription?: string;
-    source?: "telegram" | "feishu" | "cli" | "scheduler" | "api";
+    source?: "telegram" | "feishu" | "qq" | "cli" | "scheduler" | "api";
     userId?: string;
     sessionId?: string;
     runId?: string;
@@ -97,6 +98,20 @@ export interface AgentInput {
      * Platform username/handle for the current actor (best-effort).
      */
     actorUsername?: string;
+    /**
+     * Thread/topic id on the source platform (e.g. Telegram topics).
+     */
+    messageThreadId?: number;
+    /**
+     * The message id to reply to (platform-specific).
+     */
+    messageId?: string;
+    /**
+     * How replies should be delivered back to the user for chat sources.
+     * - "auto" (default): integration forwards assistant output automatically.
+     * - "tool": the agent should use `chat_send` tool to send messages.
+     */
+    replyMode?: "auto" | "tool";
     /**
      * Optional explicit initiator (first human who started a thread). If omitted,
      * the runtime will treat actorId as initiator when snapshotting approvals.
@@ -598,6 +613,14 @@ export class AgentRuntime {
     // 生成 sessionId（如果没有提供）
     const sessionId = context?.sessionId || context?.userId || "default";
 
+    const replyMode =
+      context?.replyMode ||
+      (context?.source === "telegram" ||
+      context?.source === "feishu" ||
+      context?.source === "qq"
+        ? "tool"
+        : undefined);
+
     // Read Agent.md as system prompt
     const systemPrompt = this.context.agentMd;
     await this.logger.log(
@@ -637,8 +660,13 @@ export class AgentRuntime {
       `\nUser-facing output rules:\n` +
       `- Reply in natural language.\n` +
       `- Do NOT paste raw tool outputs or JSON logs; summarize them.\n` +
-      (context?.source === "telegram" || context?.source === "feishu"
+      (context?.source === "telegram" ||
+      context?.source === "feishu" ||
+      context?.source === "qq"
         ? `- When you need to use tools in multiple steps, include short progress updates as plain text before/around tool usage (no tool names/commands).\n` +
+          (replyMode === "tool"
+            ? `- IMPORTANT: deliver replies via the \`send_message\` tool (alias: \`chat_send\`). Do not rely on plain text output only.\n`
+            : "") +
           ((context?.chatType || "").toLowerCase().includes("group")
             ? `- This is a group chat. Prefer addressing the current actor (use @<Actor username> if available) so readers know who you're responding to.\n` +
               `- In a group chat, start your reply with 1 short line that says who you are replying to (the current actor) and that you are the project assistant.\n`
@@ -769,67 +797,84 @@ export class AgentRuntime {
 
       const beforeLen = messages.length;
       let lastEmittedAssistant = "";
-      const result = await withLlmRequestContext({ sessionId, requestId }, () =>
-        this.agent!.generate({
-          messages,
-          onStepFinish: async (step) => {
-            try {
-              const userText = extractUserFacingTextFromStep(step);
-              if (userText && userText !== lastEmittedAssistant) {
-                lastEmittedAssistant = userText;
-                await emitStep("assistant", userText, { requestId, sessionId });
-              }
-            } catch {
-              // ignore
-            }
-            if (!onStep) return;
-            try {
-              for (const tr of step.toolResults || []) {
-                if (tr.type !== "tool-result") continue;
-                const toolName = (tr as any).toolName;
-
-                // 处理 exec_shell 工具
-                if (toolName === "exec_shell") {
-                  const command = String(
-                    ((tr as any).input as any)?.command || "",
-                  ).trim();
-                  const exitCode = ((tr as any).output as any)?.exitCode;
-                  const stdout = String(
-                    ((tr as any).output as any)?.stdout || "",
-                  ).trim();
-                  const stderr = String(
-                    ((tr as any).output as any)?.stderr || "",
-                  ).trim();
-                  const snippet = (stdout || stderr).slice(0, 500);
-                  await emitStep(
-                    "step_finish",
-                    `已执行：${command}${typeof exitCode === "number" ? `（exitCode=${exitCode}）` : ""}${snippet ? `\n摘要：${snippet}${(stdout || stderr).length > 500 ? "…" : ""}` : ""}`,
-                    {
-                      toolName: "exec_shell",
-                      command,
-                      exitCode:
-                        typeof exitCode === "number" ? exitCode : undefined,
+      const result = await withChatRequestContext(
+        {
+          source: context?.source,
+          userId: context?.userId,
+          messageThreadId: context?.messageThreadId,
+          sessionId,
+          actorId: context?.actorId,
+          chatType: context?.chatType,
+          messageId: context?.messageId,
+        },
+        () =>
+          withLlmRequestContext({ sessionId, requestId }, () =>
+            this.agent!.generate({
+              messages,
+              onStepFinish: async (step) => {
+                try {
+                  const userText = extractUserFacingTextFromStep(step);
+                  if (userText && userText !== lastEmittedAssistant) {
+                    lastEmittedAssistant = userText;
+                    await emitStep("assistant", userText, {
                       requestId,
                       sessionId,
-                    },
-                  );
+                    });
+                  }
+                } catch {
+                  // ignore
                 }
-                // 处理 MCP 工具
-                else if (toolName && String(toolName).includes(":")) {
-                  const output = ((tr as any).output as any)?.output || "";
-                  const snippet = String(output).slice(0, 500);
-                  await emitStep(
-                    "step_finish",
-                    `已执行 MCP 工具：${toolName}${snippet ? `\n结果：${snippet}${String(output).length > 500 ? "…" : ""}` : ""}`,
-                    { toolName, requestId, sessionId },
-                  );
+                if (!onStep) return;
+                try {
+                  for (const tr of step.toolResults || []) {
+                    if (tr.type !== "tool-result") continue;
+                    const toolName = (tr as any).toolName;
+
+                    // 处理 exec_shell 工具
+                    if (toolName === "exec_shell") {
+                      const command = String(
+                        ((tr as any).input as any)?.command || "",
+                      ).trim();
+                      const exitCode = ((tr as any).output as any)?.exitCode;
+                      const stdout = String(
+                        ((tr as any).output as any)?.stdout || "",
+                      ).trim();
+                      const stderr = String(
+                        ((tr as any).output as any)?.stderr || "",
+                      ).trim();
+                      const snippet = (stdout || stderr).slice(0, 500);
+                      await emitStep(
+                        "step_finish",
+                        `已执行：${command}${typeof exitCode === "number" ? `（exitCode=${exitCode}）` : ""}${snippet ? `\n摘要：${snippet}${(stdout || stderr).length > 500 ? "…" : ""}` : ""}`,
+                        {
+                          toolName: "exec_shell",
+                          command,
+                          exitCode:
+                            typeof exitCode === "number"
+                              ? exitCode
+                              : undefined,
+                          requestId,
+                          sessionId,
+                        },
+                      );
+                    }
+                    // 处理 MCP 工具
+                    else if (toolName && String(toolName).includes(":")) {
+                      const output = ((tr as any).output as any)?.output || "";
+                      const snippet = String(output).slice(0, 500);
+                      await emitStep(
+                        "step_finish",
+                        `已执行 MCP 工具：${toolName}${snippet ? `\n结果：${snippet}${String(output).length > 500 ? "…" : ""}` : ""}`,
+                        { toolName, requestId, sessionId },
+                      );
+                    }
+                  }
+                } catch {
+                  // ignore
                 }
-              }
-            } catch {
-              // ignore
-            }
-          },
-        }),
+              },
+            }),
+          ),
       );
 
       try {
@@ -1382,12 +1427,23 @@ export class AgentRuntime {
     await emitStep("approval", "已记录审批结果，继续执行。", { sessionId });
 
     const resumeStart = Date.now();
+    const isChatSource =
+      context?.source === "telegram" ||
+      context?.source === "feishu" ||
+      context?.source === "qq";
+    const resumePrompt = isChatSource
+      ? [
+          "Continue execution after applying the approval decisions.",
+          "IMPORTANT: deliver user-visible updates via the `send_message` tool (alias: `chat_send`). Do not rely on plain text output only.",
+        ].join("\n")
+      : "";
+
     const resumed = await this.runWithToolLoopAgent(
-      "",
+      resumePrompt,
       resumeStart,
       context,
       sessionId,
-      { addUserPrompt: false, onStep },
+      { addUserPrompt: Boolean(resumePrompt), onStep },
     );
 
     // If this approval was part of a background Run, update the run record to reflect completion.

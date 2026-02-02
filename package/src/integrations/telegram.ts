@@ -7,13 +7,15 @@ import {
   createTaskExecutor, TaskExecutor
 } from "../runtime/task-executor.js";
 import { createToolExecutor } from "../runtime/tools.js";
-import { createAgentRuntimeFromPath, AgentRuntime } from "../runtime/agent.js";
+import type { AgentRuntime } from "../runtime/agent.js";
 import { getCacheDirPath, getRunsDirPath } from "../utils.js";
-import { ChatStore } from "../runtime/chat-store.js";
 import { RunManager } from "../runtime/run-manager.js";
 import type { RunRecord } from "../runtime/run-types.js";
 import { loadRun, saveRun } from "../runtime/run-store.js";
 import type { ChatLogEntryV1 } from "../runtime/chat-store.js";
+import { BaseChatAdapter } from "./base-chat-adapter.js";
+import type { IncomingChatMessage } from "./base-chat-adapter.js";
+import type { AdapterSendTextParams } from "./platform-adapter.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TELEGRAM_HISTORY_LIMIT = 20;
@@ -269,12 +271,11 @@ function collapseChatHistoryToSingleAssistantFromEntries(
   return [{ role: 'assistant', content: header + body }];
 }
 
-export class TelegramBot {
+export class TelegramBot extends BaseChatAdapter {
   private botToken: string;
   private chatId?: string;
   private followupWindowMs: number;
   private groupAccess: "initiator_or_admin" | "anyone";
-  private logger: Logger;
   private taskExecutor: TaskExecutor;
   private lastUpdateId: number = 0;
   private pollingInterval: ReturnType<typeof setInterval> | null = null;
@@ -284,16 +285,9 @@ export class TelegramBot {
   private pollInFlight: boolean = false;
   private notifiedApprovalKeys: Set<string> = new Set();
 
-  // 会话管理：按 thread（chat）维护独立的 Agent 实例
-  private sessions: Map<string, AgentRuntime> = new Map();
-  private sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
-  private readonly SESSION_TIMEOUT = 30 * 60 * 1000; // 30分钟超时
-  private projectRoot: string;
-
   // 并发控制
   private readonly MAX_CONCURRENT = 5; // 最大并发数
   private currentConcurrent = 0; // 当前并发数
-  private threadLocks: Map<string, Promise<void>> = new Map();
 
   private lastUpdateIdFile: string;
   private notifiedRunsFile: string;
@@ -303,7 +297,6 @@ export class TelegramBot {
 
   private botUsername?: string;
   private botId?: number;
-  private chatStore: ChatStore;
   private runManager: RunManager;
   private clearedWebhookOnce: boolean = false;
   private followupExpiryByActorAndThread: Map<string, number> = new Map();
@@ -317,19 +310,17 @@ export class TelegramBot {
     taskExecutor: TaskExecutor,
     projectRoot: string,
   ) {
+    super({ channel: "telegram", projectRoot, logger });
     this.botToken = botToken;
     this.chatId = chatId;
     this.followupWindowMs = Number.isFinite(followupWindowMs as number) && (followupWindowMs as number) > 0
       ? (followupWindowMs as number)
       : 10 * 60 * 1000;
     this.groupAccess = groupAccess === "anyone" ? "anyone" : "initiator_or_admin";
-    this.logger = logger;
     this.taskExecutor = taskExecutor;
-    this.projectRoot = projectRoot;
     this.lastUpdateIdFile = path.join(getCacheDirPath(projectRoot), "telegram", "lastUpdateId.json");
     this.notifiedRunsFile = path.join(getCacheDirPath(projectRoot), "telegram", "notifiedRuns.json");
     this.threadInitiatorsFile = path.join(getCacheDirPath(projectRoot), "telegram", "threadInitiators.json");
-    this.chatStore = new ChatStore(projectRoot);
     this.runManager = new RunManager(projectRoot);
   }
 
@@ -342,6 +333,32 @@ export class TelegramBot {
       return `telegram:chat:${chatId}:topic:${messageThreadId}`;
     }
     return this.getThreadId(chatId);
+  }
+
+  protected getSessionKey(msg: Pick<IncomingChatMessage, "chatId" | "messageThreadId">): string {
+    return this.getThreadKey(msg.chatId, msg.messageThreadId);
+  }
+
+  protected getChatKey(params: AdapterSendTextParams): string {
+    return this.getThreadKey(params.chatId, params.messageThreadId);
+  }
+
+  protected async sendTextToPlatform(params: AdapterSendTextParams): Promise<void> {
+    await this.sendMessage(params.chatId, params.text, {
+      messageThreadId: params.messageThreadId,
+    });
+  }
+
+  protected override async hydrateSession(agentRuntime: AgentRuntime, sessionKey: string): Promise<void> {
+    try {
+      const entries = await this.chatStore.loadRecentEntries(sessionKey, TELEGRAM_HISTORY_LIMIT);
+      const collapsed = collapseChatHistoryToSingleAssistantFromEntries(entries);
+      if (collapsed.length > 0) {
+        agentRuntime.setConversationHistory(sessionKey, collapsed as unknown[]);
+      }
+    } catch {
+      // ignore
+    }
   }
 
   private getFollowupKey(threadKey: string, actorId: string): string {
@@ -519,20 +536,6 @@ export class TelegramBot {
     }
   }
 
-  private runInThread(threadId: string, fn: () => Promise<void>): Promise<void> {
-    const prev = this.threadLocks.get(threadId) ?? Promise.resolve();
-    const run = prev.catch(() => {}).then(fn);
-    this.threadLocks.set(
-      threadId,
-      run.finally(() => {
-        if (this.threadLocks.get(threadId) === run) {
-          this.threadLocks.delete(threadId);
-        }
-      }),
-    );
-    return run;
-  }
-
   private escapeRegExp(text: string): string {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
@@ -627,76 +630,6 @@ export class TelegramBot {
     return { ok: true, reason: 'ok' };
   }
 
-  /**
-   * 获取或创建会话
-   */
-  private getOrCreateSession(threadId: string): AgentRuntime {
-    const sessionKey = threadId;
-
-    // 如果会话已存在，重置超时
-    if (this.sessions.has(sessionKey)) {
-      this.resetSessionTimeout(sessionKey);
-      return this.sessions.get(sessionKey)!;
-    }
-
-    // 创建新会话
-    const agentRuntime = createAgentRuntimeFromPath(this.projectRoot);
-    this.sessions.set(sessionKey, agentRuntime);
-    this.resetSessionTimeout(sessionKey);
-
-    // Hydrate from persisted chat history (best-effort)
-    this.chatStore.loadRecentEntries(sessionKey, TELEGRAM_HISTORY_LIMIT).then((entries) => {
-      const collapsed = collapseChatHistoryToSingleAssistantFromEntries(entries);
-      if (collapsed.length > 0) {
-        agentRuntime.setConversationHistory(sessionKey, collapsed as unknown[]);
-      }
-    }).catch(() => {});
-
-    this.logger.debug(`Created new session: ${sessionKey}`);
-    return agentRuntime;
-  }
-
-  /**
-   * Reset session timeout
-   */
-  private resetSessionTimeout(sessionKey: string): void {
-    // Clear old timeout
-    const oldTimeout = this.sessionTimeouts.get(sessionKey);
-    if (oldTimeout) {
-      clearTimeout(oldTimeout);
-    }
-
-    // Set new timeout
-    const timeout = setTimeout(() => {
-      this.sessions.delete(sessionKey);
-      this.sessionTimeouts.delete(sessionKey);
-      this.logger.debug(`Session timeout cleanup: ${sessionKey}`);
-    }, this.SESSION_TIMEOUT);
-
-    this.sessionTimeouts.set(sessionKey, timeout);
-  }
-
-  /**
-   * Clear session
-   */
-  clearSession(chatId: string): void {
-    const sessionKey = this.getThreadId(chatId);
-    const session = this.sessions.get(sessionKey);
-
-    if (session) {
-      session.clearConversationHistory();
-      this.sessions.delete(sessionKey);
-
-      const timeout = this.sessionTimeouts.get(sessionKey);
-      if (timeout) {
-        clearTimeout(timeout);
-        this.sessionTimeouts.delete(sessionKey);
-      }
-
-      this.logger.info(`Cleared session: ${sessionKey}`);
-    }
-  }
-
   async start(): Promise<void> {
     if (!this.botToken) {
       this.logger.warn("Telegram Bot Token not configured, skipping startup");
@@ -738,8 +671,7 @@ export class TelegramBot {
     // If no admin chatId is configured, fall back to the last active chat we've seen.
     this.approvalInterval = setInterval(() => this.notifyPendingApprovals(), 2000);
 
-    // Notify completed runs (no commands needed)
-    this.runNotifyInterval = setInterval(() => this.notifyCompletedRuns(), 2000);
+    // tool_strict: do not auto-push run completion messages; agent should use `chat_send`.
   }
 
   private async pollUpdates(): Promise<void> {
@@ -958,7 +890,7 @@ export class TelegramBot {
           }
         }
         if (isGroup) this.touchFollowupWindow(threadKey, actorId);
-        await this.handleCommand(chatId, rawText, from);
+        await this.handleCommand(chatId, rawText, from, messageThreadId);
       } else {
         if (isGroup) {
           if (!actorId) return;
@@ -1114,6 +1046,7 @@ export class TelegramBot {
     chatId: string,
     command: string,
     from?: TelegramUser,
+    messageThreadId?: number,
   ): Promise<void> {
     const username = from?.username || "Unknown";
     this.logger.info(`Received command: ${command} (${username})`);
@@ -1121,6 +1054,7 @@ export class TelegramBot {
     const [commandToken, ...rest] = command.trim().split(/\s+/);
     const cmd = (commandToken || "").split("@")[0]?.toLowerCase();
     const arg = rest[0];
+    const threadId = this.getThreadKey(chatId, messageThreadId);
 
     switch (cmd) {
       case "/start":
@@ -1189,7 +1123,6 @@ Available commands:
           break;
         }
 
-        const threadId = this.getThreadId(chatId);
         await this.runInThread(threadId, async () => {
           const can = await this.canApproveTelegram(arg, from?.id ? String(from.id) : undefined);
           if (!can.ok) {
@@ -1216,8 +1149,8 @@ Available commands:
       }
 
       case "/clear":
-        this.clearSession(chatId);
-        await this.sendMessage(chatId, "✅ Conversation history cleared");
+        this.clearSession(threadId);
+        await this.sendMessage(chatId, "✅ Conversation history cleared", { messageThreadId });
         break;
 
       default:
@@ -1346,15 +1279,6 @@ Available commands:
         sessionId,
       });
       if (approvalResult) {
-        await this.sendMessage(chatId, approvalResult.output, { messageThreadId });
-        await this.chatStore.append({
-          channel: 'telegram',
-          chatId,
-          chatKey: sessionId,
-          userId: this.botId ? String(this.botId) : 'bot',
-          role: 'assistant',
-          text: approvalResult.output,
-        });
         return;
       }
 
@@ -1366,133 +1290,16 @@ Available commands:
         chatType,
         actorUsername,
         messageThreadId,
+        replyMode: "tool" as const,
+        messageId,
       };
 
-      // Let the agent decide whether to run sync or enqueue a background Run.
-      const mode = await agentRuntime.decideExecutionMode({ instructions, context });
-      if (mode.mode === 'async') {
-        const run = await this.runManager.createAndEnqueueAdhocRun({
-          name: 'Adhoc',
-          instructions,
-          context,
-          trigger: { type: 'chat', by: 'telegram' },
-        });
-
-        const ack =
-          `我会在后台处理这个请求，完成后把结果发你。\n` +
-          `runId=${run.runId}\n` +
-          `（原因：${mode.reason || 'n/a'}）`;
-        await this.sendMessage(chatId, ack, { messageThreadId });
-        await this.chatStore.append({
-          channel: 'telegram',
-          chatId,
-          chatKey: sessionId,
-          userId: this.botId ? String(this.botId) : 'bot',
-          role: 'assistant',
-          text: ack,
-          meta: { runId: run.runId, mode: 'async' },
-        });
-        return;
-      }
-
-      // Execute instruction synchronously using session agent
-      const sentProgress = new Set<string>();
-      let sawProcessSignal = false;
-      let bufferedAssistantText = '';
-      const normalize = (text: string): string =>
-        text
-          .replace(/\r\n/g, '\n')
-          .replace(/[ \t]+\n/g, '\n')
-          .replace(/\n{3,}/g, '\n\n')
-          .trim();
-
-      const sendProgress = async (text: string): Promise<void> => {
-        const cleaned = normalize(sanitizeChatText(text));
-        if (!cleaned) return;
-        // Avoid spamming short/noisy fragments
-        if (cleaned.length < 6 && !/[a-zA-Z\u4e00-\u9fff]/.test(cleaned)) return;
-        if (sentProgress.has(cleaned)) return;
-        sentProgress.add(cleaned);
-        // Cap memory
-        if (sentProgress.size > 50) {
-          // delete oldest by re-creating
-          const keep = Array.from(sentProgress).slice(-30);
-          sentProgress.clear();
-          for (const k of keep) sentProgress.add(k);
-        }
-
-        await this.sendMessage(chatId, cleaned, { messageThreadId });
-        await this.chatStore.append({
-          channel: 'telegram',
-          chatId,
-          chatKey: sessionId,
-          userId: this.botId ? String(this.botId) : 'bot',
-          role: 'assistant',
-          text: cleaned,
-          meta: { progress: true },
-        });
-      };
-
-      const result = await agentRuntime.run({
-        instructions,
-        context,
-        onStep: async (event) => {
-          if (!event || typeof event !== 'object') return;
-          const type = String((event as any).type || '');
-
-          // Treat these as "there is actual work happening" signals.
-          if (type === 'step_start' || type === 'step_finish' || type === 'approval' || type === 'compaction') {
-            sawProcessSignal = true;
-            if (bufferedAssistantText) {
-              const toFlush = bufferedAssistantText;
-              bufferedAssistantText = '';
-              await sendProgress(toFlush);
-            }
-            return;
-          }
-
-          // Only forward user-facing assistant text. Tool call / tool result summaries are intentionally ignored.
-          if (type !== 'assistant') return;
-          const text = typeof (event as any).text === 'string' ? (event as any).text : '';
-          if (!text) return;
-
-          // Avoid sending "streaming" messages for simple replies (no tool/work signals).
-          if (!sawProcessSignal) {
-            const cleaned = normalize(sanitizeChatText(text));
-            if (cleaned.length >= bufferedAssistantText.length) bufferedAssistantText = cleaned;
-            return;
-          }
-
-          await sendProgress(text);
-        },
-      });
+      const result = await agentRuntime.run({ instructions, context });
 
       if (result.pendingApproval) {
         // Send approval request once (and broadcast via polling) without duplicating messages.
         await this.notifyPendingApprovals();
-        await this.chatStore.append({
-          channel: 'telegram',
-          chatId,
-          chatKey: sessionId,
-          userId: this.botId ? String(this.botId) : 'bot',
-          role: 'assistant',
-          text: `⏳ 已发起审批请求：${result.pendingApproval.id}`,
-          meta: { pendingApproval: result.pendingApproval },
-        });
         return;
-      }
-
-      const finalText = normalize(sanitizeChatText(result.output));
-      if (finalText && !sentProgress.has(finalText)) {
-        await this.sendMessage(chatId, finalText, { messageThreadId });
-        await this.chatStore.append({
-          channel: 'telegram',
-          chatId,
-          chatKey: sessionId,
-          userId: this.botId ? String(this.botId) : 'bot',
-          role: 'assistant',
-          text: finalText,
-        });
       }
     } catch (error) {
       await this.sendMessage(chatId, `❌ Execution error: ${String(error)}`, { messageThreadId });
@@ -1762,7 +1569,7 @@ export function createTelegramBot(
     projectRoot,
   );
 
-  return new TelegramBot(
+  const bot = new TelegramBot(
     config.botToken,
     config.chatId,
     config.followupWindowMs,
@@ -1771,4 +1578,5 @@ export function createTelegramBot(
     taskExecutor,
     projectRoot, // 传递 projectRoot
   );
+  return bot;
 }

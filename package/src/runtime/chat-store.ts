@@ -3,7 +3,7 @@ import path from 'path';
 import type { ModelMessage } from 'ai';
 import { getChatsDirPath } from '../utils.js';
 
-export type ChatChannel = 'telegram' | 'feishu' | 'api' | 'cli' | 'scheduler';
+export type ChatChannel = 'telegram' | 'feishu' | 'qq' | 'api' | 'cli' | 'scheduler';
 export type ChatRole = 'user' | 'assistant' | 'system' | 'tool';
 
 export interface ChatLogEntryV1 {

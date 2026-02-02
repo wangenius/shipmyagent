@@ -1,4 +1,4 @@
 {
   "title": "集成",
-  "pages": ["telegram", "feishu", "qq"]
+  "pages": ["telegram", "telegram-message-flow", "feishu", "qq"]
 }

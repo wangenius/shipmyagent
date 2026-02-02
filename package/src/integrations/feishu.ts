@@ -5,9 +5,10 @@ import { createLogger, Logger } from '../runtime/logger.js';
 import { createPermissionEngine } from '../runtime/permission.js';
 import { createTaskExecutor, TaskExecutor } from '../runtime/task-executor.js';
 import { createToolExecutor } from '../runtime/tools.js';
-import { createAgentRuntimeFromPath, AgentRuntime } from '../runtime/agent.js';
 import { getCacheDirPath } from '../utils.js';
-import { ChatStore } from '../runtime/chat-store.js';
+import { BaseChatAdapter } from "./base-chat-adapter.js";
+import type { IncomingChatMessage } from "./base-chat-adapter.js";
+import type { AdapterSendTextParams } from "./platform-adapter.js";
 
 interface FeishuConfig {
   appId: string;
@@ -31,11 +32,10 @@ function sanitizeChatText(text: string): string {
   return out;
 }
 
-export class FeishuBot {
+export class FeishuBot extends BaseChatAdapter {
   private appId: string;
   private appSecret: string;
   private domain?: string;
-  private logger: Logger;
   private taskExecutor: TaskExecutor;
   private client: any;
   private wsClient: any;
@@ -44,18 +44,11 @@ export class FeishuBot {
   private messageCleanupInterval: NodeJS.Timeout | null = null;
   private approvalInterval: NodeJS.Timeout | null = null;
   private notifiedApprovalKeys: Set<string> = new Set();
-  private threadLocks: Map<string, Promise<void>> = new Map();
   private dedupeDir: string;
   private threadInitiatorsFile: string;
   private threadInitiators: Map<string, string> = new Map();
   private adminUserIds: Set<string>;
-  private chatStore: ChatStore;
-
-  // 会话管理：为每个聊天维护独立的 Agent 实例
-  private sessions: Map<string, AgentRuntime> = new Map();
-  private sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
-  private readonly SESSION_TIMEOUT = 30 * 60 * 1000; // 30分钟超时
-  private projectRoot: string;
+  // Use PlatformAdapter.chatStore
   private knownChats: Map<string, { chatId: string; chatType: string }> = new Map();
 
   constructor(
@@ -67,34 +60,40 @@ export class FeishuBot {
     projectRoot: string,
     adminUserIds: string[] | undefined
   ) {
+    super({ channel: "feishu", projectRoot, logger });
     this.appId = appId;
     this.appSecret = appSecret;
     this.domain = domain;
-    this.logger = logger;
     this.taskExecutor = taskExecutor;
-    this.projectRoot = projectRoot;
     this.dedupeDir = path.join(getCacheDirPath(projectRoot), 'feishu', 'dedupe');
     this.threadInitiatorsFile = path.join(getCacheDirPath(projectRoot), 'feishu', 'threadInitiators.json');
     this.adminUserIds = new Set((adminUserIds || []).map((x) => String(x)));
-    this.chatStore = new ChatStore(projectRoot);
   }
 
   private getThreadId(chatId: string, _chatType: string): string {
     return `feishu:chat:${chatId}`;
   }
 
-  private runInThread(threadId: string, fn: () => Promise<void>): Promise<void> {
-    const prev = this.threadLocks.get(threadId) ?? Promise.resolve();
-    const run = prev.catch(() => {}).then(fn);
-    this.threadLocks.set(
-      threadId,
-      run.finally(() => {
-        if (this.threadLocks.get(threadId) === run) {
-          this.threadLocks.delete(threadId);
-        }
-      }),
-    );
-    return run;
+  protected getSessionKey(msg: Pick<IncomingChatMessage, "chatId" | "chatType">): string {
+    const chatType = typeof msg.chatType === "string" ? msg.chatType : "p2p";
+    return this.getThreadId(msg.chatId, chatType);
+  }
+
+  protected getChatKey(params: AdapterSendTextParams): string {
+    const chatType = typeof params.chatType === "string" ? params.chatType : "p2p";
+    return this.getThreadId(params.chatId, chatType);
+  }
+
+  protected async sendTextToPlatform(params: AdapterSendTextParams): Promise<void> {
+    const chatType = typeof params.chatType === "string" ? params.chatType : "p2p";
+    const messageId = typeof params.messageId === "string" ? params.messageId : undefined;
+    const text = sanitizeChatText(String(params.text ?? ""));
+
+    if (messageId && chatType !== "p2p") {
+      await this.sendMessage(params.chatId, chatType, messageId, text);
+    } else {
+      await this.sendChatMessage(params.chatId, chatType, text);
+    }
   }
 
   private async loadDedupeSet(threadId: string): Promise<Set<string>> {
@@ -210,73 +209,6 @@ export class FeishuBot {
     if (initiatorId && initiatorId === actorId) return { ok: true, reason: 'ok' };
 
     return { ok: false, reason: '⛔️ 仅发起人或管理员可以审批/拒绝该操作。' };
-  }
-
-  /**
-   * Get or create session
-   */
-  private getOrCreateSession(chatId: string, chatType: string): AgentRuntime {
-    const sessionKey = this.getThreadId(chatId, chatType);
-
-    // If session exists, reset timeout
-    if (this.sessions.has(sessionKey)) {
-      this.resetSessionTimeout(sessionKey);
-      return this.sessions.get(sessionKey)!;
-    }
-
-    // Create new session
-    const agentRuntime = createAgentRuntimeFromPath(this.projectRoot);
-    this.sessions.set(sessionKey, agentRuntime);
-    this.resetSessionTimeout(sessionKey);
-
-    // Hydrate from persisted chat history (best-effort)
-    this.chatStore.hydrateOnce(sessionKey, (msgs) => {
-      agentRuntime.setConversationHistory(sessionKey, msgs);
-    }).catch(() => {});
-
-    this.logger.debug(`Created new session: ${sessionKey}`);
-    return agentRuntime;
-  }
-
-  /**
-   * Reset session timeout
-   */
-  private resetSessionTimeout(sessionKey: string): void {
-    // Clear old timeout
-    const oldTimeout = this.sessionTimeouts.get(sessionKey);
-    if (oldTimeout) {
-      clearTimeout(oldTimeout);
-    }
-
-    // Set new timeout
-    const timeout = setTimeout(() => {
-      this.sessions.delete(sessionKey);
-      this.sessionTimeouts.delete(sessionKey);
-      this.logger.debug(`Session timeout cleanup: ${sessionKey}`);
-    }, this.SESSION_TIMEOUT);
-
-    this.sessionTimeouts.set(sessionKey, timeout);
-  }
-
-  /**
-   * Clear session
-   */
-  clearSession(chatId: string, chatType: string): void {
-    const sessionKey = this.getThreadId(chatId, chatType);
-    const session = this.sessions.get(sessionKey);
-
-    if (session) {
-      session.clearConversationHistory();
-      this.sessions.delete(sessionKey);
-
-      const timeout = this.sessionTimeouts.get(sessionKey);
-      if (timeout) {
-        clearTimeout(timeout);
-        this.sessionTimeouts.delete(sessionKey);
-      }
-
-      this.logger.info(`Cleared session: ${sessionKey}`);
-    }
   }
 
   async start(): Promise<void> {
@@ -511,7 +443,7 @@ Available commands:
 
       case '/clear':
       case '/清除':
-        this.clearSession(chatId, chatType);
+        this.clearSession(this.getThreadId(chatId, chatType));
         responseText = '✅ Conversation history cleared';
         break;
 
@@ -530,11 +462,8 @@ Available commands:
     actorId?: string
   ): Promise<void> {
     try {
-      // First send processing message
-      await this.sendMessage(chatId, chatType, messageId, '🤔 Processing your request...');
-
       // Get or create session
-      const agentRuntime = this.getOrCreateSession(chatId, chatType);
+      const agentRuntime = this.getOrCreateSession(this.getThreadId(chatId, chatType));
 
       // Initialize agent (if not already initialized)
       if (!agentRuntime.isInitialized()) {
@@ -583,20 +512,13 @@ Available commands:
           userId: chatId,
           sessionId,
           actorId,
+          chatType,
+          messageId,
+          replyMode: "tool",
         },
         sessionId,
       });
       if (approvalResult) {
-        await this.sendMessage(chatId, chatType, messageId, approvalResult.output);
-        await this.chatStore.append({
-          channel: 'feishu',
-          chatId,
-          chatKey: sessionId,
-          userId: 'bot',
-          role: 'assistant',
-          text: approvalResult.output,
-          meta: { chatType },
-        });
         return;
       }
 
@@ -608,38 +530,16 @@ Available commands:
           userId: chatId,
           sessionId,
           actorId,
+          chatType,
+          messageId,
+          replyMode: "tool",
         },
       });
 
       if ((result as any).pendingApproval) {
         await this.notifyPendingApprovals();
-        await this.chatStore.append({
-          channel: 'feishu',
-          chatId,
-          chatKey: sessionId,
-          userId: 'bot',
-          role: 'assistant',
-          text: `⏳ 已发起审批请求：${(result as any).pendingApproval?.id || ''}`.trim(),
-          meta: { chatType, pendingApproval: (result as any).pendingApproval },
-        });
         return;
       }
-
-      // Send execution result
-      const message = result.success
-        ? `✅ Execution successful\n\n${result.output}`
-        : `❌ Execution failed\n\n${result.output}`;
-
-      await this.sendMessage(chatId, chatType, messageId, sanitizeChatText(message));
-      await this.chatStore.append({
-        channel: 'feishu',
-        chatId,
-        chatKey: sessionId,
-        userId: 'bot',
-        role: 'assistant',
-        text: sanitizeChatText(message),
-        meta: { chatType },
-      });
     } catch (error) {
       await this.sendErrorMessage(chatId, chatType, messageId, `Execution error: ${String(error)}`);
     }
@@ -753,7 +653,7 @@ export async function createFeishuBot(
   // 会话级 AgentRuntime 在 getOrCreateSession 方法中按需创建
   const taskExecutor = createTaskExecutor(toolExecutor, logger, null, projectRoot);
 
-  return new FeishuBot(
+  const bot = new FeishuBot(
     config.appId,
     config.appSecret,
     config.domain,
@@ -762,4 +662,5 @@ export async function createFeishuBot(
     projectRoot, // 传递 projectRoot
     config.adminUserIds
   );
+  return bot;
 }
