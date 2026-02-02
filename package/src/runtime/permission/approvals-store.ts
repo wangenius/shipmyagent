@@ -53,7 +53,19 @@ export class ApprovalStore {
     const approvalsDir = getApprovalsDirPath(this.projectRoot);
     await fs.ensureDir(approvalsDir);
     const filePath = path.join(approvalsDir, `${request.id}.json`);
-    await fs.writeJson(filePath, request, { spaces: 2 });
+
+    const tempFilePath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`;
+    try {
+      await fs.writeJson(tempFilePath, request, { spaces: 2 });
+      await fs.rename(tempFilePath, filePath);
+    } catch (error) {
+      try {
+        if (await fs.pathExists(tempFilePath)) await fs.remove(tempFilePath);
+      } catch {
+        // ignore
+      }
+      throw error;
+    }
   }
 
   async update(id: string, patch: Partial<ApprovalRequest>): Promise<boolean> {
@@ -103,4 +115,3 @@ export class ApprovalStore {
     return "timeout";
   }
 }
-

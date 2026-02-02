@@ -48,7 +48,6 @@ export class FeishuBot extends BaseChatAdapter {
   private threadInitiatorsFile: string;
   private threadInitiators: Map<string, string> = new Map();
   private adminUserIds: Set<string>;
-  // Use PlatformAdapter.chatStore
   private knownChats: Map<string, { chatId: string; chatType: string }> = new Map();
 
   constructor(

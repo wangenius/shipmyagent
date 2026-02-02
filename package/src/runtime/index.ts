@@ -22,3 +22,12 @@ export type { AgentContext, AgentInput, AgentResult } from "./agent/types.js";
 export { AgentRuntime, createAgentRuntime, createAgentRuntimeFromPath } from "./agent/index.js";
 
 export { DEFAULT_SHIP_PROMPTS } from "./prompts/index.js";
+
+export { ContextCompressor } from "./context/index.js";
+export type { CompressionOptions, CompressionResult } from "./context/index.js";
+
+export { MemoryExtractor, MemoryStoreManager } from "./memory/index.js";
+export type { MemoryEntry, MemoryType, MemoryStore } from "./memory/index.js";
+
+export { SessionManager } from "./session/index.js";
+export type { SessionManagerOptions } from "./session/index.js";

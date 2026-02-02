@@ -289,6 +289,7 @@ export class TelegramBot extends BaseChatAdapter {
   // 并发控制
   private readonly MAX_CONCURRENT = 5; // 最大并发数
   private currentConcurrent = 0; // 当前并发数
+  private concurrencyQueue: Array<() => void> = []; // 并发队列
 
   private lastUpdateIdFile: string;
   private notifiedRunsFile: string;
@@ -791,15 +792,40 @@ export class TelegramBot extends BaseChatAdapter {
   }
 
   /**
+   * 获取并发槽位（使用信号量模式）
+   */
+  private async acquireConcurrencySlot(): Promise<void> {
+    if (this.currentConcurrent < this.MAX_CONCURRENT) {
+      this.currentConcurrent++;
+      return;
+    }
+
+    // 等待队列中的槽位
+    return new Promise((resolve) => {
+      this.concurrencyQueue.push(resolve);
+    });
+  }
+
+  /**
+   * 释放并发槽位
+   */
+  private releaseConcurrencySlot(): void {
+    const next = this.concurrencyQueue.shift();
+    if (next) {
+      // 有等待的任务，直接唤醒它
+      next();
+    } else {
+      // 没有等待的任务，减少计数
+      this.currentConcurrent--;
+    }
+  }
+
+  /**
    * 带并发限制的消息处理
    */
   private async processUpdateWithLimit(update: TelegramUpdate): Promise<void> {
-    // 等待直到有可用的并发槽位
-    while (this.currentConcurrent >= this.MAX_CONCURRENT) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-
-    this.currentConcurrent++;
+    // 获取并发槽位
+    await this.acquireConcurrencySlot();
 
     try {
       if (update.message) {
@@ -808,7 +834,8 @@ export class TelegramBot extends BaseChatAdapter {
         await this.handleCallbackQuery(update.callback_query);
       }
     } finally {
-      this.currentConcurrent--;
+      // 释放并发槽位
+      this.releaseConcurrencySlot();
     }
   }
 
@@ -1227,16 +1254,17 @@ Available commands:
       const actorUsername = from?.username ? String(from.username) : undefined;
       const actorName = getActorName(from);
 
-      // Always rehydrate from persisted chat log, but collapse into ONE assistant message for context.
-      try {
-        const recent = await this.chatStore.loadRecentEntries(sessionId, TELEGRAM_HISTORY_LIMIT);
-        const collapsed = collapseChatHistoryToSingleAssistantFromEntries(recent);
-        if (collapsed.length > 0) {
-          agentRuntime.setConversationHistory(sessionId, collapsed as unknown[]);
-        }
-      } catch {
-        // ignore
-      }
+      // 历史加载已由 AgentRuntime 统一处理（从 ChatStore 懒加载）
+      // 不再需要手动压缩为单条消息，让 AgentRuntime 的压缩策略统一处理
+      // try {
+      //   const recent = await this.chatStore.loadRecentEntries(sessionId, TELEGRAM_HISTORY_LIMIT);
+      //   const collapsed = collapseChatHistoryToSingleAssistantFromEntries(recent);
+      //   if (collapsed.length > 0) {
+      //     agentRuntime.setConversationHistory(sessionId, collapsed as unknown[]);
+      //   }
+      // } catch {
+      //   // ignore
+      // }
 
       // Persist user message into chat history (append-only)
       await this.chatStore.append({
