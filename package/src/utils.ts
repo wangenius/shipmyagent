@@ -313,3 +313,7 @@ export function getCacheDirPath(cwd: string): string {
 export function getChatsDirPath(cwd: string): string {
   return path.join(cwd, ".ship", "chats");
 }
+
+export function getMcpDirPath(cwd: string): string {
+  return path.join(cwd, '.ship', 'mcp');
+}

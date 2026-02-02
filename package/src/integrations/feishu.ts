@@ -748,12 +748,10 @@ export async function createFeishuBot(
     permissionEngine,
     logger,
   });
-  const agentRuntime = createAgentRuntimeFromPath(projectRoot);
 
-  // 重要：初始化 Agent Runtime
-  await agentRuntime.initialize();
-
-  const taskExecutor = createTaskExecutor(toolExecutor, logger, agentRuntime, projectRoot);
+  // 注意：不在这里创建 AgentRuntime，因为 Feishu Bot 使用会话级的 AgentRuntime
+  // 会话级 AgentRuntime 在 getOrCreateSession 方法中按需创建
+  const taskExecutor = createTaskExecutor(toolExecutor, logger, null, projectRoot);
 
   return new FeishuBot(
     config.appId,
