@@ -153,6 +153,19 @@ You are the maintainer agent of this repository.
 
 > 注：启动时会自动加载项目根目录的 `.env`，并把 `ship.json` 里的 `${VAR_NAME}` 形式占位符替换为对应环境变量。
 
+你也可以在 `ship.json` 里配置启动参数（`shipmyagent .` / `shipmyagent start` 会读取），例如：
+
+```json
+{
+  "start": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "interactiveWeb": false,
+    "interactivePort": 3001
+  }
+}
+```
+
 ---
 
 ## 使用场景

@@ -18,6 +18,22 @@ const packageJson = JSON.parse(
 
 const program = new Command();
 
+const parsePort = (value: string): number => {
+  const num = Number.parseInt(value, 10);
+  if (!Number.isFinite(num) || Number.isNaN(num) || !Number.isInteger(num) || num <= 0 || num > 65535) {
+    throw new Error(`Invalid port: ${value}`);
+  }
+  return num;
+};
+
+const parseBoolean = (value: string | undefined): boolean => {
+  if (value === undefined) return true;
+  const s = String(value).trim().toLowerCase();
+  if (["true", "1", "yes", "y", "on"].includes(s)) return true;
+  if (["false", "0", "no", "n", "off"].includes(s)) return false;
+  throw new Error(`Invalid boolean: ${value}`);
+};
+
 program
   .name(basename(process.argv[1] || "shipmyagent"))
   .description(
@@ -35,11 +51,27 @@ program
 program
   .command("start [path]")
   .description("启动 Agent Runtime")
-  .option("-p, --port <port>", "服务端口", "3000")
-  .option("-h, --host <host>", "服务主机", "0.0.0.0")
-  .option("--interactive-web", "启动交互式 Web 界面", false)
-  .option("--interactive-port <port>", "交互式 Web 界面端口", "3001")
+  .option("-p, --port <port>", "服务端口（可在 ship.json 的 start.port 配置）", parsePort)
+  .option("-H, --host <host>", "服务主机（可在 ship.json 的 start.host 配置）")
+  .option(
+    "--interactive-web [enabled]",
+    "启动交互式 Web 界面（可在 ship.json 的 start.interactiveWeb 配置）",
+    parseBoolean,
+  )
+  .option(
+    "--interactive-port <port>",
+    "交互式 Web 界面端口（可在 ship.json 的 start.interactivePort 配置）",
+    parsePort,
+  )
   .action(startCommand);
 
-// Default: start current directory
+// Default: `shipmyagent` / `shipmyagent .` => `shipmyagent start [path]`
+const firstArg = process.argv[2];
+if (
+  !firstArg ||
+  (!firstArg.startsWith("-") && firstArg !== "init" && firstArg !== "start" && firstArg !== "help")
+) {
+  process.argv.splice(2, 0, "start");
+}
+
 program.parse();

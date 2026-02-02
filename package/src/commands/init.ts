@@ -143,6 +143,12 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   const shipConfig: ShipConfig = {
     name: response.name || path.basename(projectRoot),
     version: '1.0.0',
+    start: {
+      port: 3000,
+      host: '0.0.0.0',
+      interactiveWeb: false,
+      interactivePort: 3001,
+    },
     llm: llmConfig,
     permissions: DEFAULT_SHIP_JSON.permissions,
     integrations: {

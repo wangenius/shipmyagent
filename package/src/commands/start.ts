@@ -18,15 +18,34 @@ import { DEFAULT_SHIP_PROMPTS } from '../runtime/ship-prompts.js';
 import { fileURLToPath } from 'url';
 
 interface StartOptions {
-  port: number;
-  host: string;
-  interactiveWeb?: boolean;
-  interactivePort?: number;
+  port?: number | string;
+  host?: string;
+  interactiveWeb?: boolean | string;
+  interactivePort?: number | string;
 }
 
 export async function startCommand(cwd: string = '.', options: StartOptions): Promise<void> {
   const projectRoot = path.resolve(cwd);
   const isPlaceholder = (value?: string): boolean => value === '${}';
+  const parsePort = (value: unknown, label: string): number | undefined => {
+    if (value === undefined || value === null || value === '') return undefined;
+    const num = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
+    if (!Number.isFinite(num) || Number.isNaN(num)) {
+      throw new Error(`${label} must be a number`);
+    }
+    if (!Number.isInteger(num) || num <= 0 || num > 65535) {
+      throw new Error(`${label} must be an integer between 1 and 65535`);
+    }
+    return num;
+  };
+  const parseBoolean = (value: unknown): boolean | undefined => {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (typeof value === 'boolean') return value;
+    const s = String(value).trim().toLowerCase();
+    if (['true', '1', 'yes', 'y', 'on'].includes(s)) return true;
+    if (['false', '0', 'no', 'n', 'off'].includes(s)) return false;
+    return undefined;
+  };
 
   let version = 'unknown';
   try {
@@ -59,6 +78,20 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
     console.error('❌ Failed to read ship.json:', error);
     process.exit(1);
   }
+
+  // Resolve startup options: CLI flags override ship.json, then built-in defaults.
+  let port: number;
+  let interactivePort: number | undefined;
+  try {
+    port = parsePort(options.port, 'port') ?? shipConfig.start?.port ?? 3000;
+    interactivePort = parsePort(options.interactivePort, 'interactivePort') ?? shipConfig.start?.interactivePort;
+  } catch (error) {
+    console.error('❌ Invalid start options:', error);
+    process.exit(1);
+  }
+
+  const host = (options.host ?? shipConfig.start?.host ?? '0.0.0.0').trim();
+  const interactiveWeb = parseBoolean(options.interactiveWeb) ?? shipConfig.start?.interactiveWeb ?? false;
 
   // Create logger
   const logger = createLogger(projectRoot, 'info');
@@ -197,10 +230,10 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
 
   // 创建交互式 Web 服务器（如果已启用）
   let interactiveServer = null;
-  if (options.interactiveWeb) {
+  if (interactiveWeb) {
     logger.info('交互式 Web 界面已启用');
     interactiveServer = createInteractiveServer({
-      agentApiUrl: `http://${(options.host === '0.0.0.0' || options.host === '::') ? '127.0.0.1' : options.host}:${options.port}`,
+      agentApiUrl: `http://${(host === '0.0.0.0' || host === '::') ? '127.0.0.1' : host}:${port}`,
     });
   }
 
@@ -249,15 +282,15 @@ export async function startCommand(cwd: string = '.', options: StartOptions): Pr
 
   // Start server
   await server.start({
-    port: options.port,
-    host: options.host,
+    port,
+    host,
   });
 
   // 启动交互式 Web 服务器（如果已启用）
   if (interactiveServer) {
     await interactiveServer.start({
-      port: options.interactivePort || 3001,
-      host: options.host,
+      port: interactivePort ?? 3001,
+      host,
     });
   }
 

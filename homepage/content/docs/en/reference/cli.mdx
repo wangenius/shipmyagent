@@ -68,15 +68,25 @@ shipmyagent init --no-git
 Start the ShipMyAgent server.
 
 ```bash
-shipmyagent start [options]
+shipmyagent start [options] [path]
 ```
+
+You can also start the current directory (equivalent to `shipmyagent start .`):
+
+```bash
+shipmyagent .
+```
+
+`shipmyagent start` reads `ship.json` → `start` as defaults; explicit CLI flags override `ship.json`.
 
 **Options**:
 
 | Option | Alias | Description |
 |--------|-------|-------------|
 | `--port <port>` | `-p` | Server port (default: 3000) |
-| `--host <host>` | `-H` | Server host (default: localhost) |
+| `--host <host>` | `-H` | Server host (default: 0.0.0.0) |
+| `--interactive-web [enabled]` |  | Enable interactive web UI (default: false) |
+| `--interactive-port <port>` |  | Interactive web UI port (default: 3001) |
 | `--daemon` | `-d` | Run as background process |
 | `--log-level <level>` | `-l` | Log level (debug, info, warn, error) |
 | `--verbose` | `-v` | Enable verbose output |
@@ -86,6 +96,9 @@ shipmyagent start [options]
 ```bash
 # Start with defaults
 shipmyagent start
+
+# Start current directory using `ship.json` start defaults
+shipmyagent .
 
 # Start on custom port
 shipmyagent start --port 3001

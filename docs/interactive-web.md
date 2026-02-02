@@ -11,6 +11,21 @@ ShipMyAgent 提供了一个内置的交互式 Web 界面，可以在生产环境
 
 ## 使用方法
 
+### 在 `ship.json` 里配置（推荐）
+
+你可以把启动参数直接写进 `ship.json` 的 `start` 字段，然后直接运行 `shipmyagent .` 或 `shipmyagent start`：
+
+```json
+{
+  "start": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "interactiveWeb": true,
+    "interactivePort": 3001
+  }
+}
+```
+
 ### 基本用法
 
 在生产环境启动 Agent 时，添加 `--interactive-web` 参数：
@@ -41,10 +56,10 @@ shipmyagent start --interactive-web --interactive-port 9001
 
 ```bash
 # 监听所有网络接口
-shipmyagent start -h 0.0.0.0 --interactive-web
+shipmyagent start -H 0.0.0.0 --interactive-web
 
 # 只监听本地
-shipmyagent start -h 127.0.0.1 --interactive-web
+shipmyagent start -H 127.0.0.1 --interactive-web
 ```
 
 ## 架构说明
@@ -86,10 +101,10 @@ shipmyagent start -h 127.0.0.1 --interactive-web
 shipmyagent start [options] [path]
 
 Options:
-  -p, --port <port>          主 API 服务器端口 (default: "3000")
-  -h, --host <host>          监听主机地址 (default: "0.0.0.0")
-  --interactive-web          启动交互式 Web 界面 (default: false)
-  --interactive-port <port>  交互式 Web 界面端口 (default: "3001")
+  -p, --port <port>          主 API 服务器端口（可在 ship.json 的 start.port 配置）
+  -H, --host <host>          监听主机地址（可在 ship.json 的 start.host 配置）
+  --interactive-web [enabled] 启动交互式 Web 界面（可在 ship.json 的 start.interactiveWeb 配置）
+  --interactive-port <port>  交互式 Web 界面端口（可在 ship.json 的 start.interactivePort 配置）
 ```
 
 ## 生产环境建议
@@ -242,7 +257,7 @@ shipmyagent start --interactive-web
 
 ```bash
 # 启动并监听所有接口
-shipmyagent start -h 0.0.0.0 --interactive-web
+shipmyagent start -H 0.0.0.0 --interactive-web
 
 # 团队成员通过 http://your-server-ip:3001 访问
 ```

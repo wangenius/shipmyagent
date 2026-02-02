@@ -68,15 +68,25 @@ shipmyagent init --no-git
 启动 ShipMyAgent 服务器。
 
 ```bash
-shipmyagent start [选项]
+shipmyagent start [选项] [path]
 ```
+
+也可以用更短的方式启动当前目录（等价于 `shipmyagent start .`）：
+
+```bash
+shipmyagent .
+```
+
+`shipmyagent start` 会读取 `ship.json` 里的 `start` 配置作为默认值；如果你在命令行里显式传参，则会覆盖 `ship.json`。
 
 **选项**：
 
 | 选项 | 简写 | 描述 |
 |------|------|------|
 | `--port <port>` | `-p` | 服务器端口（默认：3000）|
-| `--host <host>` | `-H` | 服务器主机（默认：localhost）|
+| `--host <host>` | `-H` | 服务器主机（默认：0.0.0.0）|
+| `--interactive-web [enabled]` |  | 启动交互式 Web 界面（默认：false）|
+| `--interactive-port <port>` |  | 交互式 Web 界面端口（默认：3001）|
 | `--daemon` | `-d` | 作为后台进程运行 |
 | `--log-level <level>` | `-l` | 日志级别（debug、info、warn、error）|
 | `--verbose` | `-v` | 启用详细输出 |
@@ -86,6 +96,9 @@ shipmyagent start [选项]
 ```bash
 # 使用默认值启动
 shipmyagent start
+
+# 使用 `ship.json` 的 start 配置启动当前目录
+shipmyagent .
 
 # 在自定义端口上启动
 shipmyagent start --port 3001

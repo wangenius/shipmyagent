@@ -46,6 +46,19 @@ ShipMyAgent 内置了一个交互式 Web 界面，让你在浏览器中轻松管
 shipmyagent start --interactive-web
 ```
 
+也可以把启动参数写进 `ship.json` 的 `start` 字段，然后直接运行 `shipmyagent .` / `shipmyagent start`：
+
+```json
+{
+  "start": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "interactiveWeb": true,
+    "interactivePort": 3001
+  }
+}
+```
+
 这将启动两个服务：
 - **主 API 服务器**：`http://localhost:3000`
 - **交互式 Web 界面**：`http://localhost:3001`
@@ -64,10 +77,10 @@ shipmyagent start -p 8080 --interactive-web --interactive-port 8081
 
 ```bash
 # 监听所有网络接口（团队访问）
-shipmyagent start -h 0.0.0.0 --interactive-web
+shipmyagent start -H 0.0.0.0 --interactive-web
 
 # 只监听本地（开发环境）
-shipmyagent start -h 127.0.0.1 --interactive-web
+shipmyagent start -H 127.0.0.1 --interactive-web
 ```
 
 ### 架构说明

@@ -30,6 +30,12 @@ The main configuration file that controls the agent's capabilities and behavior.
 {
   "name": "my-agent",
   "version": "1.0.0",
+  "start": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "interactiveWeb": false,
+    "interactivePort": 3001
+  },
   "llm": {
     "provider": "anthropic",
     "model": "claude-3-5-sonnet-20241022",
@@ -99,6 +105,28 @@ Configuration schema version.
 ```json
 {
   "version": "1.0.0"
+}
+```
+
+#### start (object, optional)
+
+Startup options (read by `shipmyagent .` / `shipmyagent start`). Explicit CLI flags override this config.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `port` | number | 3000 | Main API server port |
+| `host` | string | 0.0.0.0 | Bind host |
+| `interactiveWeb` | boolean | false | Enable interactive web UI |
+| `interactivePort` | number | 3001 | Interactive web UI port |
+
+```json
+{
+  "start": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "interactiveWeb": true,
+    "interactivePort": 3001
+  }
 }
 ```
 

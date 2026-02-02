@@ -30,6 +30,12 @@ your-project/
 {
   "name": "my-agent",
   "version": "1.0.0",
+  "start": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "interactiveWeb": false,
+    "interactivePort": 3001
+  },
   "llm": {
     "provider": "anthropic",
     "model": "claude-3-5-sonnet-20241022",
@@ -99,6 +105,28 @@ your-project/
 ```json
 {
   "version": "1.0.0"
+}
+```
+
+#### start (object, 可选)
+
+启动参数配置（`shipmyagent .` / `shipmyagent start` 会读取）。命令行显式传参会覆盖这里的配置。
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `port` | number | 3000 | 主 API 服务器端口 |
+| `host` | string | 0.0.0.0 | 监听主机地址 |
+| `interactiveWeb` | boolean | false | 是否启用交互式 Web 界面 |
+| `interactivePort` | number | 3001 | 交互式 Web 界面端口 |
+
+```json
+{
+  "start": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "interactiveWeb": true,
+    "interactivePort": 3001
+  }
 }
 ```
 

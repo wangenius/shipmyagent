@@ -8,6 +8,16 @@ export interface ShipConfig {
   version: string;
   description?: string;
   /**
+   * Runtime startup configuration used by `shipmyagent start` / `shipmyagent .`.
+   * CLI flags (if provided) take precedence over this config.
+   */
+  start?: {
+    port?: number;
+    host?: string;
+    interactiveWeb?: boolean;
+    interactivePort?: number;
+  };
+  /**
    * Optional Claude Code-compatible skills configuration.
    * By default we look for project skills under `.claude/skills/`.
    */
@@ -144,6 +154,12 @@ export const DEFAULT_SHELL_GUIDE = "";
 export const DEFAULT_SHIP_JSON: ShipConfig = {
   name: "shipmyagent",
   version: "1.0.0",
+  start: {
+    port: 3000,
+    host: "0.0.0.0",
+    interactiveWeb: false,
+    interactivePort: 3001,
+  },
   llm: {
     provider: "anthropic",
     model: "claude-sonnet-4-20250514",
