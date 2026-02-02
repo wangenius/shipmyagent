@@ -24,9 +24,13 @@ package/bin
 .ship/approvals/
 .ship/runs/
 .ship/queue/
+.ship/chats/
 .ship/.cache/
+.ship/public/
 **/.ship/logs/
 **/.ship/approvals/
 **/.ship/runs/
 **/.ship/queue/
+**/.ship/chats/
 **/.ship/.cache/
+**/.ship/public/

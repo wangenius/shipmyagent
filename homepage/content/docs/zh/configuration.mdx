@@ -170,6 +170,43 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 }
 ```
 
+#### oss (object, 可选)
+
+对象存储配置（S3 兼容，例如 Cloudflare R2）。
+
+配置完成后，运行时会启用内置工具 `s3_upload`（Agent 可直接调用，用于把项目内文件上传到对象存储）。
+
+| 字段 | 类型 | 必需 | 默认值 | 描述 |
+|------|------|------|--------|------|
+| `enabled` | boolean | 否 | true | 是否启用对象存储工具 |
+| `provider` | string | 否 | `s3` | 目前仅支持 `s3` |
+| `endpoint` | string | 是 | - | S3 Endpoint（R2 示例：`https://<account-id>.r2.cloudflarestorage.com`） |
+| `accessKeyId` | string | 是 | - | Access Key ID（建议使用环境变量占位符） |
+| `secretAccessKey` | string | 是 | - | Secret Access Key（建议使用环境变量占位符） |
+| `region` | string | 否 | `auto` | SigV4 region（R2 通常是 `auto`） |
+
+```json
+{
+  "oss": {
+    "enabled": true,
+    "provider": "s3",
+    "endpoint": "${R2_S3_ENDPOINT}",
+    "accessKeyId": "${R2_ID}",
+    "secretAccessKey": "${R2_SECRET_KEY}",
+    "region": "auto"
+  }
+}
+```
+
+#### public 文件（.ship/public）
+
+如果你把 SMA 部署到服务器上，还可以把文件放到项目的 `.ship/public/` 目录，并通过 HTTP 路由 `/public/*` 直接访问：
+
+- 本地路径：`.ship/public/report.pdf`
+- 访问路径：`https://<host>:<port>/public/report.pdf`
+
+（该路由由服务器直接提供静态文件，不需要 OSS。）
+
 #### llm (object, 必需)
 
 语言模型配置。

@@ -191,6 +191,7 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     getLogsDirPath(projectRoot),
     getCacheDirPath(projectRoot),
     getChatsDirPath(projectRoot),
+    path.join(getShipDirPath(projectRoot), 'public'),
     getMcpDirPath(projectRoot),
   ];
 

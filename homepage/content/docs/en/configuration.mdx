@@ -170,6 +170,43 @@ Startup options (read by `shipmyagent .` / `shipmyagent start`). Explicit CLI fl
 }
 ```
 
+#### oss (object, optional)
+
+Object storage configuration (S3-compatible, e.g. Cloudflare R2).
+
+When configured, the runtime enables the built-in `s3_upload` tool (so the Agent can upload project-local files to your object storage).
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `enabled` | boolean | No | true | Enable object storage tools |
+| `provider` | string | No | `s3` | Currently only `s3` is supported |
+| `endpoint` | string | Yes | - | S3 endpoint (R2 example: `https://<account-id>.r2.cloudflarestorage.com`) |
+| `accessKeyId` | string | Yes | - | Access key id (use env placeholders) |
+| `secretAccessKey` | string | Yes | - | Secret access key (use env placeholders) |
+| `region` | string | No | `auto` | SigV4 region (R2 typically uses `auto`) |
+
+```json
+{
+  "oss": {
+    "enabled": true,
+    "provider": "s3",
+    "endpoint": "${R2_S3_ENDPOINT}",
+    "accessKeyId": "${R2_ID}",
+    "secretAccessKey": "${R2_SECRET_KEY}",
+    "region": "auto"
+  }
+}
+```
+
+#### Public files (`.ship/public`)
+
+If you deploy SMA on a server, you can also put files under `.ship/public/` and access them via the HTTP route `/public/*`:
+
+- Local path: `.ship/public/report.pdf`
+- URL: `https://<host>:<port>/public/report.pdf`
+
+(This is served directly by the server and does not require OSS.)
+
 #### llm (object, required)
 
 Language Model configuration.

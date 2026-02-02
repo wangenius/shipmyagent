@@ -55,6 +55,7 @@ import {
 } from "./skills.js";
 import { McpManager } from './mcp-manager.js';
 import type { McpConfig } from './mcp-types.js';
+import { uploadFileToS3, type S3StorageConfig } from "./s3-upload.js";
 
 // ==================== Types ====================
 
@@ -663,6 +664,35 @@ export class AgentRuntime {
   }
 
   private createToolSet() {
+    loadProjectDotenv(this.context.projectRoot);
+    const oss = (this.context.config as any)?.oss as
+      | {
+          enabled?: boolean;
+          provider?: string;
+          endpoint?: unknown;
+          accessKeyId?: unknown;
+          secretAccessKey?: unknown;
+          region?: unknown;
+        }
+      | undefined;
+
+    const ossConfigured =
+      Boolean(oss) &&
+      oss?.enabled !== false &&
+      String(oss?.provider || "s3") === "s3" &&
+      Boolean(String(oss?.endpoint || "").trim()) &&
+      Boolean(String(oss?.accessKeyId || "").trim()) &&
+      Boolean(String(oss?.secretAccessKey || "").trim());
+
+    const storageConfig: S3StorageConfig | null = ossConfigured
+      ? {
+          endpoint: String(oss!.endpoint),
+          accessKeyId: String(oss!.accessKeyId),
+          secretAccessKey: String(oss!.secretAccessKey),
+          region: String(oss!.region || "auto"),
+        }
+      : null;
+
     const tools: Record<string, any> = {
       skills_list: tool({
         description:
@@ -1037,6 +1067,49 @@ Chain commands with && for sequential execution or ; for independent execution.`
       }),
     };
 
+    if (ossConfigured) {
+      tools.s3_upload = tool({
+        description:
+          "Upload a local file (inside the project) to an S3-compatible object storage (including Cloudflare R2). Requires `oss` configured in ship.json.",
+        inputSchema: z.object({
+          bucket: z.string().describe("Bucket name"),
+          file: z
+            .string()
+            .describe("Local file path (relative to project root)"),
+          key: z
+            .string()
+            .optional()
+            .describe("Object key in bucket (default: basename(file))"),
+          contentType: z
+            .string()
+            .optional()
+            .describe("Content-Type (default: application/octet-stream)"),
+          region: z
+            .string()
+            .optional()
+            .describe("SigV4 region (default: auto)"),
+        }),
+        execute: async (args: {
+          bucket: string;
+          file: string;
+          key?: string;
+          contentType?: string;
+          region?: string;
+        }) => {
+          return uploadFileToS3({
+            projectRoot: this.context.projectRoot,
+            permissionEngine: this.permissionEngine,
+            storage: storageConfig!,
+            bucket: args.bucket,
+            file: args.file,
+            key: args.key,
+            contentType: args.contentType,
+            region: args.region,
+          });
+        },
+      });
+    }
+
     // 添加 MCP 工具
     if (this.mcpManager) {
       const mcpTools = this.mcpManager.getAllTools();
@@ -1108,7 +1181,36 @@ Chain commands with && for sequential execution or ; for independent execution.`
    * Create legacy-style tools with permission checks and approval workflow
    */
   private async createTools(): Promise<Record<string, any>> {
-    return {
+    loadProjectDotenv(this.context.projectRoot);
+    const oss = (this.context.config as any)?.oss as
+      | {
+          enabled?: boolean;
+          provider?: string;
+          endpoint?: unknown;
+          accessKeyId?: unknown;
+          secretAccessKey?: unknown;
+          region?: unknown;
+        }
+      | undefined;
+
+    const ossConfigured =
+      Boolean(oss) &&
+      oss?.enabled !== false &&
+      String(oss?.provider || "s3") === "s3" &&
+      Boolean(String(oss?.endpoint || "").trim()) &&
+      Boolean(String(oss?.accessKeyId || "").trim()) &&
+      Boolean(String(oss?.secretAccessKey || "").trim());
+
+    const storageConfig: S3StorageConfig | null = ossConfigured
+      ? {
+          endpoint: String(oss!.endpoint),
+          accessKeyId: String(oss!.accessKeyId),
+          secretAccessKey: String(oss!.secretAccessKey),
+          region: String(oss!.region || "auto"),
+        }
+      : null;
+
+    const tools: Record<string, any> = {
       skills_list: {
         description:
           "List Claude Code-compatible skills (from .claude/skills and any configured skill roots). Use this to discover available skills before loading one.",
@@ -1260,6 +1362,57 @@ Chain commands with && for sequential execution or ; for independent execution.`
         },
       },
     };
+
+    if (ossConfigured) {
+      tools.s3_upload = {
+        description:
+          "Upload a local file (inside the project) to an S3-compatible object storage (including Cloudflare R2). Requires `oss` configured in ship.json.",
+        parameters: z.object({
+          bucket: z.string().describe("Bucket name"),
+          file: z
+            .string()
+            .describe("Local file path (relative to project root)"),
+          key: z
+            .string()
+            .optional()
+            .describe("Object key in bucket (default: basename(file))"),
+          contentType: z
+            .string()
+            .optional()
+            .describe("Content-Type (default: application/octet-stream)"),
+          region: z
+            .string()
+            .optional()
+            .describe("SigV4 region (default: auto)"),
+        }),
+        execute: async ({
+          bucket,
+          file,
+          key,
+          contentType,
+          region,
+        }: {
+          bucket: string;
+          file: string;
+          key?: string;
+          contentType?: string;
+          region?: string;
+        }) => {
+          return uploadFileToS3({
+            projectRoot: this.context.projectRoot,
+            permissionEngine: this.permissionEngine,
+            storage: storageConfig!,
+            bucket,
+            file,
+            key,
+            contentType,
+            region,
+          });
+        },
+      };
+    }
+
+    return tools;
   }
 
   /**
@@ -2413,6 +2566,7 @@ You are a helpful project assistant.`;
   fs.ensureDirSync(path.join(shipDir, "approvals"));
   fs.ensureDirSync(path.join(shipDir, "logs"));
   fs.ensureDirSync(path.join(shipDir, ".cache"));
+  fs.ensureDirSync(path.join(shipDir, "public"));
 
   // Read user's Agent.md (identity/role definition)
   try {

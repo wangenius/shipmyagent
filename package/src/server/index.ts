@@ -10,6 +10,41 @@ import { ChatStore } from '../runtime/chat-store.js';
 import http from 'node:http';
 import fs from 'fs-extra';
 import path from 'path';
+import { Readable } from 'node:stream';
+
+function guessContentType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.html') return 'text/html; charset=utf-8';
+  if (ext === '.css') return 'text/css; charset=utf-8';
+  if (ext === '.js') return 'application/javascript; charset=utf-8';
+  if (ext === '.json') return 'application/json; charset=utf-8';
+  if (ext === '.txt') return 'text/plain; charset=utf-8';
+  if (ext === '.md') return 'text/markdown; charset=utf-8';
+  if (ext === '.pdf') return 'application/pdf';
+  if (ext === '.png') return 'image/png';
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  if (ext === '.gif') return 'image/gif';
+  if (ext === '.svg') return 'image/svg+xml';
+  if (ext === '.webp') return 'image/webp';
+  if (ext === '.zip') return 'application/zip';
+  return 'application/octet-stream';
+}
+
+function safePublicRelativePath(urlPath: string): string | null {
+  if (!urlPath.startsWith('/public')) return null;
+  const raw = urlPath.replace(/^\/public\/?/, '');
+  if (!raw) return '';
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+  const normalized = path.posix.normalize(decoded.replace(/\\/g, '/'));
+  if (normalized === '.' || normalized === '') return '';
+  if (normalized.startsWith('..') || normalized.includes('/..')) return null;
+  return normalized;
+}
 
 export interface ServerContext {
   projectRoot: string;
@@ -86,6 +121,41 @@ export class AgentServer {
         });
       }
       return c.text('Not Found', 404);
+    });
+
+    // Serve project runtime public files: .ship/public/* => /public/*
+    this.app.all('/public/*', async (c) => {
+      const method = c.req.method.toUpperCase();
+      if (method !== 'GET' && method !== 'HEAD') {
+        return c.text('Method Not Allowed', 405);
+      }
+
+      const rel = safePublicRelativePath(c.req.path);
+      if (rel === null) return c.text('Not Found', 404);
+
+      const baseDir = path.join(this.projectRoot, '.ship', 'public');
+      const absolutePath = path.resolve(baseDir, rel);
+      const baseResolved = path.resolve(baseDir);
+      if (absolutePath !== baseResolved && !absolutePath.startsWith(baseResolved + path.sep)) {
+        return c.text('Not Found', 404);
+      }
+
+      const exists = await fs.pathExists(absolutePath);
+      if (!exists) return c.text('Not Found', 404);
+      const stat = await fs.stat(absolutePath).catch(() => null);
+      if (!stat || !stat.isFile()) return c.text('Not Found', 404);
+
+      const headers: Record<string, string> = {
+        'Content-Type': guessContentType(absolutePath),
+        'Cache-Control': 'no-cache',
+      };
+      if (method === 'HEAD') {
+        headers['Content-Length'] = String(stat.size);
+        return c.body(null, 200, headers);
+      }
+
+      const stream = Readable.toWeb(fs.createReadStream(absolutePath)) as any;
+      return new Response(stream, { status: 200, headers });
     });
 
     // Health check
