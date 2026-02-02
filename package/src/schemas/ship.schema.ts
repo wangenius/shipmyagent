@@ -1,0 +1,145 @@
+export const SHIP_JSON_SCHEMA: Record<string, unknown> = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://shipmyagent.dev/schemas/ship.schema.json",
+  title: "ShipMyAgent ship.json",
+  type: "object",
+  additionalProperties: true,
+  properties: {
+    $schema: {
+      type: "string",
+      description:
+        "JSON Schema reference for editor/IDE validation (e.g. ./.ship/schema/ship.schema.json).",
+    },
+    name: { type: "string" },
+    version: { type: "string" },
+    description: { type: "string" },
+    start: {
+      type: "object",
+      additionalProperties: true,
+      properties: {
+        port: { type: "integer", minimum: 1, maximum: 65535 },
+        host: { type: "string" },
+        interactiveWeb: { type: "boolean" },
+        interactivePort: { type: "integer", minimum: 1, maximum: 65535 },
+      },
+    },
+    skills: {
+      type: "object",
+      additionalProperties: true,
+      properties: {
+        paths: { type: "array", items: { type: "string" } },
+        allowExternalPaths: { type: "boolean" },
+      },
+    },
+    llm: {
+      type: "object",
+      additionalProperties: true,
+      properties: {
+        provider: { type: "string" },
+        model: { type: "string" },
+        baseUrl: { type: "string" },
+        apiKey: { type: "string" },
+        logMessages: { type: "boolean" },
+        temperature: { type: "number" },
+        maxTokens: { type: "number" },
+        topP: { type: "number" },
+        frequencyPenalty: { type: "number" },
+        presencePenalty: { type: "number" },
+        anthropicVersion: { type: "string" },
+      },
+    },
+    permissions: {
+      type: "object",
+      additionalProperties: true,
+      properties: {
+        read_repo: {
+          anyOf: [
+            { type: "boolean" },
+            {
+              type: "object",
+              additionalProperties: true,
+              properties: { paths: { type: "array", items: { type: "string" } } },
+            },
+          ],
+        },
+        write_repo: {
+          anyOf: [
+            { type: "boolean" },
+            {
+              type: "object",
+              additionalProperties: true,
+              properties: {
+                paths: { type: "array", items: { type: "string" } },
+                requiresApproval: { type: "boolean" },
+              },
+              required: ["requiresApproval"],
+            },
+          ],
+        },
+        exec_shell: {
+          anyOf: [
+            { type: "boolean" },
+            {
+              type: "object",
+              additionalProperties: true,
+              properties: {
+                deny: { type: "array", items: { type: "string" } },
+                allow: { type: "array", items: { type: "string" } },
+                requiresApproval: { type: "boolean" },
+              },
+              required: ["requiresApproval"],
+            },
+          ],
+        },
+        open_pr: { type: "boolean" },
+        merge: { type: "boolean" },
+      },
+    },
+    integrations: {
+      type: "object",
+      additionalProperties: true,
+      properties: {
+        telegram: {
+          type: "object",
+          additionalProperties: true,
+          properties: {
+            enabled: { type: "boolean" },
+            botToken: { type: "string" },
+            chatId: { type: "string" },
+            followupWindowMs: { type: "number" },
+            groupAccess: { type: "string", enum: ["initiator_or_admin", "anyone"] },
+          },
+        },
+        discord: {
+          type: "object",
+          additionalProperties: true,
+          properties: {
+            enabled: { type: "boolean" },
+            botToken: { type: "string" },
+          },
+        },
+        feishu: {
+          type: "object",
+          additionalProperties: true,
+          properties: {
+            enabled: { type: "boolean" },
+            appId: { type: "string" },
+            appSecret: { type: "string" },
+            domain: { type: "string" },
+          },
+        },
+        qq: {
+          type: "object",
+          additionalProperties: true,
+          properties: {
+            enabled: { type: "boolean" },
+            appId: { type: "string" },
+            appSecret: { type: "string" },
+            sandbox: { type: "boolean" },
+          },
+        },
+      },
+    },
+  },
+};
+

@@ -4,6 +4,7 @@ import fs from "fs-extra";
 import path from "path";
 
 export interface ShipConfig {
+  $schema?: string;
   name: string;
   version: string;
   description?: string;
@@ -61,6 +62,8 @@ export interface ShipConfig {
       allow?: string[];
       requiresApproval: boolean;
     };
+    open_pr?: boolean;
+    merge?: boolean;
   };
   integrations: {
     telegram?: {
@@ -152,6 +155,7 @@ export const MODEL_CONFIGS = {
 export const DEFAULT_SHELL_GUIDE = "";
 
 export const DEFAULT_SHIP_JSON: ShipConfig = {
+  $schema: "./.ship/schema/ship.schema.json",
   name: "shipmyagent",
   version: "1.0.0",
   start: {
@@ -272,6 +276,10 @@ export function getShipJsonPath(cwd: string): string {
 
 export function getShipDirPath(cwd: string): string {
   return path.join(cwd, ".ship");
+}
+
+export function getShipSchemaPath(cwd: string): string {
+  return path.join(getShipDirPath(cwd), "schema", "ship.schema.json");
 }
 
 export function getTasksDirPath(cwd: string): string {

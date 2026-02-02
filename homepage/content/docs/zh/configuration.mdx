@@ -24,10 +24,15 @@ your-project/
 
 控制 agent 能力和行为的主配置文件。
 
+:::tip
+`shipmyagent init` 会自动生成 `ship.json` 的 `$schema` 以及对应的 schema 文件（`.ship/schema/ship.schema.json`），便于 IDE 自动补全与校验。
+:::
+
 ### 完整示例
 
 ```json
 {
+  "$schema": "./.ship/schema/ship.schema.json",
   "name": "my-agent",
   "version": "1.0.0",
   "start": {

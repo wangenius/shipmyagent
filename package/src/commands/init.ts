@@ -13,12 +13,14 @@ import {
   getLogsDirPath,
   getCacheDirPath,
   getChatsDirPath,
+  getShipSchemaPath,
   ensureDir,
   saveJson,
   DEFAULT_SHIP_JSON,
   MODEL_CONFIGS,
   ShipConfig,
 } from '../utils.js';
+import { SHIP_JSON_SCHEMA } from '../schemas/ship.schema.js';
 
 interface InitOptions {
   force?: boolean;
@@ -141,6 +143,7 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   };
 
   const shipConfig: ShipConfig = {
+    $schema: DEFAULT_SHIP_JSON.$schema,
     name: response.name || path.basename(projectRoot),
     version: '1.0.0',
     start: {
@@ -192,6 +195,12 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     await ensureDir(dir);
   }
   console.log(`✅ Created .ship/ directory structure`);
+
+  // Write JSON schema for ship.json (for editor validation via "$schema")
+  const shipSchemaPath = getShipSchemaPath(projectRoot);
+  await ensureDir(path.dirname(shipSchemaPath));
+  await saveJson(shipSchemaPath, SHIP_JSON_SCHEMA);
+  console.log(`✅ Created ship.schema.json`);
 
   // Create sample task file
   const sampleTaskPath = path.join(getTasksDirPath(projectRoot), 'sample-task.md');

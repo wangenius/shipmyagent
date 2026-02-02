@@ -24,10 +24,15 @@ your-project/
 
 The main configuration file that controls the agent's capabilities and behavior.
 
+:::tip
+`shipmyagent init` generates a `$schema` field in `ship.json` and writes the schema file to `.ship/schema/ship.schema.json` for IDE validation and autocompletion.
+:::
+
 ### Complete Example
 
 ```json
 {
+  "$schema": "./.ship/schema/ship.schema.json",
   "name": "my-agent",
   "version": "1.0.0",
   "start": {

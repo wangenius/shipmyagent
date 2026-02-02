@@ -1,6 +1,13 @@
 {
+  "$schema": "./.ship/schema/ship.schema.json",
   "name": "server-agent",
   "version": "1.0.0",
+  "start": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "interactiveWeb": false,
+    "interactivePort": 3001
+  },
   "llm": {
     "provider": "custom",
     "model": "${LLM_MODEL}",
@@ -32,6 +39,10 @@
     "feishu": {
       "enabled": false,
       "domain": "https://open.feishu.cn"
+    },
+    "qq": {
+      "enabled": false,
+      "sandbox": false
     }
   }
 }
