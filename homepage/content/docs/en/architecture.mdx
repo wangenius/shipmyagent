@@ -58,11 +58,13 @@ The central coordinator that manages all agent operations.
 - Manage permission checks
 - Handle task scheduling
 - Route notifications
+- Manage conversation context and long-term memory
 
 **Key Design Decisions**:
-- **Stateless**: Each operation is independent
+- **Session Isolation**: Each session manages context independently
 - **Plugin-based**: Tools and LLM providers are pluggable
 - **Permission-first**: All operations checked against permissions
+- **Intelligent Context Management**: Automatic compression and memory extraction
 
 ### 2. LLM Provider Abstraction
 
@@ -219,6 +221,197 @@ Cron Trigger
 │    - Retry if failed             │
 └─────────────────────────────────┘
 ```
+
+---
+
+## Context Management System
+
+ShipMyAgent implements an intelligent context management mechanism that ensures information is not lost in long conversations while avoiding exceeding LLM context limits.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   Context Management System                  │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │  Session     │  │  Context     │  │  Long-term   │     │
+│  │  Cache       │  │  Compressor  │  │  Memory      │     │
+│  │  (Hot Data)  │  │  (Smart Sum) │  │  (Persist)   │     │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
+│         │                  │                  │               │
+│         └──────────────────┼──────────────────┘               │
+│                            │                                  │
+│                    ┌───────▼────────┐                         │
+│                    │  Session       │                         │
+│                    │  Manager       │                         │
+│                    └────────────────┘                         │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Core Components
+
+#### 1. Session Cache
+
+**Features**:
+- Maintains independent message history for each session
+- Fast access to recent conversation content
+- Automatic eviction of stale data to prevent memory leaks
+
+**Working Mechanism**:
+- Each session stores data independently without interference
+- Uses FIFO (First In First Out) strategy to evict old sessions
+- Keeps recent messages per session, persists the rest to disk
+
+#### 2. Context Compressor
+
+**Features**:
+- Intelligently compresses conversation history to avoid token limits
+- Supports multiple compression strategies
+
+**Compression Strategies**:
+
+##### Sliding Window Strategy
+Keeps the most recent N complete messages and discards older ones. Suitable for scenarios where conversation content is relatively independent.
+
+##### Summary Generation Strategy
+Generates concise summaries for old messages, preserving key information, then combines with recent complete messages. Suitable for scenarios requiring historical context preservation.
+
+##### Smart Selection Strategy
+Selectively retains important messages based on importance scoring. Scoring factors include:
+- Message temporal position (newer is more important)
+- Message length (longer messages may contain more information)
+- Keywords (contains "important", "error", "decision", etc.)
+- Message role (user messages are typically more important)
+
+**Trigger Timing**:
+- **Proactive Compression**: Automatically triggered when message count exceeds threshold
+- **Reactive Compression**: Triggered when LLM returns token limit error
+- **Manual Compression**: Users can manually trigger via API
+
+#### 3. Long-term Memory System
+
+**Features**:
+- Extracts key information from conversations and persists it
+- Supports multiple memory types
+- Intelligent deduplication and importance scoring
+
+**Memory Types**:
+
+| Type | Description | Example |
+|------|-------------|---------|
+| Preference | User habits and preferences | "User prefers concise responses" |
+| Fact | Project-related important info | "Project uses TypeScript" |
+| Entity | People, projects, organizations | "John is the project lead" |
+| Task | Todo items and reminders | "Need to fix login page bug" |
+
+**Extraction Flow**:
+```
+Conversation Messages
+    │
+    ▼
+┌─────────────────────────────────┐
+│ 1. Frequency Control            │
+│    Avoid frequent extraction     │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 2. LLM Analysis                 │
+│    Use LLM to identify key info │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 3. Deduplication                │
+│    Filter duplicate memories    │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 4. Persistence                  │
+│    Save to local filesystem     │
+└─────────────────────────────────┘
+```
+
+### Workflow
+
+Complete conversation processing flow:
+
+```
+User Message
+    │
+    ▼
+┌─────────────────────────────────┐
+│ 1. Load Session Context         │
+│    - Get message history        │
+│    - Load long-term memory      │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 2. Check Compression Need       │
+│    Based on message count/tokens│
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 3. Build Complete Prompt        │
+│    Combine system, memory, hist │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 4. Call LLM                     │
+│    Send request and get response│
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│ 5. Update Context               │
+│    - Save new messages          │
+│    - Async memory extraction    │
+│    - Clean stale data           │
+└────────────┬────────────────────┘
+             │
+             ▼
+       Return Response
+```
+
+### Performance Optimization
+
+#### Async Processing
+Memory extraction and data cleanup operations execute asynchronously without blocking user responses, ensuring fast feedback.
+
+#### Caching Strategy
+- **In-memory Cache**: Hot data stored in memory for fast access
+- **File Cache**: Cold data persisted to disk to save memory
+
+#### Batch Processing
+Supports batch memory extraction to improve efficiency and reduce LLM API calls.
+
+### Storage Locations
+
+```
+.ship/
+├── memory/              # Long-term memory storage
+│   ├── {sessionId}.json
+│   └── ...
+├── .cache/              # Temporary cache
+│   └── history/         # Conversation history cache
+└── logs/                # Log files
+    └── {date}.jsonl
+```
+
+### Design Advantages
+
+1. **Seamless Long Conversations**: Automatically manages context, supports unlimited conversation length
+2. **Intelligent Memory**: Automatically extracts and saves important information without user intervention
+3. **Efficient Compression**: Multiple compression strategies balance information retention and performance
+4. **Session Isolation**: Each session managed independently without interference
+5. **Async Optimization**: Background processing doesn't affect response speed
 
 ---
 
