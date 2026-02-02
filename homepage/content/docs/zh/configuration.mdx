@@ -184,6 +184,7 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 | `accessKeyId` | string | 是 | - | Access Key ID（建议使用环境变量占位符） |
 | `secretAccessKey` | string | 是 | - | Secret Access Key（建议使用环境变量占位符） |
 | `region` | string | 否 | `auto` | SigV4 region（R2 通常是 `auto`） |
+| `bucket` | string | 否 | - | 默认 bucket（用于 `cloud_file_upload` 等高层工具） |
 
 ```json
 {
@@ -193,7 +194,26 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
     "endpoint": "${R2_S3_ENDPOINT}",
     "accessKeyId": "${R2_ID}",
     "secretAccessKey": "${R2_SECRET_KEY}",
-    "region": "auto"
+    "region": "auto",
+    "bucket": "my-bucket"
+  }
+}
+```
+
+#### cloudFiles (object, 可选)
+
+云文件对外访问配置（用于生成 `/public/*` 的可访问 URL）。
+
+| 字段 | 类型 | 必需 | 默认值 | 描述 |
+|------|------|------|--------|------|
+| `publicBaseUrl` | string | 否 | - | 你部署的 ShipMyAgent 服务的公网 Base URL（例如 `https://agent.example.com`） |
+| `publicRoutePrefix` | string | 否 | `/public` | public 路由前缀 |
+
+```json
+{
+  "cloudFiles": {
+    "publicBaseUrl": "${SMA_PUBLIC_BASE_URL}",
+    "publicRoutePrefix": "/public"
   }
 }
 ```

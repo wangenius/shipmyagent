@@ -23,6 +23,15 @@ export const SHIP_JSON_SCHEMA: Record<string, unknown> = {
         accessKeyId: { type: "string" },
         secretAccessKey: { type: "string" },
         region: { type: "string" },
+        bucket: { type: "string" },
+      },
+    },
+    cloudFiles: {
+      type: "object",
+      additionalProperties: true,
+      properties: {
+        publicBaseUrl: { type: "string" },
+        publicRoutePrefix: { type: "string" },
       },
     },
     start: {

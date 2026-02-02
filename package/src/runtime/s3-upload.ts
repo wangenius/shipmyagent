@@ -155,6 +155,17 @@ function buildObjectPath(basePathname: string, bucket: string, key: string): str
   return awsEncodePath(raw);
 }
 
+export function getS3ObjectUrl(storage: S3StorageConfig, bucket: string, key: string): string {
+  const endpointRaw = String(storage.endpoint || "").trim();
+  if (!endpointRaw) throw new Error("Missing storage.endpoint");
+  const endpoint = endpointRaw.startsWith("http://") || endpointRaw.startsWith("https://") ? endpointRaw : `https://${endpointRaw}`;
+  const baseUrl = new URL(endpoint);
+  const objectPath = buildObjectPath(baseUrl.pathname, bucket, key);
+  const url = new URL(baseUrl.origin);
+  url.pathname = objectPath;
+  return url.toString();
+}
+
 function resolveFileWithinProject(projectRoot: string, file: string): string {
   const absolutePath = path.resolve(projectRoot, file);
   const relative = path.relative(projectRoot, absolutePath);
@@ -162,6 +173,57 @@ function resolveFileWithinProject(projectRoot: string, file: string): string {
     throw new Error(`File must be inside project root: ${file}`);
   }
   return absolutePath;
+}
+
+export async function deleteObjectFromS3(params: {
+  storage: S3StorageConfig;
+  bucket: string;
+  key: string;
+  region?: string;
+}): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const endpointRaw = String(params.storage.endpoint || "").trim();
+    const accessKeyId = String(params.storage.accessKeyId || "").trim();
+    const secretAccessKey = String(params.storage.secretAccessKey || "").trim();
+    const region = String(params.region || params.storage.region || "auto").trim();
+    if (!endpointRaw || !accessKeyId || !secretAccessKey) {
+      return { success: false, error: "Missing S3 storage configuration." };
+    }
+
+    const endpoint = endpointRaw.startsWith("http://") || endpointRaw.startsWith("https://") ? endpointRaw : `https://${endpointRaw}`;
+    const baseUrl = new URL(endpoint);
+    const objectPath = buildObjectPath(baseUrl.pathname, params.bucket, params.key);
+    const url = new URL(baseUrl.origin);
+    url.pathname = objectPath;
+
+    const emptyPayloadHash = sha256Hex("");
+    const signedHeaders = signAwsV4({
+      method: "DELETE",
+      url,
+      headers: {
+        "content-length": "0",
+      },
+      payloadHash: emptyPayloadHash,
+      accessKeyId,
+      secretAccessKey,
+      region,
+      service: "s3",
+    });
+
+    const response = await fetch(url.toString(), { method: "DELETE", headers: signedHeaders });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      return {
+        success: false,
+        url: url.toString(),
+        error: `S3 delete failed: ${response.status} ${response.statusText}${text ? `\n${text}` : ""}`,
+      };
+    }
+
+    return { success: true, url: url.toString() };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
 }
 
 export async function uploadFileToS3(

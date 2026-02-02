@@ -13,8 +13,14 @@ description: 让文件对外可访问的两种方案：对象存储上传或服�
 
 ShipMyAgent 提供两种方案：
 
-1. **配置 OSS（S3 兼容）**：启用内置工具 `s3_upload`，将项目内文件上传到对象存储（Cloudflare R2 也属于 S3 兼容）。
+1. **配置 OSS（S3 兼容）**：通过内置工具把项目内文件上传到对象存储（Cloudflare R2 也属于 S3 兼容）。
 2. **部署到服务器并使用 `/public/*`**：把文件放到 `.ship/public/`，由服务器直接通过 `/public/*` 路由对外提供。
+
+同时，ShipMyAgent 也提供了一组面向 Agent 的“云文件工具”，默认策略是：
+
+- **优先 OSS**（若已配置）
+- **否则 public**（若已配置 `cloudFiles.publicBaseUrl`）
+- 两者都没有则返回失败（“没有设置文件上传路径”）
 
 ---
 
@@ -22,7 +28,7 @@ ShipMyAgent 提供两种方案：
 
 ### 1) 在 `ship.json` 配置 `oss`
 
-建议用环境变量占位符，避免把密钥写进仓库：
+建议用环境变量占位符，避免把密钥写进仓库。并且建议配置默认 bucket，便于高层工具直接 `upload(filePath)`：
 
 ```json
 {
@@ -32,7 +38,8 @@ ShipMyAgent 提供两种方案：
     "endpoint": "${R2_S3_ENDPOINT}",
     "accessKeyId": "${R2_ID}",
     "secretAccessKey": "${R2_SECRET_KEY}",
-    "region": "auto"
+    "region": "auto",
+    "bucket": "my-bucket"
   }
 }
 ```
@@ -95,6 +102,37 @@ https://<host>:<port>/public/report.pdf
 如果你启用了交互式 Web（interactive 端口），交互式端口也会将 `/public/*` 代理到主服务，所以也可以访问同一路径。
 
 ---
+
+## 云文件工具（给 Agent 调用）
+
+### 上传：`cloud_file_upload`
+
+最简用法：
+
+```json
+{ "filePath": "dist/report.pdf" }
+```
+
+返回结果会包含：
+
+- `method`: `oss` 或 `public`
+- `url`: 可访问的链接
+
+如果既没配置 `oss`（且没有默认 bucket），也没配置 `cloudFiles.publicBaseUrl`，会返回失败并提示“没有设置文件上传路径”。
+
+### 生成链接：`cloud_file_url`
+
+用于把已知的 `bucket/key` 或 `publicPath` 转成 URL：
+
+```json
+{ "method": "public", "publicPath": "uploads/20260101-report.pdf" }
+```
+
+### 删除：`cloud_file_delete`
+
+```json
+{ "method": "public", "publicPath": "uploads/20260101-report.pdf" }
+```
 
 ## 安全提示
 

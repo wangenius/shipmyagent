@@ -1,5 +1,5 @@
 ---
-title: Cloud Files (OSS / public)
+title: "Cloud Files (OSS / public)"
 description: "Two ways to expose files via URL: upload to object storage or serve from /public/*"
 ---
 
@@ -13,8 +13,14 @@ In some workflows you need a URL that external tools/services can fetch, for exa
 
 ShipMyAgent supports two approaches:
 
-1. **Configure OSS (S3-compatible)**: enables the built-in `s3_upload` tool to upload project-local files to object storage (Cloudflare R2 is S3-compatible).
+1. **Configure OSS (S3-compatible)**: upload project-local files to object storage (Cloudflare R2 is S3-compatible).
 2. **Deploy on a server and use `/public/*`**: put files under `.ship/public/` and let the server expose them via the `/public/*` route.
+
+ShipMyAgent also provides an Agent-facing “cloud files” toolset with a default strategy:
+
+- Prefer **OSS** when configured
+- Otherwise fall back to **public** when `cloudFiles.publicBaseUrl` is configured
+- If neither is configured, upload fails with “no upload path configured”
 
 ---
 
@@ -22,7 +28,7 @@ ShipMyAgent supports two approaches:
 
 ### 1) Configure `oss` in `ship.json`
 
-Use env placeholders so you don’t commit secrets:
+Use env placeholders so you don’t commit secrets. Also set a default bucket so higher-level tools can simply call `upload(filePath)`:
 
 ```json
 {
@@ -32,7 +38,8 @@ Use env placeholders so you don’t commit secrets:
     "endpoint": "${R2_S3_ENDPOINT}",
     "accessKeyId": "${R2_ID}",
     "secretAccessKey": "${R2_SECRET_KEY}",
-    "region": "auto"
+    "region": "auto",
+    "bucket": "my-bucket"
   }
 }
 ```
@@ -95,6 +102,37 @@ https://<host>:<port>/public/report.pdf
 If you enable the interactive web server (interactive port), it also proxies `/public/*` to the main server, so the same path works there too.
 
 ---
+
+## Cloud file tools (for the Agent)
+
+### Upload: `cloud_file_upload`
+
+Minimal usage:
+
+```json
+{ "filePath": "dist/report.pdf" }
+```
+
+The result includes:
+
+- `method`: `oss` or `public`
+- `url`: an accessible link
+
+If neither `oss` (with a default bucket) nor `cloudFiles.publicBaseUrl` is configured, it returns a failure (“no upload path configured”).
+
+### Build URL: `cloud_file_url`
+
+Converts a known `bucket/key` or `publicPath` into a URL:
+
+```json
+{ "method": "public", "publicPath": "uploads/20260101-report.pdf" }
+```
+
+### Delete: `cloud_file_delete`
+
+```json
+{ "method": "public", "publicPath": "uploads/20260101-report.pdf" }
+```
 
 ## Security notes
 

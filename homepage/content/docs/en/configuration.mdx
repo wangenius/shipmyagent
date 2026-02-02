@@ -184,6 +184,7 @@ When configured, the runtime enables the built-in `s3_upload` tool (so the Agent
 | `accessKeyId` | string | Yes | - | Access key id (use env placeholders) |
 | `secretAccessKey` | string | Yes | - | Secret access key (use env placeholders) |
 | `region` | string | No | `auto` | SigV4 region (R2 typically uses `auto`) |
+| `bucket` | string | No | - | Default bucket (used by higher-level tools like `cloud_file_upload`) |
 
 ```json
 {
@@ -193,7 +194,26 @@ When configured, the runtime enables the built-in `s3_upload` tool (so the Agent
     "endpoint": "${R2_S3_ENDPOINT}",
     "accessKeyId": "${R2_ID}",
     "secretAccessKey": "${R2_SECRET_KEY}",
-    "region": "auto"
+    "region": "auto",
+    "bucket": "my-bucket"
+  }
+}
+```
+
+#### cloudFiles (object, optional)
+
+Cloud file public URL configuration (used to build accessible `/public/*` URLs).
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `publicBaseUrl` | string | No | - | Public base URL of your deployed ShipMyAgent server (e.g. `https://agent.example.com`) |
+| `publicRoutePrefix` | string | No | `/public` | Public route prefix |
+
+```json
+{
+  "cloudFiles": {
+    "publicBaseUrl": "${SMA_PUBLIC_BASE_URL}",
+    "publicRoutePrefix": "/public"
   }
 }
 ```

@@ -38,6 +38,26 @@ export interface ShipConfig {
      * SigV4 region (R2 typically uses "auto").
      */
     region?: string;
+    /**
+     * Default bucket name for uploading files.
+     * Used by higher-level cloud file tools (e.g. `cloud_file_upload`).
+     */
+    bucket?: string;
+  };
+  /**
+   * Cloud file serving configuration.
+   * Used by higher-level cloud file tools to generate public URLs for `/public/*`.
+   */
+  cloudFiles?: {
+    /**
+     * Public base URL of your deployed ShipMyAgent server, e.g. https://agent.example.com
+     * (No trailing slash recommended).
+     */
+    publicBaseUrl?: string;
+    /**
+     * Route prefix for serving `.ship/public/*`. Default: "/public".
+     */
+    publicRoutePrefix?: string;
   };
   /**
    * Runtime startup configuration used by `shipmyagent start` / `shipmyagent .`.
