@@ -34,7 +34,12 @@ export function buildRuntimePrefixedPrompt(input: {
     context?.source === "qq"
       ? `- When you need to use tools in multiple steps, include short progress updates as plain text before/around tool usage (no tool names/commands).\n` +
         (replyMode === "tool"
-          ? `- IMPORTANT: deliver replies via the \`send_message\` tool (alias: \`chat_send\`). Do not rely on plain text output only.\n`
+          ? `- IMPORTANT: deliver replies via the \`send_message\` tool (alias: \`chat_send\`).\n` +
+            (context?.source
+              ? `- The user messaged you via ${context.source}. When calling send_message:\n` +
+                `  * If the user explicitly specifies a platform (e.g., "send via QQ"), use that platform\n` +
+                `  * Otherwise, you can omit the channel parameter to reply on the same platform (${context.source})\n`
+              : `- Do not rely on plain text output only.\n`)
           : "") +
         ((context?.chatType || "").toLowerCase().includes("group")
           ? `- This is a group chat. Prefer addressing the current actor (use @<Actor username> if available) so readers know who you're responding to.\n` +

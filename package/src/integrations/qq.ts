@@ -3,6 +3,7 @@ import { Logger } from "../runtime/logging/index.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type { IncomingChatMessage } from "./base-chat-adapter.js";
 import type { AdapterSendTextParams } from "./platform-adapter.js";
+import { sendFinalOutputIfNeeded } from "../runtime/chat/final-output.js";
 
 interface QQConfig {
   appId: string;
@@ -696,7 +697,18 @@ export class QQBot extends BaseChatAdapter {
         const pa = (result as any).pendingApproval;
         const text = `⏳ 需要审批后才能继续：${String(pa?.description || pa?.id || "").trim()}`.trim();
         await this.sendMessage(chatId, chatType, messageId, text, 1);
+        return;
       }
+
+      // Fallback: if agent didn't call send_message, auto-send the output
+      await sendFinalOutputIfNeeded({
+        channel: 'qq',
+        chatId,
+        output: result.output || '',
+        toolCalls: result.toolCalls as any,
+        chatType,
+        messageId,
+      });
     } catch (error) {
       await this.sendMessage(chatId, chatType, messageId, `❌ 执行错误: ${String(error)}`, 1);
     }

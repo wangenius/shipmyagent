@@ -8,7 +8,7 @@ const chatSendInputSchema = z.object({
   channel: z
     .enum(["telegram", "feishu", "qq"])
     .optional()
-    .describe("Override the destination channel. Defaults to current chat context."),
+    .describe("Platform to send message (telegram/feishu/qq). Optional - if not specified, defaults to the platform where the user's message came from."),
   chatId: z
     .string()
     .optional()
@@ -28,8 +28,11 @@ const chatSendInputSchema = z.object({
 });
 
 export const chat_send = tool({
-  description:
-    "Send a chat message back to the user on the current channel (e.g. Telegram/Feishu). Use this when you want to control when/how many messages are sent.",
+  description: (() => {
+    const store = chatRequestContext.getStore();
+    const contextInfo = store?.source ? ` Current context: user messaged from ${store.source}.` : "";
+    return `Send a chat message back to the user. ${contextInfo} The channel parameter is optional - if not specified, the message will be sent to the platform where the user's message came from. If the user explicitly requests a specific platform (e.g., "send via QQ"), use that platform by specifying the channel parameter.`;
+  })(),
   inputSchema: chatSendInputSchema,
   execute: async (input) => {
     const store = chatRequestContext.getStore();

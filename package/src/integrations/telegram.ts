@@ -18,6 +18,7 @@ import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type { IncomingChatMessage } from "./base-chat-adapter.js";
 import type { AdapterSendTextParams } from "./platform-adapter.js";
 import { tryClaimChatIngressMessage } from "../runtime/chat/idempotency.js";
+import { sendFinalOutputIfNeeded } from "../runtime/chat/final-output.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TELEGRAM_HISTORY_LIMIT = 20;
@@ -1357,6 +1358,15 @@ Available commands:
         await this.notifyPendingApprovals();
         return;
       }
+
+      // Fallback: if agent didn't call send_message, auto-send the output
+      await sendFinalOutputIfNeeded({
+        channel: 'telegram',
+        chatId,
+        output: result.output || '',
+        toolCalls: result.toolCalls as any,
+        messageThreadId,
+      });
     } catch (error) {
       await this.sendMessage(chatId, `❌ Execution error: ${String(error)}`, { messageThreadId });
     }

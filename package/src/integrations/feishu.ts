@@ -9,6 +9,7 @@ import { getCacheDirPath } from '../utils.js';
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type { IncomingChatMessage } from "./base-chat-adapter.js";
 import type { AdapterSendTextParams } from "./platform-adapter.js";
+import { sendFinalOutputIfNeeded } from "../runtime/chat/final-output.js";
 
 interface FeishuConfig {
   appId: string;
@@ -539,6 +540,16 @@ Available commands:
         await this.notifyPendingApprovals();
         return;
       }
+
+      // Fallback: if agent didn't call send_message, auto-send the output
+      await sendFinalOutputIfNeeded({
+        channel: 'feishu',
+        chatId,
+        output: result.output || '',
+        toolCalls: result.toolCalls as any,
+        chatType,
+        messageId,
+      });
     } catch (error) {
       await this.sendErrorMessage(chatId, chatType, messageId, `Execution error: ${String(error)}`);
     }
