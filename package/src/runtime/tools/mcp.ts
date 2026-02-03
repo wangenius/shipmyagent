@@ -1,6 +1,14 @@
+/**
+ * MCP tool adapter.
+ *
+ * Converts MCP server tool definitions into AI SDK `tool(...)` instances that
+ * the agent can call. The actual transport/session management lives in the
+ * runtime MCP manager.
+ */
+
 import { z } from "zod";
 import { tool } from "ai";
-import type { McpToolDefinition, McpManager } from "../runtime/mcp/index.js";
+import type { McpToolDefinition, McpManager } from "../mcp/index.js";
 
 export function createMcpAiTool(params: {
   server: string;

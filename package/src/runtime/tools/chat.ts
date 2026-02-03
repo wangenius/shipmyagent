@@ -1,7 +1,15 @@
+/**
+ * Chat delivery tools (tool-strict).
+ *
+ * Provides the `chat_send` tool which routes messages through the runtime's
+ * dispatcher registry. Adapters register dispatchers per platform, and the
+ * agent uses this tool to send user-visible replies.
+ */
+
 import { z } from "zod";
 import { tool } from "ai";
-import { chatRequestContext } from "../runtime/chat/request-context.js";
-import { getChatDispatcher, type ChatDispatchChannel } from "../runtime/chat/dispatcher.js";
+import { chatRequestContext } from "../chat/request-context.js";
+import { getChatDispatcher, type ChatDispatchChannel } from "../chat/dispatcher.js";
 
 const chatSendInputSchema = z.object({
   text: z.string().describe("Text to send to the chat."),

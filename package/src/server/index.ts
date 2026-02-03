@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { Logger } from "../runtime/logging/index.js";
+import { Logger } from "../telemetry/index.js";
 import type { AgentRuntime } from "../runtime/agent/index.js";
 import { ChatStore } from "../runtime/chat/store.js";
 import http from "node:http";

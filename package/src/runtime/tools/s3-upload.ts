@@ -1,6 +1,13 @@
+/**
+ * S3 upload tool.
+ *
+ * Exposes a direct `s3_upload` tool (S3-compatible, incl. R2) when OSS config
+ * is present in `ship.json`. The actual upload logic lives in `runtime/storage`.
+ */
+
 import { z } from "zod";
 import { tool } from "ai";
-import { uploadFileToS3 } from "../runtime/storage/index.js";
+import { uploadFileToS3 } from "../storage/index.js";
 import { resolveOssFromConfig } from "./oss.js";
 import { getToolRuntimeContext } from "./runtime-context.js";
 

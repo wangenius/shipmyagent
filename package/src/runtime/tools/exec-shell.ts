@@ -1,3 +1,13 @@
+/**
+ * Shell execution tool.
+ *
+ * This is the runtime's "escape hatch" for repository operations. It is used by
+ * the agent to read/search files, run tests, and perform safe modifications.
+ *
+ * NOTE: permission gating is handled at the product/runtime policy layer; this
+ * module only performs execution with the project root as the working directory.
+ */
+
 import { z } from "zod";
 import { tool } from "ai";
 import { execa } from "execa";

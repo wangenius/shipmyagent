@@ -1,4 +1,4 @@
-import type { Logger } from "../runtime/logging/index.js";
+import type { Logger } from "../telemetry/index.js";
 import type { AgentInput, AgentResult, AgentRuntime } from "../runtime/agent/index.js";
 import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
 import { PlatformAdapter } from "./platform-adapter.js";

@@ -1,4 +1,4 @@
-import type { Logger } from "../../runtime/logging/index.js";
+import type { Logger } from "../../telemetry/index.js";
 
 /**
  * Telegram access helpers.
@@ -33,4 +33,3 @@ export async function isTelegramAdmin(
     return false;
   }
 }
-

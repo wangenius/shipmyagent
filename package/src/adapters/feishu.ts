@@ -1,7 +1,7 @@
 import * as Lark from "@larksuiteoapi/node-sdk";
 import fs from "fs-extra";
 import path from "path";
-import { Logger } from "../runtime/logging/index.js";
+import { Logger } from "../telemetry/index.js";
 import { getCacheDirPath } from "../utils.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type {
@@ -12,6 +12,16 @@ import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
 import type { AgentRuntime } from "../runtime/agent/index.js";
 import type { McpManager } from "../runtime/mcp/index.js";
 import { sendFinalOutputIfNeeded } from "../runtime/chat/final-output.js";
+
+/**
+ * Feishu (Lark) chat adapter.
+ *
+ * Responsibilities:
+ * - Receive Feishu message events and translate them into AgentRuntime inputs
+ * - Enforce basic access policy (optional admin allowlist)
+ * - Relay tool-strict replies back to Feishu via dispatcher + `chat_send` tool
+ * - Persist chat logs through ChatStore via BaseChatAdapter helpers
+ */
 
 interface FeishuConfig {
   appId: string;

@@ -36,3 +36,4 @@ export function createLlmLoggingFetch(args: {
     return baseFetch(input, init);
   };
 }
+

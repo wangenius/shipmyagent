@@ -1,6 +1,6 @@
 // Telegram adapter implementation (moved into submodule for maintainability).
 import path from "path";
-import { Logger } from "../../runtime/logging/index.js";
+import { Logger } from "../../telemetry/index.js";
 import type { AgentRuntime } from "../../runtime/agent/index.js";
 import { createAgentRuntimeFromPath } from "../../runtime/agent/index.js";
 import { BaseChatAdapter } from "../base-chat-adapter.js";

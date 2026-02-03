@@ -1,5 +1,16 @@
+/**
+ * In-memory per-chat session store for AgentRuntime.
+ *
+ * Responsibilities:
+ * - Keep the current conversation history in-memory (keyed by `chatKey`)
+ * - Provide compaction helpers for context-window overflow scenarios
+ * - Provide deterministic log formatting for LLM response blocks
+ *
+ * Persistence is handled elsewhere (e.g. ChatStore); this class is runtime-memory only.
+ */
+
 import { generateText, type LanguageModel, type ModelMessage } from "ai";
-import { withLlmRequestContext } from "../llm-logging/index.js";
+import { withLlmRequestContext } from "../../telemetry/index.js";
 import type { ConversationMessage } from "./types.js";
 
 export class AgentSessionStore {

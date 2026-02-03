@@ -1,5 +1,5 @@
 import WebSocket from "ws";
-import { Logger } from "../runtime/logging/index.js";
+import { Logger } from "../telemetry/index.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type {
   AdapterChatKeyParams,
@@ -9,6 +9,16 @@ import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
 import type { AgentRuntime } from "../runtime/agent/index.js";
 import type { McpManager } from "../runtime/mcp/index.js";
 import { sendFinalOutputIfNeeded } from "../runtime/chat/final-output.js";
+
+/**
+ * QQ official bot adapter (WebSocket gateway).
+ *
+ * Responsibilities:
+ * - Maintain WS connection + heartbeats + reconnection
+ * - Translate inbound group/private messages into AgentRuntime runs
+ * - Deliver outbound tool-strict replies via dispatcher + `chat_send`
+ * - Persist inbound/outbound logs via ChatStore through BaseChatAdapter
+ */
 
 interface QQConfig {
   appId: string;

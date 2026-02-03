@@ -6,7 +6,7 @@ import {
   type ToolLoopAgent,
 } from "ai";
 import { withChatRequestContext } from "../chat/request-context.js";
-import { withLlmRequestContext } from "../llm-logging/index.js";
+import { withLlmRequestContext } from "../../telemetry/index.js";
 import { generateId } from "../../utils.js";
 import type { ChatLogEntryV1 } from "../chat/store.js";
 import { ContextCompressor } from "../context/compressor.js";
@@ -28,7 +28,7 @@ import type {
   AgentResult,
   ConversationMessage,
 } from "./types.js";
-import { createLogger, type Logger } from "../logging/index.js";
+import { createLogger, type Logger } from "../../telemetry/index.js";
 
 /**
  * AgentRuntime orchestrates a single "agent brain" for a project.

@@ -1,8 +1,18 @@
+/**
+ * Skills tools (Claude Code-compatible).
+ *
+ * Supports:
+ * - Listing skills discovered from the repo (e.g. `.claude/skills/<skill>/SKILL.md`)
+ * - Loading a skill's SKILL.md so the agent can follow its instructions
+ *
+ * Discovery logic is shared with the runtime skills subsystem.
+ */
+
 import fs from "fs-extra";
 import path from "path";
 import { z } from "zod";
 import { tool } from "ai";
-import { discoverClaudeSkillsSync } from "../runtime/skills/index.js";
+import { discoverClaudeSkillsSync } from "../skills/index.js";
 import { getToolRuntimeContext } from "./runtime-context.js";
 
 export const skills_list = tool({

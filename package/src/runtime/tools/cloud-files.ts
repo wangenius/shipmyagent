@@ -1,6 +1,17 @@
+/**
+ * Cloud file tools.
+ *
+ * Exposes a unified interface for:
+ * - Uploading a project-local file either to OSS (S3-compatible) or to `.ship/public`
+ * - Building URLs for uploaded objects/files
+ * - Deleting uploaded objects/files
+ *
+ * These tools are thin wrappers over `runtime/storage/*` utilities.
+ */
+
 import { z } from "zod";
 import { tool } from "ai";
-import { cloudFileDelete, cloudFileUpload, cloudFileUrl } from "../runtime/storage/index.js";
+import { cloudFileDelete, cloudFileUpload, cloudFileUrl } from "../storage/index.js";
 import { resolveOssFromConfig } from "./oss.js";
 import { getToolRuntimeContext } from "./runtime-context.js";
 

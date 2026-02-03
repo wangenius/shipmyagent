@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs-extra";
-import { Logger } from "../../runtime/logging/index.js";
+import { Logger } from "../../telemetry/index.js";
 import { getCacheDirPath } from "../../utils.js";
 import {
   guessMimeType,
@@ -10,6 +10,7 @@ import {
   type TelegramApiResponse,
   type TelegramAttachmentType,
 } from "./shared.js";
+
 
 /**
  * Telegram API client utilities for the Telegram adapter.
@@ -289,4 +290,3 @@ export class TelegramApiClient {
     await this.requestForm(method, form);
   }
 }
-

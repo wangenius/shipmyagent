@@ -1,7 +1,7 @@
 import type { ShipConfig } from "../../utils.js";
 import type { McpManager } from "../mcp/manager.js";
-import type { Logger } from "../logging/index.js";
-import { createAgentToolSet } from "../../tool/toolset.js";
+import type { Logger } from "../../telemetry/index.js";
+import { createAgentToolSet } from "../tools/toolset.js";
 
 /**
  * Agent toolset wiring for the runtime layer.

@@ -1,5 +1,13 @@
-import type { ShipConfig } from "../utils.js";
-import type { S3StorageConfig } from "../runtime/storage/index.js";
+/**
+ * OSS (S3-compatible) configuration resolver.
+ *
+ * This is shared by:
+ * - storage tools (`s3_upload`, `cloud_file_upload`)
+ * - runtime storage backend wiring
+ */
+
+import type { ShipConfig } from "../../utils.js";
+import type { S3StorageConfig } from "../storage/index.js";
 
 export type OssResolved =
   | { enabled: false; storage?: undefined; bucket?: undefined }

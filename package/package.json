@@ -1,6 +1,6 @@
 {
   "name": "shipmyagent",
-  "version": "1.0.48",
+  "version": "1.0.50",
   "type": "module",
   "description": "把一个代码仓库，启动成一个可对话、可审计的 Agent Runtime",
   "bin": {
@@ -8,7 +8,8 @@
     "sma": "./bin/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "clean": "node ./scripts/clean-bin.mjs",
+    "build": "node ./scripts/clean-bin.mjs && tsc",
     "dev": "tsc --watch",
     "start": "node bin/start.js",
     "typecheck": "tsc --noEmit"

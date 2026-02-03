@@ -1,4 +1,4 @@
-import { Logger } from "../../runtime/logging/index.js";
+import { Logger } from "../../telemetry/index.js";
 import type { TelegramUpdate, TelegramUser } from "./shared.js";
 
 /**

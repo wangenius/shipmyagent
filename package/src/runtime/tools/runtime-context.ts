@@ -1,4 +1,12 @@
-import type { ShipConfig } from "../utils.js";
+/**
+ * Shared runtime context for agent tools.
+ *
+ * Tools are executed inside the AgentRuntime, but they are implemented as standalone
+ * modules that do not receive constructor injection. This tiny store provides the
+ * minimum context they need (projectRoot + resolved ShipConfig).
+ */
+
+import type { ShipConfig } from "../../utils.js";
 
 export interface ToolRuntimeContext {
   projectRoot: string;

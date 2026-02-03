@@ -1,5 +1,17 @@
-import { loadProjectDotenv, type ShipConfig } from "../utils.js";
-import type { McpManager } from "../runtime/mcp/index.js";
+/**
+ * Runtime toolset composition.
+ *
+ * This directory (`runtime/tools/*`) defines the **agent tools** exposed to the model.
+ * The toolset is assembled here so the AgentRuntime can depend on a single constructor
+ * without reaching outside `runtime/`.
+ *
+ * Layering:
+ * - Tool implementations may depend on runtime subsystems (chat/store/storage/mcp/etc.)
+ * - Runtime subsystems should NOT depend on tool implementations
+ */
+
+import { loadProjectDotenv, type ShipConfig } from "../../utils.js";
+import type { McpManager } from "../mcp/index.js";
 import { resolveOssFromConfig } from "./oss.js";
 import { setToolRuntimeContext } from "./runtime-context.js";
 import { skillsTools } from "./skills.js";

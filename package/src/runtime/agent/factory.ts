@@ -13,7 +13,7 @@ import { discoverClaudeSkillsSync, renderClaudeSkillsPromptSection } from "../sk
 import { AgentRuntime } from "./runtime.js";
 import type { AgentContext } from "./types.js";
 import type { McpManager } from "../mcp/manager.js";
-import type { Logger } from "../logging/index.js";
+import type { Logger } from "../../telemetry/index.js";
 
 /**
  * Factory helpers for creating AgentRuntime instances.

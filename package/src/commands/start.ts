@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs-extra";
-import { createLogger } from "../runtime/logging/index.js";
+import { createLogger } from "../telemetry/index.js";
 import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
 import { createServer, ServerContext } from "../server/index.js";
 import { createInteractiveServer } from "../server/interactive.js";
