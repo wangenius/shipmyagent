@@ -9,9 +9,9 @@ import { createAgentRuntime, type AgentContext } from "../runtime/agent/index.js
 import { RunManager, RunWorker } from "../runtime/run/index.js";
 import { createServer, ServerContext } from "../server/index.js";
 import { createInteractiveServer } from "../server/interactive.js";
-import { createTelegramBot } from "../integrations/telegram.js";
-import { createFeishuBot } from "../integrations/feishu.js";
-import { createQQBot } from "../integrations/qq.js";
+import { createTelegramBot } from "../adapters/telegram.js";
+import { createFeishuBot } from "../adapters/feishu.js";
+import { createQQBot } from "../adapters/qq.js";
 import { McpManager, bootstrapMcpFromProject } from "../runtime/mcp/index.js";
 import {
   getAgentMdPath,
