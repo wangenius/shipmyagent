@@ -116,7 +116,7 @@ export interface ShipConfig {
     open_pr?: boolean;
     merge?: boolean;
   };
-  integrations: {
+  adapters?: {
     telegram?: {
       enabled: boolean;
       botToken?: string;
@@ -231,7 +231,7 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
       requiresApproval: false,
     },
   },
-  integrations: {
+  adapters: {
     telegram: {
       enabled: false,
       botToken: undefined,

@@ -7,7 +7,7 @@ description: 以 Telegram 为例，解释从用户发消息到 Agent 执行，�
 
 这篇文档以 Telegram 为例，说明 **一条用户消息如何进入 ShipMyAgent**，以及 **AgentRuntime 如何执行、如何产生审批、以及消息如何通过 `chat_send` tool 发送回 Telegram**。
 
-> 代码参考：`package/src/integrations/telegram.ts`、`package/src/runtime/agent.ts`、`package/src/runtime/permission.ts`、`package/src/runtime/chat-store.ts`
+> 代码参考：`package/src/integrations/telegram.ts`、`package/src/runtime/agent/runtime.ts`、`package/src/runtime/permission/*`、`package/src/runtime/chat/*`
 
 ## 1）总体流程（概览）
 
@@ -47,11 +47,11 @@ sequenceDiagram
 ### 2.1 拉取与分发
 
 - ShipMyAgent 以 **轮询** 模式工作：定时调用 `getUpdates` 拉取 `TelegramUpdate[]`，并更新 `lastUpdateId`（持久化在 `.ship/.cache/telegram/lastUpdateId.json`）。
-- 每个 update 会按并发上限处理；同时对**同一个会话线程**做串行化（避免并发把上下文打乱）。
+- 每个 update 会按并发上限处理；同时对**同一个 chatKey**做串行化（避免并发把上下文打乱）。
 
-### 2.2 会话（session）与线程（thread）
+### 2.2 ChatKey（唯一隔离 key）
 
-ShipMyAgent 会把 Telegram 的聊天抽象为一个“会话 key（sessionId）”，用来隔离上下文与日志：
+ShipMyAgent 会把 Telegram 的聊天抽象为一个 **chatKey**，用来隔离上下文与日志：
 
 - 私聊 / 普通群聊：`telegram:chat:<chatId>`
 - Topics（话题）的群：`telegram:chat:<chatId>:topic:<messageThreadId>`
@@ -68,7 +68,7 @@ ShipMyAgent 会把 Telegram 的聊天抽象为一个“会话 key（sessionId）
 - 默认：仅“该 thread 的发起人（第一个和 bot 说话的人）”或“群管理员”可以继续对话
 - 可配置为 `"anyone"`：允许任何群成员对话
 
-发起人信息会写入 `.ship/.cache/telegram/threadInitiators.json`，用 threadKey 作为 key。
+发起人信息会写入 `.ship/.cache/telegram/threadInitiators.json`，用 chatKey 作为 key。
 
 ### 2.4 附件处理：保存到本地缓存 + 注入 `@attach`
 
@@ -92,7 +92,7 @@ ShipMyAgent 会把 Telegram 的聊天抽象为一个“会话 key（sessionId）
 
 每次收到用户消息，TelegramBot 都会先写入一条聊天日志（append-only）：
 
-- 路径：`.ship/chats/<encode(sessionId)>.jsonl`
+- 路径：`.ship/chats/<encode(chatKey)>.jsonl`
 - 格式：`ChatLogEntryV1`（包含 channel/chatId/chatKey/userId/messageId/role/text/meta 等）
 
 在真正执行之前，会从该文件里加载最近 N 条记录，然后把历史**折叠为一条“assistant 压缩上下文”**，再注入到 AgentRuntime 的会话历史里（减少 token/成本，并保持可追溯）。
@@ -103,7 +103,7 @@ ShipMyAgent 会把 Telegram 的聊天抽象为一个“会话 key（sessionId）
 
 如果该会话存在 pending approvals，TelegramBot 会优先调用：
 
-- `agentRuntime.handleApprovalReply({ userMessage: instructions, sessionId, context })`
+- `agentRuntime.handleApprovalReply({ userMessage: instructions, chatKey, context })`
 
 这一步会让模型把用户的自然语言（如“可以”“拒绝，因为…”“全部同意”）映射为对哪些 approval id 的 `approve/refuse/pass` 决策。
 
@@ -150,7 +150,7 @@ async 模式下：
 
 当 Agent 触发敏感工具（例如写文件、执行 shell）且策略要求审批时：
 
-1. PermissionEngine 创建一条 approval request（落盘在 `.ship/approvals/<id>.json`），并附带 `meta`（例如 `source=telegram`、`userId=chatId`、`sessionId`、`initiatorId` 等）
+1. PermissionEngine 创建一条 approval request（落盘在 `.ship/approvals/<id>.json`），并附带 `meta`（例如 `source=telegram`、`userId=chatId`、`chatKey`、`initiatorId` 等）
 2. TelegramBot 定时轮询 `getPendingApprovals()`，把待审批操作推送回“来源 chat”
 3. 用户可以用两种方式响应：
    - 自然语言回复（走 `handleApprovalReply` 自动路由）

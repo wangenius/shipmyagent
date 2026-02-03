@@ -79,21 +79,6 @@ function indentBlock(text: string, indent: string): string {
     .join("\n");
 }
 
-function formatMessagesForLog(messages: any[], maxCharsTotal: number): string {
-  const lines: string[] = [];
-  for (let i = 0; i < messages.length; i++) {
-    const m = messages[i];
-    const role =
-      m && typeof m === "object"
-        ? String((m as any).role ?? "unknown")
-        : "unknown";
-    const content = m && typeof m === "object" ? (m as any).content : m;
-    const text = contentToText(content, 4000);
-    const header = `[#${i}] role=${role}`;
-    lines.push([header, indentBlock(text || "(empty)", "  ")].join("\n"));
-  }
-  return truncate(lines.join("\n"), maxCharsTotal);
-}
 
 export type ProviderFetch = (input: any, init?: any) => Promise<any>;
 

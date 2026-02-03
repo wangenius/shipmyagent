@@ -12,12 +12,19 @@ import { DEFAULT_SHIP_PROMPTS } from "../prompts/index.js";
 import { discoverClaudeSkillsSync, renderClaudeSkillsPromptSection } from "../skills/index.js";
 import { AgentRuntime } from "./runtime.js";
 import type { AgentContext } from "./types.js";
+import type { McpManager } from "../mcp/manager.js";
 
-export function createAgentRuntime(context: AgentContext): AgentRuntime {
-  return new AgentRuntime(context);
+export function createAgentRuntime(
+  context: AgentContext,
+  deps?: { mcpManager?: McpManager | null },
+): AgentRuntime {
+  return new AgentRuntime(context, deps);
 }
 
-export function createAgentRuntimeFromPath(projectRoot: string): AgentRuntime {
+export function createAgentRuntimeFromPath(
+  projectRoot: string,
+  opts?: { mcpManager?: McpManager | null },
+): AgentRuntime {
   loadProjectDotenv(projectRoot);
 
   const agentMdPath = getAgentMdPath(projectRoot);
@@ -41,7 +48,7 @@ You are a helpful project assistant.`;
       write_repo: { requiresApproval: true },
       exec_shell: { deny: ["rm"], requiresApproval: false },
     },
-    integrations: {
+    adapters: {
       telegram: { enabled: false },
     },
   };
@@ -83,9 +90,12 @@ You are a helpful project assistant.`;
 
   const agentMd = [baseAgentMd, `---\n\n${skillsSection}`].filter(Boolean).join("\n\n");
 
-  return new AgentRuntime({
-    projectRoot,
-    config,
-    agentMd,
-  });
+  return new AgentRuntime(
+    {
+      projectRoot,
+      config,
+      agentMd,
+    },
+    { mcpManager: opts?.mcpManager ?? null },
+  );
 }

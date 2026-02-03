@@ -195,9 +195,7 @@ export class AgentServer {
       const instructions = body?.instructions;
       const chatId = (typeof body?.chatId === 'string' && body.chatId.trim())
         ? body.chatId.trim()
-        : (typeof body?.sessionId === 'string' && body.sessionId.trim())
-          ? body.sessionId.trim()
-          : 'default';
+        : 'default';
       const actorId = (typeof body?.userId === 'string' && body.userId.trim())
         ? body.userId.trim()
         : (typeof body?.actorId === 'string' && body.actorId.trim())
@@ -209,11 +207,11 @@ export class AgentServer {
       }
 
       try {
-        const sessionId = `api:chat:${chatId}`;
+        const chatKey = `api:chat:${chatId}`;
         await this.chatStore.append({
           channel: 'api',
           chatId,
-          chatKey: sessionId,
+          chatKey,
           userId: actorId,
           messageId: typeof body?.messageId === 'string' ? body.messageId : undefined,
           role: 'user',
@@ -222,13 +220,13 @@ export class AgentServer {
 
         const result = await this.context.taskExecutor.executeInstructions(
           instructions,
-          { source: 'api', userId: chatId, sessionId, actorId },
+          { source: 'api', userId: chatId, chatKey, actorId },
         );
 
         await this.chatStore.append({
           channel: 'api',
           chatId,
-          chatKey: sessionId,
+          chatKey,
           userId: 'bot',
           messageId: typeof body?.messageId === 'string' ? body.messageId : undefined,
           role: 'assistant',

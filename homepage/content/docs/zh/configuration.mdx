@@ -13,7 +13,7 @@ ShipMyAgent 使用两个主要配置文件：
 
 ```
 your-project/
-├── ship.json          # 主配置（LLM、权限、集成）
+├── ship.json          # 主配置（LLM、权限、adapters）
 ├── Agent.md           # Agent 个性和行为
 └── .ship/             # 运行时数据（日志、缓存、任务）
 ```
@@ -98,7 +98,7 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
       "requiresApproval": false
     }
   },
-  "integrations": {
+  "adapters": {
     "telegram": {
       "enabled": true,
       "botToken": "${TELEGRAM_BOT_TOKEN}",
@@ -326,7 +326,10 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 }
 ```
 
-#### integrations (object)
+#### adapters (object)
+
+消息平台适配器（Telegram / 飞书 / QQ ...）。  
+使用 `adapters` 配置消息平台适配器。
 
 外部服务连接。
 
@@ -334,7 +337,7 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 
 ```json
 {
-  "integrations": {
+  "adapters": {
     "telegram": {
       "enabled": true,
       "botToken": "${TELEGRAM_BOT_TOKEN}",
@@ -352,7 +355,7 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 
 ```json
 {
-  "integrations": {
+  "adapters": {
     "github": {
       "enabled": true,
       "token": "${GITHUB_TOKEN}",
@@ -368,7 +371,7 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 
 ```json
 {
-  "integrations": {
+  "adapters": {
     "slack": {
       "enabled": true,
       "webhook": "${SLACK_WEBHOOK_URL}",
@@ -666,7 +669,7 @@ TELEGRAM_BOT_TOKEN=123456:...
   "llm": {
     "apiKey": "${ANTHROPIC_API_KEY}"  // 引用环境变量
   },
-  "integrations": {
+  "adapters": {
     "telegram": {
       "botToken": "${TELEGRAM_BOT_TOKEN}"
     }

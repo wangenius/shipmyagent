@@ -116,9 +116,11 @@ export const SHIP_JSON_SCHEMA: Record<string, unknown> = {
         merge: { type: "boolean" },
       },
     },
-    integrations: {
+    adapters: {
       type: "object",
       additionalProperties: true,
+      description:
+        "Messaging platform adapters (Telegram / Feishu / QQ...).",
       properties: {
         telegram: {
           type: "object",

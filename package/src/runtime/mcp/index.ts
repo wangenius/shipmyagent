@@ -13,4 +13,4 @@ export type {
 
 export type { McpLogger } from "./manager.js";
 export { McpManager } from "./manager.js";
-
+export { bootstrapMcpFromProject } from "./bootstrap.js";

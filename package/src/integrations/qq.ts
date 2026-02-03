@@ -2,7 +2,10 @@ import WebSocket from 'ws';
 import { Logger } from "../runtime/logging/index.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type { IncomingChatMessage } from "./base-chat-adapter.js";
-import type { AdapterSendTextParams } from "./platform-adapter.js";
+import type { AdapterChatKeyParams, AdapterSendTextParams } from "./platform-adapter.js";
+import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
+import type { AgentRuntime } from "../runtime/agent/index.js";
+import type { McpManager } from "../runtime/mcp/index.js";
 
 interface QQConfig {
   appId: string;
@@ -41,7 +44,7 @@ export class QQBot extends BaseChatAdapter {
   private ws: any | null = null;
   private isRunning: boolean = false;
   private heartbeatInterval: NodeJS.Timeout | null = null;
-  private sessionId: string = '';
+  private wsSessionId: string = '';
   private lastSeq: number = 0;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
@@ -68,15 +71,16 @@ export class QQBot extends BaseChatAdapter {
     appSecret: string,
     logger: Logger,
     projectRoot: string,
-    useSandbox: boolean = false
+    useSandbox: boolean = false,
+    createAgentRuntime?: () => AgentRuntime,
   ) {
-    super({ channel: "qq", projectRoot, logger });
+    super({ channel: "qq", projectRoot, logger, createAgentRuntime });
     this.appId = appId;
     this.appSecret = appSecret;
     this.useSandbox = useSandbox;
   }
 
-  protected getChatKey(params: AdapterSendTextParams): string {
+  protected getChatKey(params: AdapterChatKeyParams): string {
     const chatType = typeof params.chatType === "string" && params.chatType ? params.chatType : "unknown";
     return `qq:${chatType}:${params.chatId}`;
   }
@@ -108,14 +112,6 @@ export class QQBot extends BaseChatAdapter {
     return this.useSandbox
       ? 'wss://sandbox.api.sgroup.qq.com/websocket'
       : 'wss://api.sgroup.qq.com/websocket';
-  }
-
-  /**
-   * 获取或创建会话
-   */
-  protected getSessionKey(msg: Pick<IncomingChatMessage, "chatId" | "chatType">): string {
-    const chatType = typeof msg.chatType === "string" ? msg.chatType : "unknown";
-    return `${chatType}:${msg.chatId}`;
   }
 
   /**
@@ -495,8 +491,8 @@ export class QQBot extends BaseChatAdapter {
 
     switch (eventType) {
       case EventType.READY:
-        this.sessionId = data.session_id;
-        this.logger.info(`QQ Bot 已就绪，Session ID: ${this.sessionId}`);
+        this.wsSessionId = data.session_id;
+        this.logger.info(`QQ Bot 已就绪，WS Session ID: ${this.wsSessionId}`);
         this.logger.info(`用户: ${data.user?.username || 'N/A'}`);
         break;
 
@@ -646,7 +642,7 @@ export class QQBot extends BaseChatAdapter {
 
       case '/clear':
       case '/清除':
-        this.clearSession(`${chatType}:${chatId}`);
+        this.clearChat(this.getChatKey({ chatId, chatType }));
         responseText = '✅ 对话历史已清除';
         break;
 
@@ -667,16 +663,13 @@ export class QQBot extends BaseChatAdapter {
     instructions: string
   ): Promise<void> {
     try {
-      // 获取或创建会话
-      const agentRuntime = this.getOrCreateSession(`${chatType}:${chatId}`);
+      const chatKey = this.getChatKey({ chatId, chatType });
+      const agentRuntime = this.getOrCreateRuntime(chatKey);
 
       // 初始化 agent（如果尚未初始化）
       if (!agentRuntime.isInitialized()) {
         await agentRuntime.initialize();
       }
-
-      // 生成 sessionId
-      const sessionId = `qq:${chatType}:${chatId}`;
 
       // 使用会话 agent 执行指令
       const result = await agentRuntime.run({
@@ -684,7 +677,7 @@ export class QQBot extends BaseChatAdapter {
         context: {
           source: 'qq' as any,
           userId: chatId,
-          sessionId,
+          chatKey,
           chatType,
           messageId,
           replyMode: "tool",
@@ -799,7 +792,8 @@ export class QQBot extends BaseChatAdapter {
 export async function createQQBot(
   projectRoot: string,
   config: QQConfig,
-  logger: Logger
+  logger: Logger,
+  deps?: { mcpManager?: McpManager | null },
 ): Promise<QQBot | null> {
   if (!config.enabled || !config.appId || !config.appSecret) {
     return null;
@@ -810,7 +804,8 @@ export async function createQQBot(
     config.appSecret,
     logger,
     projectRoot,
-    config.sandbox || false
+    config.sandbox || false,
+    () => createAgentRuntimeFromPath(projectRoot, { mcpManager: deps?.mcpManager ?? null }),
   );
   return bot;
 }

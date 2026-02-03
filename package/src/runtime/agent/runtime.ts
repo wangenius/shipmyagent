@@ -21,7 +21,6 @@ import {
 import { buildRuntimePrefixedPrompt } from "./prompt.js";
 import { AgentLogger } from "./agent-logger.js";
 import { AgentSessionStore } from "./session-store.js";
-import { initializeMcp } from "./mcp.js";
 import { createModelAndAgent } from "./model.js";
 import { createToolSet, executeToolDirect } from "./tools.js";
 import {
@@ -61,24 +60,24 @@ export class AgentRuntime {
   private lastMemoryExtraction: Map<string, number> = new Map();
   private readonly MEMORY_EXTRACTION_INTERVAL = 5 * 60 * 1000;
 
-  constructor(context: AgentContext) {
+  constructor(context: AgentContext, deps?: { mcpManager?: McpManager | null }) {
     this.context = context;
     this.logger = new AgentLogger(context.projectRoot);
     this.permissionEngine = createPermissionEngine(context.projectRoot);
-    this.mcpManager = new McpManager(context.projectRoot, this.logger);
+    this.mcpManager = deps?.mcpManager ?? null;
     this.memoryStore = new MemoryStoreManager(context.projectRoot);
   }
 
-  setConversationHistory(sessionId: string, messages: unknown[]): void {
-    this.sessions.set(sessionId, messages);
+  setConversationHistory(chatKey: string, messages: unknown[]): void {
+    this.sessions.set(chatKey, messages);
   }
 
-  getConversationHistory(sessionId?: string): ConversationMessage[] {
-    return this.sessions.getConversationHistory(sessionId);
+  getConversationHistory(chatKey?: string): ConversationMessage[] {
+    return this.sessions.getConversationHistory(chatKey);
   }
 
-  clearConversationHistory(sessionId?: string): void {
-    this.sessions.clear(sessionId);
+  clearConversationHistory(chatKey?: string): void {
+    this.sessions.clear(chatKey);
   }
 
   async initialize(): Promise<void> {
@@ -91,12 +90,6 @@ export class AgentRuntime {
         "info",
         `Agent.md content length: ${this.context.agentMd?.length || 0} chars`,
       );
-
-      await initializeMcp({
-        projectRoot: this.context.projectRoot,
-        logger: this.logger,
-        mcpManager: this.mcpManager,
-      });
 
       const tools = createToolSet({
         projectRoot: this.context.projectRoot,
@@ -138,9 +131,9 @@ export class AgentRuntime {
     const startTime = Date.now();
     const requestId = generateId();
 
-    const sessionId = context?.sessionId || context?.userId || "default";
+    const chatKey = context?.chatKey || context?.userId || "default";
 
-    const memorySection = await this.buildMemoryPromptSection(sessionId);
+    const memorySection = await this.buildMemoryPromptSection(chatKey);
     const instructionsWithMemory = memorySection
       ? `${memorySection}\n\n${instructions}`
       : instructions;
@@ -157,10 +150,10 @@ export class AgentRuntime {
       "debug",
       `Using system prompt (Agent.md): ${this.context.agentMd?.substring(0, 100)}...`,
     );
-    await this.logger.log("debug", `Session ID: ${sessionId}`);
+    await this.logger.log("debug", `ChatKey: ${chatKey}`);
     await this.logger.log("info", "Agent request started", {
       requestId,
-      sessionId,
+      chatKey,
       source: context?.source,
       userId: context?.userId,
       instructionsPreview: instructions?.slice(0, 200),
@@ -169,7 +162,7 @@ export class AgentRuntime {
 
     const prompt = buildRuntimePrefixedPrompt({
       projectRoot: this.context.projectRoot,
-      sessionId,
+      chatKey,
       requestId,
       instructions: instructionsWithMemory,
       context,
@@ -177,7 +170,7 @@ export class AgentRuntime {
     });
 
     if (this.initialized && this.agent) {
-      return this.runWithToolLoopAgent(prompt, startTime, context, sessionId, {
+      return this.runWithToolLoopAgent(prompt, startTime, context, chatKey, {
         onStep,
         requestId,
       });
@@ -198,7 +191,7 @@ export class AgentRuntime {
     prompt: string,
     startTime: number,
     context: AgentInput["context"] | undefined,
-    sessionId: string,
+    chatKey: string,
     opts?: {
       addUserPrompt?: boolean;
       compactionAttempts?: number;
@@ -231,7 +224,7 @@ export class AgentRuntime {
       throw new Error("Agent not initialized");
     }
 
-    const messages = this.sessions.getOrCreate(sessionId);
+    const messages = this.sessions.getOrCreate(chatKey);
     if (addUserPrompt && prompt)
       messages.push({ role: "user", content: prompt });
 
@@ -262,13 +255,13 @@ export class AgentRuntime {
           source: context?.source,
           userId: context?.userId,
           messageThreadId: context?.messageThreadId,
-          sessionId,
+          chatKey,
           actorId: context?.actorId,
           chatType: context?.chatType,
           messageId: context?.messageId,
         },
         () =>
-          withLlmRequestContext({ sessionId, requestId }, () =>
+          withLlmRequestContext({ chatKey, requestId }, () =>
             this.agent!.generate({
               messages,
               onStepFinish: async (step) => {
@@ -278,7 +271,7 @@ export class AgentRuntime {
                     lastEmittedAssistant = userText;
                     await emitStep("assistant", userText, {
                       requestId,
-                      sessionId,
+                      chatKey,
                     });
                   }
                 } catch {
@@ -288,7 +281,7 @@ export class AgentRuntime {
                 try {
                   await emitToolSummariesFromStep(step, emitStep, {
                     requestId,
-                    sessionId,
+                    chatKey,
                   });
                 } catch {
                   // ignore
@@ -306,7 +299,7 @@ export class AgentRuntime {
           [
             "===== LLM RESPONSE BEGIN =====",
             ...(requestId ? [`requestId: ${requestId}`] : []),
-            `sessionId: ${sessionId}`,
+            `chatKey: ${chatKey}`,
             `historyBefore: ${beforeLen}`,
             `responseMessages: ${responseMessages.length}`,
             responseMessages.length
@@ -318,7 +311,7 @@ export class AgentRuntime {
             .join("\n"),
           {
             kind: "llm_response",
-            sessionId,
+            chatKey,
             requestId,
             historyBefore: beforeLen,
             responseMessages: responseMessages.length,
@@ -329,7 +322,7 @@ export class AgentRuntime {
       }
 
       messages.push(...result.response.messages);
-      await this.maybeExtractMemory(sessionId).catch(() => {});
+      await this.maybeExtractMemory(chatKey).catch(() => {});
 
       for (const step of result.steps || []) {
         for (const tr of step.toolResults || []) {
@@ -378,7 +371,7 @@ export class AgentRuntime {
         toolCalls,
         projectRoot: this.context.projectRoot,
         permissionEngine: this.permissionEngine,
-        sessionId,
+        chatKey,
         requestId,
         context,
       });
@@ -390,7 +383,7 @@ export class AgentRuntime {
         toolCallsTotal: toolCalls.length,
         context: context?.source,
       });
-      await emitStep("done", "done", { requestId, sessionId });
+      await emitStep("done", "done", { requestId, chatKey });
 
       return {
         success: !hadToolFailure,
@@ -410,12 +403,12 @@ export class AgentRuntime {
         errorMsg.includes("maximum context") ||
         errorMsg.includes("context window")
       ) {
-        const currentHistory = this.sessions.getOrCreate(sessionId);
+        const currentHistory = this.sessions.getOrCreate(chatKey);
         await this.logger.log(
           "warn",
           "Context length exceeded, compacting history",
           {
-            sessionId,
+            chatKey,
             currentMessages: currentHistory.length,
             error: errorMsg,
             compactionAttempts,
@@ -423,12 +416,12 @@ export class AgentRuntime {
         );
         await emitStep("compaction", "上下文过长，已自动压缩历史记录后继续。", {
           requestId,
-          sessionId,
+          chatKey,
           compactionAttempts,
         });
 
         if (compactionAttempts >= 3) {
-          this.sessions.delete(sessionId);
+          this.sessions.delete(chatKey);
           return {
             success: false,
             output:
@@ -438,12 +431,12 @@ export class AgentRuntime {
         }
 
         const compacted = await this.sessions.compactConversationHistory(
-          sessionId,
+          chatKey,
           this.model,
           requestId,
         );
         if (!compacted) {
-          this.sessions.delete(sessionId);
+          this.sessions.delete(chatKey);
           return {
             success: false,
             output:
@@ -456,7 +449,7 @@ export class AgentRuntime {
           prompt,
           startTime,
           context,
-          sessionId,
+          chatKey,
           {
             addUserPrompt: false,
             compactionAttempts: compactionAttempts + 1,
@@ -487,7 +480,7 @@ export class AgentRuntime {
       input?: unknown;
       details?: unknown;
     }>,
-    ctx?: { sessionId?: string; requestId?: string },
+    ctx?: { chatKey?: string; requestId?: string },
   ): Promise<ApprovalDecisionResult> {
     return decideApprovalsWithModel({
       initialized: this.initialized,
@@ -501,13 +494,13 @@ export class AgentRuntime {
   async handleApprovalReply(input: {
     userMessage: string;
     context?: AgentInput["context"];
-    sessionId: string;
+    chatKey: string;
     onStep?: AgentInput["onStep"];
   }): Promise<AgentResult | null> {
-    const { userMessage, context, sessionId, onStep } = input;
+    const { userMessage, context, chatKey, onStep } = input;
 
     await this.logger.log("info", "Approval reply received", {
-      sessionId,
+      chatKey,
       source: context?.source,
       userId: context?.userId,
       messagePreview: userMessage.slice(0, 200),
@@ -516,7 +509,7 @@ export class AgentRuntime {
     const pending = this.permissionEngine.getPendingApprovals();
     const relevant = filterRelevantApprovals(
       pending as any[],
-      sessionId,
+      chatKey,
       context,
     );
     if (relevant.length === 0) return null;
@@ -531,7 +524,7 @@ export class AgentRuntime {
         input: (a as any).input,
         details: a.details,
       })),
-      { sessionId },
+      { chatKey },
     );
 
     const approvals = decisions.approvals || {};
@@ -549,7 +542,7 @@ export class AgentRuntime {
     }
 
     await this.logger.log("info", "Approval decisions parsed", {
-      sessionId,
+      chatKey,
       approvals: Object.keys(approvals),
       refused: Object.keys(refused),
     });
@@ -563,7 +556,7 @@ export class AgentRuntime {
       runIds.length === 1 ? { ...(context || {}), runId: runIds[0] } : context;
 
     return this.resumeFromApprovalActions({
-      sessionId,
+      chatKey,
       context: mergedContext,
       approvals,
       refused,
@@ -572,13 +565,13 @@ export class AgentRuntime {
   }
 
   async resumeFromApprovalActions(input: {
-    sessionId: string;
+    chatKey: string;
     context?: AgentInput["context"];
     approvals?: Record<string, string>;
     refused?: Record<string, string>;
     onStep?: AgentInput["onStep"];
   }): Promise<AgentResult> {
-    const { sessionId, context } = input;
+    const { chatKey, context } = input;
     const approvals = input.approvals || {};
     const refused = input.refused || {};
     const onStep = input.onStep;
@@ -600,7 +593,7 @@ export class AgentRuntime {
     const refusedIds = Object.keys(refused);
 
     await this.logger.log("info", "Resuming from approval actions", {
-      sessionId,
+      chatKey,
       source: context?.source,
       userId: context?.userId,
       approvedIds,
@@ -611,11 +604,11 @@ export class AgentRuntime {
       projectRoot: this.context.projectRoot,
       approvedIds,
       refusedIds,
-      sessionMessagesSnapshot: this.sessions.getOrCreate(sessionId),
+      sessionMessagesSnapshot: this.sessions.getOrCreate(chatKey),
       coerceStoredMessagesToModelMessages: (m) =>
         this.sessions.coerceStoredMessagesToModelMessages(m),
     });
-    this.sessions.replace(sessionId, [...baseMessages]);
+    this.sessions.replace(chatKey, [...baseMessages]);
 
     const approvalResponses = await applyApprovalActionsAndBuildResponses({
       projectRoot: this.context.projectRoot,
@@ -632,9 +625,9 @@ export class AgentRuntime {
       };
     }
 
-    const messages = this.sessions.getOrCreate(sessionId);
+    const messages = this.sessions.getOrCreate(chatKey);
     messages.push({ role: "tool", content: approvalResponses as any });
-    await emitStep("approval", "已记录审批结果，继续执行。", { sessionId });
+    await emitStep("approval", "已记录审批结果，继续执行。", { chatKey });
 
     const resumeStart = Date.now();
     const isChatSource =
@@ -644,7 +637,7 @@ export class AgentRuntime {
     const resumePrompt = isChatSource
       ? [
           "Continue execution after applying the approval decisions.",
-          "IMPORTANT: deliver user-visible updates via the `send_message` tool (alias: `chat_send`). Do not rely on plain text output only.",
+          "IMPORTANT: deliver user-visible updates via the `chat_send` tool. Do not rely on plain text output only.",
         ].join("\n")
       : "";
 
@@ -652,7 +645,7 @@ export class AgentRuntime {
       resumePrompt,
       resumeStart,
       context,
-      sessionId,
+      chatKey,
       {
         addUserPrompt: Boolean(resumePrompt),
         onStep,
@@ -703,7 +696,7 @@ export class AgentRuntime {
 
     try {
       const result = await withLlmRequestContext(
-        { sessionId: input.context?.sessionId },
+        { chatKey: input.context?.chatKey },
         () =>
           generateText({
             model: this.model!,
@@ -714,7 +707,7 @@ export class AgentRuntime {
               `Return JSON: {"mode":"async","reason":"..."}.\n\n` +
               `Context:\n` +
               `- source: ${input.context?.source || "unknown"}\n` +
-              `- sessionId: ${input.context?.sessionId || "unknown"}\n` +
+              `- chatKey: ${input.context?.chatKey || "unknown"}\n` +
               `- userId: ${input.context?.userId || "unknown"}\n` +
               `\nUser request:\n${instructions}\n`,
           }),
@@ -757,9 +750,9 @@ export class AgentRuntime {
     return executeToolDirect(approval.tool, approval.input, toolSet);
   }
 
-  private async buildMemoryPromptSection(sessionId: string): Promise<string> {
+  private async buildMemoryPromptSection(chatKey: string): Promise<string> {
     try {
-      const store = await this.memoryStore.load(sessionId);
+      const store = await this.memoryStore.load(chatKey);
       if (!store.entries || store.entries.length === 0) return "";
 
       const selected = [...store.entries]
@@ -787,14 +780,14 @@ export class AgentRuntime {
     }
   }
 
-  private async maybeExtractMemory(sessionId: string): Promise<void> {
+  private async maybeExtractMemory(chatKey: string): Promise<void> {
     if (!this.model) return;
 
     const now = Date.now();
-    const last = this.lastMemoryExtraction.get(sessionId) || 0;
+    const last = this.lastMemoryExtraction.get(chatKey) || 0;
     if (now - last < this.MEMORY_EXTRACTION_INTERVAL) return;
 
-    const messages = this.sessions.getOrCreate(sessionId);
+    const messages = this.sessions.getOrCreate(chatKey);
     const recent = messages
       .filter((m: any) => m?.role === "user" || m?.role === "assistant")
       .slice(-40);
@@ -814,8 +807,8 @@ export class AgentRuntime {
         v: 1,
         ts: now,
         channel: "cli",
-        chatId: sessionId,
-        chatKey: sessionId,
+        chatId: chatKey,
+        chatKey,
         role: role as any,
         text,
       });
@@ -826,11 +819,11 @@ export class AgentRuntime {
     const extractor = new MemoryExtractor(this.model);
     const extracted = await extractor.extractFromHistory(entries);
     if (!extracted.memories || extracted.memories.length === 0) {
-      this.lastMemoryExtraction.set(sessionId, now);
+      this.lastMemoryExtraction.set(chatKey, now);
       return;
     }
 
-    const store = await this.memoryStore.load(sessionId);
+    const store = await this.memoryStore.load(chatKey);
     const deduped = await extractor.deduplicateMemories(
       store.entries as MemoryEntry[],
       extracted.memories,
@@ -840,10 +833,10 @@ export class AgentRuntime {
       const importance =
         typeof mem.importance === "number" ? mem.importance : 5;
       if (importance < 4) continue;
-      await this.memoryStore.add(sessionId, mem);
+      await this.memoryStore.add(chatKey, mem);
     }
 
-    this.lastMemoryExtraction.set(sessionId, now);
+    this.lastMemoryExtraction.set(chatKey, now);
   }
 
   isInitialized(): boolean {

@@ -16,17 +16,17 @@ export class RunManager {
         ? {
             source: "telegram" as const,
             userId: task.chatId,
-            sessionId: `telegram:chat:${task.chatId}`,
+            chatKey: `telegram:chat:${task.chatId}`,
           }
         : task.source === "feishu" && task.chatId
           ? {
               source: "feishu" as const,
               userId: task.chatId,
-              sessionId: `feishu:chat:${task.chatId}`,
+              chatKey: `feishu:chat:${task.chatId}`,
             }
           : {
               source: "scheduler" as const,
-              sessionId: `scheduler:task:${task.id}`,
+              chatKey: `scheduler:task:${task.id}`,
               userId: `task:${task.id}`,
             };
 

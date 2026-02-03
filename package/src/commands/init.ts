@@ -156,7 +156,7 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     },
     llm: llmConfig,
     permissions: DEFAULT_SHIP_JSON.permissions,
-    integrations: {
+    adapters: {
       telegram: {
         enabled: response.integration === 'telegram',
         botToken: response.integration === 'telegram' ? TELEGRAM_BOT_TOKEN : undefined,

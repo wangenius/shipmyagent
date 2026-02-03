@@ -3,12 +3,15 @@ import { ChatStore } from "../runtime/chat/store.js";
 import type { ChatDispatchChannel } from "../runtime/chat/dispatcher.js";
 import { registerChatDispatcher } from "../runtime/chat/dispatcher.js";
 
-export type AdapterSendTextParams = {
+export type AdapterChatKeyParams = {
   chatId: string;
-  text: string;
   messageThreadId?: number;
   chatType?: string;
   messageId?: string;
+};
+
+export type AdapterSendTextParams = AdapterChatKeyParams & {
+  text: string;
 };
 
 /**
@@ -18,7 +21,7 @@ export type AdapterSendTextParams = {
  * - Provide a consistent hook for registering adapter capabilities (dispatcher/tools).
  * - Offer shared helpers for persisting chat logs.
  *
- * Note: message delivery is tool-strict; user-visible replies should be sent via tools (e.g. `chat_send` / `send_message`),
+ * Note: message delivery is tool-strict; user-visible replies should be sent via tools (e.g. `chat_send`),
  * which route to the registered dispatcher.
  */
 export abstract class PlatformAdapter {
@@ -44,7 +47,7 @@ export abstract class PlatformAdapter {
     });
   }
 
-  protected abstract getChatKey(params: AdapterSendTextParams): string;
+  protected abstract getChatKey(params: AdapterChatKeyParams): string;
 
   protected abstract sendTextToPlatform(
     params: AdapterSendTextParams,
@@ -61,7 +64,12 @@ export abstract class PlatformAdapter {
     try {
       await this.sendTextToPlatform({ ...params, chatId, text });
       try {
-        const chatKey = this.getChatKey({ ...params, chatId, text });
+        const chatKey = this.getChatKey({
+          chatId,
+          chatType: params.chatType,
+          messageId: params.messageId,
+          messageThreadId: params.messageThreadId,
+        });
         await this.chatStore.append({
           channel: this.channel as any,
           chatId,

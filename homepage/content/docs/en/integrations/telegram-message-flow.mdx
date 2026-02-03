@@ -79,9 +79,9 @@ Summarize this PDF and list action items.
 
 ## Persistence: ChatStore
 
-Every incoming message is appended to a per-session JSONL file:
+Every incoming message is appended to a per-chat JSONL file:
 
-- `.ship/chats/<encode(sessionId)>.jsonl`
+- `.ship/chats/<encode(chatKey)>.jsonl`
 
 Before execution, recent entries are loaded and collapsed into a compact “assistant context” that is injected back into the in-memory session.
 
@@ -118,7 +118,7 @@ In async mode, ShipMyAgent enqueues a background run, immediately replies with a
 
 When a tool requires approval:
 
-1. PermissionEngine writes `.ship/approvals/<id>.json` (including `meta` such as `source=telegram`, `userId`, `sessionId`, `initiatorId`)
+1. PermissionEngine writes `.ship/approvals/<id>.json` (including `meta` such as `source=telegram`, `userId`, `chatKey`, `initiatorId`)
 2. TelegramBot periodically notifies the originating chat
 3. User replies either with natural language (handled by `handleApprovalReply`) or explicit commands/buttons
 4. AgentRuntime resumes via `resumeFromApprovalActions()`, injects `ToolApprovalResponse`, deletes approval files, and continues execution

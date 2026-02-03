@@ -8,7 +8,10 @@ import { createToolExecutor } from "../runtime/tools/index.js";
 import { getCacheDirPath } from '../utils.js';
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type { IncomingChatMessage } from "./base-chat-adapter.js";
-import type { AdapterSendTextParams } from "./platform-adapter.js";
+import type { AdapterChatKeyParams, AdapterSendTextParams } from "./platform-adapter.js";
+import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
+import type { AgentRuntime } from "../runtime/agent/index.js";
+import type { McpManager } from "../runtime/mcp/index.js";
 
 interface FeishuConfig {
   appId: string;
@@ -57,9 +60,10 @@ export class FeishuBot extends BaseChatAdapter {
     logger: Logger,
     taskExecutor: TaskExecutor,
     projectRoot: string,
-    adminUserIds: string[] | undefined
+    adminUserIds: string[] | undefined,
+    createAgentRuntime?: () => AgentRuntime,
   ) {
-    super({ channel: "feishu", projectRoot, logger });
+    super({ channel: "feishu", projectRoot, logger, createAgentRuntime });
     this.appId = appId;
     this.appSecret = appSecret;
     this.domain = domain;
@@ -69,18 +73,12 @@ export class FeishuBot extends BaseChatAdapter {
     this.adminUserIds = new Set((adminUserIds || []).map((x) => String(x)));
   }
 
-  private getThreadId(chatId: string, _chatType: string): string {
+  private buildChatKey(chatId: string): string {
     return `feishu:chat:${chatId}`;
   }
 
-  protected getSessionKey(msg: Pick<IncomingChatMessage, "chatId" | "chatType">): string {
-    const chatType = typeof msg.chatType === "string" ? msg.chatType : "p2p";
-    return this.getThreadId(msg.chatId, chatType);
-  }
-
-  protected getChatKey(params: AdapterSendTextParams): string {
-    const chatType = typeof params.chatType === "string" ? params.chatType : "p2p";
-    return this.getThreadId(params.chatId, chatType);
+  protected getChatKey(params: AdapterChatKeyParams): string {
+    return this.buildChatKey(params.chatId);
   }
 
   protected async sendTextToPlatform(params: AdapterSendTextParams): Promise<void> {
@@ -280,18 +278,18 @@ export class FeishuBot extends BaseChatAdapter {
     const pending = permissionEngine.getPendingApprovals();
 
     for (const req of pending as any[]) {
-      const meta = req?.meta as { source?: string; userId?: string; sessionId?: string } | undefined;
+      const meta = req?.meta as { source?: string; userId?: string; chatKey?: string } | undefined;
       if (meta?.source !== 'feishu') continue;
 
-      const sessionId = meta?.sessionId;
+      const chatKey = meta?.chatKey;
       const userId = meta?.userId;
-      if (!sessionId || !userId) continue;
+      if (!chatKey || !userId) continue;
 
       // We can only notify chats we have seen (so we know chatType)
-      const known = this.knownChats.get(sessionId);
+      const known = this.knownChats.get(chatKey);
       if (!known) continue;
 
-      const key = `${req.id}:${sessionId}`;
+      const key = `${req.id}:${chatKey}`;
       if (this.notifiedApprovalKeys.has(key)) continue;
       this.notifiedApprovalKeys.add(key);
 
@@ -324,7 +322,7 @@ export class FeishuBot extends BaseChatAdapter {
         message: { chat_id, content, message_type, chat_type, message_id, mentions: eventMentions },
       } = data;
 
-      const threadId = this.getThreadId(chat_id, chat_type);
+      const threadId = this.buildChatKey(chat_id);
       const actorId = this.extractSenderId(data);
 
       // Message deduplication: check if this message has been processed
@@ -367,11 +365,10 @@ export class FeishuBot extends BaseChatAdapter {
       this.logger.info(`Received Feishu message: ${userMessage}`);
 
       // Record this chat as a known notification target
-      const sessionId = threadId;
-      this.knownChats.set(sessionId, { chatId: chat_id, chatType: chat_type });
+      this.knownChats.set(threadId, { chatId: chat_id, chatType: chat_type });
 
       // Check if it's a command
-      await this.runInThread(threadId, async () => {
+      await this.runInChat(threadId, async () => {
         if (userMessage.startsWith('/')) {
           if (this.isGroupChat(chat_type) && actorId) {
             const cmdName = (userMessage.trim().split(/\s+/)[0] || '').toLowerCase();
@@ -442,7 +439,7 @@ Available commands:
 
       case '/clear':
       case '/清除':
-        this.clearSession(this.getThreadId(chatId, chatType));
+        this.clearChat(this.buildChatKey(chatId));
         responseText = '✅ Conversation history cleared';
         break;
 
@@ -461,23 +458,21 @@ Available commands:
     actorId?: string
   ): Promise<void> {
     try {
-      // Get or create session
-      const agentRuntime = this.getOrCreateSession(this.getThreadId(chatId, chatType));
+      const chatKey = this.buildChatKey(chatId);
+      const agentRuntime = this.getOrCreateRuntime(chatKey);
 
       // Initialize agent (if not already initialized)
       if (!agentRuntime.isInitialized()) {
         await agentRuntime.initialize();
       }
 
-      // Generate sessionId (thread-based, stable across restarts)
-      const sessionId = this.getThreadId(chatId, chatType);
-      this.knownChats.set(sessionId, { chatId, chatType });
+      this.knownChats.set(chatKey, { chatId, chatType });
 
       // Persist user message into chat history (append-only)
       await this.chatStore.append({
         channel: 'feishu',
         chatId,
-        chatKey: sessionId,
+        chatKey,
         userId: actorId,
         messageId,
         role: 'user',
@@ -489,8 +484,8 @@ Available commands:
       try {
         const permissionEngine = createPermissionEngine(this.projectRoot);
         const pending = permissionEngine.getPendingApprovals().filter((req: any) => {
-          const meta = (req as any)?.meta as { sessionId?: string; source?: string } | undefined;
-          return meta?.sessionId === sessionId && meta?.source === 'feishu';
+          const meta = (req as any)?.meta as { chatKey?: string; source?: string } | undefined;
+          return meta?.chatKey === chatKey && meta?.source === 'feishu';
         });
         if (pending.length > 0) {
           const can = await this.canApproveFeishu(String((pending[0] as any).id), actorId);
@@ -509,13 +504,13 @@ Available commands:
         context: {
           source: 'feishu',
           userId: chatId,
-          sessionId,
+          chatKey,
           actorId,
           chatType,
           messageId,
           replyMode: "tool",
         },
-        sessionId,
+        chatKey,
       });
       if (approvalResult) {
         return;
@@ -527,7 +522,7 @@ Available commands:
         context: {
           source: 'feishu',
           userId: chatId,
-          sessionId,
+          chatKey,
           actorId,
           chatType,
           messageId,
@@ -634,7 +629,8 @@ Available commands:
 export async function createFeishuBot(
   projectRoot: string,
   config: FeishuConfig,
-  logger: Logger
+  logger: Logger,
+  deps?: { mcpManager?: McpManager | null },
 ): Promise<FeishuBot | null> {
   if (!config.enabled || !config.appId || !config.appSecret) {
     return null;
@@ -659,7 +655,8 @@ export async function createFeishuBot(
     logger,
     taskExecutor,
     projectRoot, // 传递 projectRoot
-    config.adminUserIds
+    config.adminUserIds,
+    () => createAgentRuntimeFromPath(projectRoot, { mcpManager: deps?.mcpManager ?? null }),
   );
   return bot;
 }

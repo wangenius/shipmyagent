@@ -2,13 +2,13 @@ import type { AgentInput } from "./types.js";
 
 export function buildRuntimePrefixedPrompt(input: {
   projectRoot: string;
-  sessionId: string;
+  chatKey: string;
   requestId: string;
   instructions: string;
   context?: AgentInput["context"];
   replyMode?: "auto" | "tool";
 }): string {
-  const { projectRoot, sessionId, requestId, instructions, context, replyMode } =
+  const { projectRoot, chatKey, requestId, instructions, context, replyMode } =
     input;
 
   let fullPrompt = instructions;
@@ -19,7 +19,7 @@ export function buildRuntimePrefixedPrompt(input: {
   const runtimePrefix =
     `Runtime context:\n` +
     `- Project root: ${projectRoot}\n` +
-    `- Session: ${sessionId}\n` +
+    `- ChatKey: ${chatKey}\n` +
     `- Request ID: ${requestId}\n` +
     (context?.source ? `- Source: ${context.source}\n` : "") +
     (context?.userId ? `- User/Chat ID: ${context.userId}\n` : "") +
@@ -34,7 +34,7 @@ export function buildRuntimePrefixedPrompt(input: {
     context?.source === "qq"
       ? `- When you need to use tools in multiple steps, include short progress updates as plain text before/around tool usage (no tool names/commands).\n` +
         (replyMode === "tool"
-          ? `- IMPORTANT: deliver replies via the \`send_message\` tool (alias: \`chat_send\`). Do not rely on plain text output only.\n`
+          ? `- IMPORTANT: deliver replies via the \`chat_send\` tool. Do not rely on plain text output only.\n`
           : "") +
         ((context?.chatType || "").toLowerCase().includes("group")
           ? `- This is a group chat. Prefer addressing the current actor (use @<Actor username> if available) so readers know who you're responding to.\n` +
@@ -44,4 +44,3 @@ export function buildRuntimePrefixedPrompt(input: {
 
   return `${runtimePrefix}\n${fullPrompt}`;
 }
-

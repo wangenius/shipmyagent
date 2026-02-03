@@ -82,7 +82,4 @@ export const chat_send = tool({
   },
 });
 
-// Alias for ergonomics / common naming in prompts.
-export const send_message = chat_send;
-
-export const chatTools = { chat_send, send_message };
+export const chatTools = { chat_send };

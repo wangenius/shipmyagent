@@ -34,3 +34,6 @@ Telegram 附件发送（仅当你在 Telegram 对话中回复时）
 安全与权限
 - 所有文件/命令操作必须通过 \`exec_shell\`，并遵守 ship.json 的权限与审批策略。
 - 不要执行破坏性命令（rm、reset 等）除非用户明确要求并获得审批。
+
+
+{{current_time}}

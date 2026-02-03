@@ -5,37 +5,37 @@ import type { ConversationMessage } from "./types.js";
 export class AgentSessionStore {
   private sessionMessages: Map<string, ModelMessage[]> = new Map();
 
-  getOrCreate(sessionId: string): ModelMessage[] {
-    const existing = this.sessionMessages.get(sessionId);
+  getOrCreate(chatKey: string): ModelMessage[] {
+    const existing = this.sessionMessages.get(chatKey);
     if (existing) return existing;
     const fresh: ModelMessage[] = [];
-    this.sessionMessages.set(sessionId, fresh);
+    this.sessionMessages.set(chatKey, fresh);
     return fresh;
   }
 
-  set(sessionId: string, messages: unknown[]): void {
+  set(chatKey: string, messages: unknown[]): void {
     this.sessionMessages.set(
-      sessionId,
+      chatKey,
       this.coerceStoredMessagesToModelMessages(
         Array.isArray(messages) ? (messages as unknown[]) : [],
       ),
     );
   }
 
-  replace(sessionId: string, messages: ModelMessage[]): void {
-    this.sessionMessages.set(sessionId, messages);
+  replace(chatKey: string, messages: ModelMessage[]): void {
+    this.sessionMessages.set(chatKey, messages);
   }
 
-  delete(sessionId: string): void {
-    this.sessionMessages.delete(sessionId);
+  delete(chatKey: string): void {
+    this.sessionMessages.delete(chatKey);
   }
 
-  clear(sessionId?: string): void {
-    if (!sessionId) this.sessionMessages.clear();
-    else this.sessionMessages.delete(sessionId);
+  clear(chatKey?: string): void {
+    if (!chatKey) this.sessionMessages.clear();
+    else this.sessionMessages.delete(chatKey);
   }
 
-  getConversationHistory(sessionId?: string): ConversationMessage[] {
+  getConversationHistory(chatKey?: string): ConversationMessage[] {
     const toLegacy = (m: ModelMessage): ConversationMessage => {
       const role = (m as any).role as ConversationMessage["role"];
       const content = (m as any).content;
@@ -57,7 +57,7 @@ export class AgentSessionStore {
       };
     };
 
-    if (!sessionId) {
+    if (!chatKey) {
       const all: ConversationMessage[] = [];
       for (const messages of this.sessionMessages.values()) {
         all.push(...messages.map(toLegacy));
@@ -65,7 +65,7 @@ export class AgentSessionStore {
       return all;
     }
 
-    return (this.sessionMessages.get(sessionId) || []).map(toLegacy);
+    return (this.sessionMessages.get(chatKey) || []).map(toLegacy);
   }
 
   formatModelMessagesForLog(
@@ -95,11 +95,11 @@ export class AgentSessionStore {
   }
 
   async compactConversationHistory(
-    sessionId: string,
+    chatKey: string,
     model: LanguageModel | null,
     requestId?: string,
   ): Promise<boolean> {
-    const history = this.getOrCreate(sessionId);
+    const history = this.getOrCreate(chatKey);
     if (history.length < 6) return false;
     if (!model) return false;
 
@@ -109,7 +109,7 @@ export class AgentSessionStore {
     const newer = history.slice(cut);
 
     const input = this.extractTextForSummary(older, 12000);
-    const result = await withLlmRequestContext({ sessionId, requestId }, () =>
+    const result = await withLlmRequestContext({ chatKey, requestId }, () =>
       generateText({
         model,
         system:
@@ -130,9 +130,9 @@ export class AgentSessionStore {
     if (compacted.length > maxMessagesAfterCompaction) {
       const keep = Math.max(0, maxMessagesAfterCompaction - 1);
       const trimmedNewer = keep > 0 ? newer.slice(-keep) : [];
-      this.sessionMessages.set(sessionId, [summaryMessage, ...trimmedNewer]);
+      this.sessionMessages.set(chatKey, [summaryMessage, ...trimmedNewer]);
     } else {
-      this.sessionMessages.set(sessionId, compacted);
+      this.sessionMessages.set(chatKey, compacted);
     }
     return true;
   }

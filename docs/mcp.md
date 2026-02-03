@@ -8,7 +8,7 @@ MCP 配置**不在** `ship.json` 里，而是在项目运行目录下：
 
 - `.ship/mcp/mcp.json`
 
-运行时会在启动阶段读取该文件：`package/src/runtime/agent.ts` 中的 `initializeMcp()`。
+运行时会在启动阶段读取该文件：`package/src/commands/start.ts` 会调用 `package/src/runtime/mcp/bootstrap.ts` 的 `bootstrapMcpFromProject()` 来初始化 MCP 连接，然后把 `McpManager` 注入给 `AgentRuntime` 使用。
 
 > 提示：`shipmyagent init` 会自动创建 `.ship/mcp/mcp.json`，并同时生成 `.ship/mcp/mcp.schema.json`，用于 IDE 校验与补全。
 
@@ -122,4 +122,3 @@ ShipMyAgent 会把 MCP 工具以 `server:toolName` 的形式暴露给 Agent。
 - `servers` 为空：日志会提示 “No MCP servers configured”
 - 连接失败：查看 `.ship/logs/` 下的日志，确认 `command/url` 可用、端口可达、环境变量已设置
 - `stdio` 启动失败：先在终端手动运行 `command args...`，确认本机可执行
-

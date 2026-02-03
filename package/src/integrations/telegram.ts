@@ -9,6 +9,7 @@ import {
 } from "../runtime/task/index.js";
 import { createToolExecutor } from "../runtime/tools/index.js";
 import type { AgentRuntime } from "../runtime/agent/index.js";
+import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
 import { getCacheDirPath, getRunsDirPath } from "../utils.js";
 import { RunManager } from "../runtime/run/index.js";
 import type { RunRecord } from "../runtime/run/index.js";
@@ -16,8 +17,9 @@ import { loadRun, saveRun } from "../runtime/run/index.js";
 import type { ChatLogEntryV1 } from "../runtime/chat/store.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type { IncomingChatMessage } from "./base-chat-adapter.js";
-import type { AdapterSendTextParams } from "./platform-adapter.js";
+import type { AdapterChatKeyParams, AdapterSendTextParams } from "./platform-adapter.js";
 import { tryClaimChatIngressMessage } from "../runtime/chat/idempotency.js";
+import type { McpManager } from "../runtime/mcp/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TELEGRAM_HISTORY_LIMIT = 20;
@@ -312,8 +314,9 @@ export class TelegramBot extends BaseChatAdapter {
     logger: Logger,
     taskExecutor: TaskExecutor,
     projectRoot: string,
+    createAgentRuntime?: () => AgentRuntime,
   ) {
-    super({ channel: "telegram", projectRoot, logger });
+    super({ channel: "telegram", projectRoot, logger, createAgentRuntime });
     this.botToken = botToken;
     this.chatId = chatId;
     this.followupWindowMs = Number.isFinite(followupWindowMs as number) && (followupWindowMs as number) > 0
@@ -327,23 +330,15 @@ export class TelegramBot extends BaseChatAdapter {
     this.runManager = new RunManager(projectRoot);
   }
 
-  private getThreadId(chatId: string): string {
-    return `telegram:chat:${chatId}`;
-  }
-
-  private getThreadKey(chatId: string, messageThreadId?: number): string {
+  private buildChatKey(chatId: string, messageThreadId?: number): string {
     if (typeof messageThreadId === 'number' && Number.isFinite(messageThreadId) && messageThreadId > 0) {
       return `telegram:chat:${chatId}:topic:${messageThreadId}`;
     }
-    return this.getThreadId(chatId);
+    return `telegram:chat:${chatId}`;
   }
 
-  protected getSessionKey(msg: Pick<IncomingChatMessage, "chatId" | "messageThreadId">): string {
-    return this.getThreadKey(msg.chatId, msg.messageThreadId);
-  }
-
-  protected getChatKey(params: AdapterSendTextParams): string {
-    return this.getThreadKey(params.chatId, params.messageThreadId);
+  protected getChatKey(params: AdapterChatKeyParams): string {
+    return this.buildChatKey(params.chatId, params.messageThreadId);
   }
 
   protected async sendTextToPlatform(params: AdapterSendTextParams): Promise<void> {
@@ -495,7 +490,7 @@ export class TelegramBot extends BaseChatAdapter {
           await this.chatStore.append({
             channel: 'telegram',
             chatId,
-            chatKey: this.getThreadId(chatId),
+            chatKey: this.buildChatKey(chatId),
             userId: this.botId ? String(this.botId) : 'bot',
             role: 'assistant',
             text: sanitizeChatText(msg),
@@ -877,7 +872,7 @@ export class TelegramBot extends BaseChatAdapter {
     const actorId = from?.id ? String(from.id) : undefined;
     const actorName = getActorName(from);
     const isGroup = this.isGroupChat(message.chat.type);
-    const threadKey = this.getThreadKey(chatId, messageThreadId);
+    const chatKey = this.buildChatKey(chatId, messageThreadId);
     const replyToFrom = message.reply_to_message?.from;
     const isReplyToBot =
       (!!this.botId && replyToFrom?.id === this.botId) ||
@@ -889,7 +884,7 @@ export class TelegramBot extends BaseChatAdapter {
       const claim = await tryClaimChatIngressMessage({
         projectRoot: this.projectRoot,
         channel: "telegram",
-        chatKey: threadKey,
+        chatKey,
         messageId,
         meta: {
           chatId,
@@ -902,14 +897,14 @@ export class TelegramBot extends BaseChatAdapter {
         this.logger.debug("Ignored duplicate Telegram message (idempotency)", {
           chatId,
           messageId,
-          threadKey,
+          chatKey,
           reason: claim.reason,
         });
         return;
       }
     }
 
-    await this.runInThread(threadKey, async () => {
+    await this.runInChat(chatKey, async () => {
       this.logger.debug("Telegram message received", {
         chatId,
         chatType: message.chat.type,
@@ -919,7 +914,7 @@ export class TelegramBot extends BaseChatAdapter {
         actorName,
         messageId,
         messageThreadId,
-        threadKey,
+        chatKey,
         isReplyToBot,
         hasIncomingAttachment,
         textPreview: rawText.length > 240 ? `${rawText.slice(0, 240)}…` : rawText,
@@ -937,30 +932,30 @@ export class TelegramBot extends BaseChatAdapter {
           const cmdName = (rawText.trim().split(/\s+/)[0] || '').split("@")[0]?.toLowerCase();
           const allowAny = cmdName === '/help' || cmdName === '/start';
           if (!allowAny) {
-            const ok = await this.isAllowedGroupActor(threadKey, chatId, actorId);
+            const ok = await this.isAllowedGroupActor(chatKey, chatId, actorId);
             if (!ok) {
               await this.sendMessage(chatId, '⛔️ 仅发起人或群管理员可以使用该命令。', { messageThreadId });
               return;
             }
           }
         }
-        if (isGroup) this.touchFollowupWindow(threadKey, actorId);
+        if (isGroup) this.touchFollowupWindow(chatKey, actorId);
         await this.handleCommand(chatId, rawText, from, messageThreadId);
       } else {
         if (isGroup) {
           if (!actorId) return;
 
           const isMentioned = this.isBotMentioned(rawText, entities);
-          const inWindow = this.isWithinFollowupWindow(threadKey, actorId);
+          const inWindow = this.isWithinFollowupWindow(chatKey, actorId);
           const explicit = isMentioned || isReplyToBot;
           const shouldConsider = explicit || inWindow;
 
           if (!shouldConsider) {
-            this.logger.debug("Ignored group message (no mention/reply/window)", { chatId, messageId, threadKey });
+            this.logger.debug("Ignored group message (no mention/reply/window)", { chatId, messageId, chatKey });
             return;
           }
 
-          const ok = await this.isAllowedGroupActor(threadKey, chatId, actorId);
+          const ok = await this.isAllowedGroupActor(chatKey, chatId, actorId);
           if (!ok) {
             await this.sendMessage(chatId, '⛔️ 仅发起人或群管理员可以与我对话。', { messageThreadId });
             return;
@@ -973,20 +968,20 @@ export class TelegramBot extends BaseChatAdapter {
         if (isGroup && actorId) {
           const isMentioned = this.isBotMentioned(rawText, entities);
           const explicit = isMentioned || isReplyToBot;
-          const inWindow = this.isWithinFollowupWindow(threadKey, actorId);
+          const inWindow = this.isWithinFollowupWindow(chatKey, actorId);
 
           // Follow-up messages inside the window still need intent confirmation.
           if (!explicit && inWindow && cleaned) {
             const okIntent = this.isLikelyAddressedToBot(cleaned);
             if (!okIntent) {
-              this.logger.debug("Ignored follow-up (intent gate: not addressed to bot)", { chatId, messageId, threadKey });
+              this.logger.debug("Ignored follow-up (intent gate: not addressed to bot)", { chatId, messageId, chatKey });
               return;
             }
           }
 
           // Only (re)open the follow-up window when we actually handle a message.
           // Avoid opening a window for empty pings like "@bot".
-          if (explicit || inWindow) this.touchFollowupWindow(threadKey, actorId);
+          if (explicit || inWindow) this.touchFollowupWindow(chatKey, actorId);
         }
 
         const attachmentLines: string[] = [];
@@ -998,7 +993,7 @@ export class TelegramBot extends BaseChatAdapter {
             attachmentLines.push(`@attach ${att.type} ${rel}${desc}`);
           }
         } catch (e) {
-          this.logger.warn("Failed to save incoming Telegram attachment(s)", { error: String(e), chatId, messageId, threadKey });
+          this.logger.warn("Failed to save incoming Telegram attachment(s)", { error: String(e), chatId, messageId, chatKey });
         }
 
         const instructions = [
@@ -1012,7 +1007,7 @@ export class TelegramBot extends BaseChatAdapter {
         if (!instructions) return;
 
         // Regular message, execute instruction
-        await this.executeAndReply(chatId, instructions, from, messageId, message.chat.type, messageThreadId, threadKey);
+        await this.executeAndReply(chatId, instructions, from, messageId, message.chat.type, messageThreadId, chatKey);
       }
     });
   }
@@ -1109,7 +1104,7 @@ export class TelegramBot extends BaseChatAdapter {
     const [commandToken, ...rest] = command.trim().split(/\s+/);
     const cmd = (commandToken || "").split("@")[0]?.toLowerCase();
     const arg = rest[0];
-    const threadId = this.getThreadKey(chatId, messageThreadId);
+    const chatKey = this.buildChatKey(chatId, messageThreadId);
 
     switch (cmd) {
       case "/start":
@@ -1178,22 +1173,21 @@ Available commands:
           break;
         }
 
-        await this.runInThread(threadId, async () => {
+        await this.runInChat(chatKey, async () => {
           const can = await this.canApproveTelegram(arg, from?.id ? String(from.id) : undefined);
           if (!can.ok) {
             await this.sendMessage(chatId, can.reason);
             return;
           }
 
-          const sessionId = threadId;
-          const agentRuntime = this.getOrCreateSession(threadId);
+          const agentRuntime = this.getOrCreateRuntime(chatKey);
           if (!agentRuntime.isInitialized()) {
             await agentRuntime.initialize();
           }
 
           const result = await agentRuntime.resumeFromApprovalActions({
-            sessionId,
-            context: { source: 'telegram', userId: chatId, sessionId, actorId: from?.id ? String(from.id) : undefined },
+            chatKey,
+            context: { source: 'telegram', userId: chatId, chatKey, actorId: from?.id ? String(from.id) : undefined },
             approvals: cmd === '/approve' ? { [arg]: 'Approved via Telegram command' } : {},
             refused: cmd === '/reject' ? { [arg]: 'Rejected via Telegram command' } : {},
           });
@@ -1204,7 +1198,7 @@ Available commands:
       }
 
       case "/clear":
-        this.clearSession(threadId);
+        this.clearChat(chatKey);
         await this.sendMessage(chatId, "✅ Conversation history cleared", { messageThreadId });
         break;
 
@@ -1225,9 +1219,9 @@ Available commands:
       typeof callbackQuery.message.message_thread_id === 'number'
         ? callbackQuery.message.message_thread_id
         : undefined;
-    const threadKey = this.getThreadKey(chatId, messageThreadId);
+    const chatKey = this.buildChatKey(chatId, messageThreadId);
 
-    await this.runInThread(threadKey, async () => {
+    await this.runInChat(chatKey, async () => {
       // Parse callback data
       const [action, approvalId] = data.split(":");
 
@@ -1239,15 +1233,14 @@ Available commands:
         }
 
         // Resume execution immediately using the stored approval snapshot.
-        const sessionId = threadKey;
-        const agentRuntime = this.getOrCreateSession(threadKey);
+        const agentRuntime = this.getOrCreateRuntime(chatKey);
         if (!agentRuntime.isInitialized()) {
           await agentRuntime.initialize();
         }
 
         const result = await agentRuntime.resumeFromApprovalActions({
-          sessionId,
-          context: { source: 'telegram', userId: chatId, sessionId, actorId },
+          chatKey,
+          context: { source: 'telegram', userId: chatId, chatKey, actorId },
           approvals: action === 'approve' ? { [approvalId]: 'Approved via Telegram' } : {},
           refused: action === 'reject' ? { [approvalId]: 'Rejected via Telegram' } : {},
         });
@@ -1264,19 +1257,18 @@ Available commands:
     messageId?: string,
     chatType?: NonNullable<TelegramUpdate['message']>['chat']['type'],
     messageThreadId?: number,
-    threadKey?: string,
+    chatKey?: string,
   ): Promise<void> {
     try {
-      const key = threadKey || this.getThreadKey(chatId, messageThreadId);
-      const agentRuntime = this.getOrCreateSession(key);
+      const key = chatKey || this.buildChatKey(chatId, messageThreadId);
+      const agentRuntime = this.getOrCreateRuntime(key);
 
       // Initialize agent (if not already initialized)
       if (!agentRuntime.isInitialized()) {
         await agentRuntime.initialize();
       }
 
-      // Generate sessionId (thread-based: DM/group share the same thread)
-      const sessionId = key;
+      const chatKeyResolved = key;
       const actorId = from?.id ? String(from.id) : undefined;
       const actorUsername = from?.username ? String(from.username) : undefined;
       const actorName = getActorName(from);
@@ -1297,7 +1289,7 @@ Available commands:
       await this.chatStore.append({
         channel: 'telegram',
         chatId,
-        chatKey: sessionId,
+        chatKey: chatKeyResolved,
         userId: actorId,
         messageId,
         role: 'user',
@@ -1309,8 +1301,8 @@ Available commands:
       try {
         const permissionEngine = createPermissionEngine(this.projectRoot);
         const pending = permissionEngine.getPendingApprovals().filter((req: any) => {
-          const meta = (req as any)?.meta as { sessionId?: string; source?: string } | undefined;
-          return meta?.sessionId === sessionId && meta?.source === 'telegram';
+          const meta = (req as any)?.meta as { chatKey?: string; source?: string } | undefined;
+          return meta?.chatKey === chatKeyResolved && meta?.source === 'telegram';
         });
         if (pending.length > 0) {
           const can = await this.canApproveTelegram(String((pending[0] as any).id), actorId);
@@ -1329,10 +1321,10 @@ Available commands:
         context: {
           source: "telegram",
           userId: chatId, // route approvals back to this chat
-          sessionId,
+          chatKey: chatKeyResolved,
           actorId,
         },
-        sessionId,
+        chatKey: chatKeyResolved,
       });
       if (approvalResult) {
         return;
@@ -1341,7 +1333,7 @@ Available commands:
       const context = {
         source: "telegram" as const,
         userId: chatId,
-        sessionId,
+        chatKey: chatKeyResolved,
         actorId,
         chatType,
         actorUsername,
@@ -1603,6 +1595,7 @@ export function createTelegramBot(
   projectRoot: string,
   config: TelegramConfig,
   logger: Logger,
+  deps?: { mcpManager?: McpManager | null },
 ): TelegramBot | null {
   if (!config.enabled || !config.botToken || config.botToken === '${}') {
     return null;
@@ -1633,6 +1626,7 @@ export function createTelegramBot(
     logger,
     taskExecutor,
     projectRoot, // 传递 projectRoot
+    () => createAgentRuntimeFromPath(projectRoot, { mcpManager: deps?.mcpManager ?? null }),
   );
   return bot;
 }

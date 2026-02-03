@@ -10,13 +10,13 @@ type ToolCallLike =
  * Final-output delivery helpers for chat integrations.
  *
  * Background
- * - Chat integrations often run the agent in a "tool-strict" mode where the model *should* call `chat_send`/`send_message`
+ * - Chat integrations often run the agent in a "tool-strict" mode where the model *should* call `chat_send`
  *   to deliver replies.
  * - In practice, models sometimes forget to call the tool and instead only emit plain text output. Without a fallback,
  *   the user sees nothing in the chat.
  *
  * This module provides a conservative fallback:
- * - If the agent already called `chat_send`/`send_message` successfully, do nothing (avoid duplicate messages).
+ * - If the agent already called `chat_send` successfully, do nothing (avoid duplicate messages).
  * - Otherwise, send the agent's final `output` to the current `chatId` via the registered dispatcher.
  */
 export function hasSuccessfulChatSendToolCall(toolCalls?: ToolCallLike[]): boolean {
@@ -24,7 +24,7 @@ export function hasSuccessfulChatSendToolCall(toolCalls?: ToolCallLike[]): boole
 
   for (const tc of toolCalls) {
     const name = String((tc as any)?.tool || "");
-    if (name !== "chat_send" && name !== "send_message") continue;
+    if (name !== "chat_send") continue;
 
     const raw = String((tc as any)?.output ?? (tc as any)?.result ?? "").trim();
     if (!raw) {

@@ -314,14 +314,14 @@ ${conversationText}
    * 批量压缩多个会话的历史
    */
   async compressBatch(
-    sessions: Array<{ sessionId: string; messages: ModelMessage[] }>,
+    sessions: Array<{ chatKey: string; messages: ModelMessage[] }>,
     options?: CompressionOptions,
   ): Promise<Map<string, CompressionResult>> {
     const results = new Map<string, CompressionResult>();
 
     for (const session of sessions) {
       const result = await this.compress(session.messages, options);
-      results.set(session.sessionId, result);
+      results.set(session.chatKey, result);
     }
 
     return results;

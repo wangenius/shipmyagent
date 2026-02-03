@@ -29,7 +29,10 @@ export interface AgentInput {
     taskDescription?: string;
     source?: "telegram" | "feishu" | "qq" | "cli" | "scheduler" | "api";
     userId?: string;
-    sessionId?: string;
+    /**
+     * Stable chat key for isolating conversation history / approvals.
+     */
+    chatKey?: string;
     runId?: string;
     actorId?: string;
     chatType?: string;
@@ -71,4 +74,3 @@ export interface ApprovalDecisionResult {
   refused?: Record<string, string>;
   pass?: Record<string, string>;
 }
-

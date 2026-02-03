@@ -251,8 +251,74 @@
       "id": "mem_1770087505501_s27ko9m7a",
       "createdAt": 1770087505501,
       "updatedAt": 1770087505501
+    },
+    {
+      "type": "fact",
+      "content": "用户正在处理项目'shipmyagent/examples/demo-agent'，项目根目录为/Users/wangenius/Documents/github/shipmyagent/examples/demo-agent",
+      "importance": 7,
+      "tags": [
+        "项目信息",
+        "文件路径"
+      ],
+      "metadata": {
+        "project_name": "demo-agent",
+        "project_path": "/Users/wangenius/Documents/github/shipmyagent/examples/demo-agent"
+      },
+      "id": "mem_1770087728909_eja7zapux",
+      "createdAt": 1770087728909,
+      "updatedAt": 1770087728909
+    },
+    {
+      "type": "fact",
+      "content": "当前会话通过Telegram进行，聊天ID为8444574557",
+      "importance": 6,
+      "tags": [
+        "通信渠道",
+        "会话信息"
+      ],
+      "metadata": {
+        "platform": "telegram",
+        "chat_id": "8444574557"
+      },
+      "id": "mem_1770087728910_vava51u3j",
+      "createdAt": 1770087728910,
+      "updatedAt": 1770087728910
+    },
+    {
+      "type": "fact",
+      "content": "助手已解析并发送了预测市场论文'Toward Black–Scholes for Prediction Markets'的PDF文件，文件大小为58KB，1109行",
+      "importance": 6,
+      "tags": [
+        "文件处理",
+        "文档解析"
+      ],
+      "metadata": {
+        "document_title": "Toward Black–Scholes for Prediction Markets",
+        "file_size": "58KB",
+        "line_count": 1109,
+        "content_type": "PDF解析文本"
+      },
+      "id": "mem_1770087728910_jkylwgc9f",
+      "createdAt": 1770087728910,
+      "updatedAt": 1770087728910
+    },
+    {
+      "type": "fact",
+      "content": "论文核心内容涉及logit jump-diffusion模型框架",
+      "importance": 5,
+      "tags": [
+        "学术内容",
+        "模型框架"
+      ],
+      "metadata": {
+        "model_framework": "logit jump-diffusion",
+        "field": "预测市场"
+      },
+      "id": "mem_1770087728911_xa4rw0nqa",
+      "createdAt": 1770087728911,
+      "updatedAt": 1770087728911
     }
   ],
   "version": 1,
-  "updatedAt": 1770087505502
+  "updatedAt": 1770087728911
 }

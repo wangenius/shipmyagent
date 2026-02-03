@@ -12,6 +12,7 @@ import { createInteractiveServer } from "../server/interactive.js";
 import { createTelegramBot } from "../integrations/telegram.js";
 import { createFeishuBot } from "../integrations/feishu.js";
 import { createQQBot } from "../integrations/qq.js";
+import { McpManager, bootstrapMcpFromProject } from "../runtime/mcp/index.js";
 import {
   getAgentMdPath,
   getShipJsonPath,
@@ -130,6 +131,11 @@ export async function startCommand(
   });
   logger.info("Tool executor initialized");
 
+  // Initialize MCP (managed by the server/bootstrap layer, not AgentRuntime)
+  const mcpManager = new McpManager(projectRoot, logger);
+  await bootstrapMcpFromProject({ projectRoot, logger, mcpManager });
+  logger.info("MCP manager initialized");
+
   // Create Agent Runtime
   const userAgentMd = fs
     .readFileSync(getAgentMdPath(projectRoot), "utf-8")
@@ -145,7 +151,7 @@ export async function startCommand(
     config: shipConfig as ShipConfig,
     agentMd,
   };
-  const agentRuntime = createAgentRuntime(agentContext);
+  const agentRuntime = createAgentRuntime(agentContext, { mcpManager });
   await agentRuntime.initialize();
   logger.info("Agent Runtime initialized");
 
@@ -191,78 +197,81 @@ export async function startCommand(
   // Create and start server
   const server = createServer(serverContext);
 
-  // Create Telegram Bot (if enabled)
+  const adapters = shipConfig.adapters || {};
+
+  // Create Telegram Adapter (if enabled)
   let telegramBot = null;
-  if (shipConfig.integrations?.telegram?.enabled) {
-    logger.info("Telegram integration enabled");
+  if (adapters.telegram?.enabled) {
+    logger.info("Telegram adapter enabled");
     telegramBot = createTelegramBot(
       projectRoot,
-      shipConfig.integrations.telegram,
+      adapters.telegram,
       logger,
+      { mcpManager },
     );
   }
 
-  // Create Feishu Bot (if enabled)
+  // Create Feishu Adapter (if enabled)
   let feishuBot = null;
-  if (shipConfig.integrations?.feishu?.enabled) {
-    logger.info("Feishu integration enabled");
+  if (adapters.feishu?.enabled) {
+    logger.info("Feishu adapter enabled");
 
     // Read Feishu configuration from environment variables or config
     const feishuConfig = {
       enabled: true,
       appId:
-        (shipConfig.integrations.feishu.appId &&
-        !isPlaceholder(shipConfig.integrations.feishu.appId)
-          ? shipConfig.integrations.feishu.appId
+        (adapters.feishu?.appId &&
+        !isPlaceholder(adapters.feishu.appId)
+          ? adapters.feishu.appId
           : undefined) ||
         process.env.FEISHU_APP_ID ||
         "",
       appSecret:
-        (shipConfig.integrations.feishu.appSecret &&
-        !isPlaceholder(shipConfig.integrations.feishu.appSecret)
-          ? shipConfig.integrations.feishu.appSecret
+        (adapters.feishu?.appSecret &&
+        !isPlaceholder(adapters.feishu.appSecret)
+          ? adapters.feishu.appSecret
           : undefined) ||
         process.env.FEISHU_APP_SECRET ||
         "",
-      domain: shipConfig.integrations.feishu.domain || "https://open.feishu.cn",
+      domain: adapters.feishu?.domain || "https://open.feishu.cn",
       adminUserIds: Array.isArray(
-        (shipConfig.integrations.feishu as any).adminUserIds,
+        (adapters.feishu as any)?.adminUserIds,
       )
-        ? (shipConfig.integrations.feishu as any).adminUserIds
+        ? (adapters.feishu as any).adminUserIds
         : undefined,
     };
 
-    feishuBot = await createFeishuBot(projectRoot, feishuConfig, logger);
+    feishuBot = await createFeishuBot(projectRoot, feishuConfig, logger, { mcpManager });
   }
 
-  // Create QQ Bot (if enabled)
+  // Create QQ Adapter (if enabled)
   let qqBot = null;
-  if (shipConfig.integrations?.qq?.enabled) {
-    logger.info("QQ integration enabled");
+  if (adapters.qq?.enabled) {
+    logger.info("QQ adapter enabled");
 
     const qqConfig = {
       enabled: true,
       appId:
-        (shipConfig.integrations.qq.appId &&
-        !isPlaceholder(shipConfig.integrations.qq.appId)
-          ? shipConfig.integrations.qq.appId
+        (adapters.qq?.appId &&
+        !isPlaceholder(adapters.qq.appId)
+          ? adapters.qq.appId
           : undefined) ||
         process.env.QQ_APP_ID ||
         "",
       appSecret:
-        (shipConfig.integrations.qq.appSecret &&
-        !isPlaceholder(shipConfig.integrations.qq.appSecret)
-          ? shipConfig.integrations.qq.appSecret
+        (adapters.qq?.appSecret &&
+        !isPlaceholder(adapters.qq.appSecret)
+          ? adapters.qq.appSecret
           : undefined) ||
         process.env.QQ_APP_SECRET ||
         "",
       sandbox:
-        typeof shipConfig.integrations.qq.sandbox === "boolean"
-          ? shipConfig.integrations.qq.sandbox
+        typeof adapters.qq?.sandbox === "boolean"
+          ? adapters.qq.sandbox
           : (process.env.QQ_SANDBOX || "").toLowerCase() === "true",
     };
 
-    qqBot = await createQQBot(projectRoot, qqConfig, logger);
+    qqBot = await createQQBot(projectRoot, qqConfig, logger, { mcpManager });
   }
 
   // 创建交互式 Web 服务器（如果已启用）

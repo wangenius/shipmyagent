@@ -51,7 +51,7 @@ export function extractUserFacingTextFromStep(step: any): string {
 export async function emitToolSummariesFromStep(
   step: any,
   emitStep: (type: string, text: string, data?: Record<string, unknown>) => Promise<void>,
-  meta: { requestId?: string; sessionId: string },
+  meta: { requestId?: string; chatKey: string },
 ): Promise<void> {
   for (const tr of step?.toolResults || []) {
     if (tr?.type !== "tool-result") continue;
@@ -71,7 +71,7 @@ export async function emitToolSummariesFromStep(
           command,
           exitCode: typeof exitCode === "number" ? exitCode : undefined,
           requestId: meta.requestId,
-          sessionId: meta.sessionId,
+          chatKey: meta.chatKey,
         },
       );
     } else if (toolName && String(toolName).includes(":")) {
@@ -80,9 +80,8 @@ export async function emitToolSummariesFromStep(
       await emitStep(
         "step_finish",
         `已执行 MCP 工具：${toolName}${snippet ? `\n结果：${snippet}${String(output).length > 500 ? "…" : ""}` : ""}`,
-        { toolName, requestId: meta.requestId, sessionId: meta.sessionId },
+        { toolName, requestId: meta.requestId, chatKey: meta.chatKey },
       );
     }
   }
 }
-

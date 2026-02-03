@@ -7,7 +7,7 @@ export function createLlmLoggingFetch(args: {
   maxChars?: number;
 }): ProviderFetch {
   const baseFetch: ProviderFetch = (globalThis.fetch as any).bind(globalThis);
-  const maxChars = args.maxChars ?? 12000;
+  const maxChars = args.maxChars ?? 99999999;
 
   return async (input, init) => {
     if (args.enabled) {
@@ -18,13 +18,13 @@ export function createLlmLoggingFetch(args: {
         if (parsed) {
           const message = parsed.requestText
             .replace(/\n===== LLM REQUEST END =====$/, "") +
-            `${ctx?.sessionId ? `\nsessionId: ${ctx.sessionId}` : ""}` +
+            `${ctx?.chatKey ? `\nchatKey: ${ctx.chatKey}` : ""}` +
             `${ctx?.requestId ? `\nrequestId: ${ctx.requestId}` : ""}` +
             `\n===== LLM REQUEST END =====`;
 
           await args.logger.log("info", message.slice(0, maxChars), {
             ...parsed.meta,
-            sessionId: ctx?.sessionId,
+            chatKey: ctx?.chatKey,
             requestId: ctx?.requestId,
           });
         }
@@ -36,4 +36,3 @@ export function createLlmLoggingFetch(args: {
     return baseFetch(input, init);
   };
 }
-

@@ -19,7 +19,7 @@ export async function maybeCreatePendingApprovalFromToolLoopResult(input: {
   toolCalls: AgentResult["toolCalls"];
   projectRoot: string;
   permissionEngine: PermissionEngine;
-  sessionId: string;
+  chatKey: string;
   requestId: string;
   context?: AgentInput["context"];
 }): Promise<AgentResult | null> {
@@ -73,7 +73,7 @@ export async function maybeCreatePendingApprovalFromToolLoopResult(input: {
       input: args,
       messages: [...input.messagesSnapshot] as unknown[],
       meta: {
-        sessionId: input.sessionId,
+        chatKey: input.chatKey,
         source: input.context?.source,
         userId: input.context?.userId,
         actorId: input.context?.actorId,
@@ -137,7 +137,7 @@ export async function decideApprovalsWithModel(input: {
     input?: unknown;
     details?: unknown;
   }>;
-  ctx?: { sessionId?: string; requestId?: string };
+  ctx?: { chatKey?: string; requestId?: string };
 }): Promise<ApprovalDecisionResult> {
   if (!input.initialized || !input.model) {
     return {
@@ -155,7 +155,7 @@ export async function decideApprovalsWithModel(input: {
   }));
 
   const result = await withLlmRequestContext(
-    { sessionId: input.ctx?.sessionId, requestId: input.ctx?.requestId },
+    { chatKey: input.ctx?.chatKey, requestId: input.ctx?.requestId },
     () =>
       generateText({
         model: input.model!,
@@ -184,14 +184,14 @@ export async function decideApprovalsWithModel(input: {
 
 export function filterRelevantApprovals(
   pending: any[],
-  sessionId: string,
+  chatKey: string,
   context?: AgentInput["context"],
 ): any[] {
   return pending.filter((a: any) => {
-    const metaSessionId = (a as any)?.meta?.sessionId;
+    const metaChatKey = (a as any)?.meta?.chatKey;
     const metaUserId = (a as any)?.meta?.userId;
-    if (metaSessionId && metaSessionId === sessionId) return true;
-    if (!metaSessionId && metaUserId && context?.userId && metaUserId === context.userId)
+    if (metaChatKey && metaChatKey === chatKey) return true;
+    if (!metaChatKey && metaUserId && context?.userId && metaUserId === context.userId)
       return true;
     return false;
   });

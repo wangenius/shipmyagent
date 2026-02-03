@@ -25,99 +25,97 @@ export type IncomingChatMessage = {
  *
  * Tool-strict note:
  * - Adapters should NOT auto-send agent output.
- * - Agent replies should be delivered via `send_message` / `chat_send` tool.
+ * - Agent replies should be delivered via `chat_send` tool.
  */
 export abstract class BaseChatAdapter extends PlatformAdapter {
-  protected readonly sessions: Map<string, AgentRuntime> = new Map();
-  protected readonly sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
-  protected readonly threadLocks: Map<string, Promise<void>> = new Map();
-  protected readonly SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+  protected readonly runtimes: Map<string, AgentRuntime> = new Map();
+  protected readonly runtimeTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  protected readonly chatLocks: Map<string, Promise<void>> = new Map();
+  protected readonly RUNTIME_TIMEOUT_MS = 30 * 60 * 1000;
+  private readonly createRuntime: () => AgentRuntime;
 
   protected constructor(params: {
     channel: ChatDispatchChannel;
     projectRoot: string;
     logger: Logger;
+    createAgentRuntime?: () => AgentRuntime;
   }) {
     super({ channel: params.channel, projectRoot: params.projectRoot, logger: params.logger });
+    this.createRuntime =
+      params.createAgentRuntime ?? (() => createAgentRuntimeFromPath(this.projectRoot));
   }
-
-  /**
-   * Map an incoming platform message into a stable session key.
-   * This key is used to isolate conversation history and approvals metadata.
-   */
-  protected abstract getSessionKey(msg: Pick<IncomingChatMessage, "chatId" | "chatType" | "messageThreadId">): string;
 
   /**
    * Optional hook for custom session hydration strategies.
    * Default: hydrate recent messages from ChatStore once per process.
    */
-  protected async hydrateSession(agentRuntime: AgentRuntime, sessionKey: string): Promise<void> {
+  protected async hydrateSession(agentRuntime: AgentRuntime, chatKey: string): Promise<void> {
     try {
-      await this.chatStore.hydrateOnce(sessionKey, (msgs) => {
-        agentRuntime.setConversationHistory(sessionKey, msgs);
+      await this.chatStore.hydrateOnce(chatKey, (msgs) => {
+        agentRuntime.setConversationHistory(chatKey, msgs);
       });
     } catch {
       // ignore
     }
   }
 
-  protected runInThread(threadKey: string, fn: () => Promise<void>): Promise<void> {
-    const prev = this.threadLocks.get(threadKey) ?? Promise.resolve();
+  protected runInChat(chatKey: string, fn: () => Promise<void>): Promise<void> {
+    const prev = this.chatLocks.get(chatKey) ?? Promise.resolve();
     const run = prev.catch(() => {}).then(fn);
-    this.threadLocks.set(
-      threadKey,
+    this.chatLocks.set(
+      chatKey,
       run.finally(() => {
-        if (this.threadLocks.get(threadKey) === run) {
-          this.threadLocks.delete(threadKey);
+        if (this.chatLocks.get(chatKey) === run) {
+          this.chatLocks.delete(chatKey);
         }
       }),
     );
     return run;
   }
 
-  protected resetSessionTimeout(sessionKey: string): void {
-    const oldTimeout = this.sessionTimeouts.get(sessionKey);
+  protected resetRuntimeTimeout(chatKey: string): void {
+    const oldTimeout = this.runtimeTimeouts.get(chatKey);
     if (oldTimeout) clearTimeout(oldTimeout);
 
     const timeout = setTimeout(() => {
-      this.sessions.delete(sessionKey);
-      this.sessionTimeouts.delete(sessionKey);
-      this.logger.debug(`Session timeout cleanup: ${sessionKey}`);
-    }, this.SESSION_TIMEOUT_MS);
+      this.runtimes.delete(chatKey);
+      this.runtimeTimeouts.delete(chatKey);
+      this.logger.debug(`Chat runtime timeout cleanup: ${chatKey}`);
+    }, this.RUNTIME_TIMEOUT_MS);
 
-    this.sessionTimeouts.set(sessionKey, timeout);
+    this.runtimeTimeouts.set(chatKey, timeout);
   }
 
-  protected getOrCreateSession(sessionKey: string): AgentRuntime {
-    if (this.sessions.has(sessionKey)) {
-      this.resetSessionTimeout(sessionKey);
-      return this.sessions.get(sessionKey)!;
+  protected getOrCreateRuntime(chatKey: string): AgentRuntime {
+    if (this.runtimes.has(chatKey)) {
+      this.resetRuntimeTimeout(chatKey);
+      return this.runtimes.get(chatKey)!;
     }
 
-    const agentRuntime = createAgentRuntimeFromPath(this.projectRoot);
-    this.sessions.set(sessionKey, agentRuntime);
-    this.resetSessionTimeout(sessionKey);
+    const agentRuntime = this.createRuntime();
+    this.runtimes.set(chatKey, agentRuntime);
+    this.resetRuntimeTimeout(chatKey);
 
-    void this.hydrateSession(agentRuntime, sessionKey);
+    void this.hydrateSession(agentRuntime, chatKey);
 
-    this.logger.debug(`Created new session: ${sessionKey}`);
+    this.logger.debug(`Created new chat runtime: ${chatKey}`);
     return agentRuntime;
   }
 
-  clearSession(sessionKey: string): void {
-    const session = this.sessions.get(sessionKey);
-    if (session) {
-      session.clearConversationHistory();
-      this.sessions.delete(sessionKey);
+  clearChat(chatKey: string): void {
+    const runtime = this.runtimes.get(chatKey);
+    if (runtime) {
+      runtime.clearConversationHistory();
+      this.runtimes.delete(chatKey);
     }
 
-    const timeout = this.sessionTimeouts.get(sessionKey);
+    const timeout = this.runtimeTimeouts.get(chatKey);
     if (timeout) {
       clearTimeout(timeout);
-      this.sessionTimeouts.delete(sessionKey);
+      this.runtimeTimeouts.delete(chatKey);
     }
 
-    this.logger.info(`Cleared session: ${sessionKey}`);
+    this.logger.info(`Cleared chat: ${chatKey}`);
   }
 
   protected async appendUserMessage(params: {
@@ -146,19 +144,20 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
   }
 
   protected async runAgentForMessage(msg: IncomingChatMessage): Promise<AgentResult> {
-    const sessionKey = this.getSessionKey({
+    const chatKey = this.getChatKey({
       chatId: msg.chatId,
       chatType: msg.chatType,
       messageThreadId: msg.messageThreadId,
+      messageId: msg.messageId,
     });
 
-    const agentRuntime = this.getOrCreateSession(sessionKey);
+    const agentRuntime = this.getOrCreateRuntime(chatKey);
     if (!agentRuntime.isInitialized()) await agentRuntime.initialize();
 
     await this.appendUserMessage({
       channel: this.channel,
       chatId: msg.chatId,
-      chatKey: sessionKey,
+      chatKey,
       messageId: msg.messageId,
       actorId: msg.actorId,
       text: msg.text,
@@ -172,7 +171,7 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     const context: AgentInput["context"] = {
       source: this.channel as any,
       userId: msg.chatId,
-      sessionId: sessionKey,
+      chatKey,
       actorId: msg.actorId,
       actorUsername: msg.actorUsername,
       chatType: msg.chatType,

@@ -13,7 +13,7 @@ ShipMyAgent uses two main configuration files:
 
 ```
 your-project/
-├── ship.json          # Main configuration (LLM, permissions, integrations)
+├── ship.json          # Main configuration (LLM, permissions, adapters)
 ├── Agent.md           # Agent personality and behavior
 └── .ship/             # Runtime data (logs, cache, tasks)
 ```
@@ -98,7 +98,7 @@ Supported `type` values:
       "requiresApproval": false
     }
   },
-  "integrations": {
+  "adapters": {
     "telegram": {
       "enabled": true,
       "botToken": "${TELEGRAM_BOT_TOKEN}",
@@ -326,7 +326,10 @@ Control shell command execution.
 }
 ```
 
-#### integrations (object)
+#### adapters (object)
+
+Messaging platform adapters (Telegram / Feishu / QQ...).  
+Use `adapters` to configure messaging platform adapters.
 
 External service connections.
 
@@ -334,7 +337,7 @@ External service connections.
 
 ```json
 {
-  "integrations": {
+  "adapters": {
     "telegram": {
       "enabled": true,
       "botToken": "${TELEGRAM_BOT_TOKEN}",
@@ -352,7 +355,7 @@ External service connections.
 
 ```json
 {
-  "integrations": {
+  "adapters": {
     "github": {
       "enabled": true,
       "token": "${GITHUB_TOKEN}",
@@ -368,7 +371,7 @@ External service connections.
 
 ```json
 {
-  "integrations": {
+  "adapters": {
     "slack": {
       "enabled": true,
       "webhook": "${SLACK_WEBHOOK_URL}",
@@ -666,7 +669,7 @@ System Properties → Environment Variables
   "llm": {
     "apiKey": "${ANTHROPIC_API_KEY}"  // References environment variable
   },
-  "integrations": {
+  "adapters": {
     "telegram": {
       "botToken": "${TELEGRAM_BOT_TOKEN}"
     }
