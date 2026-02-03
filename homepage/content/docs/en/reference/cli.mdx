@@ -115,7 +115,17 @@ shipmyagent start --log-level debug --verbose
 
 ### `shipmyagent alias`
 
-Write `alias sma="shipmyagent"` into `~/.zshrc` and/or `~/.bashrc` (idempotent). Note: a CLI process cannot refresh your current shell session; run `source ~/.zshrc` / `source ~/.bashrc` (or open a new terminal).
+Write `alias sma="shipmyagent"` into `~/.zshrc` and/or `~/.bashrc` (idempotent).
+
+Note: this alias assumes `shipmyagent` is directly available on your system PATH (typically via a global install). If you installed `shipmyagent` as a project dependency (under `node_modules/.bin/`), use:
+
+```bash
+pnpm exec sma .
+# or
+pnpm exec shipmyagent .
+```
+
+Also note: a CLI process cannot refresh your current shell session; run `source ~/.zshrc` / `source ~/.bashrc` (or open a new terminal).
 
 ```bash
 shipmyagent alias

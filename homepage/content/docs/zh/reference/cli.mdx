@@ -115,7 +115,17 @@ shipmyagent start --log-level debug --verbose
 
 ### `shipmyagent alias`
 
-在 `~/.zshrc` 和/或 `~/.bashrc` 中写入 `alias sma="shipmyagent"`（幂等）。注意：CLI 进程无法直接刷新你当前的 shell 会话；请手动执行 `source ~/.zshrc` / `source ~/.bashrc`（或重新打开终端）。
+在 `~/.zshrc` 和/或 `~/.bashrc` 中写入 `alias sma="shipmyagent"`（幂等）。
+
+注意：这个 alias 依赖你的系统 PATH 里能直接找到 `shipmyagent`（通常意味着你需要全局安装 `shipmyagent`）。如果你只是把 `shipmyagent` 安装成项目依赖（在 `node_modules/.bin/` 下），请用：
+
+```bash
+pnpm exec sma .
+# 或
+pnpm exec shipmyagent .
+```
+
+另外，CLI 进程无法直接刷新你当前的 shell 会话；请手动执行 `source ~/.zshrc` / `source ~/.bashrc`（或重新打开终端）。
 
 ```bash
 shipmyagent alias

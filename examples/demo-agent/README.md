@@ -11,6 +11,17 @@
 3. 启动 demo-agent：
    - `pnpm dev`
 
+## 关于 `sma` / `shipmyagent` 命令
+
+- 这个示例项目把 `shipmyagent` 作为本地依赖安装在 `node_modules/.bin/` 下。
+- 推荐启动方式：
+  - `pnpm dev`（已在 `package.json` 里配置好）
+  - 或 `pnpm exec sma .` / `pnpm exec shipmyagent .`
+- 如果你希望在 `examples/demo-agent/` 目录下直接输入 `sma` / `shipmyagent` 就能用（不加 `pnpm exec`），可以安装 `direnv` 并在该目录执行一次：
+  - `direnv allow`
+  - 本仓库已提供 `examples/demo-agent/.envrc`，会把 `examples/demo-agent/bin/`（以及 `node_modules/.bin`）加到 PATH 里，仅对这个目录生效。
+  - 同时会在该目录内 `unalias sma`，避免 `sma` 被你全局的 `alias sma="shipmyagent"` 劫持，从而保证 `sma -v` 显示的是 `package/bin` 的版本。
+
 ## MinerU-2.5 PDF 解析（302.ai）
 
 - 在 `.env` 里设置：
