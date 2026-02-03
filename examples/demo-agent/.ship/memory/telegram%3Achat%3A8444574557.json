@@ -199,8 +199,60 @@
       "id": "mem_1770041946094_odhgswqdv",
       "createdAt": 1770041946094,
       "updatedAt": 1770041946094
+    },
+    {
+      "type": "fact",
+      "content": "助手已通过 Telegram 附件成功发送 conversation_summary.md 文件，该文件包含两个核心主题的完整总结：预测市场论文分析（风险定价框架演进）和黄金 vs 比特币流动性分析（地理路径差异）",
+      "importance": 8,
+      "tags": [
+        "文件传输",
+        "总结内容"
+      ],
+      "metadata": {
+        "file_name": "conversation_summary.md",
+        "delivery_method": "telegram_attachment",
+        "summary_topics": [
+          "预测市场论文分析",
+          "黄金 vs 比特币流动性分析"
+        ]
+      },
+      "id": "mem_1770087505496_xqz0be0v8",
+      "createdAt": 1770087505496,
+      "updatedAt": 1770087505496
+    },
+    {
+      "type": "fact",
+      "content": "系统存在云上传配置问题，导致无法直接通过云服务发送文件，最终采用 Telegram 附件方式发送",
+      "importance": 6,
+      "tags": [
+        "技术问题",
+        "配置"
+      ],
+      "metadata": {
+        "issue": "cloud_upload_configuration",
+        "workaround": "telegram_attachment"
+      },
+      "id": "mem_1770087505500_752rodtji",
+      "createdAt": 1770087505500,
+      "updatedAt": 1770087505500
+    },
+    {
+      "type": "task",
+      "content": "需要修复云上传配置问题，以确保未来文件传输的可靠性",
+      "importance": 7,
+      "tags": [
+        "技术债务",
+        "配置修复"
+      ],
+      "metadata": {
+        "status": "pending",
+        "context": "file_delivery_fallback"
+      },
+      "id": "mem_1770087505501_s27ko9m7a",
+      "createdAt": 1770087505501,
+      "updatedAt": 1770087505501
     }
   ],
   "version": 1,
-  "updatedAt": 1770041946094
+  "updatedAt": 1770087505502
 }

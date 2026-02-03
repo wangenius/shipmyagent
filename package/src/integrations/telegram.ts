@@ -17,6 +17,7 @@ import type { ChatLogEntryV1 } from "../runtime/chat/store.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type { IncomingChatMessage } from "./base-chat-adapter.js";
 import type { AdapterSendTextParams } from "./platform-adapter.js";
+import { tryClaimChatIngressMessage } from "../runtime/chat/idempotency.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TELEGRAM_HISTORY_LIMIT = 20;
@@ -881,6 +882,32 @@ export class TelegramBot extends BaseChatAdapter {
     const isReplyToBot =
       (!!this.botId && replyToFrom?.id === this.botId) ||
       (!!this.botUsername && typeof replyToFrom?.username === 'string' && replyToFrom.username.toLowerCase() === this.botUsername.toLowerCase());
+
+    // Persistent idempotency: avoid executing the agent more than once for the same inbound Telegram message.
+    // This mitigates duplicate deliveries caused by restarts / multiple pollers / offset glitches.
+    if (messageId) {
+      const claim = await tryClaimChatIngressMessage({
+        projectRoot: this.projectRoot,
+        channel: "telegram",
+        chatKey: threadKey,
+        messageId,
+        meta: {
+          chatId,
+          messageThreadId,
+          actorId,
+          updateHint: "telegram.message",
+        },
+      });
+      if (!claim.claimed) {
+        this.logger.debug("Ignored duplicate Telegram message (idempotency)", {
+          chatId,
+          messageId,
+          threadKey,
+          reason: claim.reason,
+        });
+        return;
+      }
+    }
 
     await this.runInThread(threadKey, async () => {
       this.logger.debug("Telegram message received", {

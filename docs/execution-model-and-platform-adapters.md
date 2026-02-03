@@ -67,7 +67,7 @@
 
 **幂等/去重**
 - 依赖 Telegram `getUpdates` 的 `offset = lastUpdateId + 1` 来避免重复。
-- 没有把 messageId 做持久化去重；如果进程重启或 offset 丢失，可能重复处理旧消息。
+- ✅ 已增加 **messageId 持久化去重**：对每个入站消息尝试写入 `.ship/.cache/ingress/telegram/<chatKey>/<messageId>.json` 作为 claim marker；重复投递/多实例竞争时会被忽略。
 
 **审批通知**
 - `notifyPendingApprovals()` 会读取 pending approvals 并向目标 chat 推送按钮。
@@ -254,4 +254,3 @@ adapter 负责把 intent 渲染为：
 - `## Threading Policy`：群聊是否共享线程、是否只响应 @、同一线程串行规则
 - `## Approval Policy`：谁能 approve、默认提示格式、可接受的回复短语
 - `## Idempotency Policy`：messageId 去重、重试语义
-

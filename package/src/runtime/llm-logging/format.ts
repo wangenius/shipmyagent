@@ -59,13 +59,15 @@ function contentToText(content: any, maxChars: number): string {
       .join("\n");
     return truncate(parts, maxChars);
   }
-  if (content && typeof content === "object") return stringifyCompact(content, maxChars);
+  if (content && typeof content === "object")
+    return stringifyCompact(content, maxChars);
   return truncate(String(content ?? ""), maxChars);
 }
 
 function extractMessages(payload: any): any[] | null {
   if (!payload || typeof payload !== "object") return null;
-  if (Array.isArray((payload as any).messages)) return (payload as any).messages;
+  if (Array.isArray((payload as any).messages))
+    return (payload as any).messages;
   if (Array.isArray((payload as any).input)) return (payload as any).input;
   return null;
 }
@@ -82,7 +84,9 @@ function formatMessagesForLog(messages: any[], maxCharsTotal: number): string {
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i];
     const role =
-      m && typeof m === "object" ? String((m as any).role ?? "unknown") : "unknown";
+      m && typeof m === "object"
+        ? String((m as any).role ?? "unknown")
+        : "unknown";
     const content = m && typeof m === "object" ? (m as any).content : m;
     const text = contentToText(content, 4000);
     const header = `[#${i}] role=${role}`;
@@ -93,7 +97,10 @@ function formatMessagesForLog(messages: any[], maxCharsTotal: number): string {
 
 export type ProviderFetch = (input: any, init?: any) => Promise<any>;
 
-export function parseFetchRequestForLog(input: any, init: any): {
+export function parseFetchRequestForLog(
+  input: any,
+  init: any,
+): {
   url: string;
   method: string;
   payload: unknown | null;
@@ -117,7 +124,10 @@ export function parseFetchRequestForLog(input: any, init: any): {
         ? input.toString()
         : (input as Request).url;
   const method = String(
-    init?.method || (typeof input !== "string" && input instanceof Request ? input.method : "POST"),
+    init?.method ||
+      (typeof input !== "string" && input instanceof Request
+        ? input.method
+        : "POST"),
   );
 
   const payload = safeJsonParse((init as any)?.body);
@@ -139,7 +149,10 @@ export function parseFetchRequestForLog(input: any, init: any): {
     return null;
   }
 
-  const model = typeof (payload as any).model === "string" ? (payload as any).model : undefined;
+  const model =
+    typeof (payload as any).model === "string"
+      ? (payload as any).model
+      : undefined;
   const system = (payload as any).system;
   const messages = extractMessages(payload);
   const tools = (payload as any).tools;
@@ -159,13 +172,18 @@ export function parseFetchRequestForLog(input: any, init: any): {
 
   const messageTextParts: string[] = [headerLines.join("\n")];
   if (typeof system === "string" && system.trim()) {
-    messageTextParts.push(["system:", indentBlock(truncate(system, 4000), "  ")].join("\n"));
+    messageTextParts.push(
+      ["system:", indentBlock(truncate(system, 4000), "  ")].join("\n"),
+    );
   }
   if (messages && Array.isArray(messages)) {
-    messageTextParts.push(`messages: (n=${messages.length})`);
-    // messageTextParts.push(`messages: (n=${messages.length})\n${formatMessagesForLog(messages, maxChars)}`);
+    messageTextParts.push(`messages: ${JSON.stringify(messages, null, 2)}`);
   } else {
-    messageTextParts.push(["payload:", indentBlock(stringifyCompact(payload, maxChars), "  ")].join("\n"));
+    messageTextParts.push(
+      ["payload:", indentBlock(stringifyCompact(payload, maxChars), "  ")].join(
+        "\n",
+      ),
+    );
   }
   messageTextParts.push("===== LLM REQUEST END =====");
 
@@ -187,7 +205,7 @@ export function parseFetchRequestForLog(input: any, init: any): {
       method,
       model,
       toolsCount,
-      messagesCount: Array.isArray(messages) ? messages.length : undefined,
+      messagesCount: messages,
       systemLength: typeof system === "string" ? system.length : undefined,
       ...(includePayload ? { payload } : {}),
     },
