@@ -1,17 +1,20 @@
-import * as Lark from '@larksuiteoapi/node-sdk';
-import fs from 'fs-extra';
-import path from 'path';
-import { createLogger, Logger } from "../runtime/logging/index.js";
+import * as Lark from "@larksuiteoapi/node-sdk";
+import fs from "fs-extra";
+import path from "path";
+import { Logger } from "../runtime/logging/index.js";
 import { createPermissionEngine } from "../runtime/permission/index.js";
 import { createTaskExecutor, TaskExecutor } from "../runtime/task/index.js";
 import { createToolExecutor } from "../runtime/tools/index.js";
-import { getCacheDirPath } from '../utils.js';
+import { getCacheDirPath } from "../utils.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
-import type { IncomingChatMessage } from "./base-chat-adapter.js";
-import type { AdapterChatKeyParams, AdapterSendTextParams } from "./platform-adapter.js";
+import type {
+  AdapterChatKeyParams,
+  AdapterSendTextParams,
+} from "./platform-adapter.js";
 import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
 import type { AgentRuntime } from "../runtime/agent/index.js";
 import type { McpManager } from "../runtime/mcp/index.js";
+import { sendFinalOutputIfNeeded } from "../runtime/chat/final-output.js";
 
 interface FeishuConfig {
   appId: string;
@@ -28,9 +31,13 @@ interface FeishuConfig {
 function sanitizeChatText(text: string): string {
   if (!text) return text;
   let out = text;
-  out = out.replace(/(^|\n)Tool Result:[\s\S]*?(?=\n{2,}|$)/g, '\n[工具输出已省略：我已在后台读取并提炼关键信息]\n');
+  out = out.replace(
+    /(^|\n)Tool Result:[\s\S]*?(?=\n{2,}|$)/g,
+    "\n[工具输出已省略：我已在后台读取并提炼关键信息]\n",
+  );
   if (out.length > 6000) {
-    out = out.slice(0, 5800) + '\n\n…[truncated]（如需完整输出请回复“发完整输出”）';
+    out =
+      out.slice(0, 5800) + "\n\n…[truncated]（如需完整输出请回复“发完整输出”）";
   }
   return out;
 }
@@ -51,7 +58,8 @@ export class FeishuBot extends BaseChatAdapter {
   private threadInitiatorsFile: string;
   private threadInitiators: Map<string, string> = new Map();
   private adminUserIds: Set<string>;
-  private knownChats: Map<string, { chatId: string; chatType: string }> = new Map();
+  private knownChats: Map<string, { chatId: string; chatType: string }> =
+    new Map();
 
   constructor(
     appId: string,
@@ -68,8 +76,16 @@ export class FeishuBot extends BaseChatAdapter {
     this.appSecret = appSecret;
     this.domain = domain;
     this.taskExecutor = taskExecutor;
-    this.dedupeDir = path.join(getCacheDirPath(projectRoot), 'feishu', 'dedupe');
-    this.threadInitiatorsFile = path.join(getCacheDirPath(projectRoot), 'feishu', 'threadInitiators.json');
+    this.dedupeDir = path.join(
+      getCacheDirPath(projectRoot),
+      "feishu",
+      "dedupe",
+    );
+    this.threadInitiatorsFile = path.join(
+      getCacheDirPath(projectRoot),
+      "feishu",
+      "threadInitiators.json",
+    );
     this.adminUserIds = new Set((adminUserIds || []).map((x) => String(x)));
   }
 
@@ -81,9 +97,13 @@ export class FeishuBot extends BaseChatAdapter {
     return this.buildChatKey(params.chatId);
   }
 
-  protected async sendTextToPlatform(params: AdapterSendTextParams): Promise<void> {
-    const chatType = typeof params.chatType === "string" ? params.chatType : "p2p";
-    const messageId = typeof params.messageId === "string" ? params.messageId : undefined;
+  protected async sendTextToPlatform(
+    params: AdapterSendTextParams,
+  ): Promise<void> {
+    const chatType =
+      typeof params.chatType === "string" ? params.chatType : "p2p";
+    const messageId =
+      typeof params.messageId === "string" ? params.messageId : undefined;
     const text = sanitizeChatText(String(params.text ?? ""));
 
     if (messageId && chatType !== "p2p") {
@@ -94,7 +114,10 @@ export class FeishuBot extends BaseChatAdapter {
   }
 
   private async loadDedupeSet(threadId: string): Promise<Set<string>> {
-    const file = path.join(this.dedupeDir, `${encodeURIComponent(threadId)}.json`);
+    const file = path.join(
+      this.dedupeDir,
+      `${encodeURIComponent(threadId)}.json`,
+    );
     try {
       if (!(await fs.pathExists(file))) return new Set();
       const data = await fs.readJson(file);
@@ -105,8 +128,14 @@ export class FeishuBot extends BaseChatAdapter {
     }
   }
 
-  private async persistDedupeSet(threadId: string, set: Set<string>): Promise<void> {
-    const file = path.join(this.dedupeDir, `${encodeURIComponent(threadId)}.json`);
+  private async persistDedupeSet(
+    threadId: string,
+    set: Set<string>,
+  ): Promise<void> {
+    const file = path.join(
+      this.dedupeDir,
+      `${encodeURIComponent(threadId)}.json`,
+    );
     try {
       await fs.ensureDir(this.dedupeDir);
       const ids = Array.from(set).slice(-800); // cap
@@ -121,7 +150,7 @@ export class FeishuBot extends BaseChatAdapter {
       if (!(await fs.pathExists(this.threadInitiatorsFile))) return;
       const data = await fs.readJson(this.threadInitiatorsFile);
       const raw = (data as any)?.initiators;
-      if (!raw || typeof raw !== 'object') return;
+      if (!raw || typeof raw !== "object") return;
       for (const [k, v] of Object.entries(raw)) {
         const threadId = String(k);
         const initiatorId = String(v);
@@ -140,14 +169,18 @@ export class FeishuBot extends BaseChatAdapter {
       const capped = entries.slice(-1000);
       const initiators: Record<string, string> = {};
       for (const [k, v] of capped) initiators[k] = v;
-      await fs.writeJson(this.threadInitiatorsFile, { initiators, updatedAt: Date.now() }, { spaces: 2 });
+      await fs.writeJson(
+        this.threadInitiatorsFile,
+        { initiators, updatedAt: Date.now() },
+        { spaces: 2 },
+      );
     } catch {
       // ignore
     }
   }
 
   private isGroupChat(chatType: string): boolean {
-    return chatType !== 'p2p';
+    return chatType !== "p2p";
   }
 
   private extractSenderId(data: any): string | undefined {
@@ -161,29 +194,36 @@ export class FeishuBot extends BaseChatAdapter {
 
   private parseTextContent(content: string): { text: string; mentions: any[] } {
     const parsed = JSON.parse(content);
-    const text = typeof parsed?.text === 'string' ? parsed.text : '';
+    const text = typeof parsed?.text === "string" ? parsed.text : "";
     const mentions = Array.isArray(parsed?.mentions) ? parsed.mentions : [];
     return { text, mentions };
   }
 
-  private hasAtMention(text: string, mentionsFromContent: any[], mentionsFromEvent: any[]): boolean {
+  private hasAtMention(
+    text: string,
+    mentionsFromContent: any[],
+    mentionsFromEvent: any[],
+  ): boolean {
     if (mentionsFromContent.length > 0) return true;
     if (mentionsFromEvent.length > 0) return true;
     if (/<at\b/i.test(text)) return true;
     // Fallback: many clients render @mention as plain text
-    if (text.includes('@')) return true;
+    if (text.includes("@")) return true;
     return false;
   }
 
   private stripAtMentions(text: string): string {
     if (!text) return text;
     return text
-      .replace(/<at\b[^>]*>[^<]*<\/at>/gi, ' ')
-      .replace(/\\s+/g, ' ')
+      .replace(/<at\b[^>]*>[^<]*<\/at>/gi, " ")
+      .replace(/\\s+/g, " ")
       .trim();
   }
 
-  private async isAllowedGroupActor(threadId: string, actorId: string): Promise<boolean> {
+  private async isAllowedGroupActor(
+    threadId: string,
+    actorId: string,
+  ): Promise<boolean> {
     if (this.adminUserIds.has(actorId)) return true;
     const existing = this.threadInitiators.get(threadId);
     if (!existing) {
@@ -194,34 +234,48 @@ export class FeishuBot extends BaseChatAdapter {
     return existing === actorId;
   }
 
-  private async canApproveFeishu(approvalId: string, actorId?: string): Promise<{ ok: boolean; reason: string }> {
-    if (!actorId) return { ok: false, reason: '❌ 无法识别审批人身份。' };
-    if (this.adminUserIds.has(actorId)) return { ok: true, reason: 'ok' };
+  private async canApproveFeishu(
+    approvalId: string,
+    actorId?: string,
+  ): Promise<{ ok: boolean; reason: string }> {
+    if (!actorId) return { ok: false, reason: "❌ 无法识别审批人身份。" };
+    if (this.adminUserIds.has(actorId)) return { ok: true, reason: "ok" };
 
     const permissionEngine = createPermissionEngine(this.projectRoot);
     const req = permissionEngine.getApprovalRequest(approvalId) as any;
-    if (!req) return { ok: false, reason: '❌ 未找到该审批请求（可能已处理或已过期）。' };
+    if (!req)
+      return {
+        ok: false,
+        reason: "❌ 未找到该审批请求（可能已处理或已过期）。",
+      };
     const meta = (req as any)?.meta as { initiatorId?: string } | undefined;
-    const initiatorId = meta?.initiatorId ? String(meta.initiatorId) : undefined;
-    if (initiatorId && initiatorId === actorId) return { ok: true, reason: 'ok' };
+    const initiatorId = meta?.initiatorId
+      ? String(meta.initiatorId)
+      : undefined;
+    if (initiatorId && initiatorId === actorId)
+      return { ok: true, reason: "ok" };
 
-    return { ok: false, reason: '⛔️ 仅发起人或管理员可以审批/拒绝该操作。' };
+    return { ok: false, reason: "⛔️ 仅发起人或管理员可以审批/拒绝该操作。" };
   }
 
   async start(): Promise<void> {
     if (!this.appId || !this.appSecret) {
-      this.logger.warn('Feishu App ID or App Secret not configured, skipping startup');
+      this.logger.warn(
+        "Feishu App ID or App Secret not configured, skipping startup",
+      );
       return;
     }
 
     // Prevent duplicate startup
     if (this.isRunning) {
-      this.logger.warn('Feishu Bot is already running, skipping duplicate startup');
+      this.logger.warn(
+        "Feishu Bot is already running, skipping duplicate startup",
+      );
       return;
     }
 
     this.isRunning = true;
-    this.logger.info('🤖 Starting Feishu Bot...');
+    this.logger.info("🤖 Starting Feishu Bot...");
     await this.loadThreadInitiators();
 
     try {
@@ -229,7 +283,7 @@ export class FeishuBot extends BaseChatAdapter {
       const baseConfig = {
         appId: this.appId,
         appSecret: this.appSecret,
-        domain: this.domain || 'https://open.feishu.cn',
+        domain: this.domain || "https://open.feishu.cn",
       };
 
       // Create LarkClient and WSClient
@@ -242,31 +296,36 @@ export class FeishuBot extends BaseChatAdapter {
          * Register message receive event
          * https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/events/receive
          */
-        'im.message.receive_v1': async (data: any) => {
+        "im.message.receive_v1": async (data: any) => {
           await this.handleMessage(data);
         },
       });
 
       // Start long connection
       this.wsClient.start({ eventDispatcher });
-      this.logger.info('Feishu Bot started, using long connection mode');
+      this.logger.info("Feishu Bot started, using long connection mode");
 
       // Start approval polling (notify chats that have pending approvals)
       this.approvalInterval = setInterval(() => {
         this.notifyPendingApprovals().catch((e) => {
-          this.logger.error('Failed to notify pending approvals', { error: String(e) });
+          this.logger.error("Failed to notify pending approvals", {
+            error: String(e),
+          });
         });
       }, 2000);
 
       // Start message cache cleanup timer (clean every 5 minutes, keep message IDs from last 10 minutes)
-      this.messageCleanupInterval = setInterval(() => {
-        if (this.processedMessages.size > 1000) {
-          this.processedMessages.clear();
-          this.logger.debug('Cleared message deduplication cache');
-        }
-      }, 5 * 60 * 1000);
+      this.messageCleanupInterval = setInterval(
+        () => {
+          if (this.processedMessages.size > 1000) {
+            this.processedMessages.clear();
+            this.logger.debug("Cleared message deduplication cache");
+          }
+        },
+        5 * 60 * 1000,
+      );
     } catch (error) {
-      this.logger.error('Failed to start Feishu Bot', { error: String(error) });
+      this.logger.error("Failed to start Feishu Bot", { error: String(error) });
     }
   }
 
@@ -278,8 +337,10 @@ export class FeishuBot extends BaseChatAdapter {
     const pending = permissionEngine.getPendingApprovals();
 
     for (const req of pending as any[]) {
-      const meta = req?.meta as { source?: string; userId?: string; chatKey?: string } | undefined;
-      if (meta?.source !== 'feishu') continue;
+      const meta = req?.meta as
+        | { source?: string; userId?: string; chatKey?: string }
+        | undefined;
+      if (meta?.source !== "feishu") continue;
 
       const chatKey = meta?.chatKey;
       const userId = meta?.userId;
@@ -297,7 +358,9 @@ export class FeishuBot extends BaseChatAdapter {
         req.type === "exec_shell"
           ? (req.details as { command?: string } | undefined)?.command
           : undefined;
-      const actionText = command ? `我想执行命令：${command}` : `我想执行操作：${req.action}`;
+      const actionText = command
+        ? `我想执行命令：${command}`
+        : `我想执行操作：${req.action}`;
 
       await this.sendChatMessage(
         known.chatId,
@@ -311,7 +374,9 @@ export class FeishuBot extends BaseChatAdapter {
           `- “不可以，因为 …” / “拒绝，因为 …”`,
           command ? `- “只同意执行 ${command}”` : undefined,
           `- “全部同意” / “全部拒绝”`,
-        ].filter(Boolean).join('\n'),
+        ]
+          .filter(Boolean)
+          .join("\n"),
       );
     }
   }
@@ -319,7 +384,14 @@ export class FeishuBot extends BaseChatAdapter {
   private async handleMessage(data: any): Promise<void> {
     try {
       const {
-        message: { chat_id, content, message_type, chat_type, message_id, mentions: eventMentions },
+        message: {
+          chat_id,
+          content,
+          message_type,
+          chat_type,
+          message_id,
+          mentions: eventMentions,
+        },
       } = data;
 
       const threadId = this.buildChatKey(chat_id);
@@ -334,7 +406,9 @@ export class FeishuBot extends BaseChatAdapter {
       // Persistent dedupe (best-effort)
       const persisted = await this.loadDedupeSet(threadId);
       if (persisted.has(message_id)) {
-        this.logger.debug(`Message already processed (persisted), skipping: ${message_id}`);
+        this.logger.debug(
+          `Message already processed (persisted), skipping: ${message_id}`,
+        );
         return;
       }
 
@@ -344,21 +418,33 @@ export class FeishuBot extends BaseChatAdapter {
       await this.persistDedupeSet(threadId, persisted);
 
       // Parse user message
-      let userMessage = '';
+      let userMessage = "";
       let mentionsFromContent: any[] = [];
-      const mentionsFromEvent: any[] = Array.isArray(eventMentions) ? eventMentions : [];
+      const mentionsFromEvent: any[] = Array.isArray(eventMentions)
+        ? eventMentions
+        : [];
 
       try {
-        if (message_type === 'text') {
+        if (message_type === "text") {
           const parsed = this.parseTextContent(content);
           userMessage = parsed.text;
           mentionsFromContent = parsed.mentions;
         } else {
-          await this.sendErrorMessage(chat_id, chat_type, message_id, 'Non-text messages not supported, please send text message');
+          await this.sendErrorMessage(
+            chat_id,
+            chat_type,
+            message_id,
+            "Non-text messages not supported, please send text message",
+          );
           return;
         }
       } catch (error) {
-        await this.sendErrorMessage(chat_id, chat_type, message_id, 'Failed to parse message, please send text message');
+        await this.sendErrorMessage(
+          chat_id,
+          chat_type,
+          message_id,
+          "Failed to parse message, please send text message",
+        );
         return;
       }
 
@@ -369,14 +455,21 @@ export class FeishuBot extends BaseChatAdapter {
 
       // Check if it's a command
       await this.runInChat(threadId, async () => {
-        if (userMessage.startsWith('/')) {
+        if (userMessage.startsWith("/")) {
           if (this.isGroupChat(chat_type) && actorId) {
-            const cmdName = (userMessage.trim().split(/\s+/)[0] || '').toLowerCase();
-            const allowAny = cmdName === '/help' || cmdName === '/帮助';
+            const cmdName = (
+              userMessage.trim().split(/\s+/)[0] || ""
+            ).toLowerCase();
+            const allowAny = cmdName === "/help" || cmdName === "/帮助";
             if (!allowAny) {
               const ok = await this.isAllowedGroupActor(threadId, actorId);
               if (!ok) {
-                await this.sendMessage(chat_id, chat_type, message_id, '⛔️ 仅发起人或群管理员可以使用该命令。');
+                await this.sendMessage(
+                  chat_id,
+                  chat_type,
+                  message_id,
+                  "⛔️ 仅发起人或群管理员可以使用该命令。",
+                );
                 return;
               }
             }
@@ -384,23 +477,40 @@ export class FeishuBot extends BaseChatAdapter {
           await this.handleCommand(chat_id, chat_type, message_id, userMessage);
         } else {
           if (this.isGroupChat(chat_type)) {
-            const hasAt = this.hasAtMention(userMessage, mentionsFromContent, mentionsFromEvent);
+            const hasAt = this.hasAtMention(
+              userMessage,
+              mentionsFromContent,
+              mentionsFromEvent,
+            );
             if (!hasAt) return;
             if (!actorId) return;
             const ok = await this.isAllowedGroupActor(threadId, actorId);
             if (!ok) {
-              await this.sendMessage(chat_id, chat_type, message_id, '⛔️ 仅发起人或群管理员可以与我对话。');
+              await this.sendMessage(
+                chat_id,
+                chat_type,
+                message_id,
+                "⛔️ 仅发起人或群管理员可以与我对话。",
+              );
               return;
             }
             userMessage = this.stripAtMentions(userMessage);
             if (!userMessage) return;
           }
           // Regular message, call Agent to execute
-          await this.executeAndReply(chat_id, chat_type, message_id, userMessage, actorId);
+          await this.executeAndReply(
+            chat_id,
+            chat_type,
+            message_id,
+            userMessage,
+            actorId,
+          );
         }
       });
     } catch (error) {
-      this.logger.error('Failed to process Feishu message', { error: String(error) });
+      this.logger.error("Failed to process Feishu message", {
+        error: String(error),
+      });
     }
   }
 
@@ -408,15 +518,15 @@ export class FeishuBot extends BaseChatAdapter {
     chatId: string,
     chatType: string,
     messageId: string,
-    command: string
+    command: string,
   ): Promise<void> {
     this.logger.info(`Received Feishu command: ${command}`);
 
-    let responseText = '';
+    let responseText = "";
 
-    switch (command.toLowerCase().split(' ')[0]) {
-      case '/help':
-      case '/帮助':
+    switch (command.toLowerCase().split(" ")[0]) {
+      case "/help":
+      case "/帮助":
         responseText = `🤖 ShipMyAgent Bot
 
 Available commands:
@@ -427,20 +537,21 @@ Available commands:
 - <any message> - Execute instruction`;
         break;
 
-      case '/status':
-      case '/状态':
-        responseText = '📊 Agent status: Running\nTasks: 0\nPending approvals: 0';
+      case "/status":
+      case "/状态":
+        responseText =
+          "📊 Agent status: Running\nTasks: 0\nPending approvals: 0";
         break;
 
-      case '/tasks':
-      case '/任务':
-        responseText = '📋 Task list\nNo tasks';
+      case "/tasks":
+      case "/任务":
+        responseText = "📋 Task list\nNo tasks";
         break;
 
-      case '/clear':
-      case '/清除':
+      case "/clear":
+      case "/清除":
         this.clearChat(this.buildChatKey(chatId));
-        responseText = '✅ Conversation history cleared';
+        responseText = "✅ Conversation history cleared";
         break;
 
       default:
@@ -455,7 +566,7 @@ Available commands:
     chatType: string,
     messageId: string,
     instructions: string,
-    actorId?: string
+    actorId?: string,
   ): Promise<void> {
     try {
       const chatKey = this.buildChatKey(chatId);
@@ -470,12 +581,12 @@ Available commands:
 
       // Persist user message into chat history (append-only)
       await this.chatStore.append({
-        channel: 'feishu',
+        channel: "feishu",
         chatId,
         chatKey,
         userId: actorId,
         messageId,
-        role: 'user',
+        role: "user",
         text: instructions,
         meta: { chatType },
       });
@@ -483,14 +594,26 @@ Available commands:
       // If there are pending approvals for this session, only initiator/admin can reply.
       try {
         const permissionEngine = createPermissionEngine(this.projectRoot);
-        const pending = permissionEngine.getPendingApprovals().filter((req: any) => {
-          const meta = (req as any)?.meta as { chatKey?: string; source?: string } | undefined;
-          return meta?.chatKey === chatKey && meta?.source === 'feishu';
-        });
+        const pending = permissionEngine
+          .getPendingApprovals()
+          .filter((req: any) => {
+            const meta = (req as any)?.meta as
+              | { chatKey?: string; source?: string }
+              | undefined;
+            return meta?.chatKey === chatKey && meta?.source === "feishu";
+          });
         if (pending.length > 0) {
-          const can = await this.canApproveFeishu(String((pending[0] as any).id), actorId);
+          const can = await this.canApproveFeishu(
+            String((pending[0] as any).id),
+            actorId,
+          );
           if (!can.ok) {
-            await this.sendMessage(chatId, chatType, messageId, '⛔️ 当前有待审批操作，仅发起人或管理员可以回复审批。');
+            await this.sendMessage(
+              chatId,
+              chatType,
+              messageId,
+              "⛔️ 当前有待审批操作，仅发起人或管理员可以回复审批。",
+            );
             return;
           }
         }
@@ -502,7 +625,7 @@ Available commands:
       const approvalResult = await agentRuntime.handleApprovalReply({
         userMessage: instructions,
         context: {
-          source: 'feishu',
+          source: "feishu",
           userId: chatId,
           chatKey,
           actorId,
@@ -520,7 +643,7 @@ Available commands:
       const result = await agentRuntime.run({
         instructions,
         context: {
-          source: 'feishu',
+          source: "feishu",
           userId: chatId,
           chatKey,
           actorId,
@@ -534,8 +657,23 @@ Available commands:
         await this.notifyPendingApprovals();
         return;
       }
+
+      // Fallback: if agent didn't call send_message, auto-send the output
+      await sendFinalOutputIfNeeded({
+        channel: "feishu",
+        chatId,
+        output: result.output || "",
+        toolCalls: result.toolCalls as any,
+        chatType,
+        messageId,
+      });
     } catch (error) {
-      await this.sendErrorMessage(chatId, chatType, messageId, `Execution error: ${String(error)}`);
+      await this.sendErrorMessage(
+        chatId,
+        chatType,
+        messageId,
+        `Execution error: ${String(error)}`,
+      );
     }
   }
 
@@ -543,19 +681,19 @@ Available commands:
     chatId: string,
     chatType: string,
     messageId: string,
-    text: string
+    text: string,
   ): Promise<void> {
     try {
-      if (chatType === 'p2p') {
+      if (chatType === "p2p") {
         // Private chat message, send directly
         await this.client.im.v1.message.create({
           params: {
-            receive_id_type: 'chat_id',
+            receive_id_type: "chat_id",
           },
           data: {
             receive_id: chatId,
             content: JSON.stringify({ text }),
-            msg_type: 'text',
+            msg_type: "text",
           },
         });
       } else {
@@ -566,30 +704,38 @@ Available commands:
           },
           data: {
             content: JSON.stringify({ text }),
-            msg_type: 'text',
+            msg_type: "text",
           },
         });
       }
     } catch (error) {
-      this.logger.error('Failed to send Feishu message', { error: String(error) });
+      this.logger.error("Failed to send Feishu message", {
+        error: String(error),
+      });
     }
   }
 
-  private async sendChatMessage(chatId: string, chatType: string, text: string): Promise<void> {
+  private async sendChatMessage(
+    chatId: string,
+    chatType: string,
+    text: string,
+  ): Promise<void> {
     try {
       // Send directly to chat without needing to reply to a message
       await this.client.im.v1.message.create({
         params: {
-          receive_id_type: 'chat_id',
+          receive_id_type: "chat_id",
         },
         data: {
           receive_id: chatId,
           content: JSON.stringify({ text }),
-          msg_type: 'text',
+          msg_type: "text",
         },
       });
     } catch (error) {
-      this.logger.error('Failed to send Feishu chat message', { error: String(error) });
+      this.logger.error("Failed to send Feishu chat message", {
+        error: String(error),
+      });
     }
   }
 
@@ -597,7 +743,7 @@ Available commands:
     chatId: string,
     chatType: string,
     messageId: string,
-    errorText: string
+    errorText: string,
   ): Promise<void> {
     await this.sendMessage(chatId, chatType, messageId, `❌ ${errorText}`);
   }
@@ -621,7 +767,7 @@ Available commands:
 
     if (this.wsClient) {
       // Feishu SDK's WSClient doesn't have explicit stop method, just set status
-      this.logger.info('Feishu Bot stopped');
+      this.logger.info("Feishu Bot stopped");
     }
   }
 }
@@ -646,7 +792,12 @@ export async function createFeishuBot(
 
   // 注意：不在这里创建 AgentRuntime，因为 Feishu Bot 使用会话级的 AgentRuntime
   // 会话级 AgentRuntime 在 getOrCreateSession 方法中按需创建
-  const taskExecutor = createTaskExecutor(toolExecutor, logger, null, projectRoot);
+  const taskExecutor = createTaskExecutor(
+    toolExecutor,
+    logger,
+    null,
+    projectRoot,
+  );
 
   const bot = new FeishuBot(
     config.appId,
@@ -656,7 +807,10 @@ export async function createFeishuBot(
     taskExecutor,
     projectRoot, // 传递 projectRoot
     config.adminUserIds,
-    () => createAgentRuntimeFromPath(projectRoot, { mcpManager: deps?.mcpManager ?? null }),
+    () =>
+      createAgentRuntimeFromPath(projectRoot, {
+        mcpManager: deps?.mcpManager ?? null,
+      }),
   );
   return bot;
 }

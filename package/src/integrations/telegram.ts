@@ -3,10 +3,7 @@ import { fileURLToPath } from "url";
 import fs from "fs-extra";
 import { Logger } from "../runtime/logging/index.js";
 import { createPermissionEngine } from "../runtime/permission/index.js";
-import {
-  createTaskExecutor,
-  TaskExecutor,
-} from "../runtime/task/index.js";
+import { createTaskExecutor, TaskExecutor } from "../runtime/task/index.js";
 import { createToolExecutor } from "../runtime/tools/index.js";
 import type { AgentRuntime } from "../runtime/agent/index.js";
 import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
@@ -16,10 +13,13 @@ import type { RunRecord } from "../runtime/run/index.js";
 import { loadRun, saveRun } from "../runtime/run/index.js";
 import type { ChatLogEntryV1 } from "../runtime/chat/store.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
-import type { IncomingChatMessage } from "./base-chat-adapter.js";
-import type { AdapterChatKeyParams, AdapterSendTextParams } from "./platform-adapter.js";
+import type {
+  AdapterChatKeyParams,
+  AdapterSendTextParams,
+} from "./platform-adapter.js";
 import { tryClaimChatIngressMessage } from "../runtime/chat/idempotency.js";
 import type { McpManager } from "../runtime/mcp/index.js";
+import { sendFinalOutputIfNeeded } from "../runtime/chat/final-output.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TELEGRAM_HISTORY_LIMIT = 20;
@@ -41,7 +41,7 @@ interface TelegramUpdate {
     caption?: string;
     chat: {
       id: number;
-      type?: 'private' | 'group' | 'supergroup' | 'channel';
+      type?: "private" | "group" | "supergroup" | "channel";
     };
     document?: {
       file_id: string;
@@ -70,7 +70,12 @@ interface TelegramUpdate {
     };
     reply_to_message?: {
       message_id?: number;
-      from?: { id: number; username?: string; first_name?: string; last_name?: string };
+      from?: {
+        id: number;
+        username?: string;
+        first_name?: string;
+        last_name?: string;
+      };
     };
     from?: {
       id: number;
@@ -95,7 +100,12 @@ interface TelegramUpdate {
   callback_query?: {
     id: string;
     data: string;
-    from?: { id: number; username?: string; first_name?: string; last_name?: string };
+    from?: {
+      id: number;
+      username?: string;
+      first_name?: string;
+      last_name?: string;
+    };
     message: {
       message_thread_id?: number;
       chat: {
@@ -128,11 +138,15 @@ function sanitizeChatText(text: string): string {
   let out = text;
 
   // Remove/compact tool-log style dumps if present
-  out = out.replace(/(^|\n)Tool Result:[\s\S]*?(?=\n{2,}|$)/g, '\n[工具输出已省略：我已在后台读取并提炼关键信息]\n');
+  out = out.replace(
+    /(^|\n)Tool Result:[\s\S]*?(?=\n{2,}|$)/g,
+    "\n[工具输出已省略：我已在后台读取并提炼关键信息]\n",
+  );
 
   // Collapse very long JSON-ish blocks
   if (out.length > 6000) {
-    out = out.slice(0, 5800) + '\n\n…[truncated]（如需完整输出请回复“发完整输出”）';
+    out =
+      out.slice(0, 5800) + "\n\n…[truncated]（如需完整输出请回复“发完整输出”）";
   }
 
   return out;
@@ -169,15 +183,25 @@ function guessMimeType(fileName: string): string | undefined {
 
 function parseTelegramAttachments(text: string): {
   text: string;
-  attachments: Array<{ type: TelegramAttachmentType; pathOrUrl: string; caption?: string }>;
+  attachments: Array<{
+    type: TelegramAttachmentType;
+    pathOrUrl: string;
+    caption?: string;
+  }>;
 } {
   const raw = String(text || "");
   const lines = raw.split("\n");
-  const attachments: Array<{ type: TelegramAttachmentType; pathOrUrl: string; caption?: string }> = [];
+  const attachments: Array<{
+    type: TelegramAttachmentType;
+    pathOrUrl: string;
+    caption?: string;
+  }> = [];
   const kept: string[] = [];
 
   for (const line of lines) {
-    const m = line.match(/^\s*@attach\s+(photo|image|document|file|voice|audio)\s+(.+?)(?:\s*\|\s*(.+))?\s*$/i);
+    const m = line.match(
+      /^\s*@attach\s+(photo|image|document|file|voice|audio)\s+(.+?)(?:\s*\|\s*(.+))?\s*$/i,
+    );
     if (!m) {
       kept.push(line);
       continue;
@@ -203,20 +227,29 @@ function parseTelegramAttachments(text: string): {
 }
 
 function formatActorName(name: string): string {
-  return name.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').replace(/[\[\]]/g, '').trim();
+  return name
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/[\[\]]/g, "")
+    .trim();
 }
 
-function getActorName(from?: { first_name?: string; last_name?: string }): string | undefined {
-  const first = typeof from?.first_name === 'string' ? from.first_name.trim() : '';
-  const last = typeof from?.last_name === 'string' ? from.last_name.trim() : '';
-  const raw = [first, last].filter(Boolean).join(' ').trim();
+function getActorName(from?: {
+  first_name?: string;
+  last_name?: string;
+}): string | undefined {
+  const first =
+    typeof from?.first_name === "string" ? from.first_name.trim() : "";
+  const last = typeof from?.last_name === "string" ? from.last_name.trim() : "";
+  const raw = [first, last].filter(Boolean).join(" ").trim();
   if (!raw) return undefined;
   return formatActorName(raw);
 }
 
 function formatEntryBracket(e: ChatLogEntryV1): string {
-  const pad = (n: number, width: number = 2): string => String(n).padStart(width, '0');
-  const ts = typeof e.ts === 'number' ? new Date(e.ts) : new Date();
+  const pad = (n: number, width: number = 2): string =>
+    String(n).padStart(width, "0");
+  const ts = typeof e.ts === "number" ? new Date(e.ts) : new Date();
   const t =
     `${ts.getFullYear()}-${pad(ts.getMonth() + 1)}-${pad(ts.getDate())} ` +
     `${pad(ts.getHours())}:${pad(ts.getMinutes())}:${pad(ts.getSeconds())}.` +
@@ -226,26 +259,29 @@ function formatEntryBracket(e: ChatLogEntryV1): string {
   const mid = e.messageId ? `mid=${e.messageId}` : undefined;
   const meta = (e.meta || {}) as any;
   const username =
-    typeof meta.actorUsername === 'string' && meta.actorUsername.trim()
+    typeof meta.actorUsername === "string" && meta.actorUsername.trim()
       ? `@${meta.actorUsername.trim()}`
       : undefined;
   const name =
-    !username && typeof meta.actorName === 'string' && meta.actorName.trim()
+    !username && typeof meta.actorName === "string" && meta.actorName.trim()
       ? `name=${formatActorName(meta.actorName)}`
       : undefined;
   const tag =
-    meta?.from === 'run_notify'
+    meta?.from === "run_notify"
       ? `tag=run_notify`
       : meta?.progress
         ? `tag=progress`
         : undefined;
-  return [t, role, uid, username, name, mid, tag].filter(Boolean).map((x) => `[${x}]`).join('');
+  return [t, role, uid, username, name, mid, tag]
+    .filter(Boolean)
+    .map((x) => `[${x}]`)
+    .join("");
 }
 
 function collapseChatHistoryToSingleAssistantFromEntries(
   entries: ChatLogEntryV1[],
-  opts?: { maxChars?: number }
-): Array<{ role: 'assistant'; content: string }> {
+  opts?: { maxChars?: number },
+): Array<{ role: "assistant"; content: string }> {
   const maxChars = opts?.maxChars ?? 9000;
   if (!entries || entries.length === 0) return [];
 
@@ -254,12 +290,12 @@ function collapseChatHistoryToSingleAssistantFromEntries(
     const meta = (e.meta || {}) as any;
     // Skip noisy progress duplicates in context; final assistant replies remain.
     if (meta?.progress) continue;
-    const text = typeof e.text === 'string' ? e.text.trim() : '';
+    const text = typeof e.text === "string" ? e.text.trim() : "";
     if (!text) continue;
     lines.push(`${formatEntryBracket(e)} ${text}`);
   }
 
-  const joined = lines.join('\n').trim();
+  const joined = lines.join("\n").trim();
   if (!joined) return [];
 
   const header =
@@ -272,7 +308,7 @@ function collapseChatHistoryToSingleAssistantFromEntries(
     body = `…（历史过长，已截断保留末尾）\n` + body;
   }
 
-  return [{ role: 'assistant', content: header + body }];
+  return [{ role: "assistant", content: header + body }];
 }
 
 export class TelegramBot extends BaseChatAdapter {
@@ -319,19 +355,38 @@ export class TelegramBot extends BaseChatAdapter {
     super({ channel: "telegram", projectRoot, logger, createAgentRuntime });
     this.botToken = botToken;
     this.chatId = chatId;
-    this.followupWindowMs = Number.isFinite(followupWindowMs as number) && (followupWindowMs as number) > 0
-      ? (followupWindowMs as number)
-      : 10 * 60 * 1000;
-    this.groupAccess = groupAccess === "anyone" ? "anyone" : "initiator_or_admin";
+    this.followupWindowMs =
+      Number.isFinite(followupWindowMs as number) &&
+      (followupWindowMs as number) > 0
+        ? (followupWindowMs as number)
+        : 10 * 60 * 1000;
+    this.groupAccess =
+      groupAccess === "anyone" ? "anyone" : "initiator_or_admin";
     this.taskExecutor = taskExecutor;
-    this.lastUpdateIdFile = path.join(getCacheDirPath(projectRoot), "telegram", "lastUpdateId.json");
-    this.notifiedRunsFile = path.join(getCacheDirPath(projectRoot), "telegram", "notifiedRuns.json");
-    this.threadInitiatorsFile = path.join(getCacheDirPath(projectRoot), "telegram", "threadInitiators.json");
+    this.lastUpdateIdFile = path.join(
+      getCacheDirPath(projectRoot),
+      "telegram",
+      "lastUpdateId.json",
+    );
+    this.notifiedRunsFile = path.join(
+      getCacheDirPath(projectRoot),
+      "telegram",
+      "notifiedRuns.json",
+    );
+    this.threadInitiatorsFile = path.join(
+      getCacheDirPath(projectRoot),
+      "telegram",
+      "threadInitiators.json",
+    );
     this.runManager = new RunManager(projectRoot);
   }
 
   private buildChatKey(chatId: string, messageThreadId?: number): string {
-    if (typeof messageThreadId === 'number' && Number.isFinite(messageThreadId) && messageThreadId > 0) {
+    if (
+      typeof messageThreadId === "number" &&
+      Number.isFinite(messageThreadId) &&
+      messageThreadId > 0
+    ) {
       return `telegram:chat:${chatId}:topic:${messageThreadId}`;
     }
     return `telegram:chat:${chatId}`;
@@ -341,16 +396,25 @@ export class TelegramBot extends BaseChatAdapter {
     return this.buildChatKey(params.chatId, params.messageThreadId);
   }
 
-  protected async sendTextToPlatform(params: AdapterSendTextParams): Promise<void> {
+  protected async sendTextToPlatform(
+    params: AdapterSendTextParams,
+  ): Promise<void> {
     await this.sendMessage(params.chatId, params.text, {
       messageThreadId: params.messageThreadId,
     });
   }
 
-  protected override async hydrateSession(agentRuntime: AgentRuntime, sessionKey: string): Promise<void> {
+  protected override async hydrateSession(
+    agentRuntime: AgentRuntime,
+    sessionKey: string,
+  ): Promise<void> {
     try {
-      const entries = await this.chatStore.loadRecentEntries(sessionKey, TELEGRAM_HISTORY_LIMIT);
-      const collapsed = collapseChatHistoryToSingleAssistantFromEntries(entries);
+      const entries = await this.chatStore.loadRecentEntries(
+        sessionKey,
+        TELEGRAM_HISTORY_LIMIT,
+      );
+      const collapsed =
+        collapseChatHistoryToSingleAssistantFromEntries(entries);
       if (collapsed.length > 0) {
         agentRuntime.setConversationHistory(sessionKey, collapsed as unknown[]);
       }
@@ -364,21 +428,31 @@ export class TelegramBot extends BaseChatAdapter {
   }
 
   private isLikelyAddressedToBot(text: string): boolean {
-    const t = (text || '').trim();
+    const t = (text || "").trim();
     if (!t) return false;
 
     // If user explicitly mentions someone else, it's less likely to be for the bot.
-    if (/@[a-zA-Z0-9_]{2,}/.test(t) && !(this.botUsername && new RegExp(`@${this.escapeRegExp(this.botUsername)}\\b`, 'i').test(t))) {
+    if (
+      /@[a-zA-Z0-9_]{2,}/.test(t) &&
+      !(
+        this.botUsername &&
+        new RegExp(`@${this.escapeRegExp(this.botUsername)}\\b`, "i").test(t)
+      )
+    ) {
       return false;
     }
 
     // Strong signals
     if (/[?？]/.test(t)) return true;
     if (/(^|\s)(you|u|bot|agent|ai)(\s|$)/i.test(t)) return true;
-    if (/(你|您|机器人|助理|AI|同学|能不能|可以|帮我|帮忙)/.test(t)) return true;
+    if (/(你|您|机器人|助理|AI|同学|能不能|可以|帮我|帮忙)/.test(t))
+      return true;
 
     // Short follow-ups like "继续/再来/然后呢/why/how"
-    if (/^(继续|再来|然后呢|为啥|为什么|怎么|如何|what|why|how|help)\b/i.test(t)) return true;
+    if (
+      /^(继续|再来|然后呢|为啥|为什么|怎么|如何|what|why|how|help)\b/i.test(t)
+    )
+      return true;
 
     return false;
   }
@@ -398,7 +472,10 @@ export class TelegramBot extends BaseChatAdapter {
   private touchFollowupWindow(threadKey: string, actorId?: string): void {
     if (!actorId) return;
     const key = this.getFollowupKey(threadKey, actorId);
-    this.followupExpiryByActorAndThread.set(key, Date.now() + this.followupWindowMs);
+    this.followupExpiryByActorAndThread.set(
+      key,
+      Date.now() + this.followupWindowMs,
+    );
   }
 
   private async loadLastUpdateId(): Promise<void> {
@@ -420,7 +497,7 @@ export class TelegramBot extends BaseChatAdapter {
       if (!(await fs.pathExists(this.threadInitiatorsFile))) return;
       const data = await fs.readJson(this.threadInitiatorsFile);
       const raw = (data as any)?.initiators;
-      if (!raw || typeof raw !== 'object') return;
+      if (!raw || typeof raw !== "object") return;
       for (const [k, v] of Object.entries(raw)) {
         const threadId = String(k);
         const initiatorId = String(v);
@@ -439,7 +516,8 @@ export class TelegramBot extends BaseChatAdapter {
       const ids = (data as any)?.runIds;
       if (Array.isArray(ids)) {
         for (const id of ids) {
-          if (typeof id === 'string' && id.trim()) this.notifiedRunIds.add(id.trim());
+          if (typeof id === "string" && id.trim())
+            this.notifiedRunIds.add(id.trim());
         }
       }
     } catch {
@@ -451,7 +529,11 @@ export class TelegramBot extends BaseChatAdapter {
     try {
       await fs.ensureDir(path.dirname(this.notifiedRunsFile));
       const ids = Array.from(this.notifiedRunIds).slice(-5000);
-      await fs.writeJson(this.notifiedRunsFile, { runIds: ids, updatedAt: Date.now() }, { spaces: 2 });
+      await fs.writeJson(
+        this.notifiedRunsFile,
+        { runIds: ids, updatedAt: Date.now() },
+        { spaces: 2 },
+      );
     } catch {
       // ignore
     }
@@ -462,39 +544,47 @@ export class TelegramBot extends BaseChatAdapter {
     try {
       const runsDir = getRunsDirPath(this.projectRoot);
       if (!(await fs.pathExists(runsDir))) return;
-      const files = (await fs.readdir(runsDir)).filter((f) => f.endsWith('.json')).slice(-200);
+      const files = (await fs.readdir(runsDir))
+        .filter((f) => f.endsWith(".json"))
+        .slice(-200);
 
       for (const f of files) {
-        const runId = f.replace(/\.json$/, '');
+        const runId = f.replace(/\.json$/, "");
         if (this.notifiedRunIds.has(runId)) continue;
 
-        const run = (await loadRun(this.projectRoot, runId)) as RunRecord | null;
+        const run = (await loadRun(
+          this.projectRoot,
+          runId,
+        )) as RunRecord | null;
         if (!run) continue;
-        if (run.status !== 'succeeded' && run.status !== 'failed') continue;
+        if (run.status !== "succeeded" && run.status !== "failed") continue;
         if (run.notified) {
           this.notifiedRunIds.add(runId);
           continue;
         }
 
-        const chatId = run.context?.source === 'telegram' ? run.context.userId : undefined;
+        const chatId =
+          run.context?.source === "telegram" ? run.context.userId : undefined;
         if (!chatId) continue;
 
-        const title = run.name || run.taskId || '任务';
-        const prefix = run.status === 'succeeded' ? '✅' : '❌';
-        const snippet = (run.output?.text || run.error?.message || '').trim();
-        const body = snippet ? `\n\n${snippet.slice(0, 2500)}${snippet.length > 2500 ? '\n…[truncated]' : ''}` : '';
+        const title = run.name || run.taskId || "任务";
+        const prefix = run.status === "succeeded" ? "✅" : "❌";
+        const snippet = (run.output?.text || run.error?.message || "").trim();
+        const body = snippet
+          ? `\n\n${snippet.slice(0, 2500)}${snippet.length > 2500 ? "\n…[truncated]" : ""}`
+          : "";
 
         const msg = `${prefix} ${title} 已完成（runId=${runId}）${body}`;
         await this.sendMessage(chatId, msg);
         try {
           await this.chatStore.append({
-            channel: 'telegram',
+            channel: "telegram",
             chatId,
             chatKey: this.buildChatKey(chatId),
-            userId: this.botId ? String(this.botId) : 'bot',
-            role: 'assistant',
+            userId: this.botId ? String(this.botId) : "bot",
+            role: "assistant",
             text: sanitizeChatText(msg),
-            meta: { runId, status: run.status, from: 'run_notify' },
+            meta: { runId, status: run.status, from: "run_notify" },
           });
         } catch {
           // ignore
@@ -519,7 +609,11 @@ export class TelegramBot extends BaseChatAdapter {
       const capped = entries.slice(-1000);
       const initiators: Record<string, string> = {};
       for (const [k, v] of capped) initiators[k] = v;
-      await fs.writeJson(this.threadInitiatorsFile, { initiators, updatedAt: Date.now() }, { spaces: 2 });
+      await fs.writeJson(
+        this.threadInitiatorsFile,
+        { initiators, updatedAt: Date.now() },
+        { spaces: 2 },
+      );
     } catch {
       // ignore
     }
@@ -528,37 +622,50 @@ export class TelegramBot extends BaseChatAdapter {
   private async persistLastUpdateId(): Promise<void> {
     try {
       await fs.ensureDir(path.dirname(this.lastUpdateIdFile));
-      await fs.writeJson(this.lastUpdateIdFile, { lastUpdateId: this.lastUpdateId }, { spaces: 2 });
+      await fs.writeJson(
+        this.lastUpdateIdFile,
+        { lastUpdateId: this.lastUpdateId },
+        { spaces: 2 },
+      );
     } catch {
       // ignore
     }
   }
 
   private escapeRegExp(text: string): string {
-    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
   private isGroupChat(chatType?: string): boolean {
-    return chatType === 'group' || chatType === 'supergroup';
+    return chatType === "group" || chatType === "supergroup";
   }
 
-  private isBotMentioned(text: string, entities?: NonNullable<TelegramUpdate['message']>['entities']): boolean {
+  private isBotMentioned(
+    text: string,
+    entities?: NonNullable<TelegramUpdate["message"]>["entities"],
+  ): boolean {
     if (!text) return false;
     const username = this.botUsername;
 
     if (username) {
-      const re = new RegExp(`@${this.escapeRegExp(username)}\\b`, 'i');
+      const re = new RegExp(`@${this.escapeRegExp(username)}\\b`, "i");
       if (re.test(text)) return true;
     }
 
     if (!entities || entities.length === 0) return false;
 
     for (const ent of entities) {
-      if (!ent || typeof ent !== 'object') continue;
-      if (ent.type === 'text_mention' && this.botId && ent.user?.id === this.botId) return true;
-      if (ent.type === 'mention' && username) {
+      if (!ent || typeof ent !== "object") continue;
+      if (
+        ent.type === "text_mention" &&
+        this.botId &&
+        ent.user?.id === this.botId
+      )
+        return true;
+      if (ent.type === "mention" && username) {
         const mentionText = text.slice(ent.offset, ent.offset + ent.length);
-        if (mentionText.toLowerCase() === `@${username.toLowerCase()}`) return true;
+        if (mentionText.toLowerCase() === `@${username.toLowerCase()}`)
+          return true;
       }
     }
 
@@ -568,29 +675,44 @@ export class TelegramBot extends BaseChatAdapter {
   private stripBotMention(text: string): string {
     if (!text) return text;
     if (!this.botUsername) return text.trim();
-    const re = new RegExp(`\\s*@${this.escapeRegExp(this.botUsername)}\\b`, 'ig');
-    return text.replace(re, ' ').replace(/\s+/g, ' ').trim();
+    const re = new RegExp(
+      `\\s*@${this.escapeRegExp(this.botUsername)}\\b`,
+      "ig",
+    );
+    return text.replace(re, " ").replace(/\s+/g, " ").trim();
   }
 
-  private async isTelegramAdmin(originChatId: string, actorId: string): Promise<boolean> {
+  private async isTelegramAdmin(
+    originChatId: string,
+    actorId: string,
+  ): Promise<boolean> {
     const chatIdNum = Number(originChatId);
     const userIdNum = Number(actorId);
-    if (!Number.isFinite(chatIdNum) || !Number.isFinite(userIdNum)) return false;
+    if (!Number.isFinite(chatIdNum) || !Number.isFinite(userIdNum))
+      return false;
 
     try {
-      const res = await this.sendRequest<{ status?: string }>('getChatMember', {
+      const res = await this.sendRequest<{ status?: string }>("getChatMember", {
         chat_id: chatIdNum,
         user_id: userIdNum,
       });
-      const status = String((res as any)?.status || '').toLowerCase();
-      return status === 'administrator' || status === 'creator';
+      const status = String((res as any)?.status || "").toLowerCase();
+      return status === "administrator" || status === "creator";
     } catch (e) {
-      this.logger.warn('Failed to check Telegram admin', { originChatId, actorId, error: String(e) });
+      this.logger.warn("Failed to check Telegram admin", {
+        originChatId,
+        actorId,
+        error: String(e),
+      });
       return false;
     }
   }
 
-  private async isAllowedGroupActor(threadId: string, originChatId: string, actorId: string): Promise<boolean> {
+  private async isAllowedGroupActor(
+    threadId: string,
+    originChatId: string,
+    actorId: string,
+  ): Promise<boolean> {
     if (this.groupAccess === "anyone") return true;
     const existing = this.threadInitiators.get(threadId);
     if (!existing) {
@@ -602,30 +724,47 @@ export class TelegramBot extends BaseChatAdapter {
     return this.isTelegramAdmin(originChatId, actorId);
   }
 
-  private async canApproveTelegram(approvalId: string, actorId?: string): Promise<{ ok: boolean; reason: string }> {
-    if (!actorId) return { ok: false, reason: '❌ 无法识别审批人身份。' };
+  private async canApproveTelegram(
+    approvalId: string,
+    actorId?: string,
+  ): Promise<{ ok: boolean; reason: string }> {
+    if (!actorId) return { ok: false, reason: "❌ 无法识别审批人身份。" };
 
     const permissionEngine = createPermissionEngine(this.projectRoot);
     const req = permissionEngine.getApprovalRequest(approvalId) as any;
-    if (!req) return { ok: false, reason: '❌ 未找到该审批请求（可能已处理或已过期）。' };
+    if (!req)
+      return {
+        ok: false,
+        reason: "❌ 未找到该审批请求（可能已处理或已过期）。",
+      };
 
-    const meta = (req as any)?.meta as { initiatorId?: string; userId?: string } | undefined;
-    const initiatorId = meta?.initiatorId ? String(meta.initiatorId) : undefined;
+    const meta = (req as any)?.meta as
+      | { initiatorId?: string; userId?: string }
+      | undefined;
+    const initiatorId = meta?.initiatorId
+      ? String(meta.initiatorId)
+      : undefined;
     if (initiatorId && initiatorId === actorId) {
-      return { ok: true, reason: 'ok' };
+      return { ok: true, reason: "ok" };
     }
 
-    const originChatId = meta?.userId ? String(meta.userId) : '';
+    const originChatId = meta?.userId ? String(meta.userId) : "";
     if (!originChatId) {
-      return { ok: false, reason: '❌ 审批请求缺少来源 chatId，无法校验管理员权限。' };
+      return {
+        ok: false,
+        reason: "❌ 审批请求缺少来源 chatId，无法校验管理员权限。",
+      };
     }
 
     const isAdmin = await this.isTelegramAdmin(originChatId, actorId);
     if (!isAdmin) {
-      return { ok: false, reason: '⛔️ 仅发起人或群管理员可以审批/拒绝该操作。' };
+      return {
+        ok: false,
+        reason: "⛔️ 仅发起人或群管理员可以审批/拒绝该操作。",
+      };
     }
 
-    return { ok: true, reason: 'ok' };
+    return { ok: true, reason: "ok" };
   }
 
   async start(): Promise<void> {
@@ -643,18 +782,25 @@ export class TelegramBot extends BaseChatAdapter {
     // Ensure polling works even if a webhook was previously configured.
     // Telegram disallows getUpdates while a webhook is active.
     try {
-      await this.sendRequest<boolean>("deleteWebhook", { drop_pending_updates: false });
+      await this.sendRequest<boolean>("deleteWebhook", {
+        drop_pending_updates: false,
+      });
       this.clearedWebhookOnce = true;
       this.logger.info("Telegram webhook cleared (polling mode)");
     } catch (error) {
-      this.logger.warn("Failed to clear Telegram webhook (continuing)", { error: String(error) });
+      this.logger.warn("Failed to clear Telegram webhook (continuing)", {
+        error: String(error),
+      });
     }
 
     // Get bot info
     try {
-      const me = await this.sendRequest<{ id?: number; username?: string }>("getMe", {});
+      const me = await this.sendRequest<{ id?: number; username?: string }>(
+        "getMe",
+        {},
+      );
       this.botUsername = me.username || undefined;
-      this.botId = typeof me.id === 'number' ? me.id : undefined;
+      this.botId = typeof me.id === "number" ? me.id : undefined;
       this.logger.info(`Bot username: @${me.username || "unknown"}`);
     } catch (error) {
       this.logger.error("Failed to get Bot info", { error: String(error) });
@@ -667,7 +813,10 @@ export class TelegramBot extends BaseChatAdapter {
 
     // Push pending approvals to originating chat (if any) and optionally to configured/admin chat.
     // If no admin chatId is configured, fall back to the last active chat we've seen.
-    this.approvalInterval = setInterval(() => this.notifyPendingApprovals(), 2000);
+    this.approvalInterval = setInterval(
+      () => this.notifyPendingApprovals(),
+      2000,
+    );
 
     // tool_strict: do not auto-push run completion messages; agent should use `chat_send`.
   }
@@ -715,15 +864,25 @@ export class TelegramBot extends BaseChatAdapter {
       if (!msg.includes("timeout")) {
         // Self-heal common setup issue: webhook enabled while using getUpdates polling.
         const looksLikeWebhookConflict =
-          /webhook/i.test(msg) || /Conflict/i.test(msg) || /getUpdates/i.test(msg);
+          /webhook/i.test(msg) ||
+          /Conflict/i.test(msg) ||
+          /getUpdates/i.test(msg);
         if (!this.clearedWebhookOnce && looksLikeWebhookConflict) {
           try {
-            await this.sendRequest<boolean>("deleteWebhook", { drop_pending_updates: false });
+            await this.sendRequest<boolean>("deleteWebhook", {
+              drop_pending_updates: false,
+            });
             this.clearedWebhookOnce = true;
-            this.logger.warn("Telegram polling conflict detected; cleared webhook and will retry", { error: msg });
+            this.logger.warn(
+              "Telegram polling conflict detected; cleared webhook and will retry",
+              { error: msg },
+            );
             return;
           } catch (e) {
-            this.logger.error("Telegram polling conflict detected; failed to clear webhook", { error: msg, clearError: String(e) });
+            this.logger.error(
+              "Telegram polling conflict detected; failed to clear webhook",
+              { error: msg, clearError: String(e) },
+            );
           }
         }
 
@@ -742,11 +901,13 @@ export class TelegramBot extends BaseChatAdapter {
       const pending = permissionEngine.getPendingApprovals();
 
       for (const req of pending) {
-        const meta = (req as any).meta as { source?: string; userId?: string } | undefined;
+        const meta = (req as any).meta as
+          | { source?: string; userId?: string }
+          | undefined;
         const targets: string[] = [];
 
         // Notify the originating Telegram chat (if available)
-        if (meta?.source === 'telegram' && meta.userId) {
+        if (meta?.source === "telegram" && meta.userId) {
           targets.push(String(meta.userId));
         }
 
@@ -765,7 +926,9 @@ export class TelegramBot extends BaseChatAdapter {
             req.type === "exec_shell"
               ? (req.details as { command?: string } | undefined)?.command
               : undefined;
-          const actionText = command ? `我想执行命令：${command}` : `我想执行操作：${req.action}`;
+          const actionText = command
+            ? `我想执行命令：${command}`
+            : `我想执行操作：${req.action}`;
 
           await this.sendMessage(
             target,
@@ -778,7 +941,9 @@ export class TelegramBot extends BaseChatAdapter {
               `- “不可以，因为 …” / “拒绝，因为 …”`,
               command ? `- “只同意执行 ${command}”` : undefined,
               `- “全部同意” / “全部拒绝”`,
-            ].filter(Boolean).join('\n'),
+            ]
+              .filter(Boolean)
+              .join("\n"),
           );
         }
       }
@@ -849,11 +1014,16 @@ export class TelegramBot extends BaseChatAdapter {
           : "";
     const entities = message.entities || message.caption_entities;
     const hasIncomingAttachment =
-      !!message.document || (Array.isArray(message.photo) && message.photo.length > 0) || !!message.voice || !!message.audio;
+      !!message.document ||
+      (Array.isArray(message.photo) && message.photo.length > 0) ||
+      !!message.voice ||
+      !!message.audio;
     const from = message.from;
     const fromIsBot =
       (from as any)?.is_bot === true ||
-      (!!this.botId && typeof from?.id === "number" && from.id === this.botId) ||
+      (!!this.botId &&
+        typeof from?.id === "number" &&
+        from.id === this.botId) ||
       (!!this.botUsername &&
         typeof from?.username === "string" &&
         from.username.toLowerCase() === this.botUsername.toLowerCase());
@@ -861,14 +1031,23 @@ export class TelegramBot extends BaseChatAdapter {
       this.logger.debug("Ignored bot-originated message", {
         chatId,
         chatType: message.chat.type,
-        messageId: typeof message.message_id === "number" ? String(message.message_id) : undefined,
+        messageId:
+          typeof message.message_id === "number"
+            ? String(message.message_id)
+            : undefined,
         fromId: from?.id,
         fromUsername: from?.username,
       });
       return;
     }
-    const messageId = typeof message.message_id === 'number' ? String(message.message_id) : undefined;
-    const messageThreadId = typeof message.message_thread_id === 'number' ? message.message_thread_id : undefined;
+    const messageId =
+      typeof message.message_id === "number"
+        ? String(message.message_id)
+        : undefined;
+    const messageThreadId =
+      typeof message.message_thread_id === "number"
+        ? message.message_thread_id
+        : undefined;
     const actorId = from?.id ? String(from.id) : undefined;
     const actorName = getActorName(from);
     const isGroup = this.isGroupChat(message.chat.type);
@@ -876,7 +1055,9 @@ export class TelegramBot extends BaseChatAdapter {
     const replyToFrom = message.reply_to_message?.from;
     const isReplyToBot =
       (!!this.botId && replyToFrom?.id === this.botId) ||
-      (!!this.botUsername && typeof replyToFrom?.username === 'string' && replyToFrom.username.toLowerCase() === this.botUsername.toLowerCase());
+      (!!this.botUsername &&
+        typeof replyToFrom?.username === "string" &&
+        replyToFrom.username.toLowerCase() === this.botUsername.toLowerCase());
 
     // Persistent idempotency: avoid executing the agent more than once for the same inbound Telegram message.
     // This mitigates duplicate deliveries caused by restarts / multiple pollers / offset glitches.
@@ -917,7 +1098,8 @@ export class TelegramBot extends BaseChatAdapter {
         chatKey,
         isReplyToBot,
         hasIncomingAttachment,
-        textPreview: rawText.length > 240 ? `${rawText.slice(0, 240)}…` : rawText,
+        textPreview:
+          rawText.length > 240 ? `${rawText.slice(0, 240)}…` : rawText,
         entityTypes: (entities || []).map((e) => e.type),
         botUsername: this.botUsername,
         botId: this.botId,
@@ -929,12 +1111,18 @@ export class TelegramBot extends BaseChatAdapter {
       // Check if it's a command
       if (rawText.startsWith("/")) {
         if (isGroup && actorId) {
-          const cmdName = (rawText.trim().split(/\s+/)[0] || '').split("@")[0]?.toLowerCase();
-          const allowAny = cmdName === '/help' || cmdName === '/start';
+          const cmdName = (rawText.trim().split(/\s+/)[0] || "")
+            .split("@")[0]
+            ?.toLowerCase();
+          const allowAny = cmdName === "/help" || cmdName === "/start";
           if (!allowAny) {
             const ok = await this.isAllowedGroupActor(chatKey, chatId, actorId);
             if (!ok) {
-              await this.sendMessage(chatId, '⛔️ 仅发起人或群管理员可以使用该命令。', { messageThreadId });
+              await this.sendMessage(
+                chatId,
+                "⛔️ 仅发起人或群管理员可以使用该命令。",
+                { messageThreadId },
+              );
               return;
             }
           }
@@ -951,13 +1139,20 @@ export class TelegramBot extends BaseChatAdapter {
           const shouldConsider = explicit || inWindow;
 
           if (!shouldConsider) {
-            this.logger.debug("Ignored group message (no mention/reply/window)", { chatId, messageId, chatKey });
+            this.logger.debug(
+              "Ignored group message (no mention/reply/window)",
+              { chatId, messageId, chatKey },
+            );
             return;
           }
 
           const ok = await this.isAllowedGroupActor(chatKey, chatId, actorId);
           if (!ok) {
-            await this.sendMessage(chatId, '⛔️ 仅发起人或群管理员可以与我对话。', { messageThreadId });
+            await this.sendMessage(
+              chatId,
+              "⛔️ 仅发起人或群管理员可以与我对话。",
+              { messageThreadId },
+            );
             return;
           }
         }
@@ -974,7 +1169,10 @@ export class TelegramBot extends BaseChatAdapter {
           if (!explicit && inWindow && cleaned) {
             const okIntent = this.isLikelyAddressedToBot(cleaned);
             if (!okIntent) {
-              this.logger.debug("Ignored follow-up (intent gate: not addressed to bot)", { chatId, messageId, chatKey });
+              this.logger.debug(
+                "Ignored follow-up (intent gate: not addressed to bot)",
+                { chatId, messageId, chatKey },
+              );
               return;
             }
           }
@@ -993,21 +1191,38 @@ export class TelegramBot extends BaseChatAdapter {
             attachmentLines.push(`@attach ${att.type} ${rel}${desc}`);
           }
         } catch (e) {
-          this.logger.warn("Failed to save incoming Telegram attachment(s)", { error: String(e), chatId, messageId, chatKey });
+          this.logger.warn("Failed to save incoming Telegram attachment(s)", {
+            error: String(e),
+            chatId,
+            messageId,
+            chatKey,
+          });
         }
 
-        const instructions = [
-          attachmentLines.length > 0 ? attachmentLines.join("\n") : undefined,
-          cleaned ? cleaned.trim() : undefined,
-        ]
-          .filter(Boolean)
-          .join("\n\n")
-          .trim() || (attachmentLines.length > 0 ? `${attachmentLines.join("\n")}\n\n请查看以上附件。` : "");
+        const instructions =
+          [
+            attachmentLines.length > 0 ? attachmentLines.join("\n") : undefined,
+            cleaned ? cleaned.trim() : undefined,
+          ]
+            .filter(Boolean)
+            .join("\n\n")
+            .trim() ||
+          (attachmentLines.length > 0
+            ? `${attachmentLines.join("\n")}\n\n请查看以上附件。`
+            : "");
 
         if (!instructions) return;
 
         // Regular message, execute instruction
-        await this.executeAndReply(chatId, instructions, from, messageId, message.chat.type, messageThreadId, chatKey);
+        await this.executeAndReply(
+          chatId,
+          instructions,
+          from,
+          messageId,
+          message.chat.type,
+          messageThreadId,
+          chatKey,
+        );
       }
     });
   }
@@ -1017,16 +1232,25 @@ export class TelegramBot extends BaseChatAdapter {
   ): string | undefined {
     if (!Array.isArray(photo) || photo.length === 0) return undefined;
     // Prefer largest file_size, fall back to last item (often the highest resolution).
-    const sorted = [...photo].sort((a, b) => Number(a?.file_size || 0) - Number(b?.file_size || 0));
+    const sorted = [...photo].sort(
+      (a, b) => Number(a?.file_size || 0) - Number(b?.file_size || 0),
+    );
     const best = sorted[sorted.length - 1];
-    return typeof best?.file_id === 'string' ? best.file_id : undefined;
+    return typeof best?.file_id === "string" ? best.file_id : undefined;
   }
 
   private async saveIncomingAttachments(
     message: TelegramUpdate["message"],
-  ): Promise<Array<{ type: TelegramAttachmentType; path: string; desc?: string }>> {
+  ): Promise<
+    Array<{ type: TelegramAttachmentType; path: string; desc?: string }>
+  > {
     if (!message) return [];
-    const items: Array<{ type: TelegramAttachmentType; fileId: string; fileName?: string; desc?: string }> = [];
+    const items: Array<{
+      type: TelegramAttachmentType;
+      fileId: string;
+      fileName?: string;
+      desc?: string;
+    }> = [];
 
     if (message.document?.file_id) {
       items.push({
@@ -1039,11 +1263,21 @@ export class TelegramBot extends BaseChatAdapter {
 
     const bestPhotoId = this.pickBestPhotoFileId(message.photo);
     if (bestPhotoId) {
-      items.push({ type: "photo", fileId: bestPhotoId, fileName: "photo.jpg", desc: "photo" });
+      items.push({
+        type: "photo",
+        fileId: bestPhotoId,
+        fileName: "photo.jpg",
+        desc: "photo",
+      });
     }
 
     if (message.voice?.file_id) {
-      items.push({ type: "voice", fileId: message.voice.file_id, fileName: "voice.ogg", desc: "voice" });
+      items.push({
+        type: "voice",
+        fileId: message.voice.file_id,
+        fileName: "voice.ogg",
+        desc: "voice",
+      });
     }
 
     if (message.audio?.file_id) {
@@ -1057,7 +1291,11 @@ export class TelegramBot extends BaseChatAdapter {
 
     if (items.length === 0) return [];
 
-    const out: Array<{ type: TelegramAttachmentType; path: string; desc?: string }> = [];
+    const out: Array<{
+      type: TelegramAttachmentType;
+      path: string;
+      desc?: string;
+    }> = [];
     for (const item of items) {
       const saved = await this.downloadTelegramFile(item.fileId, item.fileName);
       out.push({ type: item.type, path: saved, desc: item.desc });
@@ -1066,9 +1304,17 @@ export class TelegramBot extends BaseChatAdapter {
     return out;
   }
 
-  private async downloadTelegramFile(fileId: string, suggestedName?: string): Promise<string> {
-    const file = await this.sendRequest<{ file_path?: string }>("getFile", { file_id: fileId });
-    const filePath = typeof (file as any)?.file_path === "string" ? String((file as any).file_path) : "";
+  private async downloadTelegramFile(
+    fileId: string,
+    suggestedName?: string,
+  ): Promise<string> {
+    const file = await this.sendRequest<{ file_path?: string }>("getFile", {
+      file_id: fileId,
+    });
+    const filePath =
+      typeof (file as any)?.file_path === "string"
+        ? String((file as any).file_path)
+        : "";
     if (!filePath) {
       throw new Error("Telegram getFile returned empty file_path");
     }
@@ -1081,8 +1327,13 @@ export class TelegramBot extends BaseChatAdapter {
 
     const buf = Buffer.from(await res.arrayBuffer());
     const baseFromTelegram = path.basename(filePath);
-    const base = (suggestedName && path.basename(suggestedName)) || baseFromTelegram || `tg-${fileId}`;
-    const safeBase = base.replace(/[^\w.\-()@\u4e00-\u9fff]+/g, "_").slice(0, 160) || `tg-${fileId}`;
+    const base =
+      (suggestedName && path.basename(suggestedName)) ||
+      baseFromTelegram ||
+      `tg-${fileId}`;
+    const safeBase =
+      base.replace(/[^\w.\-()@\u4e00-\u9fff]+/g, "_").slice(0, 160) ||
+      `tg-${fileId}`;
 
     const dir = path.join(getCacheDirPath(this.projectRoot), "telegram");
     await fs.ensureDir(dir);
@@ -1174,7 +1425,10 @@ Available commands:
         }
 
         await this.runInChat(chatKey, async () => {
-          const can = await this.canApproveTelegram(arg, from?.id ? String(from.id) : undefined);
+          const can = await this.canApproveTelegram(
+            arg,
+            from?.id ? String(from.id) : undefined,
+          );
           if (!can.ok) {
             await this.sendMessage(chatId, can.reason);
             return;
@@ -1187,9 +1441,20 @@ Available commands:
 
           const result = await agentRuntime.resumeFromApprovalActions({
             chatKey,
-            context: { source: 'telegram', userId: chatId, chatKey, actorId: from?.id ? String(from.id) : undefined },
-            approvals: cmd === '/approve' ? { [arg]: 'Approved via Telegram command' } : {},
-            refused: cmd === '/reject' ? { [arg]: 'Rejected via Telegram command' } : {},
+            context: {
+              source: "telegram",
+              userId: chatId,
+              chatKey,
+              actorId: from?.id ? String(from.id) : undefined,
+            },
+            approvals:
+              cmd === "/approve"
+                ? { [arg]: "Approved via Telegram command" }
+                : {},
+            refused:
+              cmd === "/reject"
+                ? { [arg]: "Rejected via Telegram command" }
+                : {},
           });
 
           await this.sendMessage(chatId, result.output);
@@ -1199,7 +1464,9 @@ Available commands:
 
       case "/clear":
         this.clearChat(chatKey);
-        await this.sendMessage(chatId, "✅ Conversation history cleared", { messageThreadId });
+        await this.sendMessage(chatId, "✅ Conversation history cleared", {
+          messageThreadId,
+        });
         break;
 
       default:
@@ -1214,9 +1481,11 @@ Available commands:
 
     const chatId = callbackQuery.message.chat.id.toString();
     const data = callbackQuery.data;
-    const actorId = callbackQuery.from?.id ? String(callbackQuery.from.id) : undefined;
+    const actorId = callbackQuery.from?.id
+      ? String(callbackQuery.from.id)
+      : undefined;
     const messageThreadId =
-      typeof callbackQuery.message.message_thread_id === 'number'
+      typeof callbackQuery.message.message_thread_id === "number"
         ? callbackQuery.message.message_thread_id
         : undefined;
     const chatKey = this.buildChatKey(chatId, messageThreadId);
@@ -1240,9 +1509,15 @@ Available commands:
 
         const result = await agentRuntime.resumeFromApprovalActions({
           chatKey,
-          context: { source: 'telegram', userId: chatId, chatKey, actorId },
-          approvals: action === 'approve' ? { [approvalId]: 'Approved via Telegram' } : {},
-          refused: action === 'reject' ? { [approvalId]: 'Rejected via Telegram' } : {},
+          context: { source: "telegram", userId: chatId, chatKey, actorId },
+          approvals:
+            action === "approve"
+              ? { [approvalId]: "Approved via Telegram" }
+              : {},
+          refused:
+            action === "reject"
+              ? { [approvalId]: "Rejected via Telegram" }
+              : {},
         });
 
         await this.sendMessage(chatId, result.output, { messageThreadId });
@@ -1255,7 +1530,7 @@ Available commands:
     instructions: string,
     from?: TelegramUser,
     messageId?: string,
-    chatType?: NonNullable<TelegramUpdate['message']>['chat']['type'],
+    chatType?: NonNullable<TelegramUpdate["message"]>["chat"]["type"],
     messageThreadId?: number,
     chatKey?: string,
   ): Promise<void> {
@@ -1287,12 +1562,12 @@ Available commands:
 
       // Persist user message into chat history (append-only)
       await this.chatStore.append({
-        channel: 'telegram',
+        channel: "telegram",
         chatId,
         chatKey: chatKeyResolved,
         userId: actorId,
         messageId,
-        role: 'user',
+        role: "user",
         text: instructions,
         meta: { chatType, actorId, actorUsername, actorName },
       });
@@ -1300,14 +1575,27 @@ Available commands:
       // If there are pending approvals for this session, only initiator/admin can reply.
       try {
         const permissionEngine = createPermissionEngine(this.projectRoot);
-        const pending = permissionEngine.getPendingApprovals().filter((req: any) => {
-          const meta = (req as any)?.meta as { chatKey?: string; source?: string } | undefined;
-          return meta?.chatKey === chatKeyResolved && meta?.source === 'telegram';
-        });
+        const pending = permissionEngine
+          .getPendingApprovals()
+          .filter((req: any) => {
+            const meta = (req as any)?.meta as
+              | { chatKey?: string; source?: string }
+              | undefined;
+            return (
+              meta?.chatKey === chatKeyResolved && meta?.source === "telegram"
+            );
+          });
         if (pending.length > 0) {
-          const can = await this.canApproveTelegram(String((pending[0] as any).id), actorId);
+          const can = await this.canApproveTelegram(
+            String((pending[0] as any).id),
+            actorId,
+          );
           if (!can.ok) {
-            await this.sendMessage(chatId, '⛔️ 当前有待审批操作，仅发起人或群管理员可以回复审批。', { messageThreadId });
+            await this.sendMessage(
+              chatId,
+              "⛔️ 当前有待审批操作，仅发起人或群管理员可以回复审批。",
+              { messageThreadId },
+            );
             return;
           }
         }
@@ -1349,8 +1637,19 @@ Available commands:
         await this.notifyPendingApprovals();
         return;
       }
+
+      // Fallback: if agent didn't call send_message, auto-send the output
+      await sendFinalOutputIfNeeded({
+        channel: "telegram",
+        chatId,
+        output: result.output || "",
+        toolCalls: result.toolCalls as any,
+        messageThreadId,
+      });
     } catch (error) {
-      await this.sendMessage(chatId, `❌ Execution error: ${String(error)}`, { messageThreadId });
+      await this.sendMessage(chatId, `❌ Execution error: ${String(error)}`, {
+        messageThreadId,
+      });
     }
   }
 
@@ -1362,7 +1661,9 @@ Available commands:
     const parsed = parseTelegramAttachments(sanitizeChatText(text));
     const chunks = splitTelegramMessage(parsed.text);
     const message_thread_id =
-      typeof opts?.messageThreadId === 'number' ? opts.messageThreadId : undefined;
+      typeof opts?.messageThreadId === "number"
+        ? opts.messageThreadId
+        : undefined;
     for (const chunk of chunks) {
       if (!chunk) continue;
       try {
@@ -1388,7 +1689,9 @@ Available commands:
 
     for (const att of parsed.attachments) {
       try {
-        await this.sendAttachment(chatId, att, { messageThreadId: message_thread_id });
+        await this.sendAttachment(chatId, att, {
+          messageThreadId: message_thread_id,
+        });
       } catch (e) {
         try {
           await this.sendRequest("sendMessage", {
@@ -1397,7 +1700,9 @@ Available commands:
             ...(message_thread_id ? { message_thread_id } : {}),
           });
         } catch (e2) {
-          this.logger.error(`Failed to send attachment error message: ${String(e2)}`);
+          this.logger.error(
+            `Failed to send attachment error message: ${String(e2)}`,
+          );
         }
       }
     }
@@ -1409,7 +1714,9 @@ Available commands:
     opts?: { messageThreadId?: number },
   ): Promise<void> {
     const message_thread_id =
-      typeof opts?.messageThreadId === "number" ? opts.messageThreadId : undefined;
+      typeof opts?.messageThreadId === "number"
+        ? opts.messageThreadId
+        : undefined;
     const caption =
       typeof att.caption === "string" && att.caption.trim()
         ? att.caption.trim().slice(0, 900)
@@ -1445,7 +1752,9 @@ Available commands:
       return;
     }
 
-    const abs = path.isAbsolute(src) ? src : path.resolve(this.projectRoot, src);
+    const abs = path.isAbsolute(src)
+      ? src
+      : path.resolve(this.projectRoot, src);
     const resolved = path.resolve(abs);
     const root = path.resolve(this.projectRoot);
     if (!resolved.startsWith(root + path.sep) && resolved !== root) {
@@ -1461,7 +1770,8 @@ Available commands:
     const form = new FormData();
     form.set("chat_id", chatId);
     if (caption) form.set("caption", caption);
-    if (message_thread_id) form.set("message_thread_id", String(message_thread_id));
+    if (message_thread_id)
+      form.set("message_thread_id", String(message_thread_id));
 
     const method =
       att.type === "photo"
@@ -1491,7 +1801,9 @@ Available commands:
     opts?: { messageThreadId?: number },
   ): Promise<void> {
     const message_thread_id =
-      typeof opts?.messageThreadId === 'number' ? opts.messageThreadId : undefined;
+      typeof opts?.messageThreadId === "number"
+        ? opts.messageThreadId
+        : undefined;
     try {
       await this.sendRequest("sendMessage", {
         chat_id: chatId,
@@ -1597,7 +1909,7 @@ export function createTelegramBot(
   logger: Logger,
   deps?: { mcpManager?: McpManager | null },
 ): TelegramBot | null {
-  if (!config.enabled || !config.botToken || config.botToken === '${}') {
+  if (!config.enabled || !config.botToken || config.botToken === "${}") {
     return null;
   }
 
@@ -1626,7 +1938,10 @@ export function createTelegramBot(
     logger,
     taskExecutor,
     projectRoot, // 传递 projectRoot
-    () => createAgentRuntimeFromPath(projectRoot, { mcpManager: deps?.mcpManager ?? null }),
+    () =>
+      createAgentRuntimeFromPath(projectRoot, {
+        mcpManager: deps?.mcpManager ?? null,
+      }),
   );
   return bot;
 }

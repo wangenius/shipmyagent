@@ -1,41 +1,44 @@
-import WebSocket from 'ws';
+import WebSocket from "ws";
 import { Logger } from "../runtime/logging/index.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
-import type { IncomingChatMessage } from "./base-chat-adapter.js";
-import type { AdapterChatKeyParams, AdapterSendTextParams } from "./platform-adapter.js";
+import type {
+  AdapterChatKeyParams,
+  AdapterSendTextParams,
+} from "./platform-adapter.js";
 import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
 import type { AgentRuntime } from "../runtime/agent/index.js";
 import type { McpManager } from "../runtime/mcp/index.js";
+import { sendFinalOutputIfNeeded } from "../runtime/chat/final-output.js";
 
 interface QQConfig {
   appId: string;
   appSecret: string;
   enabled: boolean;
-  sandbox?: boolean;  // 是否使用沙箱环境
+  sandbox?: boolean; // 是否使用沙箱环境
 }
 
 // QQ 官方机器人 WebSocket 操作码
 enum OpCode {
-  Dispatch = 0,        // 服务端推送消息
-  Heartbeat = 1,       // 客户端发送心跳
-  Identify = 2,        // 客户端发送鉴权
-  Resume = 6,          // 客户端恢复连接
-  Reconnect = 7,       // 服务端通知重连
-  InvalidSession = 9,  // 无效的 session
-  Hello = 10,          // 服务端发送 hello
-  HeartbeatAck = 11,   // 服务端回复心跳
+  Dispatch = 0, // 服务端推送消息
+  Heartbeat = 1, // 客户端发送心跳
+  Identify = 2, // 客户端发送鉴权
+  Resume = 6, // 客户端恢复连接
+  Reconnect = 7, // 服务端通知重连
+  InvalidSession = 9, // 无效的 session
+  Hello = 10, // 服务端发送 hello
+  HeartbeatAck = 11, // 服务端回复心跳
 }
 
 // 事件类型
 const EventType = {
-  READY: 'READY',
-  RESUMED: 'RESUMED',
+  READY: "READY",
+  RESUMED: "RESUMED",
   // 群聊 @机器人 消息
-  GROUP_AT_MESSAGE_CREATE: 'GROUP_AT_MESSAGE_CREATE',
+  GROUP_AT_MESSAGE_CREATE: "GROUP_AT_MESSAGE_CREATE",
   // C2C 私聊消息
-  C2C_MESSAGE_CREATE: 'C2C_MESSAGE_CREATE',
+  C2C_MESSAGE_CREATE: "C2C_MESSAGE_CREATE",
   // 频道消息（可选支持）
-  AT_MESSAGE_CREATE: 'AT_MESSAGE_CREATE',
+  AT_MESSAGE_CREATE: "AT_MESSAGE_CREATE",
 };
 
 export class QQBot extends BaseChatAdapter {
@@ -44,7 +47,7 @@ export class QQBot extends BaseChatAdapter {
   private ws: any | null = null;
   private isRunning: boolean = false;
   private heartbeatInterval: NodeJS.Timeout | null = null;
-  private wsSessionId: string = '';
+  private wsSessionId: string = "";
   private lastSeq: number = 0;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
@@ -52,15 +55,15 @@ export class QQBot extends BaseChatAdapter {
   private messageCleanupInterval: NodeJS.Timeout | null = null;
 
   // 缓存的 access_token 和过期时间
-  private accessToken: string = '';
+  private accessToken: string = "";
   private accessTokenExpires: number = 0;
 
   // API 基础地址
   // 鉴权 API 使用 bots.qq.com
   // 其他 API 使用 api.sgroup.qq.com
-  private readonly AUTH_API_BASE = 'https://bots.qq.com';
-  private readonly API_BASE = 'https://api.sgroup.qq.com';
-  private readonly SANDBOX_API_BASE = 'https://sandbox.api.sgroup.qq.com';
+  private readonly AUTH_API_BASE = "https://bots.qq.com";
+  private readonly API_BASE = "https://api.sgroup.qq.com";
+  private readonly SANDBOX_API_BASE = "https://sandbox.api.sgroup.qq.com";
 
   // 是否使用沙箱环境
   private useSandbox: boolean = false;
@@ -81,13 +84,19 @@ export class QQBot extends BaseChatAdapter {
   }
 
   protected getChatKey(params: AdapterChatKeyParams): string {
-    const chatType = typeof params.chatType === "string" && params.chatType ? params.chatType : "unknown";
+    const chatType =
+      typeof params.chatType === "string" && params.chatType
+        ? params.chatType
+        : "unknown";
     return `qq:${chatType}:${params.chatId}`;
   }
 
-  protected async sendTextToPlatform(params: AdapterSendTextParams): Promise<void> {
+  protected async sendTextToPlatform(
+    params: AdapterSendTextParams,
+  ): Promise<void> {
     const chatType = typeof params.chatType === "string" ? params.chatType : "";
-    const messageId = typeof params.messageId === "string" ? params.messageId : "";
+    const messageId =
+      typeof params.messageId === "string" ? params.messageId : "";
     if (!chatType || !messageId) {
       throw new Error("QQ requires chatType + messageId to send a reply");
     }
@@ -95,7 +104,13 @@ export class QQBot extends BaseChatAdapter {
     const key = `${chatType}:${params.chatId}:${messageId}`;
     const nextSeq = (this.msgSeqByMessageKey.get(key) ?? 0) + 1;
     this.msgSeqByMessageKey.set(key, nextSeq);
-    await this.sendMessage(params.chatId, chatType, messageId, String(params.text ?? ""), nextSeq);
+    await this.sendMessage(
+      params.chatId,
+      chatType,
+      messageId,
+      String(params.text ?? ""),
+      nextSeq,
+    );
   }
 
   /**
@@ -110,8 +125,8 @@ export class QQBot extends BaseChatAdapter {
    */
   private getWsGateway(): string {
     return this.useSandbox
-      ? 'wss://sandbox.api.sgroup.qq.com/websocket'
-      : 'wss://api.sgroup.qq.com/websocket';
+      ? "wss://sandbox.api.sgroup.qq.com/websocket"
+      : "wss://api.sgroup.qq.com/websocket";
   }
 
   /**
@@ -137,9 +152,9 @@ export class QQBot extends BaseChatAdapter {
       this.logger.debug(`请求体: ${JSON.stringify(requestBody)}`);
 
       const response = await fetch(`${authApiBase}/app/getAppAccessToken`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(requestBody),
       });
@@ -172,7 +187,9 @@ export class QQBot extends BaseChatAdapter {
       // expires_in 是秒数，转换为毫秒时间戳
       this.accessTokenExpires = Date.now() + (data.expires_in || 7200) * 1000;
 
-      this.logger.info(`Access Token 获取成功，有效期: ${data.expires_in || 7200} 秒`);
+      this.logger.info(
+        `Access Token 获取成功，有效期: ${data.expires_in || 7200} 秒`,
+      );
       return this.accessToken;
     } catch (error) {
       this.logger.error(`获取 Access Token 失败: ${String(error)}`);
@@ -193,9 +210,9 @@ export class QQBot extends BaseChatAdapter {
 
       // 使用 GET /gateway 接口获取 gateway 地址
       const response = await fetch(`${apiBase}/gateway`, {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Authorization': authToken,
+          Authorization: authToken,
         },
       });
 
@@ -248,20 +265,22 @@ export class QQBot extends BaseChatAdapter {
    */
   async start(): Promise<void> {
     if (!this.appId || !this.appSecret) {
-      this.logger.warn('QQ 机器人配置不完整（需要 appId 和 appSecret），跳过启动');
+      this.logger.warn(
+        "QQ 机器人配置不完整（需要 appId 和 appSecret），跳过启动",
+      );
       return;
     }
 
     // 防止重复启动
     if (this.isRunning) {
-      this.logger.warn('QQ Bot 已在运行中，跳过重复启动');
+      this.logger.warn("QQ Bot 已在运行中，跳过重复启动");
       return;
     }
 
     this.isRunning = true;
-    this.logger.info('🤖 正在启动 QQ 机器人...');
+    this.logger.info("🤖 正在启动 QQ 机器人...");
     this.logger.info(`   AppID: ${this.appId}`);
-    this.logger.info(`   沙箱模式: ${this.useSandbox ? '是' : '否'}`);
+    this.logger.info(`   沙箱模式: ${this.useSandbox ? "是" : "否"}`);
 
     try {
       // 获取 Gateway 地址
@@ -271,15 +290,17 @@ export class QQBot extends BaseChatAdapter {
       await this.connectWebSocket(gatewayUrl);
 
       // 启动消息缓存清理定时器
-      this.messageCleanupInterval = setInterval(() => {
-        if (this.processedMessages.size > 1000) {
-          this.processedMessages.clear();
-          this.logger.debug('已清理消息去重缓存');
-        }
-      }, 5 * 60 * 1000);
-
+      this.messageCleanupInterval = setInterval(
+        () => {
+          if (this.processedMessages.size > 1000) {
+            this.processedMessages.clear();
+            this.logger.debug("已清理消息去重缓存");
+          }
+        },
+        5 * 60 * 1000,
+      );
     } catch (error) {
-      this.logger.error('启动 QQ Bot 失败', { error: String(error) });
+      this.logger.error("启动 QQ Bot 失败", { error: String(error) });
       this.isRunning = false;
     }
   }
@@ -294,15 +315,17 @@ export class QQBot extends BaseChatAdapter {
       const ws: any = new (WebSocket as any)(gatewayUrl);
       this.ws = ws;
 
-      ws.on('open', () => {
-        this.logger.info('WebSocket 连接已建立');
+      ws.on("open", () => {
+        this.logger.info("WebSocket 连接已建立");
         this.reconnectAttempts = 0;
       });
 
-      ws.on('message', async (data: any) => {
+      ws.on("message", async (data: any) => {
         try {
           const payload = JSON.parse(data.toString());
-          this.logger.debug(`收到 WebSocket 消息: op=${payload.op}, t=${payload.t || 'N/A'}`);
+          this.logger.debug(
+            `收到 WebSocket 消息: op=${payload.op}, t=${payload.t || "N/A"}`,
+          );
           await this.handleWebSocketMessage(payload);
 
           // 首次连接成功后 resolve
@@ -310,36 +333,43 @@ export class QQBot extends BaseChatAdapter {
             resolve();
           }
         } catch (error) {
-          this.logger.error('处理 WebSocket 消息失败', { error: String(error) });
+          this.logger.error("处理 WebSocket 消息失败", {
+            error: String(error),
+          });
         }
       });
 
-      ws.on('close', (code: number, reason: Buffer) => {
+      ws.on("close", (code: number, reason: Buffer) => {
         this.logger.warn(`WebSocket 连接关闭: ${code} - ${reason}`);
         this.stopHeartbeat();
 
         // 尝试重连
-        if (this.isRunning && this.reconnectAttempts < this.maxReconnectAttempts) {
+        if (
+          this.isRunning &&
+          this.reconnectAttempts < this.maxReconnectAttempts
+        ) {
           this.reconnectAttempts++;
           const delay = 5000 * this.reconnectAttempts;
-          this.logger.info(`尝试重连 (${this.reconnectAttempts}/${this.maxReconnectAttempts})，${delay/1000}秒后...`);
+          this.logger.info(
+            `尝试重连 (${this.reconnectAttempts}/${this.maxReconnectAttempts})，${delay / 1000}秒后...`,
+          );
           setTimeout(async () => {
             try {
               // 清除缓存的 token，强制重新获取
-              this.accessToken = '';
+              this.accessToken = "";
               this.accessTokenExpires = 0;
               // 重新获取 Gateway
               const newGatewayUrl = await this.getGatewayUrl();
               await this.connectWebSocket(newGatewayUrl);
             } catch (error) {
-              this.logger.error('重连失败', { error: String(error) });
+              this.logger.error("重连失败", { error: String(error) });
             }
           }, delay);
         }
       });
 
-      ws.on('error', (error: unknown) => {
-        this.logger.error('WebSocket 错误', { error: String(error) });
+      ws.on("error", (error: unknown) => {
+        this.logger.error("WebSocket 错误", { error: String(error) });
         reject(error);
       });
     });
@@ -370,25 +400,25 @@ export class QQBot extends BaseChatAdapter {
         break;
 
       case OpCode.HeartbeatAck:
-        this.logger.debug('收到心跳响应');
+        this.logger.debug("收到心跳响应");
         break;
 
       case OpCode.Reconnect:
-        this.logger.warn('服务端要求重连');
+        this.logger.warn("服务端要求重连");
         this.ws?.close();
         break;
 
       case OpCode.InvalidSession:
-        this.logger.error('无效的 Session，需要重新鉴权');
+        this.logger.error("无效的 Session，需要重新鉴权");
         // 清除缓存的 token，强制重新获取
-        this.accessToken = '';
+        this.accessToken = "";
         this.accessTokenExpires = 0;
         // 等待一段时间后重新鉴权
         setTimeout(async () => {
           try {
             await this.sendIdentify();
           } catch (error) {
-            this.logger.error('重新鉴权失败', { error: String(error) });
+            this.logger.error("重新鉴权失败", { error: String(error) });
           }
         }, 2000);
         break;
@@ -410,20 +440,20 @@ export class QQBot extends BaseChatAdapter {
     const identifyPayload = {
       op: OpCode.Identify,
       d: {
-        token: authToken,  // "QQBot {access_token}" 格式
+        token: authToken, // "QQBot {access_token}" 格式
         intents: intents,
-        shard: [0, 1],     // [当前分片, 总分片数]
+        shard: [0, 1], // [当前分片, 总分片数]
         properties: {
-          $os: 'linux',
-          $browser: 'shipmyagent',
-          $device: 'shipmyagent',
+          $os: "linux",
+          $browser: "shipmyagent",
+          $device: "shipmyagent",
         },
       },
     };
 
     this.logger.debug(`Identify payload: ${JSON.stringify(identifyPayload)}`);
     this.ws?.send(JSON.stringify(identifyPayload));
-    this.logger.info('已发送鉴权请求');
+    this.logger.info("已发送鉴权请求");
   }
 
   /**
@@ -468,7 +498,7 @@ export class QQBot extends BaseChatAdapter {
           d: this.lastSeq || null,
         };
         ws.send(JSON.stringify(heartbeatPayload));
-        this.logger.debug('发送心跳');
+        this.logger.debug("发送心跳");
       }
     }, intervalMs);
   }
@@ -493,11 +523,11 @@ export class QQBot extends BaseChatAdapter {
       case EventType.READY:
         this.wsSessionId = data.session_id;
         this.logger.info(`QQ Bot 已就绪，WS Session ID: ${this.wsSessionId}`);
-        this.logger.info(`用户: ${data.user?.username || 'N/A'}`);
+        this.logger.info(`用户: ${data.user?.username || "N/A"}`);
         break;
 
       case EventType.RESUMED:
-        this.logger.info('连接已恢复');
+        this.logger.info("连接已恢复");
         break;
 
       case EventType.GROUP_AT_MESSAGE_CREATE:
@@ -539,10 +569,10 @@ export class QQBot extends BaseChatAdapter {
     this.logger.info(`收到群聊消息 [${groupId}]: ${userMessage}`);
 
     // 检查是否是命令
-    if (userMessage.startsWith('/')) {
-      await this.handleCommand(groupId, 'group', messageId, userMessage);
+    if (userMessage.startsWith("/")) {
+      await this.handleCommand(groupId, "group", messageId, userMessage);
     } else {
-      await this.executeAndReply(groupId, 'group', messageId, userMessage);
+      await this.executeAndReply(groupId, "group", messageId, userMessage);
     }
   }
 
@@ -565,10 +595,10 @@ export class QQBot extends BaseChatAdapter {
     this.logger.info(`收到私聊消息 [${userId}]: ${userMessage}`);
 
     // 检查是否是命令
-    if (userMessage.startsWith('/')) {
-      await this.handleCommand(userId, 'c2c', messageId, userMessage);
+    if (userMessage.startsWith("/")) {
+      await this.handleCommand(userId, "c2c", messageId, userMessage);
     } else {
-      await this.executeAndReply(userId, 'c2c', messageId, userMessage);
+      await this.executeAndReply(userId, "c2c", messageId, userMessage);
     }
   }
 
@@ -588,10 +618,10 @@ export class QQBot extends BaseChatAdapter {
 
     this.logger.info(`收到频道消息 [${channelId}]: ${userMessage}`);
 
-    if (userMessage.startsWith('/')) {
-      await this.handleCommand(channelId, 'channel', messageId, userMessage);
+    if (userMessage.startsWith("/")) {
+      await this.handleCommand(channelId, "channel", messageId, userMessage);
     } else {
-      await this.executeAndReply(channelId, 'channel', messageId, userMessage);
+      await this.executeAndReply(channelId, "channel", messageId, userMessage);
     }
   }
 
@@ -599,9 +629,12 @@ export class QQBot extends BaseChatAdapter {
    * 提取纯文本内容
    */
   private extractTextContent(content: string): string {
-    if (!content) return '';
+    if (!content) return "";
     // 去除 @ 提及和多余空格
-    return content.replace(/<@!\d+>/g, '').replace(/<@\d+>/g, '').trim();
+    return content
+      .replace(/<@!\d+>/g, "")
+      .replace(/<@\d+>/g, "")
+      .trim();
   }
 
   /**
@@ -611,15 +644,15 @@ export class QQBot extends BaseChatAdapter {
     chatId: string,
     chatType: string,
     messageId: string,
-    command: string
+    command: string,
   ): Promise<void> {
     this.logger.info(`收到命令: ${command}`);
 
-    let responseText = '';
+    let responseText = "";
 
-    switch (command.toLowerCase().split(' ')[0]) {
-      case '/help':
-      case '/帮助':
+    switch (command.toLowerCase().split(" ")[0]) {
+      case "/help":
+      case "/帮助":
         responseText = `🤖 ShipMyAgent Bot
 
 可用命令:
@@ -630,20 +663,20 @@ export class QQBot extends BaseChatAdapter {
 - <任意消息> - 执行指令`;
         break;
 
-      case '/status':
-      case '/状态':
-        responseText = '📊 Agent 状态: 运行中\n任务数: 0\n待审批: 0';
+      case "/status":
+      case "/状态":
+        responseText = "📊 Agent 状态: 运行中\n任务数: 0\n待审批: 0";
         break;
 
-      case '/tasks':
-      case '/任务':
-        responseText = '📋 任务列表\n暂无任务';
+      case "/tasks":
+      case "/任务":
+        responseText = "📋 任务列表\n暂无任务";
         break;
 
-      case '/clear':
-      case '/清除':
+      case "/clear":
+      case "/清除":
         this.clearChat(this.getChatKey({ chatId, chatType }));
-        responseText = '✅ 对话历史已清除';
+        responseText = "✅ 对话历史已清除";
         break;
 
       default:
@@ -660,7 +693,7 @@ export class QQBot extends BaseChatAdapter {
     chatId: string,
     chatType: string,
     messageId: string,
-    instructions: string
+    instructions: string,
   ): Promise<void> {
     try {
       const chatKey = this.getChatKey({ chatId, chatType });
@@ -675,7 +708,7 @@ export class QQBot extends BaseChatAdapter {
       const result = await agentRuntime.run({
         instructions,
         context: {
-          source: 'qq' as any,
+          source: "qq" as any,
           userId: chatId,
           chatKey,
           chatType,
@@ -687,11 +720,29 @@ export class QQBot extends BaseChatAdapter {
       // If agent requested approval, surface a system prompt (QQ currently has no interactive approval UI).
       if ((result as any).pendingApproval) {
         const pa = (result as any).pendingApproval;
-        const text = `⏳ 需要审批后才能继续：${String(pa?.description || pa?.id || "").trim()}`.trim();
+        const text =
+          `⏳ 需要审批后才能继续：${String(pa?.description || pa?.id || "").trim()}`.trim();
         await this.sendMessage(chatId, chatType, messageId, text, 1);
+        return;
       }
+
+      // Fallback: if agent didn't call send_message, auto-send the output
+      await sendFinalOutputIfNeeded({
+        channel: "qq",
+        chatId,
+        output: result.output || "",
+        toolCalls: result.toolCalls as any,
+        chatType,
+        messageId,
+      });
     } catch (error) {
-      await this.sendMessage(chatId, chatType, messageId, `❌ 执行错误: ${String(error)}`, 1);
+      await this.sendMessage(
+        chatId,
+        chatType,
+        messageId,
+        `❌ 执行错误: ${String(error)}`,
+        1,
+      );
     }
   }
 
@@ -703,14 +754,14 @@ export class QQBot extends BaseChatAdapter {
     chatType: string,
     messageId: string,
     text: string,
-    msgSeq: number = 1
+    msgSeq: number = 1,
   ): Promise<void> {
     try {
       // 实时获取最新的 authToken
       const authToken = await this.getAuthToken();
 
       const apiBase = this.getApiBase();
-      let url = '';
+      let url = "";
       let body: any = {
         content: text,
         msg_type: 0, // 文本消息
@@ -719,15 +770,15 @@ export class QQBot extends BaseChatAdapter {
       };
 
       switch (chatType) {
-        case 'group':
+        case "group":
           // 群聊消息
           url = `${apiBase}/v2/groups/${chatId}/messages`;
           break;
-        case 'c2c':
+        case "c2c":
           // C2C 私聊消息
           url = `${apiBase}/v2/users/${chatId}/messages`;
           break;
-        case 'channel':
+        case "channel":
           // 频道消息
           url = `${apiBase}/channels/${chatId}/messages`;
           break;
@@ -739,10 +790,10 @@ export class QQBot extends BaseChatAdapter {
       this.logger.debug(`发送消息到: ${url}`);
 
       const response = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': authToken,
+          "Content-Type": "application/json",
+          Authorization: authToken,
         },
         body: JSON.stringify(body),
       });
@@ -751,10 +802,10 @@ export class QQBot extends BaseChatAdapter {
         const errorData = await response.text();
         this.logger.error(`发送消息失败: ${response.status} - ${errorData}`);
       } else {
-        this.logger.debug('消息发送成功');
+        this.logger.debug("消息发送成功");
       }
     } catch (error) {
-      this.logger.error('发送 QQ 消息失败', { error: String(error) });
+      this.logger.error("发送 QQ 消息失败", { error: String(error) });
     }
   }
 
@@ -782,7 +833,7 @@ export class QQBot extends BaseChatAdapter {
       this.ws = null;
     }
 
-    this.logger.info('QQ Bot 已停止');
+    this.logger.info("QQ Bot 已停止");
   }
 }
 
@@ -805,7 +856,10 @@ export async function createQQBot(
     logger,
     projectRoot,
     config.sandbox || false,
-    () => createAgentRuntimeFromPath(projectRoot, { mcpManager: deps?.mcpManager ?? null }),
+    () =>
+      createAgentRuntimeFromPath(projectRoot, {
+        mcpManager: deps?.mcpManager ?? null,
+      }),
   );
   return bot;
 }
