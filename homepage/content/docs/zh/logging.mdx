@@ -1,0 +1,45 @@
+---
+title: 日志与审计数据
+description: Agent 执行过程的日志落盘位置、格式与开关
+---
+
+# 日志与审计数据
+
+ShipMyAgent 的“可审计”主要由 `.ship/` 目录下的多类数据共同构成：系统日志、Agent 执行日志、对话日志、runs、审批记录。
+
+## `.ship/` 关键目录
+
+```text
+.ship/
+  logs/       # 系统 Logger + Agent Logger + LLM 请求/响应
+  chats/      # 对话消息（jsonl，可归档）
+  runs/       # 每次 run 的状态与输出（json）
+  approvals/  # 待审批与审批记录（json）
+  queue/      # run 队列 token（pending/running/done）
+```
+
+## 统一日志：`Logger`
+
+当前版本已统一为一套 `Logger`（系统层 + Agent 执行层共用）：
+
+- 文件：`.ship/logs/<YYYY-MM-DD>.jsonl`（JSONL）
+- 落盘策略：每条日志都会 append（包含系统事件、Agent 执行、LLM 请求/响应）
+
+## LLM 请求日志开关（重要）
+
+默认会记录向 LLM provider 发出的请求（通常包含 system + messages），落到 `.ship/logs/<date>.jsonl` 中。
+
+可通过以下方式关闭：
+
+- 环境变量 `SMA_LOG_LLM_MESSAGES=0`
+- 或在 `ship.json` 中设置 `llm.logMessages=false`
+
+如需把完整 payload 写入 `meta.payload`（更敏感），可设置：
+
+- `SMA_LOG_LLM_PAYLOAD=1`
+
+## 对话、Runs、审批分别怎么查？
+
+- **对话内容**：`.ship/chats/<chatKey>.jsonl`（超过阈值会生成 `.archive-<n>.jsonl`）
+- **某次 run 的状态/输出**：`.ship/runs/<runId>.json`
+- **卡在审批**：`.ship/approvals/<approvalId>.json` + `.ship/logs/*`

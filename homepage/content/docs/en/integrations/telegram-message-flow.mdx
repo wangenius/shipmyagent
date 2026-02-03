@@ -7,7 +7,7 @@ description: End-to-end flow from a Telegram message to agent execution, replies
 
 This page explains how a Telegram message is translated into ShipMyAgent instructions, how `AgentRuntime` executes them, and how replies are delivered via the `chat_send` tool.
 
-> Code references: `package/src/integrations/telegram.ts`, `package/src/runtime/agent.ts`, `package/src/runtime/permission.ts`, `package/src/runtime/chat-store.ts`
+> Code references: `package/src/adapters/telegram/bot.ts`, `package/src/adapters/base-chat-adapter.ts`, `package/src/runtime/agent/runtime.ts`, `package/src/runtime/permission/*`, `package/src/runtime/chat/*`
 
 ## Overview
 
@@ -44,9 +44,9 @@ sequenceDiagram
 
 ## Input: Telegram update → executable instructions
 
-### Sessions / threads
+### Chat keys (per chat / thread)
 
-ShipMyAgent uses a session key to isolate context:
+ShipMyAgent uses a `chatKey` to isolate context:
 
 - DM / regular group: `telegram:chat:<chatId>`
 - Group topics: `telegram:chat:<chatId>:topic:<messageThreadId>`
@@ -83,13 +83,13 @@ Every incoming message is appended to a per-chat JSONL file:
 
 - `.ship/chats/<encode(chatKey)>.jsonl`
 
-Before execution, recent entries are loaded and collapsed into a compact “assistant context” that is injected back into the in-memory session.
+Before execution, recent entries are loaded and collapsed into a compact “assistant context” that is injected back into the in-memory chat runtime for that `chatKey`.
 
-## Execution: sync vs async
+## Execution
 
 ### Approval reply first
 
-If the session has pending approvals, ShipMyAgent tries to interpret the message as an approval reply first via:
+If the `chatKey` has pending approvals, ShipMyAgent tries to interpret the message as an approval reply first via:
 
 - `agentRuntime.handleApprovalReply(...)`
 
@@ -102,17 +102,17 @@ ShipMyAgent integrations use a tool-strict pattern:
 - The agent uses the `chat_send` tool to deliver replies (multiple messages, staged updates, etc.)
 - The integration does not automatically forward the agent’s plain text output as chat messages
 
-### Sync
+### Run + delivery
 
-In sync mode, ShipMyAgent runs `agentRuntime.run(...)` and forwards user-facing assistant text:
+Telegram executes `agentRuntime.run(...)` for the current `chatKey`.
 
-- Progress updates are only forwarded after real work signals (step/tool/approval events) to avoid “streaming spam”.
-- Output is chunked (Telegram size limits), tries Markdown first, then falls back to plain text.
-- `@attach ...` lines in output are converted into actual Telegram attachments (local paths or URLs).
+- Primary delivery path: the model calls `chat_send` to send replies (tool-strict).
+- Fallback: if the model forgets to call `chat_send`, the adapter sends the final plain-text output.
+- Messages are chunked for Telegram size limits; Markdown is attempted first, then it falls back to plain text.
 
-### Async runs + completion notifications
+### Background runs (optional)
 
-In async mode, ShipMyAgent enqueues a background run, immediately replies with an ACK containing `runId`, and later pushes completion summaries by scanning `.ship/runs/*.json`.
+ShipMyAgent persists run records under `.ship/runs/`. Some integrations may implement completion notifications by scanning these records; the Telegram adapter focuses on tool-driven replies and approval notifications.
 
 ## Approvals (human-in-the-loop)
 

@@ -61,7 +61,7 @@ The central coordinator that manages all agent operations.
 - Manage conversation context and long-term memory
 
 **Key Design Decisions**:
-- **Session Isolation**: Each session manages context independently
+  - **Chat Isolation**: Each chat/thread (by `chatKey`) manages context independently
 - **Plugin-based**: Tools and LLM providers are pluggable
 - **Permission-first**: All operations checked against permissions
 - **Intelligent Context Management**: Automatic compression and memory extraction
@@ -236,15 +236,15 @@ ShipMyAgent implements an intelligent context management mechanism that ensures 
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │  Session     │  │  Context     │  │  Long-term   │     │
-│  │  Cache       │  │  Compressor  │  │  Memory      │     │
+│  │  Chat        │  │  Context     │  │  Long-term   │     │
+│  │  Runtime     │  │  Compressor  │  │  Memory      │     │
 │  │  (Hot Data)  │  │  (Smart Sum) │  │  (Persist)   │     │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
 │         │                  │                  │               │
 │         └──────────────────┼──────────────────┘               │
 │                            │                                  │
 │                    ┌───────▼────────┐                         │
-│                    │  Session       │                         │
+│                    │  Chat Runtime  │                         │
 │                    │  Manager       │                         │
 │                    └────────────────┘                         │
 │                                                               │
@@ -253,17 +253,17 @@ ShipMyAgent implements an intelligent context management mechanism that ensures 
 
 ### Core Components
 
-#### 1. Session Cache
+#### 1. Chat Runtime Cache (by `chatKey`)
 
 **Features**:
-- Maintains independent message history for each session
+- Maintains independent in-memory `AgentRuntime` per `chatKey`
 - Fast access to recent conversation content
-- Automatic eviction of stale data to prevent memory leaks
+- Automatic TTL cleanup of inactive chat runtimes to prevent memory leaks
 
 **Working Mechanism**:
-- Each session stores data independently without interference
-- Uses FIFO (First In First Out) strategy to evict old sessions
-- Keeps recent messages per session, persists the rest to disk
+- Each `chatKey` stores data independently without interference
+- Uses TTL cleanup for inactive `chatKey` runtimes (best-effort)
+- Persists messages to disk via `ChatStore` (`.ship/chats/*.jsonl`)
 
 #### 2. Context Compressor
 
@@ -345,7 +345,7 @@ User Message
     │
     ▼
 ┌─────────────────────────────────┐
-│ 1. Load Session Context         │
+│ 1. Load Chat Context            │
 │    - Get message history        │
 │    - Load long-term memory      │
 └────────────┬────────────────────┘
@@ -396,11 +396,16 @@ Supports batch memory extraction to improve efficiency and reduce LLM API calls.
 
 ```
 .ship/
+├── approvals/            # Pending approvals (human-in-the-loop)
+│   ├── {approvalId}.json
+│   └── ...
+├── chats/                # Chat history (JSONL, append-only)
+│   ├── {encode(chatKey)}.jsonl
+│   └── ...
 ├── memory/              # Long-term memory storage
 │   ├── {chatKey}.json
 │   └── ...
-├── .cache/              # Temporary cache
-│   └── history/         # Conversation history cache
+├── .cache/              # Temporary cache (attachments, adapter state, etc.)
 └── logs/                # Log files
     └── {date}.jsonl
 ```
@@ -410,7 +415,7 @@ Supports batch memory extraction to improve efficiency and reduce LLM API calls.
 1. **Seamless Long Conversations**: Automatically manages context, supports unlimited conversation length
 2. **Intelligent Memory**: Automatically extracts and saves important information without user intervention
 3. **Efficient Compression**: Multiple compression strategies balance information retention and performance
-4. **Session Isolation**: Each session managed independently without interference
+4. **Chat Isolation**: Each `chatKey` managed independently without interference
 5. **Async Optimization**: Background processing doesn't affect response speed
 
 ---

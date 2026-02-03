@@ -28,6 +28,3 @@ export type { CompressionOptions, CompressionResult } from "./context/index.js";
 
 export { MemoryExtractor, MemoryStoreManager } from "./memory/index.js";
 export type { MemoryEntry, MemoryType, MemoryStore } from "./memory/index.js";
-
-export { SessionManager } from "./session/index.js";
-export type { SessionManagerOptions } from "./session/index.js";

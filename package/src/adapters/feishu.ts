@@ -4,7 +4,6 @@ import path from "path";
 import { Logger } from "../runtime/logging/index.js";
 import { createPermissionEngine } from "../runtime/permission/index.js";
 import { createTaskExecutor, TaskExecutor } from "../runtime/task/index.js";
-import { createToolExecutor } from "../runtime/tools/index.js";
 import { getCacheDirPath } from "../utils.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type {
@@ -782,22 +781,9 @@ export async function createFeishuBot(
     return null;
   }
 
-  // 创建依赖组件
-  const permissionEngine = createPermissionEngine(projectRoot);
-  const toolExecutor = createToolExecutor({
-    projectRoot,
-    permissionEngine,
-    logger,
-  });
-
-  // 注意：不在这里创建 AgentRuntime，因为 Feishu Bot 使用会话级的 AgentRuntime
-  // 会话级 AgentRuntime 在 getOrCreateSession 方法中按需创建
-  const taskExecutor = createTaskExecutor(
-    toolExecutor,
-    logger,
-    null,
-    projectRoot,
-  );
+  // 注意：不在这里直接创建 AgentRuntime 单例；Feishu Bot 使用 chatKey 级别的 AgentRuntime 缓存
+  //（BaseChatAdapter.getOrCreateRuntime），按需创建并在一段时间无交互后自动清理。
+  const taskExecutor = createTaskExecutor(logger, null, projectRoot);
 
   const bot = new FeishuBot(
     config.appId,
@@ -810,6 +796,7 @@ export async function createFeishuBot(
     () =>
       createAgentRuntimeFromPath(projectRoot, {
         mcpManager: deps?.mcpManager ?? null,
+        logger,
       }),
   );
   return bot;

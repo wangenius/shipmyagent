@@ -859,6 +859,7 @@ export async function createQQBot(
     () =>
       createAgentRuntimeFromPath(projectRoot, {
         mcpManager: deps?.mcpManager ?? null,
+        logger,
       }),
   );
   return bot;

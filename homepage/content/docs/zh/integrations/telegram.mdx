@@ -99,7 +99,7 @@ shipmyagent start
 
 ## 常见问题排查
 
-- **完全没反应**：确认进程在跑，并查看 `.ship/logs/integration/telegram.log`。
+- **完全没反应**：确认进程在跑，并查看 `.ship/logs/<YYYY-MM-DD>.jsonl`（可搜索 `TELEGRAM` / `telegram` / error 关键词）。
 - **群里收不到消息**：在 BotFather 执行 `/setprivacy` 设为 `Disable`，并确认你是在群里 `@bot`。
 - **轮询收不到（getUpdates 冲突）**：如果之前配置过 webhook，会与轮询冲突。ShipMyAgent 启动时会尝试清理 webhook；留意日志里的 webhook/Conflict 报错。
 - **群里发不出消息**：检查群权限/管理员设置，机器人可能被禁言或不允许发消息。

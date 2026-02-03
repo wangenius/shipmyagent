@@ -1,0 +1,73 @@
+---
+title: Skills（Claude Code 兼容）
+description: skills 的目录结构、发现逻辑、工具接口与当前行为说明
+---
+
+# Skills（Claude Code 兼容）
+
+ShipMyAgent 当前支持 **Claude Code-compatible skills**。本页解释：skills 如何在磁盘上组织、如何被扫描、如何以工具形式提供给 Agent，以及当前提示词层的行为差异。
+
+## 目录结构
+
+默认 skills root 为项目根目录下的 `.claude/skills`：
+
+```text
+.claude/skills/
+  <skill-id>/
+    SKILL.md
+    (optional) scripts/
+    (optional) assets/
+```
+
+- `<skill-id>`：目录名，会作为 skill 的 `id`。
+- 必须存在 `SKILL.md`，否则不会被识别为 skill。
+
+## SKILL.md 元数据（front matter）
+
+扫描时会读取 `SKILL.md` 的 YAML front matter，用于展示与检索：
+
+- `name`：显示名（默认等于 `<skill-id>`）
+- `description`：描述
+- `allowed-tools`（或 `allowedTools` / `allowed_tools`）：工具白名单提示
+
+> 目前 `allowed-tools` 仅作为“提示/元数据”，不会在运行时强制阻断不在白名单的工具调用。
+
+## skills roots 的解析规则
+
+可以在 `ship.json` 配置 `skills`：
+
+```json
+{
+  "skills": {
+    "paths": [".claude/skills", ".my/skills"],
+    "allowExternalPaths": false
+  }
+}
+```
+
+解析规则要点：
+
+- `paths` 支持相对路径（相对项目根目录）、绝对路径、`~` 展开。
+- 如果某个 root 的 basename 不是 `skills`，且其子目录 `skills/` 存在，则优先扫描 `<root>/skills/`（兼容 `.claude/skills` 这类布局）。
+- 默认 `allowExternalPaths=false`：只扫描项目根目录下的路径（更安全）。
+
+## Agent 如何“使用 skills”
+
+skills 通过两个内置工具提供给模型：
+
+- `skills_list`：列出可用 skills（含 `id/name/description/allowedTools`）
+- `skills_load`：按 `id/name` 查找并加载对应 `SKILL.md` 全文
+
+典型工作流：
+
+1. 模型调用 `skills_list` 发现是否有合适的 skill
+2. 调用 `skills_load` 读取 `SKILL.md`
+3. 按 `SKILL.md` 的步骤执行（必要时再调用其它工具）
+
+## system prompt 中的 skills section
+
+当前 `shipmyagent start` 与聊天适配器默认都会把 skills 摘要 section 拼进 system prompt（`Agent.md` 拼接结果），让模型在对话一开始就知道：
+
+- skills roots 是哪些
+- 应优先用 `skills_list / skills_load` 来发现与加载 skills
+- 当前发现了哪些 skills（最多列出 40 个）

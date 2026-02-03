@@ -42,14 +42,17 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
   }) {
     super({ channel: params.channel, projectRoot: params.projectRoot, logger: params.logger });
     this.createRuntime =
-      params.createAgentRuntime ?? (() => createAgentRuntimeFromPath(this.projectRoot));
+      params.createAgentRuntime ??
+      (() => createAgentRuntimeFromPath(this.projectRoot, { logger: this.logger }));
   }
 
   /**
-   * Optional hook for custom session hydration strategies.
+   * Optional hook for custom chat history hydration strategies.
+   *
    * Default: hydrate recent messages from ChatStore once per process.
+   * Adapters can override to apply channel-specific history shaping.
    */
-  protected async hydrateSession(agentRuntime: AgentRuntime, chatKey: string): Promise<void> {
+  protected async hydrateChat(agentRuntime: AgentRuntime, chatKey: string): Promise<void> {
     try {
       await this.chatStore.hydrateOnce(chatKey, (msgs) => {
         agentRuntime.setConversationHistory(chatKey, msgs);
@@ -59,7 +62,7 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     }
   }
 
-  protected runInChat(chatKey: string, fn: () => Promise<void>): Promise<void> {
+  runInChat(chatKey: string, fn: () => Promise<void>): Promise<void> {
     const prev = this.chatLocks.get(chatKey) ?? Promise.resolve();
     const run = prev.catch(() => {}).then(fn);
     this.chatLocks.set(
@@ -78,35 +81,37 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     if (oldTimeout) clearTimeout(oldTimeout);
 
     const timeout = setTimeout(() => {
+      const runtime = this.runtimes.get(chatKey);
       this.runtimes.delete(chatKey);
       this.runtimeTimeouts.delete(chatKey);
       this.logger.debug(`Chat runtime timeout cleanup: ${chatKey}`);
+      if (runtime) void runtime.cleanup().catch(() => {});
     }, this.RUNTIME_TIMEOUT_MS);
 
     this.runtimeTimeouts.set(chatKey, timeout);
   }
 
-  protected getOrCreateRuntime(chatKey: string): AgentRuntime {
+  getOrCreateRuntime(chatKey: string): AgentRuntime {
     if (this.runtimes.has(chatKey)) {
       this.resetRuntimeTimeout(chatKey);
+      this.logger.debug(`Using chat runtime: ${chatKey}`);
       return this.runtimes.get(chatKey)!;
     }
 
-    const agentRuntime = this.createRuntime();
-    this.runtimes.set(chatKey, agentRuntime);
+    const runtime = this.createRuntime();
+    this.runtimes.set(chatKey, runtime);
     this.resetRuntimeTimeout(chatKey);
-
-    void this.hydrateSession(agentRuntime, chatKey);
-
+    void this.hydrateChat(runtime, chatKey);
     this.logger.debug(`Created new chat runtime: ${chatKey}`);
-    return agentRuntime;
+    return runtime;
   }
 
   clearChat(chatKey: string): void {
     const runtime = this.runtimes.get(chatKey);
     if (runtime) {
-      runtime.clearConversationHistory();
+      runtime.clearConversationHistory(chatKey);
       this.runtimes.delete(chatKey);
+      void runtime.cleanup().catch(() => {});
     }
 
     const timeout = this.runtimeTimeouts.get(chatKey);

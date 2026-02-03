@@ -14,50 +14,23 @@ Logs are stored in the `.ship/` directory of your project:
 ```
 .ship/
 ├── logs/
-│   ├── agent.log          # Main agent logs
-│   ├── tasks.log          # Scheduled task logs
-│   ├── errors.log         # Error-only logs
-│   └── integration/       # Integration-specific logs
-│       ├── telegram.log
-│       └── github.log
-└── cache/                 # Temporary cached data
+│   └── <YYYY-MM-DD>.jsonl  # Unified JSONL logs (system + agent + LLM)
+└── chats/                  # Chat messages (jsonl, with archives)
 ```
 
 ## Viewing Logs
 
-### CLI Commands
-
-```bash
-# View real-time logs (follow mode)
-shipmyagent logs --follow
-
-# View last 50 lines
-shipmyagent logs --tail 50
-
-# View specific log file
-shipmyagent logs --file tasks
-
-# Export logs
-shipmyagent logs --export > my-logs.txt
-
-# Filter by log level
-shipmyagent logs --level error
-```
-
 ### Direct File Access
 
 ```bash
-# View agent logs
-tail -f .ship/logs/agent.log
+# Follow today's unified log file
+tail -f .ship/logs/$(date +%F).jsonl
 
-# View recent errors
-tail -50 .ship/logs/errors.log
+# Search by keywords
+grep -i "error\\|warn\\|approval\\|llm" .ship/logs/$(date +%F).jsonl
 
-# Search for specific errors
-grep "ERROR" .ship/logs/agent.log
-
-# Find HTTP requests
-grep "POST\|GET" .ship/logs/agent.log
+# Pretty-print recent JSONL entries (requires jq)
+tail -50 .ship/logs/$(date +%F).jsonl | jq -c '{timestamp, type, message}'
 ```
 
 ## Log Levels
@@ -73,18 +46,12 @@ ShipMyAgent uses standard log levels:
 
 ### Setting Log Level
 
-```bash
-# Set via CLI
-shipmyagent start --log-level debug
+ShipMyAgent currently writes structured JSONL logs to `.ship/logs/<YYYY-MM-DD>.jsonl`.
 
-# Set in ship.json
-{
-  "logging": {
-    "level": "debug",
-    "file": ".ship/logs/agent.log"
-  }
-}
-```
+For LLM request logging (may include system + messages), you can toggle:
+
+- `SMA_LOG_LLM_MESSAGES=0` to disable request logging
+- `SMA_LOG_LLM_PAYLOAD=1` to include full JSON payload in log metadata (more sensitive)
 
 ## Interpreting Log Messages
 
@@ -142,17 +109,11 @@ Each log entry follows this format:
 
 ## Debugging Mode
 
-### Enable Verbose Logging
+To debug, keep the agent running and follow today’s unified JSONL log:
 
 ```bash
-# Start with verbose output
-shipmyagent start --verbose
-
-# Enable debug logging
-shipmyagent start --log-level debug
-
-# Combine both
-shipmyagent start --verbose --log-level debug
+shipmyagent start
+tail -f .ship/logs/$(date +%F).jsonl
 ```
 
 ### Debug Output Example
@@ -170,194 +131,78 @@ shipmyagent start --verbose --log-level debug
 
 ## Common Debugging Scenarios
 
-### Scenario 1: Agent Won't Start
+### Scenario 1: Agent won't start / exits immediately
 
 ```bash
-# 1. Check logs for errors
-shipmyagent logs --level error
+# Confirm required files exist
+ls -la Agent.md ship.json
 
-# 2. Look for configuration issues
-grep "CONFIG" .ship/logs/agent.log
-
-# 3. Test LLM connection
-shipmyagent test-llm
-
-# 4. Validate configuration
-shipmyagent validate
+# Check today's unified logs
+tail -200 .ship/logs/$(date +%F).jsonl
 ```
 
-### Scenario 2: Task Not Running
+Common things to look for in `.ship/logs/<YYYY-MM-DD>.jsonl`:
+- missing/invalid `ship.json`
+- missing API key (or `${...}` not resolved)
+- provider/model mismatch
+
+### Scenario 2: Task/run is not executing
 
 ```bash
-# 1. Check task scheduler status
-shipmyagent tasks list
+# Check task definitions exist
+ls -la .ship/tasks
 
-# 2. View task logs
-shipmyagent logs --file tasks
-
-# 3. Verify cron expression
-cat .ship/tasks/my-task.md | grep cron
-
-# 4. Test task manually
-shipmyagent tasks run my-task
+# Inspect recent runs
+ls -lt .ship/runs | head
 ```
 
-### Scenario 3: Telegram Not Responding
+If a run is waiting for approval, check:
 
 ```bash
-# 1. Check Telegram logs
-tail -f .ship/logs/integration/telegram.log
-
-# 2. Verify connection
-grep "TELEGRAM" .ship/logs/agent.log
-
-# 3. Test Telegram API
-curl https://api.telegram.org/bot<BOT_TOKEN>/getMe
+ls -la .ship/approvals
 ```
 
-### Scenario 4: Slow Performance
+### Scenario 3: Telegram not responding
 
 ```bash
-# 1. Check for errors
-shipmyagent logs --level error
-
-# 2. Look for slow operations
-grep "slow\|timeout" .ship/logs/agent.log
-
-# 3. Monitor LLM response times
-grep "LLM response time" .ship/logs/agent.log
-
-# 4. Check system resources
-top | grep shipmyagent
+# Search today’s unified log for Telegram-related lines
+grep -i "telegram\\|webhook\\|getUpdates\\|409\\|conflict" .ship/logs/$(date +%F).jsonl | tail -100
 ```
 
-## Log Rotation
+### Scenario 4: Debugging LLM calls
 
-Logs are automatically rotated to prevent disk space issues:
+By default, ShipMyAgent logs outgoing LLM requests and the AI SDK response messages.
 
-```json
-{
-  "logging": {
-    "rotation": {
-      "enabled": true,
-      "maxSize": "10MB",
-      "maxFiles": 10,
-      "compress": true
-    }
-  }
-}
-```
-
-**Configuration**:
-- `maxSize`: Maximum size of each log file before rotation
-- `maxFiles`: Number of backup files to keep
-- `compress`: Compress rotated logs with gzip
-
-## Exporting Logs for Support
-
-When asking for help, export relevant logs:
+To disable LLM request logging:
 
 ```bash
-# Export all logs
-shipmyagent logs --export --all > full-logs.txt
-
-# Export only errors
-shipmyagent logs --level error --export > errors-only.txt
-
-# Export with context (lines before/after)
-shipmyagent logs --context 5 --export > logs-with-context.txt
-
-# Create diagnostic bundle
-shipmyagent doctor --export > diagnostic-bundle.zip
+SMA_LOG_LLM_MESSAGES=0 shipmyagent start
 ```
 
-## Log Analysis Tools
-
-### Using grep for Analysis
+To include full JSON payload metadata (more sensitive):
 
 ```bash
-# Count errors by type
-grep "ERROR" .ship/logs/agent.log | cut -d']' -f3 | sort | uniq -c
-
-# Find slow operations
-grep "ms\|timeout" .ship/logs/agent.log
-
-# Track LLM API calls
-grep "LLM" .ship/logs/agent.log | grep "response time"
-
-# Monitor for specific errors
-grep -i "permission denied\|401\|403" .ship/logs/agent.log
+SMA_LOG_LLM_PAYLOAD=1 shipmyagent start
 ```
 
-### Using jq for JSON Logs
-
-If logs are in JSON format:
+## JSONL log analysis (jq)
 
 ```bash
-# Extract specific fields
-jq '.timestamp, .level, .message' .ship/logs/agent.log
+# Show the most recent 50 entries as a compact summary
+tail -50 .ship/logs/$(date +%F).jsonl | jq -c '{timestamp, type, message}'
 
-# Filter by level
-jq 'select(.level == "ERROR")' .ship/logs/agent.log
+# Only errors
+jq -c 'select(.type == "error") | {timestamp, message, details}' .ship/logs/$(date +%F).jsonl | tail -200
 
-# Count by component
-jq '.component' .ship/logs/agent.log | sort | uniq -c
+# Only approvals
+jq -c 'select(.type == "approval") | {timestamp, message, details}' .ship/logs/$(date +%F).jsonl | tail -200
 ```
 
-## Troubleshooting Log Issues
+## Retention / cleanup
 
-### Logs Not Appearing
+ShipMyAgent writes one log file per day under `.ship/logs/`. If you need to clean up old logs:
 
-**Problem**: Log files are empty or missing.
-
-**Solutions**:
-
-1. **Check permissions**:
-   ```bash
-   ls -la .ship/logs/
-   chmod 755 .ship/logs/
-   ```
-
-2. **Restart agent**:
-   ```bash
-   shipmyagent restart
-   ```
-
-3. **Verify log configuration**:
-   ```bash
-   cat ship.json | grep logging
-   ```
-
-### Logs Growing Too Large
-
-**Problem**: Log files consuming too much disk space.
-
-**Solutions**:
-
-1. **Enable rotation** (see above)
-2. **Clean old logs manually**:
-   ```bash
-   rm .ship/logs/*.log.*
-   ```
-3. **Reduce log level**:
-   ```json
-   {
-     "logging": {
-       "level": "warn"  // Only log warnings and errors
-     }
-   }
-   ```
-
-## Best Practices
-
-1. **Regular Review**: Check logs weekly for recurring issues
-2. **Set Up Alerts**: Use log monitoring tools for critical errors
-3. **Archive Logs**: Keep old logs for compliance or analysis
-4. **Clean Up**: Regularly remove old rotated logs
-5. **Document Patterns**: Note common log patterns for quick reference
-
-## Next Steps
-
-- [Common Issues](/docs/troubleshooting/common-issues) - Solutions to frequent problems
-- [Performance Issues](/docs/troubleshooting/performance-issues) - Optimizing speed
-- [Permission Errors](/docs/troubleshooting/permission-errors) - Access control debugging
+```bash
+ls -la .ship/logs
+rm .ship/logs/2023-*.jsonl
+```

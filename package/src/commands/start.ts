@@ -1,27 +1,32 @@
 import path from "path";
 import fs from "fs-extra";
 import { createLogger } from "../runtime/logging/index.js";
-import { createPermissionEngine } from "../runtime/permission/index.js";
 import { createTaskScheduler } from "../runtime/scheduler/index.js";
 import { createTaskExecutor } from "../runtime/task/index.js";
-import { createToolExecutor } from "../runtime/tools/index.js";
-import { createAgentRuntime, type AgentContext } from "../runtime/agent/index.js";
+import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
 import { RunManager, RunWorker } from "../runtime/run/index.js";
 import { createServer, ServerContext } from "../server/index.js";
 import { createInteractiveServer } from "../server/interactive.js";
-import { createTelegramBot } from "../integrations/telegram.js";
-import { createFeishuBot } from "../integrations/feishu.js";
-import { createQQBot } from "../integrations/qq.js";
+import { createTelegramBot } from "../adapters/telegram.js";
+import { createFeishuBot } from "../adapters/feishu.js";
+import { createQQBot } from "../adapters/qq.js";
 import { McpManager, bootstrapMcpFromProject } from "../runtime/mcp/index.js";
 import {
   getAgentMdPath,
   getShipJsonPath,
-  loadShipConfig,
-  ShipConfig,
+  loadShipConfig
 } from "../utils.js";
-import { DEFAULT_SHIP_PROMPTS } from "../runtime/prompts/index.js";
 import { fileURLToPath } from "url";
 
+/**
+ * `shipmyagent start` command entrypoint.
+ *
+ * Responsibilities:
+ * - Load `ship.json` and validate startup options
+ * - Bootstrap the unified logger, permission engine, MCP manager
+ * - Create AgentRuntime (via factory) + TaskExecutor + Run worker/scheduler
+ * - Start the HTTP server and optional interactive web server / chat adapters
+ */
 interface StartOptions {
   port?: number | string;
   host?: string;
@@ -119,49 +124,21 @@ export async function startCommand(
   logger.info(`Project: ${projectRoot}`);
   logger.info(`Model: ${shipConfig.llm?.provider} / ${shipConfig.llm?.model}`);
 
-  // Create permission engine
-  const permissionEngine = createPermissionEngine(projectRoot);
-  logger.info("Permission engine initialized");
-
-  // Create tool executor
-  const toolExecutor = createToolExecutor({
-    projectRoot,
-    permissionEngine,
-    logger,
-  });
-  logger.info("Tool executor initialized");
-
   // Initialize MCP (managed by the server/bootstrap layer, not AgentRuntime)
   const mcpManager = new McpManager(projectRoot, logger);
   await bootstrapMcpFromProject({ projectRoot, logger, mcpManager });
   logger.info("MCP manager initialized");
 
   // Create Agent Runtime
-  const userAgentMd = fs
-    .readFileSync(getAgentMdPath(projectRoot), "utf-8")
-    .trim();
-  const agentMd = [
-    userAgentMd || "You are a helpful project assistant.",
-    `---\n\n${DEFAULT_SHIP_PROMPTS}`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-  const agentContext: AgentContext = {
-    projectRoot,
-    config: shipConfig as ShipConfig,
-    agentMd,
-  };
-  const agentRuntime = createAgentRuntime(agentContext, { mcpManager });
+  const agentRuntime = createAgentRuntimeFromPath(projectRoot, {
+    mcpManager,
+    logger,
+  });
   await agentRuntime.initialize();
   logger.info("Agent Runtime initialized");
 
   // Create task executor
-  const taskExecutor = createTaskExecutor(
-    toolExecutor,
-    logger,
-    agentRuntime,
-    projectRoot,
-  );
+  const taskExecutor = createTaskExecutor(logger, agentRuntime, projectRoot);
   logger.info("Task executor initialized");
 
   // Create Run manager/worker (Tasks v2)
@@ -188,10 +165,8 @@ export async function startCommand(
   const serverContext: ServerContext = {
     projectRoot,
     logger,
-    permissionEngine,
     taskScheduler,
     taskExecutor,
-    toolExecutor,
   };
 
   // Create and start server
@@ -203,12 +178,9 @@ export async function startCommand(
   let telegramBot = null;
   if (adapters.telegram?.enabled) {
     logger.info("Telegram adapter enabled");
-    telegramBot = createTelegramBot(
-      projectRoot,
-      adapters.telegram,
-      logger,
-      { mcpManager },
-    );
+    telegramBot = createTelegramBot(projectRoot, adapters.telegram, logger, {
+      mcpManager,
+    });
   }
 
   // Create Feishu Adapter (if enabled)
@@ -220,28 +192,26 @@ export async function startCommand(
     const feishuConfig = {
       enabled: true,
       appId:
-        (adapters.feishu?.appId &&
-        !isPlaceholder(adapters.feishu.appId)
+        (adapters.feishu?.appId && !isPlaceholder(adapters.feishu.appId)
           ? adapters.feishu.appId
           : undefined) ||
         process.env.FEISHU_APP_ID ||
         "",
       appSecret:
-        (adapters.feishu?.appSecret &&
-        !isPlaceholder(adapters.feishu.appSecret)
+        (adapters.feishu?.appSecret && !isPlaceholder(adapters.feishu.appSecret)
           ? adapters.feishu.appSecret
           : undefined) ||
         process.env.FEISHU_APP_SECRET ||
         "",
       domain: adapters.feishu?.domain || "https://open.feishu.cn",
-      adminUserIds: Array.isArray(
-        (adapters.feishu as any)?.adminUserIds,
-      )
+      adminUserIds: Array.isArray((adapters.feishu as any)?.adminUserIds)
         ? (adapters.feishu as any).adminUserIds
         : undefined,
     };
 
-    feishuBot = await createFeishuBot(projectRoot, feishuConfig, logger, { mcpManager });
+    feishuBot = await createFeishuBot(projectRoot, feishuConfig, logger, {
+      mcpManager,
+    });
   }
 
   // Create QQ Adapter (if enabled)
@@ -252,15 +222,13 @@ export async function startCommand(
     const qqConfig = {
       enabled: true,
       appId:
-        (adapters.qq?.appId &&
-        !isPlaceholder(adapters.qq.appId)
+        (adapters.qq?.appId && !isPlaceholder(adapters.qq.appId)
           ? adapters.qq.appId
           : undefined) ||
         process.env.QQ_APP_ID ||
         "",
       appSecret:
-        (adapters.qq?.appSecret &&
-        !isPlaceholder(adapters.qq.appSecret)
+        (adapters.qq?.appSecret && !isPlaceholder(adapters.qq.appSecret)
           ? adapters.qq.appSecret
           : undefined) ||
         process.env.QQ_APP_SECRET ||

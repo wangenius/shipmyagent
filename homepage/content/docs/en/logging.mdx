@@ -1,0 +1,45 @@
+---
+title: Logging & Audit Data
+description: Where execution logs are stored, their formats, and how to toggle LLM logging
+---
+
+# Logging & Audit Data
+
+ShipMyAgent’s auditability is built from multiple data streams under `.ship/`: system logs, agent execution logs, chat logs, runs, and approvals.
+
+## Key `.ship/` directories
+
+```text
+.ship/
+  logs/       # system Logger + AgentLogger + LLM request/response
+  chats/      # chat messages (jsonl, with archives)
+  runs/       # per-run status/output snapshots (json)
+  approvals/  # pending approvals & decisions (json)
+  queue/      # run queue tokens (pending/running/done)
+```
+
+## Unified logger: `Logger`
+
+ShipMyAgent now uses a single `Logger` implementation for both system-level and agent execution logs:
+
+- File: `.ship/logs/<YYYY-MM-DD>.jsonl` (JSONL)
+- Persistence: each log entry is appended (system events + agent execution + LLM request/response)
+
+## LLM request logging toggles (important)
+
+By default, ShipMyAgent logs outgoing LLM requests (often including system + messages) into `.ship/logs/<date>.jsonl`.
+
+To disable:
+
+- `SMA_LOG_LLM_MESSAGES=0` (env var), or
+- `llm.logMessages=false` in `ship.json`
+
+To include full payload in `meta.payload` (more sensitive):
+
+- `SMA_LOG_LLM_PAYLOAD=1`
+
+## Where to look
+
+- **Chat history**: `.ship/chats/<chatKey>.jsonl` (plus `.archive-<n>.jsonl`)
+- **Run status/output**: `.ship/runs/<runId>.json`
+- **Stuck on approvals**: `.ship/approvals/<approvalId>.json` + `.ship/logs/*`

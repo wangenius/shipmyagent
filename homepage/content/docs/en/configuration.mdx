@@ -110,15 +110,6 @@ Supported `type` values:
       "repository": "owner/repo"
     }
   },
-  "logging": {
-    "level": "info",
-    "file": ".ship/logs/agent.log",
-    "rotation": {
-      "enabled": true,
-      "maxSize": "10MB",
-      "maxFiles": 10
-    }
-  },
   "cache": {
     "enabled": true,
     "ttl": 3600
@@ -383,26 +374,14 @@ External service connections.
 
 #### logging (object)
 
-Configure logging behavior.
+ShipMyAgent currently writes unified structured logs to:
 
-```json
-{
-  "logging": {
-    "level": "info",  // debug, info, warn, error
-    "file": ".ship/logs/agent.log",
-    "timing": {
-      "enabled": true,
-      "threshold": 1000  // Log operations > 1 second
-    },
-    "rotation": {
-      "enabled": true,
-      "maxSize": "10MB",
-      "maxFiles": 10,
-      "compress": true
-    }
-  }
-}
-```
+- `.ship/logs/<YYYY-MM-DD>.jsonl` (JSONL)
+
+LLM request logging (may include system + messages) can be toggled via env vars:
+
+- `SMA_LOG_LLM_MESSAGES=0` to disable
+- `SMA_LOG_LLM_PAYLOAD=1` to include full JSON payload in metadata (more sensitive)
 
 #### cache (object)
 

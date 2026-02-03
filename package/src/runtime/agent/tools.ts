@@ -1,15 +1,22 @@
 import type { ShipConfig } from "../../utils.js";
 import type { PermissionEngine } from "../permission/index.js";
 import type { McpManager } from "../mcp/manager.js";
-import type { AgentLogger } from "./agent-logger.js";
+import type { Logger } from "../logging/index.js";
 import { createAgentToolSet } from "../../tool/toolset.js";
 
+/**
+ * Agent toolset wiring for the runtime layer.
+ *
+ * This module adapts the shared toolset builder (`createAgentToolSet`) to the AgentRuntime needs:
+ * - Injects runtime dependencies (permission engine, MCP manager, logger)
+ * - Produces a plain `Record<string, Tool>` map that can be passed into AI SDK ToolLoopAgent.
+ */
 export function createToolSet(input: {
   projectRoot: string;
   permissionEngine: PermissionEngine;
   config: ShipConfig;
   mcpManager: McpManager | null;
-  logger: AgentLogger;
+  logger: Logger;
 }) {
   return createAgentToolSet({
     projectRoot: input.projectRoot,

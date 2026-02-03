@@ -14,50 +14,23 @@ description: 理解和使用 ShipMyAgent 日志
 ```
 .ship/
 ├── logs/
-│   ├── agent.log          # 主 agent 日志
-│   ├── tasks.log          # 定时任务日志
-│   ├── errors.log         # 仅错误日志
-│   └── integration/       # 集成特定日志
-│       ├── telegram.log
-│       └── github.log
-└── cache/                 # 临时缓存数据
+│   └── <YYYY-MM-DD>.jsonl  # 统一 JSONL 日志（系统 + Agent + LLM）
+└── chats/                  # 对话消息（jsonl，可归档）
 ```
 
 ## 查看日志
 
-### CLI 命令
-
-```bash
-# 实时查看日志（跟踪模式）
-shipmyagent logs --follow
-
-# 查看最近 50 行
-shipmyagent logs --tail 50
-
-# 查看特定日志文件
-shipmyagent logs --file tasks
-
-# 导出日志
-shipmyagent logs --export > my-logs.txt
-
-# 按日志级别过滤
-shipmyagent logs --level error
-```
-
 ### 直接文件访问
 
 ```bash
-# 查看 agent 日志
-tail -f .ship/logs/agent.log
+# 跟踪今天的统一日志文件
+tail -f .ship/logs/$(date +%F).jsonl
 
-# 查看最近的错误
-tail -50 .ship/logs/errors.log
+# 按关键词搜索
+grep -i "error\\|warn\\|approval\\|llm" .ship/logs/$(date +%F).jsonl
 
-# 搜索特定错误
-grep "ERROR" .ship/logs/agent.log
-
-# 查找 HTTP 请求
-grep "POST\|GET" .ship/logs/agent.log
+# 结构化查看（需要 jq）
+tail -50 .ship/logs/$(date +%F).jsonl | jq -c '{timestamp, type, message}'
 ```
 
 ## 日志级别
@@ -73,18 +46,12 @@ ShipMyAgent 使用标准日志级别：
 
 ### 设置日志级别
 
-```bash
-# 通过 CLI 设置
-shipmyagent start --log-level debug
+ShipMyAgent 当前会把结构化 JSONL 日志写入 `.ship/logs/<YYYY-MM-DD>.jsonl`。
 
-# 在 ship.json 中设置
-{
-  "logging": {
-    "level": "debug",
-    "file": ".ship/logs/agent.log"
-  }
-}
-```
+如需控制 LLM 请求日志（通常包含 system + messages），可通过环境变量：
+
+- `SMA_LOG_LLM_MESSAGES=0` 关闭请求日志
+- `SMA_LOG_LLM_PAYLOAD=1` 在日志元信息里包含完整 payload（更敏感）
 
 ## 解释日志消息
 
@@ -145,14 +112,8 @@ shipmyagent start --log-level debug
 ### 启用详细日志
 
 ```bash
-# 使用详细输出启动
-shipmyagent start --verbose
-
-# 启用调试日志
-shipmyagent start --log-level debug
-
-# 同时启用两者
-shipmyagent start --verbose --log-level debug
+shipmyagent start
+tail -f .ship/logs/$(date +%F).jsonl
 ```
 
 ### 调试输出示例
@@ -173,43 +134,28 @@ shipmyagent start --verbose --log-level debug
 ### 场景 1：Agent 无法启动
 
 ```bash
-# 1. 检查错误日志
-shipmyagent logs --level error
+# 确认必要文件存在
+ls -la Agent.md ship.json
 
-# 2. 查找配置问题
-grep "CONFIG" .ship/logs/agent.log
-
-# 3. 测试 LLM 连接
-shipmyagent test-llm
-
-# 4. 验证配置
-shipmyagent validate
+# 查看今天的统一日志
+tail -200 .ship/logs/$(date +%F).jsonl
 ```
 
 ### 场景 2：任务未运行
 
 ```bash
-# 1. 检查任务调度器状态
-shipmyagent tasks list
+# 确认任务文件存在
+ls -la .ship/tasks
 
-# 2. 查看任务日志
-shipmyagent logs --file tasks
-
-# 3. 验证 cron 表达式
-cat .ship/tasks/my-task.md | grep cron
-
-# 4. 手动测试任务
-shipmyagent tasks run my-task
+# 查看最近 runs
+ls -lt .ship/runs | head
 ```
 
 ### 场景 3：Telegram 无响应
 
 ```bash
-# 1. 检查 Telegram 日志
-tail -f .ship/logs/integration/telegram.log
-
-# 2. 验证连接
-grep "TELEGRAM" .ship/logs/agent.log
+# 在统一日志里搜索 Telegram 相关关键词
+grep -i "telegram\\|webhook\\|getUpdates\\|409\\|conflict" .ship/logs/$(date +%F).jsonl | tail -100
 
 # 3. 测试 Telegram API
 curl https://api.telegram.org/bot<BOT_TOKEN>/getMe
@@ -218,146 +164,31 @@ curl https://api.telegram.org/bot<BOT_TOKEN>/getMe
 ### 场景 4：性能缓慢
 
 ```bash
-# 1. 检查错误
-shipmyagent logs --level error
+# 查看今天的统一日志并搜索超时/慢操作关键词
+grep -i "timeout\\|too long\\|context_length" .ship/logs/$(date +%F).jsonl | tail -200
 
-# 2. 查找慢操作
-grep "slow\|timeout" .ship/logs/agent.log
-
-# 3. 监控 LLM 响应时间
-grep "LLM response time" .ship/logs/agent.log
-
-# 4. 检查系统资源
+# 检查系统资源
 top | grep shipmyagent
 ```
 
-## 日志轮转
-
-日志会自动轮转以防止磁盘空间问题：
-
-```json
-{
-  "logging": {
-    "rotation": {
-      "enabled": true,
-      "maxSize": "10MB",
-      "maxFiles": 10,
-      "compress": true
-    }
-  }
-}
-```
-
-**配置说明**：
-- `maxSize`：轮转前每个日志文件的最大大小
-- `maxFiles`：要保留的备份文件数量
-- `compress`：使用 gzip 压缩轮转的日志
-
-## 导出日志以供支持
-
-寻求帮助时，导出相关日志：
+## JSONL 日志分析（jq）
 
 ```bash
-# 导出所有日志
-shipmyagent logs --export --all > full-logs.txt
+# 最近 50 条日志的简要视图
+tail -50 .ship/logs/$(date +%F).jsonl | jq -c '{timestamp, type, message}'
 
-# 仅导出错误
-shipmyagent logs --level error --export > errors-only.txt
+# 只看 error
+jq -c 'select(.type == "error") | {timestamp, message, details}' .ship/logs/$(date +%F).jsonl | tail -200
 
-# 导出带上下文（前/后行）
-shipmyagent logs --context 5 --export > logs-with-context.txt
-
-# 创建诊断包
-shipmyagent doctor --export > diagnostic-bundle.zip
+# 只看审批相关
+jq -c 'select(.type == "approval") | {timestamp, message, details}' .ship/logs/$(date +%F).jsonl | tail -200
 ```
 
-## 日志分析工具
+## 保留 / 清理
 
-### 使用 grep 进行分析
+日志按“每天一个文件”写入 `.ship/logs/`。如需清理旧日志：
 
 ```bash
-# 按类型统计错误
-grep "ERROR" .ship/logs/agent.log | cut -d']' -f3 | sort | uniq -c
-
-# 查找慢操作
-grep "ms\|timeout" .ship/logs/agent.log
-
-# 跟踪 LLM API 调用
-grep "LLM" .ship/logs/agent.log | grep "response time"
-
-# 监控特定错误
-grep -i "permission denied\|401\|403" .ship/logs/agent.log
+ls -la .ship/logs
+rm .ship/logs/2023-*.jsonl
 ```
-
-### 使用 jq 处理 JSON 日志
-
-如果日志是 JSON 格式：
-
-```bash
-# 提取特定字段
-jq '.timestamp, .level, .message' .ship/logs/agent.log
-
-# 按级别过滤
-jq 'select(.level == "ERROR")' .ship/logs/agent.log
-
-# 按组件统计
-jq '.component' .ship/logs/agent.log | sort | uniq -c
-```
-
-## 日志问题故障排查
-
-### 日志未出现
-
-**问题**：日志文件为空或缺失。
-
-**解决方案**：
-
-1. **检查权限**：
-   ```bash
-   ls -la .ship/logs/
-   chmod 755 .ship/logs/
-   ```
-
-2. **重启 agent**：
-   ```bash
-   shipmyagent restart
-   ```
-
-3. **验证日志配置**：
-   ```bash
-   cat ship.json | grep logging
-   ```
-
-### 日志增长过大
-
-**问题**：日志文件占用过多磁盘空间。
-
-**解决方案**：
-
-1. **启用轮转**（见上文）
-2. **手动清理旧日志**：
-   ```bash
-   rm .ship/logs/*.log.*
-   ```
-3. **降低日志级别**：
-   ```json
-   {
-     "logging": {
-       "level": "warn"  // 仅记录警告和错误
-     }
-   }
-   ```
-
-## 最佳实践
-
-1. **定期审查**：每周检查日志以发现重复问题
-2. **设置警报**：使用日志监控工具监控关键错误
-3. **归档日志**：保留旧日志以供合规或分析
-4. **清理**：定期删除旧的轮转日志
-5. **记录模式**：记录常见日志模式以供快速参考
-
-## 下一步
-
-- [常见问题](/docs/troubleshooting/common-issues) - 频繁问题的解决方案
-- [性能问题](/docs/troubleshooting/performance-issues) - 优化速度
-- [权限错误](/docs/troubleshooting/permission-errors) - 访问控制调试

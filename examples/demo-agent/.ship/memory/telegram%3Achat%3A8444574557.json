@@ -317,8 +317,80 @@
       "id": "mem_1770087728911_xa4rw0nqa",
       "createdAt": 1770087728911,
       "updatedAt": 1770087728911
+    },
+    {
+      "type": "fact",
+      "content": "用户当前项目根目录为 /Users/wangenius/Documents/github/shipmyagent/examples/demo-agent",
+      "importance": 6,
+      "tags": [
+        "项目配置",
+        "开发环境"
+      ],
+      "metadata": {
+        "project_root": "/Users/wangenius/Documents/github/shipmyagent/examples/demo-agent"
+      },
+      "id": "mem_1770097469091_rhzo53ubx",
+      "createdAt": 1770097469091,
+      "updatedAt": 1770097469091
+    },
+    {
+      "type": "fact",
+      "content": "当前对话的Telegram聊天ID为 telegram:chat:8444574557",
+      "importance": 5,
+      "tags": [
+        "通信配置",
+        "聊天平台"
+      ],
+      "metadata": {
+        "platform": "telegram",
+        "chat_id": "8444574557"
+      },
+      "id": "mem_1770097469093_qxj33nxq3",
+      "createdAt": 1770097469093,
+      "updatedAt": 1770097469093
+    },
+    {
+      "type": "task",
+      "content": "已通过QQ私聊向用户发送新春祝福，内容包含投资决策专业视角",
+      "importance": 4,
+      "tags": [
+        "已完成任务",
+        "消息发送"
+      ],
+      "metadata": {
+        "platform": "qq",
+        "message_type": "c2c_private",
+        "content_themes": [
+          "宏观周期把握",
+          "长期结构洞察",
+          "非对称风险管理",
+          "风险收益平衡"
+        ]
+      },
+      "id": "mem_1770097469093_n06iy888o",
+      "createdAt": 1770097469093,
+      "updatedAt": 1770097469093
+    },
+    {
+      "type": "entity",
+      "content": "用户使用QQ和Telegram两个通信平台",
+      "importance": 5,
+      "tags": [
+        "通信平台",
+        "用户渠道"
+      ],
+      "metadata": {
+        "platforms": [
+          "telegram",
+          "qq"
+        ],
+        "qq_chat_type": "c2c_private"
+      },
+      "id": "mem_1770097469094_zgdop28ff",
+      "createdAt": 1770097469094,
+      "updatedAt": 1770097469094
     }
   ],
   "version": 1,
-  "updatedAt": 1770087728911
+  "updatedAt": 1770097469094
 }

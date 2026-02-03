@@ -4,22 +4,27 @@ import { getTasksDirPath } from "../../utils.js";
 import type { Logger } from "../logging/index.js";
 import type { TaskDefinition } from "../scheduler/index.js";
 import type { AgentInput, AgentRuntime } from "../agent/index.js";
-import type { ToolExecutor } from "../tools/index.js";
 import type { ExecutionResult } from "./types.js";
 
+/**
+ * TaskExecutor bridges "tasks/runs" and AgentRuntime execution.
+ *
+ * It supports:
+ * - executing a named scheduled task (loading `.ship/tasks/<id>.md` if present)
+ * - executing ad-hoc instructions (e.g. via API, chat adapters, run worker)
+ *
+ * Note: tools are invoked by the AgentRuntime/toolset; TaskExecutor intentionally stays thin.
+ */
 export class TaskExecutor {
-  private toolExecutor: ToolExecutor;
   private logger: Logger;
   private agentRuntime: AgentRuntime | null;
   private projectRoot: string;
 
   constructor(
-    toolExecutor: ToolExecutor,
     logger: Logger,
     agentRuntime: AgentRuntime | null,
     projectRoot: string,
   ) {
-    this.toolExecutor = toolExecutor;
     this.logger = logger;
     this.agentRuntime = agentRuntime;
     this.projectRoot = projectRoot;
@@ -124,10 +129,9 @@ export class TaskExecutor {
 }
 
 export function createTaskExecutor(
-  toolExecutor: ToolExecutor,
   logger: Logger,
   agentRuntime: AgentRuntime | null,
   projectRoot: string,
 ): TaskExecutor {
-  return new TaskExecutor(toolExecutor, logger, agentRuntime, projectRoot);
+  return new TaskExecutor(logger, agentRuntime, projectRoot);
 }

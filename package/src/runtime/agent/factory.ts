@@ -13,17 +13,28 @@ import { discoverClaudeSkillsSync, renderClaudeSkillsPromptSection } from "../sk
 import { AgentRuntime } from "./runtime.js";
 import type { AgentContext } from "./types.js";
 import type { McpManager } from "../mcp/manager.js";
+import type { Logger } from "../logging/index.js";
 
+/**
+ * Factory helpers for creating AgentRuntime instances.
+ *
+ * - `createAgentRuntime` is a thin wrapper for dependency injection (logger, MCP manager).
+ * - `createAgentRuntimeFromPath` builds the final `agentMd` by composing:
+ *   1) project `Agent.md` (or a default role)
+ *   2) built-in prompts (`DEFAULT_SHIP_PROMPTS`)
+ *   3) skills summary section (Claude Code compatible skills)
+ * - It also ensures the `.ship/` runtime directory structure exists.
+ */
 export function createAgentRuntime(
   context: AgentContext,
-  deps?: { mcpManager?: McpManager | null },
+  deps?: { mcpManager?: McpManager | null; logger?: Logger | null },
 ): AgentRuntime {
   return new AgentRuntime(context, deps);
 }
 
 export function createAgentRuntimeFromPath(
   projectRoot: string,
-  opts?: { mcpManager?: McpManager | null },
+  opts?: { mcpManager?: McpManager | null; logger?: Logger | null },
 ): AgentRuntime {
   loadProjectDotenv(projectRoot);
 
@@ -96,6 +107,6 @@ You are a helpful project assistant.`;
       config,
       agentMd,
     },
-    { mcpManager: opts?.mcpManager ?? null },
+    { mcpManager: opts?.mcpManager ?? null, logger: opts?.logger ?? null },
   );
 }

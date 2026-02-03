@@ -47,6 +47,18 @@ export abstract class PlatformAdapter {
     });
   }
 
+  getProjectRoot(): string {
+    return this.projectRoot;
+  }
+
+  getLogger(): Logger {
+    return this.logger;
+  }
+
+  getChatStore(): ChatStore {
+    return this.chatStore;
+  }
+
   protected abstract getChatKey(params: AdapterChatKeyParams): string;
 
   protected abstract sendTextToPlatform(

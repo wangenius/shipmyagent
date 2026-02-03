@@ -7,7 +7,7 @@ description: 以 Telegram 为例，解释从用户发消息到 Agent 执行，�
 
 这篇文档以 Telegram 为例，说明 **一条用户消息如何进入 ShipMyAgent**，以及 **AgentRuntime 如何执行、如何产生审批、以及消息如何通过 `chat_send` tool 发送回 Telegram**。
 
-> 代码参考：`package/src/integrations/telegram.ts`、`package/src/runtime/agent/runtime.ts`、`package/src/runtime/permission/*`、`package/src/runtime/chat/*`
+> 代码参考：`package/src/adapters/telegram/bot.ts`、`package/src/adapters/base-chat-adapter.ts`、`package/src/runtime/agent/runtime.ts`、`package/src/runtime/permission/*`、`package/src/runtime/chat/*`
 
 ## 1）总体流程（概览）
 
@@ -95,13 +95,13 @@ ShipMyAgent 会把 Telegram 的聊天抽象为一个 **chatKey**，用来隔离�
 - 路径：`.ship/chats/<encode(chatKey)>.jsonl`
 - 格式：`ChatLogEntryV1`（包含 channel/chatId/chatKey/userId/messageId/role/text/meta 等）
 
-在真正执行之前，会从该文件里加载最近 N 条记录，然后把历史**折叠为一条“assistant 压缩上下文”**，再注入到 AgentRuntime 的会话历史里（减少 token/成本，并保持可追溯）。
+在真正执行之前，会从该文件里加载最近 N 条记录，然后把历史**折叠为一条“assistant 压缩上下文”**，再注入到该 chatKey 对应的 AgentRuntime 对话历史里（减少 token/成本，并保持可追溯）。
 
 ## 4）执行：AgentRuntime 如何跑起来（sync / async）
 
 ### 4.1 先尝试把输入当作“审批回复”
 
-如果该会话存在 pending approvals，TelegramBot 会优先调用：
+如果该 chatKey 存在 pending approvals，TelegramBot 会优先调用：
 
 - `agentRuntime.handleApprovalReply({ userMessage: instructions, chatKey, context })`
 
@@ -116,35 +116,26 @@ ShipMyAgent 的聊天集成采用 tool-strict：
 - Agent 通过 `chat_send` 工具把回复发送回 Telegram（可以分多条、按阶段发送）
 - 集成本身不再“自动转发 Agent 的输出”为消息（避免把发送逻辑写死在集成层）
 
-### 4.2 决定执行模式
+### 4.2 执行与回复（run + delivery）
 
-如果不是审批回复，TelegramBot 会调用：
+如果不是审批回复，TelegramBot 会直接调用：
 
-- `agentRuntime.decideExecutionMode({ instructions, context })`
+- `agentRuntime.run({ instructions, context })`
 
-返回：
+回复发送遵循 tool-strict：
 
-- `sync`：直接在当前消息链路中执行（并可推送进度）
-- `async`：创建一个后台 Run（入队执行），先回 ACK，稍后再推送结果
+- **主要路径**：Agent 使用 `chat_send` 工具把消息发送回 Telegram（可以分多条/分阶段）
+- **兜底路径**：如果 Agent 忘记调用 `chat_send`，集成会把最终的 plain text `output` 回发（避免“用户收不到回复”）
 
-### 4.3 sync：边跑边回（progress）+ 最终输出
+发送消息时会：
 
-sync 模式下：
+- 按 3900 字符分片（避开 Telegram 4096 限制）
+- 优先用 `parse_mode=Markdown`，失败则回退纯文本
+- 解析输出中的 `@attach ...` 并以真正的 Telegram 附件形式发送（支持本地路径或 URL）
 
-- 调用 `agentRuntime.run({ instructions, context, onStep })`
-- 当 `onStep` 收到“明确的执行信号”（step_start/step_finish/approval/compaction 等）后，才开始把后续 assistant 文本当作**进度**转发，避免对“简单一问一答”刷屏
-- 发送消息时会：
-  - 按 3900 字符分片（避开 Telegram 4096 限制）
-  - 优先用 `parse_mode=Markdown`，失败则回退纯文本
-  - 解析输出中的 `@attach ...` 并以真正的 Telegram 附件形式发送（支持本地路径或 URL）
+### 4.3 后台 runs（可选）
 
-### 4.4 async：后台 Run + 完成通知
-
-async 模式下：
-
-1. 创建并入队一个 adhoc run（写入 `.ship/queue` / `.ship/runs` 相关记录）
-2. 立刻给用户回一条 ACK（包含 `runId`）
-3. 后台执行结束后，TelegramBot 的 `notifyCompletedRuns()` 会扫描 `.ship/runs/*.json`，并把结果（或错误）推送回原 chat
+ShipMyAgent 会把 runs 记录落盘在 `.ship/runs/`。部分集成可以基于这些记录实现“完成通知”；当前 Telegram 集成主要处理 tool-driven 回复与审批通知。
 
 ## 5）审批：从“工具调用需要确认”到“继续执行”
 
@@ -165,9 +156,8 @@ async 模式下：
 
 以一次完整交互为例，用户可能看到：
 
-- **普通回复**：最终答案（可能分片多条）
-- **进度消息**：当 Agent 真的在跑工具/步骤时，按需推送中间进展
+- **普通回复**：最终答案（可能分片多条；主要来自 `chat_send`，兜底来自 `output` 回发）
+- **进度消息**：仅当 Agent 主动用 `chat_send` 发送阶段性进度时才会出现（集成层不做自动“流式转发”）
 - **审批提示**：提醒你确认某个敏感操作（并引导如何回复）
 - **审批处理结果**：你同意/拒绝后，继续执行并返回后续结果
-- **后台 Run 的 ACK**：告诉你已入队、给出 `runId`
-- **后台 Run 的完成通知**：✅/❌ + 截断后的结果摘要
+- **后台 Run 的 ACK / 完成通知（可选）**：取决于集成是否启用后台 runs 与通知逻辑

@@ -31,7 +31,7 @@
       "requiresApproval": false
     }
   },
-  "integrations": {
+  "adapters": {
     "telegram": {
       "enabled": true,
       "botToken": "${TELEGRAM_BOT_TOKEN}"

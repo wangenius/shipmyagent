@@ -214,7 +214,7 @@ sudo systemctl status shipmyagent
 
 3. **查看应用日志**
    ```bash
-   tail -f .ship/logs/agent-*.log
+   tail -f .ship/logs/$(date +%F).jsonl
    ```
 
 #### API 请求失败

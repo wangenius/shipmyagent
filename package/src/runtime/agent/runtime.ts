@@ -19,7 +19,6 @@ import {
   type PermissionEngine,
 } from "../permission/index.js";
 import { buildRuntimePrefixedPrompt } from "./prompt.js";
-import { AgentLogger } from "./agent-logger.js";
 import { AgentSessionStore } from "./session-store.js";
 import { createModelAndAgent } from "./model.js";
 import { createToolSet, executeToolDirect } from "./tools.js";
@@ -43,11 +42,25 @@ import type {
   ApprovalRequest,
   ConversationMessage,
 } from "./types.js";
+import { createLogger, type Logger } from "../logging/index.js";
+import { loadRun, saveRun } from "../run/store.js";
 
+/**
+ * AgentRuntime orchestrates a single "agent brain" for a project.
+ *
+ * Responsibilities:
+ * - Build the runtime prompt (system prompt + user instructions + memory).
+ * - Run the AI SDK ToolLoopAgent and stream step/tool summaries via `onStep`.
+ * - Persist execution telemetry via the unified Logger (incl. LLM request/response blocks).
+ * - Handle human-in-the-loop approvals and resume execution after decisions.
+ * - Maintain per-chatKey conversation history and periodic long-term memory extraction.
+ *
+ * Note: AgentRuntime is transport-agnostic; chat adapters/server APIs provide `context` and delivery tools.
+ */
 export class AgentRuntime {
   private context: AgentContext;
   private initialized: boolean = false;
-  private logger: AgentLogger;
+  private logger: Logger;
   private permissionEngine: PermissionEngine;
   private mcpManager: McpManager | null = null;
 
@@ -60,9 +73,12 @@ export class AgentRuntime {
   private lastMemoryExtraction: Map<string, number> = new Map();
   private readonly MEMORY_EXTRACTION_INTERVAL = 5 * 60 * 1000;
 
-  constructor(context: AgentContext, deps?: { mcpManager?: McpManager | null }) {
+  constructor(
+    context: AgentContext,
+    deps?: { mcpManager?: McpManager | null; logger?: Logger | null },
+  ) {
     this.context = context;
-    this.logger = new AgentLogger(context.projectRoot);
+    this.logger = deps?.logger ?? createLogger(context.projectRoot, "info");
     this.permissionEngine = createPermissionEngine(context.projectRoot);
     this.mcpManager = deps?.mcpManager ?? null;
     this.memoryStore = new MemoryStoreManager(context.projectRoot);
@@ -654,7 +670,6 @@ export class AgentRuntime {
 
     if (context?.runId) {
       try {
-        const { loadRun, saveRun } = await import("../run/store.js");
         const run = await loadRun(this.context.projectRoot, context.runId);
         if (run) {
           run.status = resumed.success ? "succeeded" : "failed";

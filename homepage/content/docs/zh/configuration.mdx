@@ -110,15 +110,6 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
       "repository": "owner/repo"
     }
   },
-  "logging": {
-    "level": "info",
-    "file": ".ship/logs/agent.log",
-    "rotation": {
-      "enabled": true,
-      "maxSize": "10MB",
-      "maxFiles": 10
-    }
-  },
   "cache": {
     "enabled": true,
     "ttl": 3600
@@ -383,26 +374,14 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 
 #### logging (object)
 
-配置日志行为。
+ShipMyAgent 当前会把统一的结构化日志写入：
 
-```json
-{
-  "logging": {
-    "level": "info",  // debug、info、warn、error
-    "file": ".ship/logs/agent.log",
-    "timing": {
-      "enabled": true,
-      "threshold": 1000  // 记录超过 1 秒的操作
-    },
-    "rotation": {
-      "enabled": true,
-      "maxSize": "10MB",
-      "maxFiles": 10,
-      "compress": true
-    }
-  }
-}
-```
+- `.ship/logs/<YYYY-MM-DD>.jsonl`（JSONL）
+
+LLM 请求日志（通常包含 system + messages）可通过环境变量控制：
+
+- `SMA_LOG_LLM_MESSAGES=0` 关闭
+- `SMA_LOG_LLM_PAYLOAD=1` 在日志元信息中包含完整 payload（更敏感）
 
 #### cache (object)
 
