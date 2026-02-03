@@ -94,8 +94,75 @@
       "id": "mem_1770097385116_xq7p9ixa0",
       "createdAt": 1770097385116,
       "updatedAt": 1770097385116
+    },
+    {
+      "type": "fact",
+      "content": "用户的Telegram ID为8444574557，且系统已通过memory文件确认其对应的Telegram chat_id也是8444574557",
+      "importance": 8,
+      "tags": [
+        "telegram",
+        "user_identity",
+        "configuration"
+      ],
+      "metadata": {
+        "telegram_id": "8444574557",
+        "chat_id": "8444574557",
+        "source": "memory_file"
+      },
+      "id": "mem_1770114144809_d68rnqg9s",
+      "createdAt": 1770114144809,
+      "updatedAt": 1770114144809
+    },
+    {
+      "type": "fact",
+      "content": "项目已启用Telegram适配器，相关配置位于.ship目录下的ship.json文件中",
+      "importance": 7,
+      "tags": [
+        "project_config",
+        "telegram_adapter"
+      ],
+      "metadata": {
+        "project_root": "/Users/wangenius/Documents/github/shipmyagent/examples/demo-agent",
+        "config_file": "ship.json"
+      },
+      "id": "mem_1770114144810_xl5ffmicr",
+      "createdAt": 1770114144810,
+      "updatedAt": 1770114144810
+    },
+    {
+      "type": "task",
+      "content": "助手已向用户的Telegram发送测试消息，并正在更新memory以确保Telegram信息正确关联",
+      "importance": 6,
+      "tags": [
+        "telegram_test",
+        "memory_update"
+      ],
+      "metadata": {
+        "status": "in_progress",
+        "action": "chat_send_and_memory_update"
+      },
+      "id": "mem_1770114144810_dve3c6tux",
+      "createdAt": 1770114144810,
+      "updatedAt": 1770114144810
+    },
+    {
+      "type": "entity",
+      "content": "项目实体：shipmyagent项目下的demo-agent示例，位于指定路径，使用Telegram作为通信渠道",
+      "importance": 5,
+      "tags": [
+        "project",
+        "github_repo"
+      ],
+      "metadata": {
+        "project_name": "demo-agent",
+        "parent_project": "shipmyagent",
+        "communication_channel": "Telegram"
+      },
+      "id": "mem_1770114144811_61t8igv1n",
+      "createdAt": 1770114144811,
+      "updatedAt": 1770114144811
     }
   ],
   "version": 1,
-  "updatedAt": 1770097385116
+  "updatedAt": 1770114144811
 }

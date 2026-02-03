@@ -27,6 +27,22 @@ ShipMyAgent follows the **Principle of Least Privilege**:
 
 ## Common Permission Errors
 
+### Error: `zsh: permission denied: shipmyagent`
+
+This is usually not ShipMyAgent’s permission system. It’s almost always an **OS execute-bit (`+x`)** issue on the CLI entry file.
+
+In some setups, `pnpm` creates `node_modules/.bin/shipmyagent` as a symlink directly to the package’s `bin/cli.js`. If the target file is `0644` (not executable), zsh will refuse to run it.
+
+**Fix**:
+
+```bash
+# Make the entry file executable
+chmod +x node_modules/shipmyagent/bin/cli.js
+
+# Or run via node (doesn't require +x)
+node node_modules/shipmyagent/bin/cli.js .
+```
+
 ### Error: "Permission denied: read access"
 
 **Problem**: Agent cannot read repository files.

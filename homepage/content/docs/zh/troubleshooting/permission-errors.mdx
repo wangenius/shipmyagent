@@ -27,6 +27,22 @@ ShipMyAgent 遵循**最小权限原则**：
 
 ## 常见权限错误
 
+### 错误：`zsh: permission denied: shipmyagent`
+
+这通常不是 ShipMyAgent 的权限系统问题，而是 **CLI 入口文件缺少可执行位（`+x`）**。
+
+`pnpm` 有时会把 `node_modules/.bin/shipmyagent` 做成软链并直接指向包里的 `bin/cli.js`；如果目标文件是 `0644`（不可执行），就会出现该错误。
+
+**解决方案**：
+
+```bash
+# 修复入口文件的可执行位
+chmod +x node_modules/shipmyagent/bin/cli.js
+
+# 或：直接用 node 执行（不依赖可执行位）
+node node_modules/shipmyagent/bin/cli.js .
+```
+
 ### 错误："Permission denied: read access"
 
 **问题**：Agent 无法读取仓库文件。

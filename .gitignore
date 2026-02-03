@@ -18,7 +18,6 @@ bin
 bun.*
 # Package build output
 package/bin
-
 # Runtime data
 .ship/logs/
 .ship/approvals/
