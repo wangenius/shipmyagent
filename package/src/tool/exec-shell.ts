@@ -15,10 +15,39 @@ function preflightExecShell(config: ShipConfig, command: string): {
   if (execConfigAny === true) {
     return { allowed: true, needsApproval: false };
   }
-  if (!execConfigAny || execConfigAny === false) {
+
+  // 如果没有配置 permissions 或 exec_shell，使用默认配置
+  if (!execConfigAny) {
+    const defaultConfig = {
+      deny: ["rm"],
+      requiresApproval: false,
+      denyRequiresApproval: true,
+    };
+
+    const commandNames = extractExecShellCommandNames(command);
+    if (commandNames.length === 0) {
+      return { allowed: false, deniedReason: "Empty command", needsApproval: false };
+    }
+
+    // 检查是否命中黑名单
+    const deniedNames = defaultConfig.deny
+      .map((d) => String(d).trim().split(/\s+/)[0] || "")
+      .filter(Boolean)
+      .map((d) => d.split("/").pop() || d);
+    const hit = commandNames.find((n) => deniedNames.includes(n));
+    if (hit) {
+      // 黑名单命令需要审批
+      return { allowed: true, needsApproval: true };
+    }
+
+    // 其他命令直接允许
+    return { allowed: true, needsApproval: false };
+  }
+
+  if (execConfigAny === false) {
     return {
       allowed: false,
-      deniedReason: "Shell execution permission not configured",
+      deniedReason: "Shell execution permission disabled",
       needsApproval: false,
     };
   }
@@ -27,6 +56,7 @@ function preflightExecShell(config: ShipConfig, command: string): {
     deny?: string[];
     allow?: string[];
     requiresApproval?: boolean;
+    denyRequiresApproval?: boolean;
   };
 
   const commandNames = extractExecShellCommandNames(command);
@@ -41,6 +71,10 @@ function preflightExecShell(config: ShipConfig, command: string): {
       .map((d) => d.split("/").pop() || d);
     const hit = commandNames.find((n) => deniedNames.includes(n));
     if (hit) {
+      // 如果命中黑名单，检查是否需要审批
+      if (execConfig.denyRequiresApproval) {
+        return { allowed: true, needsApproval: true };
+      }
       return {
         allowed: false,
         deniedReason: `Command denied by blacklist: ${hit}`,

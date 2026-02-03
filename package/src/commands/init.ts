@@ -155,7 +155,6 @@ Help users understand and work with their codebase by exploring, analyzing, and 
       interactivePort: 3001,
     },
     llm: llmConfig,
-    permissions: DEFAULT_SHIP_JSON.permissions,
     adapters: {
       telegram: {
         enabled: response.integration === 'telegram',

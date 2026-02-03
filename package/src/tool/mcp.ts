@@ -19,8 +19,8 @@ export function createMcpAiTool(params: {
         ]),
       ),
     ),
-    // All MCP tools require approval by default.
-    needsApproval: async () => true,
+    // MCP tools do not require approval by default.
+    needsApproval: async () => false,
     execute: async (args: Record<string, unknown>) => {
       try {
         const result = await mcpManager.callTool(server, mcpTool.name, args);

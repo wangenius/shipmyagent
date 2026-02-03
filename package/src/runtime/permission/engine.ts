@@ -101,6 +101,20 @@ export class PermissionEngine {
 
       const hit = commandNames.find((n) => deniedNames.includes(n));
       if (hit) {
+        // 如果命中黑名单，检查是否需要审批
+        if (execConfig.denyRequiresApproval) {
+          const request = await this.createApprovalRequest("exec_shell", "Execute shell command", {
+            command,
+          });
+
+          return {
+            allowed: false,
+            reason: `Command denied by blacklist: ${hit}, requires approval`,
+            requiresApproval: true,
+            approvalId: request.id,
+          } as PermissionCheckResult & { approvalId: string };
+        }
+
         return {
           allowed: false,
           reason: `Command denied by blacklist: ${hit}`,
