@@ -8,24 +8,26 @@ import {
 } from "ai";
 import { withChatRequestContext } from "../chat/request-context.js";
 import { withLlmRequestContext } from "../llm-logging/index.js";
-import {
-  generateId,
-  getApprovalsDirPath,
-  getTimestamp,
-} from "../../utils.js";
+import { generateId, getApprovalsDirPath, getTimestamp } from "../../utils.js";
 import type { ChatLogEntryV1 } from "../chat/store.js";
 import { ContextCompressor } from "../context/compressor.js";
 import { MemoryExtractor } from "../memory/extractor.js";
 import { MemoryStoreManager, type MemoryEntry } from "../memory/store.js";
 import { McpManager } from "../mcp/manager.js";
-import { createPermissionEngine, type PermissionEngine } from "../permission/index.js";
+import {
+  createPermissionEngine,
+  type PermissionEngine,
+} from "../permission/index.js";
 import { buildRuntimePrefixedPrompt } from "./prompt.js";
 import { AgentLogger } from "./agent-logger.js";
 import { AgentSessionStore } from "./session-store.js";
 import { initializeMcp } from "./mcp.js";
 import { createModelAndAgent } from "./model.js";
 import { createToolSet, executeToolDirect } from "./tools.js";
-import { extractUserFacingTextFromStep, emitToolSummariesFromStep } from "./tool-step.js";
+import {
+  extractUserFacingTextFromStep,
+  emitToolSummariesFromStep,
+} from "./tool-step.js";
 import {
   applyApprovalActionsAndBuildResponses,
   decideApprovalsWithModel,
@@ -81,8 +83,14 @@ export class AgentRuntime {
 
   async initialize(): Promise<void> {
     try {
-      await this.logger.log("info", "Initializing Agent Runtime with ToolLoopAgent (AI SDK v6)");
-      await this.logger.log("info", `Agent.md content length: ${this.context.agentMd?.length || 0} chars`);
+      await this.logger.log(
+        "info",
+        "Initializing Agent Runtime with ToolLoopAgent (AI SDK v6)",
+      );
+      await this.logger.log(
+        "info",
+        `Agent.md content length: ${this.context.agentMd?.length || 0} chars`,
+      );
 
       await initializeMcp({
         projectRoot: this.context.projectRoot,
@@ -114,7 +122,10 @@ export class AgentRuntime {
       });
       this.initialized = true;
 
-      await this.logger.log("info", "Agent Runtime initialized with ToolLoopAgent");
+      await this.logger.log(
+        "info",
+        "Agent Runtime initialized with ToolLoopAgent",
+      );
     } catch (error) {
       await this.logger.log("error", "Agent Runtime initialization failed", {
         error: String(error),
@@ -142,7 +153,10 @@ export class AgentRuntime {
         ? "tool"
         : undefined);
 
-    await this.logger.log("debug", `Using system prompt (Agent.md): ${this.context.agentMd?.substring(0, 100)}...`);
+    await this.logger.log(
+      "debug",
+      `Using system prompt (Agent.md): ${this.context.agentMd?.substring(0, 100)}...`,
+    );
     await this.logger.log("debug", `Session ID: ${sessionId}`);
     await this.logger.log("info", "Agent request started", {
       requestId,
@@ -218,11 +232,15 @@ export class AgentRuntime {
     }
 
     const messages = this.sessions.getOrCreate(sessionId);
-    if (addUserPrompt && prompt) messages.push({ role: "user", content: prompt });
+    if (addUserPrompt && prompt)
+      messages.push({ role: "user", content: prompt });
 
     if (this.contextCompressor && messages.length > 30) {
       try {
-        const compressed = await this.contextCompressor.compressByTokenLimit(messages, 8000);
+        const compressed = await this.contextCompressor.compressByTokenLimit(
+          messages,
+          8000,
+        );
         if (compressed.compressed) {
           messages.length = 0;
           messages.push(...compressed.messages);
@@ -258,7 +276,10 @@ export class AgentRuntime {
                   const userText = extractUserFacingTextFromStep(step);
                   if (userText && userText !== lastEmittedAssistant) {
                     lastEmittedAssistant = userText;
-                    await emitStep("assistant", userText, { requestId, sessionId });
+                    await emitStep("assistant", userText, {
+                      requestId,
+                      sessionId,
+                    });
                   }
                 } catch {
                   // ignore
@@ -278,7 +299,8 @@ export class AgentRuntime {
       );
 
       try {
-        const responseMessages = (result.response?.messages || []) as ModelMessage[];
+        const responseMessages = (result.response?.messages ||
+          []) as ModelMessage[];
         await this.logger.log(
           "info",
           [
@@ -287,7 +309,9 @@ export class AgentRuntime {
             `sessionId: ${sessionId}`,
             `historyBefore: ${beforeLen}`,
             `responseMessages: ${responseMessages.length}`,
-            responseMessages.length ? `\n${this.sessions.formatModelMessagesForLog(responseMessages)}` : "",
+            responseMessages.length
+              ? `\n${this.sessions.formatModelMessagesForLog(responseMessages)}`
+              : "",
             "===== LLM RESPONSE END =====",
           ]
             .filter(Boolean)
@@ -316,10 +340,18 @@ export class AgentRuntime {
           });
 
           const out = (tr as any).output;
-          if (out && typeof out === "object" && "success" in out && !out.success) {
+          if (
+            out &&
+            typeof out === "object" &&
+            "success" in out &&
+            !out.success
+          ) {
             hadToolFailure = true;
-            const err = (out as any).error || (out as any).stderr || "unknown error";
-            toolFailureSummaries.push(`${String((tr as any).toolName)}: ${String(err)}`.slice(0, 200));
+            const err =
+              (out as any).error || (out as any).stderr || "unknown error";
+            toolFailureSummaries.push(
+              `${String((tr as any).toolName)}: ${String(err)}`.slice(0, 200),
+            );
           }
         }
 
@@ -332,7 +364,10 @@ export class AgentRuntime {
           });
           hadToolFailure = true;
           toolFailureSummaries.push(
-            `${String((part as any).toolName)}: ${String((part as any).error)}`.slice(0, 200),
+            `${String((part as any).toolName)}: ${String((part as any).error)}`.slice(
+              0,
+              200,
+            ),
           );
         }
       }
@@ -376,12 +411,16 @@ export class AgentRuntime {
         errorMsg.includes("context window")
       ) {
         const currentHistory = this.sessions.getOrCreate(sessionId);
-        await this.logger.log("warn", "Context length exceeded, compacting history", {
-          sessionId,
-          currentMessages: currentHistory.length,
-          error: errorMsg,
-          compactionAttempts,
-        });
+        await this.logger.log(
+          "warn",
+          "Context length exceeded, compacting history",
+          {
+            sessionId,
+            currentMessages: currentHistory.length,
+            error: errorMsg,
+            compactionAttempts,
+          },
+        );
         await emitStep("compaction", "上下文过长，已自动压缩历史记录后继续。", {
           requestId,
           sessionId,
@@ -413,16 +452,28 @@ export class AgentRuntime {
           };
         }
 
-        return this.runWithToolLoopAgent(prompt, startTime, context, sessionId, {
-          addUserPrompt: false,
-          compactionAttempts: compactionAttempts + 1,
-          onStep,
-          requestId,
-        });
+        return this.runWithToolLoopAgent(
+          prompt,
+          startTime,
+          context,
+          sessionId,
+          {
+            addUserPrompt: false,
+            compactionAttempts: compactionAttempts + 1,
+            onStep,
+            requestId,
+          },
+        );
       }
 
-      await this.logger.log("error", "Agent execution failed", { error: errorMsg });
-      return { success: false, output: `Execution failed: ${errorMsg}`, toolCalls };
+      await this.logger.log("error", "Agent execution failed", {
+        error: errorMsg,
+      });
+      return {
+        success: false,
+        output: `Execution failed: ${errorMsg}`,
+        toolCalls,
+      };
     }
   }
 
@@ -463,7 +514,11 @@ export class AgentRuntime {
     });
 
     const pending = this.permissionEngine.getPendingApprovals();
-    const relevant = filterRelevantApprovals(pending as any[], sessionId, context);
+    const relevant = filterRelevantApprovals(
+      pending as any[],
+      sessionId,
+      context,
+    );
     if (relevant.length === 0) return null;
 
     const decisions = await this.decideApprovals(
@@ -482,7 +537,10 @@ export class AgentRuntime {
     const approvals = decisions.approvals || {};
     const refused = decisions.refused || {};
 
-    if (Object.keys(approvals).length === 0 && Object.keys(refused).length === 0) {
+    if (
+      Object.keys(approvals).length === 0 &&
+      Object.keys(refused).length === 0
+    ) {
       return {
         success: true,
         output: `No approval action taken. Pending approvals: ${relevant.map((a: any) => a.id).join(", ")}`,
@@ -497,7 +555,9 @@ export class AgentRuntime {
     });
 
     const runIds = Array.from(
-      new Set(relevant.map((a: any) => (a as any)?.meta?.runId).filter(Boolean)),
+      new Set(
+        relevant.map((a: any) => (a as any)?.meta?.runId).filter(Boolean),
+      ),
     );
     const mergedContext: AgentInput["context"] | undefined =
       runIds.length === 1 ? { ...(context || {}), runId: runIds[0] } : context;
@@ -552,7 +612,8 @@ export class AgentRuntime {
       approvedIds,
       refusedIds,
       sessionMessagesSnapshot: this.sessions.getOrCreate(sessionId),
-      coerceStoredMessagesToModelMessages: (m) => this.sessions.coerceStoredMessagesToModelMessages(m),
+      coerceStoredMessagesToModelMessages: (m) =>
+        this.sessions.coerceStoredMessagesToModelMessages(m),
     });
     this.sessions.replace(sessionId, [...baseMessages]);
 
@@ -564,7 +625,11 @@ export class AgentRuntime {
     });
 
     if (approvalResponses.length === 0) {
-      return { success: true, output: "No approval action taken.", toolCalls: [] };
+      return {
+        success: true,
+        output: "No approval action taken.",
+        toolCalls: [],
+      };
     }
 
     const messages = this.sessions.getOrCreate(sessionId);
@@ -583,10 +648,16 @@ export class AgentRuntime {
         ].join("\n")
       : "";
 
-    const resumed = await this.runWithToolLoopAgent(resumePrompt, resumeStart, context, sessionId, {
-      addUserPrompt: Boolean(resumePrompt),
-      onStep,
-    });
+    const resumed = await this.runWithToolLoopAgent(
+      resumePrompt,
+      resumeStart,
+      context,
+      sessionId,
+      {
+        addUserPrompt: Boolean(resumePrompt),
+        onStep,
+      },
+    );
 
     if (context?.runId) {
       try {
@@ -598,7 +669,8 @@ export class AgentRuntime {
           run.output = { text: resumed.output };
           run.pendingApproval = undefined;
           run.notified = true;
-          if (!resumed.success) run.error = { message: resumed.output || "Run failed" };
+          if (!resumed.success)
+            run.error = { message: resumed.output || "Run failed" };
           await saveRun(this.context.projectRoot, run);
         }
       } catch {
@@ -619,10 +691,14 @@ export class AgentRuntime {
     if (!instructions) return { mode: "sync", reason: "Empty instructions" };
 
     const explicitAsync =
-      /(后台|异步|不用等|稍后|晚点|慢慢来|你先跑着|跑起来|排队|队列)/.test(instructions) ||
-      /\b(background|async|later|queue|enqueue)\b/i.test(instructions);
+      /(后台|异步|不用等|稍后|晚点|慢慢来|你先跑着|跑起来|排队|队列)/.test(
+        instructions,
+      ) || /\b(background|async|later|queue|enqueue)\b/i.test(instructions);
     if (!explicitAsync) {
-      return { mode: "sync", reason: "Default sync (no explicit async request)" };
+      return {
+        mode: "sync",
+        reason: "Default sync (no explicit async request)",
+      };
     }
 
     try {
@@ -656,7 +732,9 @@ export class AgentRuntime {
     }
   }
 
-  async executeApproved(approvalId: string): Promise<{ success: boolean; result: unknown }> {
+  async executeApproved(
+    approvalId: string,
+  ): Promise<{ success: boolean; result: unknown }> {
     const approvalsDir = getApprovalsDirPath(this.context.projectRoot);
     const approvalFile = path.join(approvalsDir, `${approvalId}.json`);
 
@@ -693,7 +771,10 @@ export class AgentRuntime {
           Array.isArray(e.tags) && e.tags.length > 0
             ? ` (tags: ${e.tags.slice(0, 6).join(", ")})`
             : "";
-        const importance = typeof e.importance === "number" ? ` [importance=${e.importance}]` : "";
+        const importance =
+          typeof e.importance === "number"
+            ? ` [importance=${e.importance}]`
+            : "";
         return `- [${e.type}]${importance} ${String(e.content || "").trim()}${tags}`;
       });
 
@@ -756,7 +837,8 @@ export class AgentRuntime {
     );
 
     for (const mem of deduped) {
-      const importance = typeof mem.importance === "number" ? mem.importance : 5;
+      const importance =
+        typeof mem.importance === "number" ? mem.importance : 5;
       if (importance < 4) continue;
       await this.memoryStore.add(sessionId, mem);
     }

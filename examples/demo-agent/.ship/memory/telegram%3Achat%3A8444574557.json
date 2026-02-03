@@ -33,8 +33,174 @@
       "id": "mem_1770029050975_v3sq3sgbm",
       "createdAt": 1770029050975,
       "updatedAt": 1770029050975
+    },
+    {
+      "type": "fact",
+      "content": "用户正在处理一个名为'shipmyagent'的项目，具体路径为/Users/wangenius/Documents/github/shipmyagent/examples/demo-agent",
+      "importance": 7,
+      "tags": [
+        "项目信息",
+        "文件路径"
+      ],
+      "metadata": {
+        "project_name": "shipmyagent",
+        "project_path": "/Users/wangenius/Documents/github/shipmyagent/examples/demo-agent"
+      },
+      "id": "mem_1770040781174_2ihnt9co5",
+      "createdAt": 1770040781174,
+      "updatedAt": 1770040781174
+    },
+    {
+      "type": "task",
+      "content": "需要解析一个PDF文件，但遇到了访问问题，需要创建可访问的HTTP URL",
+      "importance": 8,
+      "tags": [
+        "文件处理",
+        "PDF解析",
+        "待解决"
+      ],
+      "metadata": {
+        "tool_used": "MinerU",
+        "status": "in_progress",
+        "issue": "需要HTTP URL而非file://协议"
+      },
+      "id": "mem_1770040781176_qri9pas13",
+      "createdAt": 1770040781176,
+      "updatedAt": 1770040781176
+    },
+    {
+      "type": "fact",
+      "content": "用户拥有MinerU的API密钥，可用于PDF解析",
+      "importance": 6,
+      "tags": [
+        "工具配置",
+        "API密钥"
+      ],
+      "metadata": {
+        "tool": "MinerU",
+        "has_api_key": true
+      },
+      "id": "mem_1770040781177_9led9hylp",
+      "createdAt": 1770040781177,
+      "updatedAt": 1770040781177
+    },
+    {
+      "type": "task",
+      "content": "需要检查或启动本地服务器以提供PDF文件的HTTP访问",
+      "importance": 7,
+      "tags": [
+        "服务器配置",
+        "网络访问"
+      ],
+      "metadata": {
+        "purpose": "为PDF文件创建HTTP URL",
+        "current_approach": "检查本地服务器状态"
+      },
+      "id": "mem_1770040781178_wxvsvnmhh",
+      "createdAt": 1770040781178,
+      "updatedAt": 1770040781178
+    },
+    {
+      "type": "fact",
+      "content": "用户尝试了多种方法：复制到公共目录、使用cloud_file工具、尝试file://协议、考虑上传到临时在线服务",
+      "importance": 5,
+      "tags": [
+        "问题解决",
+        "尝试方法"
+      ],
+      "metadata": {
+        "attempted_methods": [
+          "公共目录",
+          "cloud_file",
+          "file://协议",
+          "本地服务器",
+          "临时在线服务"
+        ]
+      },
+      "id": "mem_1770040781180_n7vti6fz3",
+      "createdAt": 1770040781180,
+      "updatedAt": 1770040781180
+    },
+    {
+      "type": "entity",
+      "content": "用户身份为 Lucas Whitman，投资决策辅助专家",
+      "importance": 7,
+      "tags": [
+        "用户身份",
+        "专家"
+      ],
+      "metadata": {
+        "name": "Lucas Whitman",
+        "role": "投资决策辅助专家"
+      },
+      "id": "mem_1770041946091_m2uwj2gbb",
+      "createdAt": 1770041946091,
+      "updatedAt": 1770041946091
+    },
+    {
+      "type": "fact",
+      "content": "项目根目录位于 /Users/wangenius/Documents/github/shipmyagent/examples/demo-agent",
+      "importance": 8,
+      "tags": [
+        "项目路径",
+        "系统配置"
+      ],
+      "metadata": {
+        "project_root": "/Users/wangenius/Documents/github/shipmyagent/examples/demo-agent",
+        "session": "telegram:chat:8444574557"
+      },
+      "id": "mem_1770041946092_ohl8dytg7",
+      "createdAt": 1770041946092,
+      "updatedAt": 1770041946092
+    },
+    {
+      "type": "fact",
+      "content": "存在文件 .ship/public/2510.15205v1_extracted.txt，已确认其存在并查看部分内容",
+      "importance": 6,
+      "tags": [
+        "文件管理",
+        "数据处理"
+      ],
+      "metadata": {
+        "file_path": ".ship/public/2510.15205v1_extracted.txt",
+        "status": "已确认存在"
+      },
+      "id": "mem_1770041946093_n3mtxwc4d",
+      "createdAt": 1770041946093,
+      "updatedAt": 1770041946093
+    },
+    {
+      "type": "task",
+      "content": "云上传配置存在问题，需要解决文件上传到云存储的问题",
+      "importance": 7,
+      "tags": [
+        "技术问题",
+        "文件上传"
+      ],
+      "metadata": {
+        "issue": "云上传配置错误",
+        "file_location": "本地 .ship/public/ 目录"
+      },
+      "id": "mem_1770041946093_rgtmy4wk1",
+      "createdAt": 1770041946093,
+      "updatedAt": 1770041946093
+    },
+    {
+      "type": "fact",
+      "content": "完整文件路径为 /Users/wangenius/Documents/github/shipmyagent/examples/demo-agent/.ship/public/2510.15205v1_extracted.txt",
+      "importance": 5,
+      "tags": [
+        "文件路径",
+        "系统信息"
+      ],
+      "metadata": {
+        "full_path": "/Users/wangenius/Documents/github/shipmyagent/examples/demo-agent/.ship/public/2510.15205v1_extracted.txt"
+      },
+      "id": "mem_1770041946094_odhgswqdv",
+      "createdAt": 1770041946094,
+      "updatedAt": 1770041946094
     }
   ],
   "version": 1,
-  "updatedAt": 1770029050976
+  "updatedAt": 1770041946094
 }
