@@ -11,7 +11,6 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node bin/start.js",
-    "postinstall": "node ./scripts/ensure-sma-bin.mjs",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
