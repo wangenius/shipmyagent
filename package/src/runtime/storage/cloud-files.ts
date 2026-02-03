@@ -1,6 +1,5 @@
 import fs from "fs-extra";
 import path from "path";
-import type { PermissionEngine } from "../permission/index.js";
 import type { S3StorageConfig } from "./s3/types.js";
 import { deleteObjectFromS3, getS3ObjectUrl, uploadFileToS3 } from "./s3/client.js";
 
@@ -58,7 +57,6 @@ function makeUploadKey(originalFilePath: string): string {
 
 export async function cloudFileUpload(params: {
   projectRoot: string;
-  permissionEngine: PermissionEngine;
   storage?: { config: S3StorageConfig; bucket?: string };
   cloudFiles?: CloudFilesConfig;
   filePath: string;
@@ -91,10 +89,6 @@ export async function cloudFileUpload(params: {
 > {
   try {
     const absolute = resolveFileWithinProject(params.projectRoot, params.filePath);
-    const permission = await params.permissionEngine.checkReadRepo(absolute);
-    if (!permission.allowed) {
-      return { success: false, error: `No permission to read file: ${permission.reason}` };
-    }
 
     const exists = await fs.pathExists(absolute);
     if (!exists) return { success: false, error: `File not found: ${params.filePath}` };
@@ -111,7 +105,6 @@ export async function cloudFileUpload(params: {
 
       const out = await uploadFileToS3({
         projectRoot: params.projectRoot,
-        permissionEngine: params.permissionEngine,
         storage,
         bucket,
         file: params.filePath,

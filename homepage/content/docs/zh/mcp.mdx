@@ -95,7 +95,8 @@ MCP 配置**不在** `ship.json`，而在：
 
 在 `env` / `headers` / `url` 中可以使用 `${VAR_NAME}`，启动连接时会被替换为当前环境变量的值。
 
-## 审批说明
+## 执行说明
 
-MCP 工具会以 `server:toolName` 的形式暴露给 Agent；当 Agent 调用 MCP 工具时，会进入审批流程（类型为 `mcp_tool`）。
+MCP 工具会以 `server:toolName` 的形式暴露给 Agent。
 
+> ⚠️ **简化模式（2026-02-03）**：当前发布的 `shipmyagent` 包已暂时移除审批流程；MCP 工具调用会直接执行。

@@ -21,7 +21,7 @@ export const s3_upload = tool({
     contentType?: string;
     region?: string;
   }) => {
-    const { projectRoot, permissionEngine, config } = getToolRuntimeContext();
+    const { projectRoot, config } = getToolRuntimeContext();
     const oss = resolveOssFromConfig(config);
     if (!oss.enabled) {
       return { success: false, error: "OSS is not configured in ship.json (oss.*)." };
@@ -29,7 +29,6 @@ export const s3_upload = tool({
 
     return uploadFileToS3({
       projectRoot,
-      permissionEngine,
       storage: oss.storage,
       bucket: args.bucket,
       file: args.file,

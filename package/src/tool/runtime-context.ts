@@ -1,9 +1,7 @@
-import type { PermissionEngine } from "../runtime/permission/index.js";
 import type { ShipConfig } from "../utils.js";
 
 export interface ToolRuntimeContext {
   projectRoot: string;
-  permissionEngine: PermissionEngine;
   config: ShipConfig;
 }
 

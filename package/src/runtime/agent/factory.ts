@@ -56,8 +56,8 @@ You are a helpful project assistant.`;
     },
     permissions: {
       read_repo: true,
-      write_repo: { requiresApproval: true },
-      exec_shell: { deny: ["rm"], requiresApproval: false },
+      write_repo: true,
+      exec_shell: true,
     },
     adapters: {
       telegram: { enabled: false },
@@ -66,14 +66,13 @@ You are a helpful project assistant.`;
 
   const shipDir = getShipDirPath(projectRoot);
   fs.ensureDirSync(shipDir);
-  fs.ensureDirSync(path.join(shipDir, "tasks"));
-  fs.ensureDirSync(path.join(shipDir, "runs"));
-  fs.ensureDirSync(path.join(shipDir, "queue"));
   fs.ensureDirSync(path.join(shipDir, "routes"));
-  fs.ensureDirSync(path.join(shipDir, "approvals"));
   fs.ensureDirSync(path.join(shipDir, "logs"));
   fs.ensureDirSync(path.join(shipDir, ".cache"));
   fs.ensureDirSync(path.join(shipDir, "public"));
+  fs.ensureDirSync(path.join(shipDir, "chats"));
+  fs.ensureDirSync(path.join(shipDir, "memory"));
+  fs.ensureDirSync(path.join(shipDir, "mcp"));
 
   try {
     if (fs.existsSync(agentMdPath)) {

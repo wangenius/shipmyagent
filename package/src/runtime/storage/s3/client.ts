@@ -1,7 +1,6 @@
 import fs from "fs-extra";
 import path from "path";
 import { Readable } from "stream";
-import type { PermissionEngine } from "../../permission/index.js";
 import type { S3StorageConfig, S3UploadParams } from "./types.js";
 import { sha256Hex, sha256HexOfFile, signAwsV4 } from "./aws-v4.js";
 import { buildObjectPath, resolveFileWithinProject } from "./paths.js";
@@ -70,7 +69,7 @@ export async function deleteObjectFromS3(params: {
 }
 
 export async function uploadFileToS3(
-  params: S3UploadParams & { storage: S3StorageConfig; permissionEngine: PermissionEngine },
+  params: S3UploadParams & { storage: S3StorageConfig },
 ): Promise<{
   success: boolean;
   url?: string;
@@ -94,10 +93,6 @@ export async function uploadFileToS3(
     const baseUrl = normalizeEndpoint(endpointRaw);
 
     const filePath = resolveFileWithinProject(params.projectRoot, params.file);
-    const permission = await params.permissionEngine.checkReadRepo(filePath);
-    if (!permission.allowed) {
-      return { success: false, error: `No permission to read file: ${permission.reason}` };
-    }
 
     const exists = await fs.pathExists(filePath);
     if (!exists) return { success: false, error: `File not found: ${params.file}` };

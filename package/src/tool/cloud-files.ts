@@ -23,7 +23,7 @@ export const cloud_file_upload = tool({
     bucket?: string;
     publicPath?: string;
   }) => {
-    const { projectRoot, permissionEngine, config } = getToolRuntimeContext();
+    const { projectRoot, config } = getToolRuntimeContext();
     const oss = resolveOssFromConfig(config);
 
     const cloudFiles = (config as any)?.cloudFiles || {};
@@ -36,7 +36,6 @@ export const cloud_file_upload = tool({
 
     return cloudFileUpload({
       projectRoot,
-      permissionEngine,
       storage: oss.enabled ? { config: oss.storage, bucket: oss.bucket } : undefined,
       cloudFiles: cloudFilesConfig,
       filePath: args.filePath,

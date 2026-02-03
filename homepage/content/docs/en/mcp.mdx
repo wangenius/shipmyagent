@@ -95,7 +95,8 @@ Supported `type` values:
 
 You can use `${VAR_NAME}` in `env` / `headers` / `url`. Values are resolved from process env during connection setup.
 
-## Approvals
+## Execution
 
-MCP tools are exposed as `server:toolName`. When the Agent calls an MCP tool, it goes through approval flow (type `mcp_tool`).
+MCP tools are exposed as `server:toolName`.
 
+> ⚠️ **Simplified mode (2026-02-03)**: the current `shipmyagent` package temporarily disables approvals. MCP tools execute directly when invoked.

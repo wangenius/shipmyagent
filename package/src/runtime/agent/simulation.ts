@@ -1,5 +1,3 @@
-import fs from "fs-extra";
-import path from "path";
 import type { ShipConfig } from "../../utils.js";
 import type { AgentInput, AgentResult } from "./types.js";
 
@@ -17,12 +15,8 @@ export function runSimulated(input: {
 
   if (promptLower.includes("status") || promptLower.includes("状态")) {
     output = generateStatusResponse(input.config);
-  } else if (promptLower.includes("task") || promptLower.includes("任务")) {
-    output = generateTasksResponse(input.projectRoot);
   } else if (promptLower.includes("scan") || promptLower.includes("扫描")) {
     output = generateScanResponse(input.projectRoot);
-  } else if (promptLower.includes("approve") || promptLower.includes("审批")) {
-    output = generateApprovalsResponse();
   } else {
     output = `Received: "${input.prompt}"\n\n[Simulation Mode] AI service not configured. Please configure API Key in ship.json and restart.`;
   }
@@ -41,11 +35,13 @@ export function runSimulated(input: {
 }
 
 function generateStatusResponse(config: ShipConfig): string {
-  const permissions = config.permissions || {
-    read_repo: true,
-    write_repo: { requiresApproval: false },
-    exec_shell: { deny: ["rm"], requiresApproval: false, denyRequiresApproval: true },
-  };
+  const permissions = (config as any)?.permissions || {};
+  const readEnabled =
+    permissions.read_repo === undefined ? true : Boolean(permissions.read_repo);
+  const writeEnabled =
+    permissions.write_repo === undefined ? true : Boolean(permissions.write_repo);
+  const execEnabled =
+    permissions.exec_shell === undefined ? true : Boolean(permissions.exec_shell);
 
   return `📊 **Agent Status Report**
 
@@ -54,38 +50,11 @@ function generateStatusResponse(config: ShipConfig): string {
 **Model**: ${config.llm.provider} / ${config.llm.model}
 
 **Permissions**:
-- Read repository: ✅ ${typeof permissions.read_repo === "boolean" ? (permissions.read_repo ? "Enabled" : "Disabled") : "Enabled (with path restrictions)"}
-- Write code: ${permissions.write_repo ? (permissions.write_repo.requiresApproval ? "⚠️ Requires approval" : "✅ Enabled") : "❌ Disabled"}
-- Execute shell: ${permissions.exec_shell ? (permissions.exec_shell.requiresApproval ? "⚠️ Requires approval" : "✅ Enabled") : "❌ Disabled"}
+- Read repository: ${readEnabled ? "✅ Enabled" : "❌ Disabled"}
+- Write code: ${writeEnabled ? "✅ Enabled" : "❌ Disabled"}
+- Execute shell: ${execEnabled ? "✅ Enabled" : "❌ Disabled"}
 
 **Runtime**: Normal`;
-}
-
-function generateTasksResponse(projectRoot: string): string {
-  const tasksDir = path.join(projectRoot, ".ship", "tasks");
-
-  if (!fs.existsSync(tasksDir)) {
-    return `📋 **Task List**
-
-No scheduled tasks configured.
-
-Add .md files in .ship/tasks/ to define tasks.`;
-  }
-
-  const files = fs.readdirSync(tasksDir).filter((f) => f.endsWith(".md"));
-
-  if (files.length === 0) {
-    return `📋 **Task List**
-
-No scheduled tasks configured.`;
-  }
-
-  return `📋 **Task List**
-
-Configured ${files.length} tasks:
-${files.map((f) => `- ${f.replace(".md", "")}`).join("\n")}
-
-Task definitions: .ship/tasks/`;
 }
 
 function generateScanResponse(projectRoot: string): string {
@@ -99,10 +68,3 @@ Directory: ${projectRoot}
 
 **TODO comments**: None detected`;
 }
-
-function generateApprovalsResponse(): string {
-  return `📋 **Approvals**
-
-No pending approval requests.`;
-}
-

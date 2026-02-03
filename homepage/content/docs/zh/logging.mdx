@@ -5,7 +5,9 @@ description: Agent 执行过程的日志落盘位置、格式与开关
 
 # 日志与审计数据
 
-ShipMyAgent 的“可审计”主要由 `.ship/` 目录下的多类数据共同构成：系统日志、Agent 执行日志、对话日志、runs、审批记录。
+> ⚠️ **简化模式（2026-02-03）**：当前发布的 `shipmyagent` 包已暂时移除 Tasks/Runs 与审批；可依赖的审计数据主要是 `.ship/logs` 与 `.ship/chats`。
+
+ShipMyAgent 的“可审计”主要由 `.ship/` 目录下的多类数据共同构成：系统日志、Agent 执行日志、对话日志。
 
 ## `.ship/` 关键目录
 
@@ -13,9 +15,10 @@ ShipMyAgent 的“可审计”主要由 `.ship/` 目录下的多类数据共同�
 .ship/
   logs/       # 系统 Logger + Agent Logger + LLM 请求/响应
   chats/      # 对话消息（jsonl，可归档）
-  runs/       # 每次 run 的状态与输出（json）
-  approvals/  # 待审批与审批记录（json）
-  queue/      # run 队列 token（pending/running/done）
+  .cache/     # 运行缓存（如 ingress 去重）
+  memory/     # 长期记忆
+  public/     # 对外可访问文件（通过 /public/*）
+  mcp/        # MCP 配置
 ```
 
 ## 统一日志：`Logger`

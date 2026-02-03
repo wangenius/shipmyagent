@@ -2,8 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { Logger } from "../runtime/logging/index.js";
-import { TaskScheduler } from "../runtime/scheduler/index.js";
-import { TaskExecutor } from "../runtime/task/index.js";
+import type { AgentRuntime } from "../runtime/agent/index.js";
 import { ChatStore } from "../runtime/chat/store.js";
 import http from "node:http";
 import fs from "fs-extra";
@@ -15,7 +14,7 @@ import { Readable } from "node:stream";
  *
  * Provides:
  * - Health and status endpoints
- * - A minimal `/api/execute` endpoint for running ad-hoc instructions via TaskExecutor
+ * - A minimal `/api/execute` endpoint for running ad-hoc instructions via AgentRuntime
  * - Static file serving for project `public/` and `.ship/public/*` (via `/public/*`)
  */
 function guessContentType(filePath: string): string {
@@ -55,8 +54,7 @@ function safePublicRelativePath(urlPath: string): string | null {
 export interface ServerContext {
   projectRoot: string;
   logger: Logger;
-  taskScheduler: TaskScheduler;
-  taskExecutor: TaskExecutor;
+  agentRuntime: AgentRuntime;
 }
 
 export interface StartOptions {
@@ -246,10 +244,13 @@ export class AgentServer {
           text: String(instructions),
         });
 
-        const result = await this.context.taskExecutor.executeInstructions(
+        if (!this.context.agentRuntime.isInitialized()) {
+          await this.context.agentRuntime.initialize();
+        }
+        const result = await this.context.agentRuntime.run({
           instructions,
-          { source: "api", userId: chatId, chatKey, actorId },
-        );
+          context: { source: "api", userId: chatId, chatKey, actorId },
+        });
 
         await this.chatStore.append({
           channel: "api",
@@ -272,10 +273,6 @@ export class AgentServer {
 
   async start(options: StartOptions): Promise<void> {
     const { port, host } = options;
-
-    // Load and start task scheduler
-    await this.context.taskScheduler.loadTasks();
-    this.context.taskScheduler.start();
 
     // Start server
     return new Promise((resolve) => {
@@ -330,7 +327,6 @@ export class AgentServer {
 
   async stop(): Promise<void> {
     if (this.server) {
-      this.context.taskScheduler.stop();
       await this.context.logger.saveAllLogs();
       this.server.close();
       this.context.logger.info("Agent Server stopped");

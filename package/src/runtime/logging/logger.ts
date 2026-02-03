@@ -20,7 +20,7 @@ import { getLogsDirPath, getTimestamp } from "../../utils.js";
 export interface LogEntry {
   id: string;
   timestamp: string;
-  type: "info" | "warn" | "error" | "debug" | "action" | "approval";
+  type: "info" | "warn" | "error" | "debug" | "action";
   message: string;
   details?: Record<string, unknown>;
   duration?: number;
@@ -42,7 +42,7 @@ export class Logger {
 
   /**
    * Generic async logger used by agent/LLM logging.
-   * Accepts `info|warn|error|debug|action|approval` (case-insensitive).
+   * Accepts `info|warn|error|debug|action` (case-insensitive).
    */
   async log(level: string, message: string, details?: Record<string, unknown>): Promise<void> {
     const type = this.normalizeType(level);
@@ -69,17 +69,12 @@ export class Logger {
     void this.emit("action", message, details);
   }
 
-  approval(message: string, details?: Record<string, unknown>): void {
-    void this.emit("approval", message, details);
-  }
-
   private normalizeType(level: string): LogEntry["type"] {
     const s = String(level || "").trim().toLowerCase();
     if (s === "warn" || s === "warning") return "warn";
     if (s === "error" || s === "err") return "error";
     if (s === "debug" || s === "trace") return "debug";
     if (s === "action") return "action";
-    if (s === "approval") return "approval";
     return "info";
   }
 
@@ -129,9 +124,6 @@ export class Logger {
         break;
       case "action":
         console.log(`\x1b[36m${message}\x1b[0m`);
-        break;
-      case "approval":
-        console.log(`\x1b[35m${message}\x1b[0m`);
         break;
       default:
         console.log(message);

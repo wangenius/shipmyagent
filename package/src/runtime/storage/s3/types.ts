@@ -1,5 +1,3 @@
-import type { PermissionEngine } from "../../permission/index.js";
-
 export interface S3StorageConfig {
   endpoint: string;
   accessKeyId: string;
@@ -9,7 +7,6 @@ export interface S3StorageConfig {
 
 export interface S3UploadParams {
   projectRoot: string;
-  permissionEngine: PermissionEngine;
   bucket: string;
   file: string;
   key?: string;

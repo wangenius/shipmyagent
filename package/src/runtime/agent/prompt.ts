@@ -12,9 +12,6 @@ export function buildRuntimePrefixedPrompt(input: {
     input;
 
   let fullPrompt = instructions;
-  if (context?.taskDescription) {
-    fullPrompt = `${context.taskDescription}\n\n${instructions}`;
-  }
 
   const runtimePrefix =
     `Runtime context:\n` +

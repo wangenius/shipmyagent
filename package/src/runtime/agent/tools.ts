@@ -1,5 +1,4 @@
 import type { ShipConfig } from "../../utils.js";
-import type { PermissionEngine } from "../permission/index.js";
 import type { McpManager } from "../mcp/manager.js";
 import type { Logger } from "../logging/index.js";
 import { createAgentToolSet } from "../../tool/toolset.js";
@@ -13,14 +12,12 @@ import { createAgentToolSet } from "../../tool/toolset.js";
  */
 export function createToolSet(input: {
   projectRoot: string;
-  permissionEngine: PermissionEngine;
   config: ShipConfig;
   mcpManager: McpManager | null;
   logger: Logger;
 }) {
   return createAgentToolSet({
     projectRoot: input.projectRoot,
-    permissionEngine: input.permissionEngine,
     config: input.config,
     mcpManager: input.mcpManager,
     logger: input.logger,

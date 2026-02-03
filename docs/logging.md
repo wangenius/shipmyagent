@@ -7,8 +7,6 @@
 > - Agent Logger：`package/src/runtime/agent/agent-logger.ts`、`package/src/runtime/agent/runtime.ts`
 > - LLM 请求日志：`package/src/runtime/llm-logging/*`、`package/src/runtime/agent/model.ts`
 > - 对话日志（ChatStore）：`package/src/runtime/chat/store.ts`
-> - Runs：`package/src/runtime/run/*`
-> - Approvals：`package/src/runtime/permission/approvals-store.ts`
 
 ---
 
@@ -20,17 +18,13 @@
 .ship/
   logs/         # 日志（系统 Logger + Agent Logger + LLM 请求/响应）
   chats/        # 对话消息（jsonl，可归档）
-  runs/         # 每次 run 的状态与输出（json）
-  queue/        # run 队列 token（pending/running/done）
-  approvals/    # 待审批与审批记录（json）
-  tasks/        # 任务定义（.md）
   .cache/       # 运行缓存（含 ingress 去重等）
   memory/       # 长期记忆（见 memory/store）
   public/       # 对外可访问文件（可配 cloud files）
   mcp/          # MCP 配置（mcp.json + schema）
 ```
 
-> 其中“执行过程”的可追溯性主要由 `logs/`、`chats/`、`runs/`、`approvals/` 四类数据共同构成。
+> 其中“执行过程”的可追溯性主要由 `logs/` 与 `chats/` 两类数据构成。
 
 ---
 
@@ -38,7 +32,7 @@
 
 当前版本已统一为一套 `Logger`（见 `package/src/runtime/logging/logger.ts`），同时满足：
 
-- 系统层（server / scheduler / run worker 等）使用的 `info/warn/error/debug/action/approval`
+- 系统层（server 等）使用的 `info/warn/error/debug/action`
 - Agent/LLM 日志需要的 `logger.log(level, message, details?)`（异步）
 
 ### 2.1 落盘位置与格式
@@ -91,41 +85,7 @@
 
 ---
 
-## 5. Runs / Queue / Approvals 的记录方式
-
-### 5.1 Runs（一次执行的结果快照）
-
-`RunRecord` 会以 JSON 文件保存到：
-
-- `.ship/runs/<runId>.json`
-
-字段包括：`status`、`startedAt/finishedAt`、`input.instructions`、`output.text`、`pendingApproval` 等（见 `package/src/runtime/run/types.ts`、`package/src/runtime/run/store.ts`）。
-
-### 5.2 Queue（执行队列 token）
-
-队列 token 是 JSON 文件：
-
-- `.ship/queue/pending/<runId>.json`
-- `.ship/queue/running/<runId>.json`
-- `.ship/queue/done/<runId>.json`
-
-用于 RunWorker 的“认领/去重/并发控制”（见 `package/src/runtime/run/queue.ts`、`package/src/runtime/run/worker.ts`）。
-
-### 5.3 Approvals（审批请求/结果）
-
-审批请求会以 JSON 文件保存到：
-
-- `.ship/approvals/<approvalId>.json`
-
-`ApprovalStore` 会在启动时从磁盘 reload 所有 `status=pending` 的请求并缓存（见 `package/src/runtime/permission/approvals-store.ts`）。
-
-工具执行器在需要审批时会先写 approval log（系统 `Logger.approval(...)`），然后等待 `permissionEngine.waitForApproval(...)` 返回（见 `package/src/runtime/tools/executor.ts`）。
-
----
-
-## 6. 排查建议（快速定位问题）
+## 5. 排查建议（快速定位问题）
 
 - **我想看“系统/Agent/模型请求响应”的统一日志**：看 `.ship/logs/<date>.jsonl`（统一 `Logger`）
-- **我想回放某次执行是否成功、输出是什么**：看 `.ship/runs/<runId>.json`
-- **我想知道为什么卡在审批**：看 `.ship/approvals/*.json` + `.ship/logs/*`
 - **我想查某个用户/会话说了什么**：看 `.ship/chats/<chatKey>*.jsonl`

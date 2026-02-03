@@ -1,103 +1,7 @@
 import { z } from "zod";
 import { tool } from "ai";
 import { execa } from "execa";
-import type { ShipConfig } from "../utils.js";
-import { extractExecShellCommandNames } from "../runtime/permission/index.js";
 import { getToolRuntimeContext } from "./runtime-context.js";
-
-function preflightExecShell(config: ShipConfig, command: string): {
-  allowed: boolean;
-  deniedReason?: string;
-  needsApproval: boolean;
-} {
-  const execConfigAny = (config as any)?.permissions?.exec_shell;
-
-  if (execConfigAny === true) {
-    return { allowed: true, needsApproval: false };
-  }
-
-  // 如果没有配置 permissions 或 exec_shell，使用默认配置
-  if (!execConfigAny) {
-    const defaultConfig = {
-      deny: ["rm"],
-      requiresApproval: false,
-      denyRequiresApproval: true,
-    };
-
-    const commandNames = extractExecShellCommandNames(command);
-    if (commandNames.length === 0) {
-      return { allowed: false, deniedReason: "Empty command", needsApproval: false };
-    }
-
-    // 检查是否命中黑名单
-    const deniedNames = defaultConfig.deny
-      .map((d) => String(d).trim().split(/\s+/)[0] || "")
-      .filter(Boolean)
-      .map((d) => d.split("/").pop() || d);
-    const hit = commandNames.find((n) => deniedNames.includes(n));
-    if (hit) {
-      // 黑名单命令需要审批
-      return { allowed: true, needsApproval: true };
-    }
-
-    // 其他命令直接允许
-    return { allowed: true, needsApproval: false };
-  }
-
-  if (execConfigAny === false) {
-    return {
-      allowed: false,
-      deniedReason: "Shell execution permission disabled",
-      needsApproval: false,
-    };
-  }
-
-  const execConfig = execConfigAny as {
-    deny?: string[];
-    allow?: string[];
-    requiresApproval?: boolean;
-    denyRequiresApproval?: boolean;
-  };
-
-  const commandNames = extractExecShellCommandNames(command);
-  if (commandNames.length === 0) {
-    return { allowed: false, deniedReason: "Empty command", needsApproval: false };
-  }
-
-  if (Array.isArray(execConfig.deny) && execConfig.deny.length > 0) {
-    const deniedNames = execConfig.deny
-      .map((d) => String(d).trim().split(/\s+/)[0] || "")
-      .filter(Boolean)
-      .map((d) => d.split("/").pop() || d);
-    const hit = commandNames.find((n) => deniedNames.includes(n));
-    if (hit) {
-      // 如果命中黑名单，检查是否需要审批
-      if (execConfig.denyRequiresApproval) {
-        return { allowed: true, needsApproval: true };
-      }
-      return {
-        allowed: false,
-        deniedReason: `Command denied by blacklist: ${hit}`,
-        needsApproval: false,
-      };
-    }
-  } else if (Array.isArray(execConfig.allow) && execConfig.allow.length > 0) {
-    const allowedNames = execConfig.allow
-      .map((a) => String(a).trim().split(/\s+/)[0] || "")
-      .filter(Boolean)
-      .map((a) => a.split("/").pop() || a);
-    const isAllowed = commandNames.every((n) => allowedNames.includes(n));
-    if (!isAllowed) {
-      return {
-        allowed: false,
-        deniedReason: "Command not in allow list",
-        needsApproval: false,
-      };
-    }
-  }
-
-  return { allowed: true, needsApproval: Boolean(execConfig.requiresApproval) };
-}
 
 export const exec_shell = tool({
   description: `Execute a shell command. This is your ONLY tool for interacting with the filesystem and codebase.
@@ -120,22 +24,10 @@ Chain commands with && for sequential execution or ; for independent execution.`
       .describe("Shell command to execute. Can be a single command or multiple commands chained with && or ;"),
     timeout: z.number().optional().default(30000).describe("Timeout in milliseconds (default: 30000)"),
   }),
-  needsApproval: async ({ command }) => {
-    const { config } = getToolRuntimeContext();
-    const preflight = preflightExecShell(config, command);
-    return preflight.allowed && preflight.needsApproval;
-  },
   execute: async (
     { command, timeout = 30000 }: { command: string; timeout?: number },
   ) => {
-    const { projectRoot, config } = getToolRuntimeContext();
-    const preflight = preflightExecShell(config, command);
-    if (!preflight.allowed) {
-      return {
-        success: false,
-        error: `No permission to execute: ${command} (${preflight.deniedReason || "denied"})`,
-      };
-    }
+    const { projectRoot } = getToolRuntimeContext();
 
     try {
       const result = await execa(command, {

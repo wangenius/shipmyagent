@@ -5,11 +5,7 @@ import {
   getAgentMdPath,
   getShipJsonPath,
   getShipDirPath,
-  getTasksDirPath,
-  getRunsDirPath,
-  getQueueDirPath,
   getRoutesDirPath,
-  getApprovalsDirPath,
   getLogsDirPath,
   getCacheDirPath,
   getChatsDirPath,
@@ -182,11 +178,7 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   // Create .ship directory structure
   const dirs = [
     getShipDirPath(projectRoot),
-    getTasksDirPath(projectRoot),
-    getRunsDirPath(projectRoot),
-    getQueueDirPath(projectRoot),
     getRoutesDirPath(projectRoot),
-    getApprovalsDirPath(projectRoot),
     getLogsDirPath(projectRoot),
     getCacheDirPath(projectRoot),
     getChatsDirPath(projectRoot),
@@ -204,25 +196,6 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   await ensureDir(path.dirname(shipSchemaPath));
   await saveJson(shipSchemaPath, SHIP_JSON_SCHEMA);
   console.log(`✅ Created ship.schema.json`);
-
-  // Create sample task file
-  const sampleTaskPath = path.join(getTasksDirPath(projectRoot), 'sample-task.md');
-  const notify = response.integration && response.integration !== 'none' ? response.integration : undefined;
-  const sampleTaskContent = `---
-id: sample-task
-name: Sample Task
-cron: "0 9 * * *"
----
-
-This is a sample task.
-
-Please scan the repository for TODO comments and generate a report.
-`;
-  const finalSampleTaskContent = notify
-    ? sampleTaskContent.replace('---\n\n', `notify: ${notify}\n---\n\n`)
-    : sampleTaskContent;
-  await fs.writeFile(sampleTaskPath, finalSampleTaskContent);
-  console.log(`✅ Created sample task file`);
 
   // Create default mcp.json file in .ship/mcp/ directory
   const mcpDirPath = getMcpDirPath(projectRoot);

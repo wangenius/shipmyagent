@@ -717,15 +717,6 @@ export class QQBot extends BaseChatAdapter {
         },
       });
 
-      // If agent requested approval, surface a system prompt (QQ currently has no interactive approval UI).
-      if ((result as any).pendingApproval) {
-        const pa = (result as any).pendingApproval;
-        const text =
-          `⏳ 需要审批后才能继续：${String(pa?.description || pa?.id || "").trim()}`.trim();
-        await this.sendMessage(chatId, chatType, messageId, text, 1);
-        return;
-      }
-
       // Fallback: if agent didn't call send_message, auto-send the output
       await sendFinalOutputIfNeeded({
         channel: "qq",

@@ -1,13 +1,15 @@
 ---
 title: Telegram message flow & agent execution
-description: End-to-end flow from a Telegram message to agent execution, replies, and approval prompts
+description: End-to-end flow from a Telegram message to agent execution and replies
 ---
 
 # Telegram: end-to-end message → agent → replies
 
+> ⚠️ **Simplified mode (2026-02-03)**: the current `shipmyagent` package disables approvals (full-permission execution). Approval-related parts of this flow are outdated.
+
 This page explains how a Telegram message is translated into ShipMyAgent instructions, how `AgentRuntime` executes them, and how replies are delivered via the `chat_send` tool.
 
-> Code references: `package/src/adapters/telegram/bot.ts`, `package/src/adapters/base-chat-adapter.ts`, `package/src/runtime/agent/runtime.ts`, `package/src/runtime/permission/*`, `package/src/runtime/chat/*`
+> Code references: `package/src/adapters/telegram/bot.ts`, `package/src/adapters/base-chat-adapter.ts`, `package/src/runtime/agent/runtime.ts`, `package/src/runtime/chat/*`
 
 ## Overview
 

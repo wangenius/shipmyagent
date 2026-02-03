@@ -104,11 +104,11 @@ export interface ShipConfig {
   };
   permissions?: {
     read_repo: boolean | { paths?: string[] };
-    write_repo?: {
+    write_repo?: boolean | {
       paths?: string[];
       requiresApproval: boolean;
     };
-    exec_shell?: {
+    exec_shell?: boolean | {
       deny?: string[];
       allow?: string[];
       requiresApproval: boolean;
@@ -332,24 +332,8 @@ export function getShipSchemaPath(cwd: string): string {
   return path.join(getShipDirPath(cwd), "schema", "ship.schema.json");
 }
 
-export function getTasksDirPath(cwd: string): string {
-  return path.join(cwd, ".ship", "tasks");
-}
-
-export function getRunsDirPath(cwd: string): string {
-  return path.join(cwd, ".ship", "runs");
-}
-
-export function getQueueDirPath(cwd: string): string {
-  return path.join(cwd, ".ship", "queue");
-}
-
 export function getRoutesDirPath(cwd: string): string {
   return path.join(cwd, ".ship", "routes");
-}
-
-export function getApprovalsDirPath(cwd: string): string {
-  return path.join(cwd, ".ship", "approvals");
 }
 
 export function getLogsDirPath(cwd: string): string {

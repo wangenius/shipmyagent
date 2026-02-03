@@ -1,10 +1,7 @@
 import path from "path";
 import fs from "fs-extra";
 import { createLogger } from "../runtime/logging/index.js";
-import { createTaskScheduler } from "../runtime/scheduler/index.js";
-import { createTaskExecutor } from "../runtime/task/index.js";
 import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
-import { RunManager, RunWorker } from "../runtime/run/index.js";
 import { createServer, ServerContext } from "../server/index.js";
 import { createInteractiveServer } from "../server/interactive.js";
 import { createTelegramBot } from "../adapters/telegram.js";
@@ -23,8 +20,8 @@ import { fileURLToPath } from "url";
  *
  * Responsibilities:
  * - Load `ship.json` and validate startup options
- * - Bootstrap the unified logger, permission engine, MCP manager
- * - Create AgentRuntime (via factory) + TaskExecutor + Run worker/scheduler
+ * - Bootstrap the unified logger + MCP manager
+ * - Create AgentRuntime (via factory)
  * - Start the HTTP server and optional interactive web server / chat adapters
  */
 interface StartOptions {
@@ -137,36 +134,11 @@ export async function startCommand(
   await agentRuntime.initialize();
   logger.info("Agent Runtime initialized");
 
-  // Create task executor
-  const taskExecutor = createTaskExecutor(logger, agentRuntime, projectRoot);
-  logger.info("Task executor initialized");
-
-  // Create Run manager/worker (Tasks v2)
-  const runManager = new RunManager(projectRoot);
-  const runWorker = new RunWorker(projectRoot, logger, taskExecutor, {
-    maxConcurrent: 1,
-    pollIntervalMs: 1000,
-  });
-  runWorker.start();
-  logger.info("Run worker started");
-
-  // Create task scheduler
-  const taskScheduler = createTaskScheduler(
-    projectRoot,
-    logger,
-    async (task) => {
-      const run = await runManager.createAndEnqueueTaskRun(task);
-      logger.info(`Enqueued scheduled run: ${run.runId} (${task.id})`);
-    },
-  );
-  logger.info("Task scheduler initialized");
-
   // Create server context
   const serverContext: ServerContext = {
     projectRoot,
     logger,
-    taskScheduler,
-    taskExecutor,
+    agentRuntime,
   };
 
   // Create and start server
@@ -273,8 +245,6 @@ export async function startCommand(
     if (qqBot) {
       await qqBot.stop();
     }
-
-    await runWorker.stop();
 
     // 停止交互式 Web 服务器
     if (interactiveServer) {

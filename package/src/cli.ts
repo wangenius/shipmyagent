@@ -38,7 +38,7 @@ const parseBoolean = (value: string | undefined): boolean => {
 program
   .name(basename(process.argv[1] || "shipmyagent"))
   .description(
-    "把一个代码仓库，启动成一个可对话、可调度、可审计的 Agent Runtime",
+    "把一个代码仓库，启动成一个可对话、可审计的 Agent Runtime",
   )
   .version(packageJson.version, "-v, --version");
 

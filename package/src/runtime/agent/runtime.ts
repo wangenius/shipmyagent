@@ -1,49 +1,34 @@
 import fs from "fs-extra";
 import path from "path";
 import {
-  generateText,
   type LanguageModel,
   type ModelMessage,
   type ToolLoopAgent,
 } from "ai";
 import { withChatRequestContext } from "../chat/request-context.js";
 import { withLlmRequestContext } from "../llm-logging/index.js";
-import { generateId, getApprovalsDirPath, getTimestamp } from "../../utils.js";
+import { generateId } from "../../utils.js";
 import type { ChatLogEntryV1 } from "../chat/store.js";
 import { ContextCompressor } from "../context/compressor.js";
 import { MemoryExtractor } from "../memory/extractor.js";
 import { MemoryStoreManager, type MemoryEntry } from "../memory/store.js";
 import { McpManager } from "../mcp/manager.js";
-import {
-  createPermissionEngine,
-  type PermissionEngine,
-} from "../permission/index.js";
 import { buildRuntimePrefixedPrompt } from "./prompt.js";
 import { AgentSessionStore } from "./session-store.js";
 import { createModelAndAgent } from "./model.js";
-import { createToolSet, executeToolDirect } from "./tools.js";
+import { createToolSet } from "./tools.js";
 import {
   extractUserFacingTextFromStep,
   emitToolSummariesFromStep,
 } from "./tool-step.js";
-import {
-  applyApprovalActionsAndBuildResponses,
-  decideApprovalsWithModel,
-  filterRelevantApprovals,
-  loadBaseMessagesFromApprovals,
-  maybeCreatePendingApprovalFromToolLoopResult,
-} from "./approvals.js";
 import { runSimulated } from "./simulation.js";
 import type {
   AgentContext,
   AgentInput,
   AgentResult,
-  ApprovalDecisionResult,
-  ApprovalRequest,
   ConversationMessage,
 } from "./types.js";
 import { createLogger, type Logger } from "../logging/index.js";
-import { loadRun, saveRun } from "../run/store.js";
 
 /**
  * AgentRuntime orchestrates a single "agent brain" for a project.
@@ -61,7 +46,6 @@ export class AgentRuntime {
   private context: AgentContext;
   private initialized: boolean = false;
   private logger: Logger;
-  private permissionEngine: PermissionEngine;
   private mcpManager: McpManager | null = null;
 
   private model: LanguageModel | null = null;
@@ -79,7 +63,6 @@ export class AgentRuntime {
   ) {
     this.context = context;
     this.logger = deps?.logger ?? createLogger(context.projectRoot, "info");
-    this.permissionEngine = createPermissionEngine(context.projectRoot);
     this.mcpManager = deps?.mcpManager ?? null;
     this.memoryStore = new MemoryStoreManager(context.projectRoot);
   }
@@ -109,7 +92,6 @@ export class AgentRuntime {
 
       const tools = createToolSet({
         projectRoot: this.context.projectRoot,
-        permissionEngine: this.permissionEngine,
         config: this.context.config,
         mcpManager: this.mcpManager,
         logger: this.logger,
@@ -382,18 +364,6 @@ export class AgentRuntime {
         }
       }
 
-      const pending = await maybeCreatePendingApprovalFromToolLoopResult({
-        result,
-        messagesSnapshot: [...messages],
-        toolCalls,
-        projectRoot: this.context.projectRoot,
-        permissionEngine: this.permissionEngine,
-        chatKey,
-        requestId,
-        context,
-      });
-      if (pending) return pending;
-
       const duration = Date.now() - startTime;
       await this.logger.log("info", "Agent execution completed", {
         duration,
@@ -485,285 +455,6 @@ export class AgentRuntime {
         toolCalls,
       };
     }
-  }
-
-  async decideApprovals(
-    userMessage: string,
-    pendingApprovals: Array<{
-      id: string;
-      type: string;
-      action: string;
-      tool?: string;
-      input?: unknown;
-      details?: unknown;
-    }>,
-    ctx?: { chatKey?: string; requestId?: string },
-  ): Promise<ApprovalDecisionResult> {
-    return decideApprovalsWithModel({
-      initialized: this.initialized,
-      model: this.model,
-      userMessage,
-      pendingApprovals,
-      ctx,
-    });
-  }
-
-  async handleApprovalReply(input: {
-    userMessage: string;
-    context?: AgentInput["context"];
-    chatKey: string;
-    onStep?: AgentInput["onStep"];
-  }): Promise<AgentResult | null> {
-    const { userMessage, context, chatKey, onStep } = input;
-
-    await this.logger.log("info", "Approval reply received", {
-      chatKey,
-      source: context?.source,
-      userId: context?.userId,
-      messagePreview: userMessage.slice(0, 200),
-    });
-
-    const pending = this.permissionEngine.getPendingApprovals();
-    const relevant = filterRelevantApprovals(
-      pending as any[],
-      chatKey,
-      context,
-    );
-    if (relevant.length === 0) return null;
-
-    const decisions = await this.decideApprovals(
-      userMessage,
-      relevant.map((a: any) => ({
-        id: a.id,
-        type: a.type,
-        action: a.action,
-        tool: (a as any).tool,
-        input: (a as any).input,
-        details: a.details,
-      })),
-      { chatKey },
-    );
-
-    const approvals = decisions.approvals || {};
-    const refused = decisions.refused || {};
-
-    if (
-      Object.keys(approvals).length === 0 &&
-      Object.keys(refused).length === 0
-    ) {
-      return {
-        success: true,
-        output: `No approval action taken. Pending approvals: ${relevant.map((a: any) => a.id).join(", ")}`,
-        toolCalls: [],
-      };
-    }
-
-    await this.logger.log("info", "Approval decisions parsed", {
-      chatKey,
-      approvals: Object.keys(approvals),
-      refused: Object.keys(refused),
-    });
-
-    const runIds = Array.from(
-      new Set(
-        relevant.map((a: any) => (a as any)?.meta?.runId).filter(Boolean),
-      ),
-    );
-    const mergedContext: AgentInput["context"] | undefined =
-      runIds.length === 1 ? { ...(context || {}), runId: runIds[0] } : context;
-
-    return this.resumeFromApprovalActions({
-      chatKey,
-      context: mergedContext,
-      approvals,
-      refused,
-      onStep,
-    });
-  }
-
-  async resumeFromApprovalActions(input: {
-    chatKey: string;
-    context?: AgentInput["context"];
-    approvals?: Record<string, string>;
-    refused?: Record<string, string>;
-    onStep?: AgentInput["onStep"];
-  }): Promise<AgentResult> {
-    const { chatKey, context } = input;
-    const approvals = input.approvals || {};
-    const refused = input.refused || {};
-    const onStep = input.onStep;
-
-    const emitStep = async (
-      type: string,
-      text: string,
-      data?: Record<string, unknown>,
-    ) => {
-      if (!onStep) return;
-      try {
-        await onStep({ type, text, data });
-      } catch {
-        // ignore
-      }
-    };
-
-    const approvedIds = Object.keys(approvals);
-    const refusedIds = Object.keys(refused);
-
-    await this.logger.log("info", "Resuming from approval actions", {
-      chatKey,
-      source: context?.source,
-      userId: context?.userId,
-      approvedIds,
-      refusedIds,
-    });
-
-    const baseMessages = await loadBaseMessagesFromApprovals({
-      projectRoot: this.context.projectRoot,
-      approvedIds,
-      refusedIds,
-      sessionMessagesSnapshot: this.sessions.getOrCreate(chatKey),
-      coerceStoredMessagesToModelMessages: (m) =>
-        this.sessions.coerceStoredMessagesToModelMessages(m),
-    });
-    this.sessions.replace(chatKey, [...baseMessages]);
-
-    const approvalResponses = await applyApprovalActionsAndBuildResponses({
-      projectRoot: this.context.projectRoot,
-      permissionEngine: this.permissionEngine,
-      approvals,
-      refused,
-    });
-
-    if (approvalResponses.length === 0) {
-      return {
-        success: true,
-        output: "No approval action taken.",
-        toolCalls: [],
-      };
-    }
-
-    const messages = this.sessions.getOrCreate(chatKey);
-    messages.push({ role: "tool", content: approvalResponses as any });
-    await emitStep("approval", "已记录审批结果，继续执行。", { chatKey });
-
-    const resumeStart = Date.now();
-    const isChatSource =
-      context?.source === "telegram" ||
-      context?.source === "feishu" ||
-      context?.source === "qq";
-    const resumePrompt = isChatSource
-      ? [
-          "Continue execution after applying the approval decisions.",
-          "IMPORTANT: deliver user-visible updates via the `chat_send` tool. Do not rely on plain text output only.",
-        ].join("\n")
-      : "";
-
-    const resumed = await this.runWithToolLoopAgent(
-      resumePrompt,
-      resumeStart,
-      context,
-      chatKey,
-      {
-        addUserPrompt: Boolean(resumePrompt),
-        onStep,
-      },
-    );
-
-    if (context?.runId) {
-      try {
-        const run = await loadRun(this.context.projectRoot, context.runId);
-        if (run) {
-          run.status = resumed.success ? "succeeded" : "failed";
-          run.finishedAt = getTimestamp();
-          run.output = { text: resumed.output };
-          run.pendingApproval = undefined;
-          run.notified = true;
-          if (!resumed.success)
-            run.error = { message: resumed.output || "Run failed" };
-          await saveRun(this.context.projectRoot, run);
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    return resumed;
-  }
-
-  async decideExecutionMode(input: {
-    instructions: string;
-    context?: AgentInput["context"];
-  }): Promise<{ mode: "sync" | "async"; reason: string }> {
-    if (!this.model) return { mode: "sync", reason: "No model configured" };
-
-    const instructions = String(input.instructions || "").trim();
-    if (!instructions) return { mode: "sync", reason: "Empty instructions" };
-
-    const explicitAsync =
-      /(后台|异步|不用等|稍后|晚点|慢慢来|你先跑着|跑起来|排队|队列)/.test(
-        instructions,
-      ) || /\b(background|async|later|queue|enqueue)\b/i.test(instructions);
-    if (!explicitAsync) {
-      return {
-        mode: "sync",
-        reason: "Default sync (no explicit async request)",
-      };
-    }
-
-    try {
-      const result = await withLlmRequestContext(
-        { chatKey: input.context?.chatKey },
-        () =>
-          generateText({
-            model: this.model!,
-            system:
-              "You are an execution-mode router. The user explicitly asked for background execution. " +
-              'Return STRICT JSON only: {"mode":"async","reason":"..."}.',
-            prompt:
-              `Return JSON: {"mode":"async","reason":"..."}.\n\n` +
-              `Context:\n` +
-              `- source: ${input.context?.source || "unknown"}\n` +
-              `- chatKey: ${input.context?.chatKey || "unknown"}\n` +
-              `- userId: ${input.context?.userId || "unknown"}\n` +
-              `\nUser request:\n${instructions}\n`,
-          }),
-      );
-
-      const text = (result.text || "").trim();
-      const parsed = JSON.parse(text);
-      const reason =
-        typeof parsed?.reason === "string"
-          ? parsed.reason.slice(0, 200)
-          : "User requested async";
-      return { mode: "async", reason };
-    } catch {
-      return { mode: "async", reason: "User requested async" };
-    }
-  }
-
-  async executeApproved(
-    approvalId: string,
-  ): Promise<{ success: boolean; result: unknown }> {
-    const approvalsDir = getApprovalsDirPath(this.context.projectRoot);
-    const approvalFile = path.join(approvalsDir, `${approvalId}.json`);
-
-    if (!fs.existsSync(approvalFile)) {
-      return { success: false, result: "Approval not found" };
-    }
-
-    const approval = (await fs.readJson(approvalFile)) as ApprovalRequest;
-    if (approval.status !== "approved") {
-      return { success: false, result: "Approval not approved" };
-    }
-
-    const toolSet = createToolSet({
-      projectRoot: this.context.projectRoot,
-      permissionEngine: this.permissionEngine,
-      config: this.context.config,
-      mcpManager: this.mcpManager,
-      logger: this.logger,
-    });
-    return executeToolDirect(approval.tool, approval.input, toolSet);
   }
 
   private async buildMemoryPromptSection(chatKey: string): Promise<string> {

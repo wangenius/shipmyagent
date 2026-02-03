@@ -2,7 +2,7 @@
 
 本文档用于**完整描述当前 `package/`（npm 包：`shipmyagent`）的架构逻辑**，重点解释：
 
-- Agent（`AgentRuntime`）如何运行、如何调用工具、如何处理审批
+- Agent（`AgentRuntime`）如何运行、如何调用工具
 - 平台适配器（Telegram / 飞书 / QQ 等）与 Agent 的边界与协作方式
 - 核心数据/状态落盘在 `.ship/` 的哪些位置，以及它们在运行链路中的作用
 
@@ -19,6 +19,29 @@
 - `docs/`：工程内设计/实现文档（偏工程决策、实现细节）
 
 本文聚焦 `package/`。
+
+### 1.1 package 模块一览（按职责）
+
+> 这部分回答“当前 package 里有哪些模块、分别负责什么”。如果你只想快速定位代码入口，从这里开始查即可。
+
+| 模块（目录/文件） | 职责 | 关键入口/代表文件 |
+| --- | --- | --- |
+| `package/src/cli.ts` | CLI 入口：命令解析与默认行为 | `cli.ts` |
+| `package/src/commands/*` | CLI 子命令：初始化、启动、alias 等 | `commands/init.ts`、`commands/start.ts`、`commands/alias.ts` |
+| `package/src/server/*` | HTTP API Server +（可选）交互式 Web（interactive） | `server/index.ts`、`server/interactive.ts` |
+| `package/src/runtime/agent/*` | Agent 核心：`AgentRuntime`、模型/提示词/工具组装、会话存储 | `runtime/agent/runtime.ts`、`runtime/agent/factory.ts`、`runtime/agent/prompt.ts` |
+| `package/src/tool/*` | “对模型暴露”的工具定义（AI SDK tool 形态）：`exec_shell`、`chat_send`、`skills_*`、MCP tools 等 | `tool/toolset.ts`、`tool/exec-shell.ts`、`tool/chat.ts` |
+| `package/src/runtime/chat/*` | 聊天态：chatKey、request context、对话历史缓存、落盘（`.ship/chats`）、去重（幂等） | `runtime/chat/store.ts`、`runtime/chat/idempotency.ts`、`runtime/chat/dispatcher.ts` |
+| `package/src/adapters/*` | 平台适配器：入站消息解析 → 选择 chatKey → 调用 `AgentRuntime.run()`；以及把 `chat_send` 路由回平台 | `adapters/base-chat-adapter.ts`、`adapters/platform-adapter.ts`、`adapters/telegram.ts`、`adapters/feishu.ts`、`adapters/qq.ts` |
+| `package/src/runtime/memory/*` | 长期记忆：抽取、存储、召回（落盘在 `.ship/memory` 等） | `runtime/memory/extractor.ts`、`runtime/memory/store.ts` |
+| `package/src/runtime/context/*` | 上下文压缩：控制 token/窗口大小，减少跑偏与成本 | `runtime/context/compressor.ts` |
+| `package/src/runtime/skills/*` | Skills：发现与解析（frontmatter）、注入 prompts、路径约定 | `runtime/skills/discovery.ts`、`runtime/skills/prompt.ts` |
+| `package/src/runtime/mcp/*` | MCP：启动/管理 MCP servers，把 MCP tools 暴露给 runtime | `runtime/mcp/bootstrap.ts`、`runtime/mcp/manager.ts` |
+| `package/src/runtime/storage/*` | Cloud Files：`.ship/public`、S3/OSS 上传等资源存储 | `runtime/storage/cloud-files.ts`、`runtime/storage/s3-upload.ts` |
+| `package/src/runtime/logging/*` / `runtime/llm-logging/*` | 运行与 LLM 过程日志：结构化日志、上下文格式化与落盘 | `runtime/logging/logger.ts`、`runtime/llm-logging/format.ts` |
+| `package/src/schemas/*` | 配置 schema（Zod）：`ship.json`、`mcp.json` 等 | `schemas/ship.schema.ts`、`schemas/mcp.schema.ts` |
+| `package/src/utils.ts` | 路径与约定：`.ship/*` 目录定位、读写辅助 | `utils.ts` |
+| `package/public/*` | 交互式 Web 静态资源（如启用 `--interactive-web`） | `public/index.html` |
 
 ---
 
@@ -40,9 +63,7 @@
 
 - **Agent 定义**：`Agent.md`（agent 的人格/规则/偏好/写作规范的主要入口）
 - **运行配置**：`ship.json`（模型、权限、adapters 等）
-- **运行状态目录**：`.ship/`（tasks/runs/queue/approvals/chats/logs/cache/mcp/public 等）
-
-`.ship/` 的路径由 `package/src/utils.ts` 提供（例如 `getApprovalsDirPath()`、`getChatsDirPath()`）。
+- **运行状态目录**：`.ship/`（chats/logs/.cache/mcp/public/memory 等）
 
 ### 2.3 启动：把“Runtime + Server + Adapters”组装起来
 
@@ -50,16 +71,12 @@
 
 1. 读取 `Agent.md` 与 `ship.json`
 2. 初始化核心服务：
-   - `PermissionEngine`（权限与审批落盘）
-   - `ToolExecutor`（工具执行器）
-   - `AgentRuntime`（核心 agent：LLM + tools + approvals + memory）
-   - `TaskExecutor`（把任务/指令交给 `AgentRuntime` 执行）
-   - `RunWorker` / `RunManager`（任务运行队列，Tasks v2）
-   - `TaskScheduler`（cron 调度 → enqueue run）
+   - `McpManager`（MCP servers 管理）
+   - `AgentRuntime`（核心 agent：LLM + tools + memory）
 3. 启动 HTTP Server（`package/src/server/index.ts`）
-4. 按 `ship.json.adapters.*.enabled` 启动平台适配器（`package/src/integrations/*`）
+4. 按 `ship.json.adapters.*.enabled` 启动平台适配器（`package/src/adapters/*`）
 
-一句话：**start 负责把“人类入口（HTTP/平台消息）”接到“AgentRuntime 的一次 run”上，并提供任务调度与审批闭环。**
+一句话：**start 负责把“人类入口（HTTP/平台消息）”接到“AgentRuntime 的一次 run”上。**
 
 ---
 
@@ -73,7 +90,6 @@
 
 - 读取并拼接系统提示词（`Agent.md` + 内置 prompts +（可选）skills section）
 - 初始化 LLM 与 ToolLoopAgent（基于 Vercel AI SDK：`ToolLoopAgent` / `tool()`）
-- 将工具调用纳入权限/审批体系（`PermissionEngine`）
 - 维护对话历史（以 `chatKey` 为 key）
 - 管理上下文压缩（`ContextCompressor`）
 - 管理长期记忆抽取与召回（`MemoryExtractor` / `MemoryStoreManager`）
@@ -95,59 +111,29 @@ agentRuntime.run({
     messageThreadId?: number
     actorId?: string
     actorUsername?: string
-    // ...任务触发还会带 taskId 等
   },
   onStep?: (step) => void
 })
 ```
 
-输出为 `AgentResult`（文本、工具调用记录、是否 pending approval 等）。
+输出为 `AgentResult`（文本、工具调用记录等）。
 
-关键点：`chatKey` 决定对话隔离与审批关联（如果未提供会退化为 `"default"`）。
+关键点：`chatKey` 决定对话隔离（如果未提供会退化为 `"default"`）。
 
 ### 3.3 工具系统：工具“是什么”、从哪里来、如何调用
 
 工具集合由 `createAgentToolSet()` 生成（`package/src/tool/toolset.ts`），主要包含：
 
 - `chat_send`（把消息“发回平台”，用于平台 adapters；见 `package/src/tool/chat.ts`）
-- `exec_shell`（执行命令，受权限与审批控制）
+- `exec_shell`（执行命令）
 - `skills_*`（skills 相关工具）
-- `runs_*`（运行/队列相关工具）
 - `cloud_file_*` / `s3_upload`（与 `.ship/public/` + OSS 上传相关）
 - `server:tool`（MCP tools：来自 `.ship/mcp/mcp.json` 的 MCP server 列表；见 `docs/mcp.md` 与 `package/src/runtime/mcp/*`）
 
 工具的共同特征：
 
 - 以 AI SDK `tool({ inputSchema, execute, ... })` 形式暴露给模型
-- 在 `execute()` 内部会读取运行上下文（项目根目录、权限引擎、当前 chat context 等）
-
-### 3.4 权限与审批：为什么需要、状态如何落盘、如何恢复
-
-权限系统核心：`package/src/runtime/permission/*`
-
-原则：**凡是有副作用的行为（写文件、执行 shell、调用 MCP 工具等）都可以进入审批流程。**
-
-当前审批的事实来源是磁盘文件：`.ship/approvals/*.json`（创建/更新/删除）。
-
-典型链路（简化）：
-
-```
-LLM -> 想调用 needsApproval 的工具
-  -> ToolLoopAgent 返回 tool-approval-request（AI SDK approvalId）
-  -> AgentRuntime 转成 ShipMyAgent approval：
-       - PermissionEngine 写入 .ship/approvals/<approvalId>.json
-       - 记录 meta.aiApprovalId（把 AI SDK approvalId 映射回来）
-  -> 上层（例如平台适配器）提示用户“是否批准？”
-用户回复（同意/拒绝/范围授权）
-  -> AgentRuntime.handleApprovalReply(...)
-  -> 读取 pending approvals + 解析用户意图
-  -> 构造 tool-approval-response（AI SDK 格式）写回对话历史
-  -> 继续 ToolLoopAgent 运行
-```
-
-这也是为什么**同一 `chatKey` 必须串行执行**：否则 approval-response 很容易回到错误的上下文。
-
-> 更完整的执行模型分析可参考：`docs/execution-model-and-platform-adapters.md`
+- 在 `execute()` 内部会读取运行上下文（项目根目录、当前 chat context 等）
 
 ---
 
@@ -157,9 +143,9 @@ LLM -> 想调用 needsApproval 的工具
 
 在 `ship.json.adapters` 中，**adapters 指“消息平台入口/出口”**，例如：
 
-- Telegram：`package/src/integrations/telegram.ts`
-- 飞书：`package/src/integrations/feishu.ts`
-- QQ：`package/src/integrations/qq.ts`
+- Telegram：`package/src/adapters/telegram.ts`
+- 飞书：`package/src/adapters/feishu.ts`
+- QQ：`package/src/adapters/qq.ts`
 
 它们的职责不是“实现 agent”，而是：
 
@@ -174,8 +160,8 @@ LLM -> 想调用 needsApproval 的工具
 
 核心代码：
 
-- `package/src/integrations/platform-adapter.ts`
-- `package/src/integrations/base-chat-adapter.ts`
+- `package/src/adapters/platform-adapter.ts`
+- `package/src/adapters/base-chat-adapter.ts`
 
 #### PlatformAdapter：输出能力注册（dispatcher）
 
@@ -191,7 +177,7 @@ LLM -> 想调用 needsApproval 的工具
 `BaseChatAdapter` 在 `PlatformAdapter` 的基础上提供：
 
 - `runtimes: Map<chatKey, AgentRuntime>`：按 `chatKey` 复用一个 `AgentRuntime`（并带 TTL 清理）
-- `chatLocks: Map<chatKey, Promise<void>>`：同一 `chatKey` 的串行队列，避免并发污染上下文/审批错配
+- `chatLocks: Map<chatKey, Promise<void>>`：同一 `chatKey` 的串行队列，避免并发污染上下文
 - `ChatStore`：
   - 把入站用户消息 append 到 `.ship/chats/<chatKey>.jsonl`
   - 启动时可 hydrate 最近消息到 `AgentRuntime` 的对话历史（best-effort）
@@ -275,20 +261,15 @@ ShipMyAgent 提供了**持久化的 ingress 去重**：
   - 群聊：`<platform>:chat:<groupId>`
   - 话题/帖子：可进一步包含 `messageThreadId`（视平台能力）
 
-飞书当前实现：`feishu:chat:<chatId>`（见 `package/src/integrations/feishu.ts` 的 `buildChatKey()`）。
+飞书当前实现：`feishu:chat:<chatId>`（见 `package/src/adapters/feishu.ts` 的 `buildChatKey()`）。
 
 > 不同平台的“群/话题/频道”定义不同，适配器最关键的工作之一就是把它映射为稳定的 chatKey。
 
 ---
 
-## 5. 任务系统（Tasks / Runs）与 Adapters 的关系
+## 5. 任务系统（Tasks / Runs）
 
-任务系统提供两类触发：
-
-1. **即时指令**：来自平台消息 / HTTP API / CLI，直接调用 `TaskExecutor.executeInstructions()` → `AgentRuntime.run()`
-2. **计划任务**：来自 `cron` 调度（`.ship/tasks/*.md`）→ enqueue run → `RunWorker` 拉取执行
-
-当任务需要“通知到平台”时，通常会依赖 `chat_send`（或任务/通知模块封装）把结果推送回指定 channel/chat。
+当前版本不包含 Tasks / Runs / Scheduler：没有 `.ship/tasks`、`.ship/runs`、`.ship/queue` 等目录约定，所有执行都在一次 `AgentRuntime.run()` 内同步完成。
 
 ---
 
@@ -296,24 +277,22 @@ ShipMyAgent 提供了**持久化的 ingress 去重**：
 
 实现一个新的“聊天类平台”适配器，推荐流程：
 
-1. 新建 `package/src/integrations/<platform>.ts`，继承 `BaseChatAdapter`
+1. 新建 `package/src/adapters/<platform>.ts`，继承 `BaseChatAdapter`
 2. 实现最小两件事：
    - `getChatKey()`：把平台的 chat/topic 映射成稳定 `chatKey`
    - `sendTextToPlatform()`：把 dispatcher 的 sendText 真正发到平台
 3. 在入站处理前接入去重：
    - 以 `messageId` + `chatKey` 调用 `tryClaimChatIngressMessage()`
 4. 在 `start.ts` 中按 `ship.json.adapters.<platform>.enabled` 启动该 adapter
-5. 如果平台有按钮/回调等“审批快捷交互”，把它们统一转成用户文本回复再交给 `AgentRuntime.handleApprovalReply()`（保持 core 的审批状态机不变）
 
 ---
 
 ## 7. 关键目录速查
 
-- `package/src/runtime/agent/*`：AgentRuntime、模型/工具组装、审批恢复、prompt 拼接
+- `package/src/runtime/agent/*`：AgentRuntime、模型/工具组装、prompt 拼接
 - `package/src/tool/*`：工具集合（含 `chat_send`、`exec_shell`、MCP tools 等）
-- `package/src/runtime/permission/*`：权限与审批（`.ship/approvals`）
 - `package/src/runtime/chat/*`：聊天记录落盘（`.ship/chats`）、dispatcher、去重
-- `package/src/integrations/*`：平台适配器（Telegram/飞书/QQ）
+- `package/src/adapters/*`：平台适配器（Telegram/飞书/QQ）
 - `package/src/runtime/mcp/*`：MCP 管理（`.ship/mcp/mcp.json`）
 - `.ship/`：项目运行状态目录（init 创建）
 
@@ -321,6 +300,6 @@ ShipMyAgent 提供了**持久化的 ingress 去重**：
 
 ## 8. 一句话总结（边界清晰版）
 
-- **AgentRuntime**：负责“思考 + 工具调用 + 审批 + 记忆 + 上下文管理”
+- **AgentRuntime**：负责“思考 + 工具调用 + 记忆 + 上下文管理”
 - **Adapters（平台适配器）**：负责“把平台消息变成一次 run，并把 run 过程中的 `chat_send` 发送回平台”
 - **二者通过工具与 dispatcher 解耦**：agent 不知道平台细节，平台也不直接替 agent 决定要说什么

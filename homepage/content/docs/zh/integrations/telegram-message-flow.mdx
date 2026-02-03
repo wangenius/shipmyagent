@@ -1,13 +1,15 @@
 ---
 title: Telegram 消息流与执行逻辑
-description: 以 Telegram 为例，解释从用户发消息到 Agent 执行，再到回复/审批提示的端到端数据流
+description: 以 Telegram 为例，解释从用户发消息到 Agent 执行，再到回复的端到端数据流
 ---
 
 # Telegram：从发消息到收到回复的全链路
 
-这篇文档以 Telegram 为例，说明 **一条用户消息如何进入 ShipMyAgent**，以及 **AgentRuntime 如何执行、如何产生审批、以及消息如何通过 `chat_send` tool 发送回 Telegram**。
+> ⚠️ **简化模式（2026-02-03）**：当前发布的 `shipmyagent` 包已暂时移除审批（默认全权限执行）。本文档中与审批相关的部分已过期。
 
-> 代码参考：`package/src/adapters/telegram/bot.ts`、`package/src/adapters/base-chat-adapter.ts`、`package/src/runtime/agent/runtime.ts`、`package/src/runtime/permission/*`、`package/src/runtime/chat/*`
+这篇文档以 Telegram 为例，说明 **一条用户消息如何进入 ShipMyAgent**，以及 **AgentRuntime 如何执行、以及消息如何通过 `chat_send` tool 发送回 Telegram**。
+
+> 代码参考：`package/src/adapters/telegram/bot.ts`、`package/src/adapters/base-chat-adapter.ts`、`package/src/runtime/agent/runtime.ts`、`package/src/runtime/chat/*`
 
 ## 1）总体流程（概览）
 

@@ -1,7 +1,6 @@
 // Telegram adapter implementation (moved into submodule for maintainability).
 import path from "path";
 import { Logger } from "../../runtime/logging/index.js";
-import { createTaskExecutor, TaskExecutor } from "../../runtime/task/index.js";
 import type { AgentRuntime } from "../../runtime/agent/index.js";
 import { createAgentRuntimeFromPath } from "../../runtime/agent/index.js";
 import { BaseChatAdapter } from "../base-chat-adapter.js";
@@ -11,9 +10,9 @@ import type {
 } from "../platform-adapter.js";
 import { tryClaimChatIngressMessage } from "../../runtime/chat/idempotency.js";
 import type { McpManager } from "../../runtime/mcp/index.js";
-import { isTelegramAdmin, notifyPendingApprovals } from "./approvals.js";
+import { isTelegramAdmin } from "./access.js";
+import { sendFinalOutputIfNeeded } from "../../runtime/chat/final-output.js";
 import { TelegramApiClient } from "./api-client.js";
-import { executeTelegramAndReply } from "./executor.js";
 import {
   handleTelegramCallbackQuery,
   handleTelegramCommand,
@@ -35,13 +34,10 @@ export class TelegramBot extends BaseChatAdapter {
   private chatId?: string;
   private followupWindowMs: number;
   private groupAccess: "initiator_or_admin" | "anyone";
-  private taskExecutor: TaskExecutor;
   private lastUpdateId: number = 0;
   private pollingInterval: ReturnType<typeof setInterval> | null = null;
-  private approvalInterval: ReturnType<typeof setInterval> | null = null;
   private isRunning: boolean = false;
   private pollInFlight: boolean = false;
-  private notifiedApprovalKeys: Set<string> = new Set();
 
   // 并发控制
   private readonly MAX_CONCURRENT = 5; // 最大并发数
@@ -63,7 +59,6 @@ export class TelegramBot extends BaseChatAdapter {
     followupWindowMs: number | undefined,
     groupAccess: TelegramConfig["groupAccess"] | undefined,
     logger: Logger,
-    taskExecutor: TaskExecutor,
     projectRoot: string,
     createAgentRuntime?: () => AgentRuntime,
   ) {
@@ -77,7 +72,6 @@ export class TelegramBot extends BaseChatAdapter {
         : 10 * 60 * 1000;
     this.groupAccess =
       groupAccess === "anyone" ? "anyone" : "initiator_or_admin";
-    this.taskExecutor = taskExecutor;
     this.api = new TelegramApiClient({ botToken, projectRoot, logger });
     this.stateStore = new TelegramStateStore(projectRoot);
   }
@@ -296,13 +290,6 @@ export class TelegramBot extends BaseChatAdapter {
     this.pollingInterval = setInterval(() => this.pollUpdates(), 1000);
     this.logger.info("Telegram Bot started");
 
-    // Push pending approvals to originating chat (if any) and optionally to configured/admin chat.
-    // If no admin chatId is configured, fall back to the last active chat we've seen.
-    this.approvalInterval = setInterval(
-      () => void this.notifyPendingApprovals(),
-      2000,
-    );
-
     // tool_strict: do not auto-push run completion messages; agent should use `chat_send`.
   }
 
@@ -376,18 +363,6 @@ export class TelegramBot extends BaseChatAdapter {
     } finally {
       this.pollInFlight = false;
     }
-  }
-
-  private async notifyPendingApprovals(): Promise<void> {
-    if (!this.isRunning) return;
-    await notifyPendingApprovals({
-      projectRoot: this.projectRoot,
-      sendMessage: async (chatId, text) => {
-        await this.sendMessage(chatId, text);
-      },
-      notifiedApprovalKeys: this.notifiedApprovalKeys,
-      logger: this.logger,
-    });
   }
 
   /**
@@ -752,12 +727,10 @@ export class TelegramBot extends BaseChatAdapter {
       {
         projectRoot: this.projectRoot,
         logger: this.logger,
-        requestJson: (method, data) => this.api.requestJson(method, data),
         buildChatKey: (c, t) => this.buildChatKey(c, t),
         runInChat: (key, fn) => this.runInChat(key, fn),
         sendMessage: (c, text, opts) => this.sendMessage(c, text, opts),
         clearChat: (key) => this.clearChat(key),
-        getOrCreateRuntime: (key) => this.getOrCreateRuntime(key),
       },
       { chatId, command, from, messageThreadId },
     );
@@ -770,12 +743,10 @@ export class TelegramBot extends BaseChatAdapter {
       {
         projectRoot: this.projectRoot,
         logger: this.logger,
-        requestJson: (method, data) => this.api.requestJson(method, data),
         buildChatKey: (c, t) => this.buildChatKey(c, t),
         runInChat: (key, fn) => this.runInChat(key, fn),
         sendMessage: (c, text, opts) => this.sendMessage(c, text, opts),
         clearChat: (key) => this.clearChat(key),
-        getOrCreateRuntime: (key) => this.getOrCreateRuntime(key),
       },
       callbackQuery,
     );
@@ -791,24 +762,24 @@ export class TelegramBot extends BaseChatAdapter {
     chatKey?: string,
   ): Promise<void> {
     try {
-      await executeTelegramAndReply({
-        projectRoot: this.projectRoot,
-        logger: this.logger,
-        requestJson: (method, data) => this.api.requestJson(method, data),
-        chatStore: this.chatStore,
-        getOrCreateRuntime: (key) => this.getOrCreateRuntime(key),
-        notifyPendingApprovals: () => this.notifyPendingApprovals(),
-        buildChatKey: (c, t) => this.buildChatKey(c, t),
-        sendMessage: (c, text, opts) => this.sendMessage(c, text, opts),
-        input: {
-          chatId,
-          instructions,
-          from,
-          messageId,
-          chatType,
-          messageThreadId,
-          chatKey,
-        },
+      const actorId = from?.id ? String(from.id) : undefined;
+      const actorUsername = from?.username ? String(from.username) : undefined;
+      const result = await this.runAgentForMessage({
+        chatId,
+        text: instructions,
+        chatType,
+        messageId,
+        messageThreadId,
+        actorId,
+        actorUsername,
+      });
+
+      await sendFinalOutputIfNeeded({
+        channel: "telegram",
+        chatId,
+        output: result.output || "",
+        toolCalls: result.toolCalls as any,
+        messageThreadId,
       });
     } catch (error) {
       await this.sendMessage(chatId, `❌ Execution error: ${String(error)}`, {
@@ -839,9 +810,6 @@ export class TelegramBot extends BaseChatAdapter {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
     }
-    if (this.approvalInterval) {
-      clearInterval(this.approvalInterval);
-    }
     this.logger.info("Telegram Bot stopped");
   }
 }
@@ -858,15 +826,12 @@ export function createTelegramBot(
 
   // 注意：不在这里直接创建 AgentRuntime 单例；Telegram Bot 使用 chatKey 级别的 AgentRuntime 缓存
   //（BaseChatAdapter.getOrCreateRuntime），按需创建并在一段时间无交互后自动清理。
-  const taskExecutor = createTaskExecutor(logger, null, projectRoot);
-
   const bot = new TelegramBot(
     config.botToken,
     config.chatId,
     config.followupWindowMs,
     config.groupAccess,
     logger,
-    taskExecutor,
     projectRoot, // 传递 projectRoot
     () =>
       createAgentRuntimeFromPath(projectRoot, {

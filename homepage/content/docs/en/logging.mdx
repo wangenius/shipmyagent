@@ -5,7 +5,9 @@ description: Where execution logs are stored, their formats, and how to toggle L
 
 # Logging & Audit Data
 
-ShipMyAgent’s auditability is built from multiple data streams under `.ship/`: system logs, agent execution logs, chat logs, runs, and approvals.
+> ⚠️ **Simplified mode (2026-02-03)**: the current `shipmyagent` package disables Tasks/Runs and Approvals. The audit data you can rely on is primarily `.ship/logs` and `.ship/chats`.
+
+ShipMyAgent’s auditability is built from multiple data streams under `.ship/`: system logs, agent execution logs, and chat logs.
 
 ## Key `.ship/` directories
 
@@ -13,9 +15,10 @@ ShipMyAgent’s auditability is built from multiple data streams under `.ship/`:
 .ship/
   logs/       # system Logger + AgentLogger + LLM request/response
   chats/      # chat messages (jsonl, with archives)
-  runs/       # per-run status/output snapshots (json)
-  approvals/  # pending approvals & decisions (json)
-  queue/      # run queue tokens (pending/running/done)
+  .cache/     # runtime cache (e.g. ingress idempotency)
+  memory/     # long-term memory
+  public/     # public files (via /public/* when configured)
+  mcp/        # MCP config
 ```
 
 ## Unified logger: `Logger`

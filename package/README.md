@@ -15,7 +15,13 @@ shipmyagent .
 ## access
 
 ```http
-GET http://localhost:7001/tasks
+GET http://localhost:3000/health
+GET http://localhost:3000/api/status
+
+POST http://localhost:3000/api/execute
+Content-Type: application/json
+
+{"instructions":"Say hi"}
 ```
 
 ## debug

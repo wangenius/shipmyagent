@@ -14,33 +14,23 @@ export interface AgentResult {
     input: Record<string, unknown>;
     output: string;
   }>;
-  pendingApproval?: {
-    id: string;
-    type: string;
-    description: string;
-    data: Record<string, unknown>;
-  };
 }
 
 export interface AgentInput {
   instructions: string;
   context?: {
-    taskId?: string;
-    taskDescription?: string;
-    source?: "telegram" | "feishu" | "qq" | "cli" | "scheduler" | "api";
+    source?: "telegram" | "feishu" | "qq" | "cli" | "api";
     userId?: string;
     /**
-     * Stable chat key for isolating conversation history / approvals.
+     * Stable chat key for isolating conversation history.
      */
     chatKey?: string;
-    runId?: string;
     actorId?: string;
     chatType?: string;
     actorUsername?: string;
     messageThreadId?: number;
     messageId?: string;
     replyMode?: "auto" | "tool";
-    initiatorId?: string;
   };
   onStep?: (event: {
     type: string;
@@ -49,28 +39,10 @@ export interface AgentInput {
   }) => Promise<void>;
 }
 
-export interface ApprovalRequest {
-  id: string;
-  timestamp: string;
-  type: "write_repo" | "exec_shell" | "other";
-  description: string;
-  tool: string;
-  input: Record<string, unknown>;
-  status: "pending" | "approved" | "rejected";
-  approvedBy?: string;
-  approvedAt?: string;
-}
-
 export interface ConversationMessage {
   role: "user" | "assistant" | "tool";
   content: string;
   toolCallId?: string;
   toolName?: string;
   timestamp: number;
-}
-
-export interface ApprovalDecisionResult {
-  approvals?: Record<string, string>;
-  refused?: Record<string, string>;
-  pass?: Record<string, string>;
 }
