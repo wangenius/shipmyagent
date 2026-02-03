@@ -41,6 +41,12 @@ export function runSimulated(input: {
 }
 
 function generateStatusResponse(config: ShipConfig): string {
+  const permissions = config.permissions || {
+    read_repo: true,
+    write_repo: { requiresApproval: false },
+    exec_shell: { deny: ["rm"], requiresApproval: false, denyRequiresApproval: true },
+  };
+
   return `📊 **Agent Status Report**
 
 **Project**: ${config.name}
@@ -48,9 +54,9 @@ function generateStatusResponse(config: ShipConfig): string {
 **Model**: ${config.llm.provider} / ${config.llm.model}
 
 **Permissions**:
-- Read repository: ✅ ${typeof config.permissions.read_repo === "boolean" ? (config.permissions.read_repo ? "Enabled" : "Disabled") : "Enabled (with path restrictions)"}
-- Write code: ${config.permissions.write_repo ? (config.permissions.write_repo.requiresApproval ? "⚠️ Requires approval" : "✅ Enabled") : "❌ Disabled"}
-- Execute shell: ${config.permissions.exec_shell ? (config.permissions.exec_shell.requiresApproval ? "⚠️ Requires approval" : "✅ Enabled") : "❌ Disabled"}
+- Read repository: ✅ ${typeof permissions.read_repo === "boolean" ? (permissions.read_repo ? "Enabled" : "Disabled") : "Enabled (with path restrictions)"}
+- Write code: ${permissions.write_repo ? (permissions.write_repo.requiresApproval ? "⚠️ Requires approval" : "✅ Enabled") : "❌ Disabled"}
+- Execute shell: ${permissions.exec_shell ? (permissions.exec_shell.requiresApproval ? "⚠️ Requires approval" : "✅ Enabled") : "❌ Disabled"}
 
 **Runtime**: Normal`;
 }

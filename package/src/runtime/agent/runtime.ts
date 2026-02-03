@@ -58,7 +58,7 @@ export class AgentRuntime {
   private memoryStore: MemoryStoreManager;
   private contextCompressor: ContextCompressor | null = null;
   private lastMemoryExtraction: Map<string, number> = new Map();
-  private readonly MEMORY_EXTRACTION_INTERVAL = 5 * 60 * 1000;
+  private readonly MEMORY_EXTRACTION_INTERVAL = 15 * 60 * 1000; // 增加到 15 分钟，减少频繁提取
 
   constructor(context: AgentContext, deps?: { mcpManager?: McpManager | null }) {
     this.context = context;
@@ -110,7 +110,7 @@ export class AgentRuntime {
       this.model = created.model;
       this.agent = created.agent;
       this.contextCompressor = new ContextCompressor(created.model, {
-        windowSize: 20,
+        windowSize: 12, // 从 20 减少到 12，减少上下文长度
         enableSummary: true,
       });
       this.initialized = true;
@@ -228,11 +228,12 @@ export class AgentRuntime {
     if (addUserPrompt && prompt)
       messages.push({ role: "user", content: prompt });
 
-    if (this.contextCompressor && messages.length > 30) {
+    // 降低压缩阈值，更早触发压缩以减少上下文长度
+    if (this.contextCompressor && messages.length > 20) {
       try {
         const compressed = await this.contextCompressor.compressByTokenLimit(
           messages,
-          8000,
+          6000, // 从 8000 降低到 6000，减少 token 使用
         );
         if (compressed.compressed) {
           messages.length = 0;
@@ -755,14 +756,15 @@ export class AgentRuntime {
       const store = await this.memoryStore.load(chatKey);
       if (!store.entries || store.entries.length === 0) return "";
 
+      // 减少加载的 memory 数量，从 20 降到 10
       const selected = [...store.entries]
         .sort((a, b) => (b.importance || 0) - (a.importance || 0))
-        .slice(0, 20);
+        .slice(0, 10);
 
       const lines = selected.map((e) => {
         const tags =
           Array.isArray(e.tags) && e.tags.length > 0
-            ? ` (tags: ${e.tags.slice(0, 6).join(", ")})`
+            ? ` (tags: ${e.tags.slice(0, 3).join(", ")})` // 减少 tag 数量从 6 到 3
             : "";
         const importance =
           typeof e.importance === "number"

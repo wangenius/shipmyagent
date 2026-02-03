@@ -102,7 +102,7 @@ export interface ShipConfig {
     // 特定模型配置
     anthropicVersion?: string;
   };
-  permissions: {
+  permissions?: {
     read_repo: boolean | { paths?: string[] };
     write_repo?: {
       paths?: string[];
@@ -112,6 +112,7 @@ export interface ShipConfig {
       deny?: string[];
       allow?: string[];
       requiresApproval: boolean;
+      denyRequiresApproval?: boolean;
     };
     open_pr?: boolean;
     merge?: boolean;
@@ -223,12 +224,12 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
   permissions: {
     read_repo: true,
     write_repo: {
-      paths: ["src/**", "**/*.md"],
-      requiresApproval: true,
+      requiresApproval: false,
     },
     exec_shell: {
       deny: ["rm"],
       requiresApproval: false,
+      denyRequiresApproval: true,
     },
   },
   adapters: {

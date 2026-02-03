@@ -900,6 +900,19 @@ export class TelegramBot extends BaseChatAdapter {
       const permissionEngine = createPermissionEngine(this.projectRoot);
       const pending = permissionEngine.getPendingApprovals();
 
+      // 清理已经不存在的审批请求的通知记录
+      const pendingIds = new Set(pending.map(req => req.id));
+      const keysToRemove: string[] = [];
+      for (const key of this.notifiedApprovalKeys) {
+        const approvalId = key.split(':')[0];
+        if (!pendingIds.has(approvalId)) {
+          keysToRemove.push(key);
+        }
+      }
+      for (const key of keysToRemove) {
+        this.notifiedApprovalKeys.delete(key);
+      }
+
       for (const req of pending) {
         const meta = (req as any).meta as
           | { source?: string; userId?: string }
@@ -937,10 +950,10 @@ export class TelegramBot extends BaseChatAdapter {
               actionText,
               ``,
               `你可以直接用自然语言回复，比如：`,
-              `- “可以” / “同意”`,
-              `- “不可以，因为 …” / “拒绝，因为 …”`,
-              command ? `- “只同意执行 ${command}”` : undefined,
-              `- “全部同意” / “全部拒绝”`,
+              `- "可以" / "同意"`,
+              `- "不可以，因为 …" / "拒绝，因为 …"`,
+              command ? `- "只同意执行 ${command}"` : undefined,
+              `- "全部同意" / "全部拒绝"`,
             ]
               .filter(Boolean)
               .join("\n"),

@@ -39,6 +39,7 @@ export interface PermissionConfig {
     deny?: string[];
     allow?: string[];
     requiresApproval: boolean;
+    denyRequiresApproval?: boolean;
   };
   open_pr?: boolean;
   merge?: boolean;
