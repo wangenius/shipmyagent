@@ -14,12 +14,11 @@ import {
   renderClaudeSkillsPromptSection,
 } from "../skills/index.js";
 import { Agent } from "./agent.js";
-import type { McpManager } from "../mcp/manager.js";
 import type { Logger } from "../../telemetry/index.js";
 
 export function createAgent(
   projectRoot: string,
-  opts?: { mcpManager?: McpManager | null; logger?: Logger | null },
+  opts?: { logger?: Logger | null },
 ): Agent {
   loadProjectDotenv(projectRoot);
 
@@ -89,6 +88,6 @@ You are a helpful project assistant.`;
       config,
       systems: [userAgentMd, DEFAULT_SHIP_PROMPTS, skillsSection],
     },
-    { mcpManager: opts?.mcpManager ?? null, logger: opts?.logger ?? null },
+    { logger: opts?.logger ?? null },
   );
 }

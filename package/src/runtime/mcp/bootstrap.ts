@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import path from "path";
 import { getMcpDirPath } from "../../utils.js";
-import type { McpManager } from "./manager.js";
+import { getMcpManager } from "./singleton.js";
 import type { McpConfig } from "./types.js";
 
 export interface McpBootstrapLogger {
@@ -14,16 +14,18 @@ export interface McpBootstrapLogger {
  * Bootstrap MCP connections from `.ship/mcp/mcp.json`.
  *
  * This MUST be called by the server/bootstrap layer (e.g. `shipmyagent start`)
- * instead of inside AgentRuntime. AgentRuntime only consumes an already-created
- * `McpManager` (or no MCP at all).
+ * instead of inside AgentRuntime. AgentRuntime only consumes the already-bootstrapped
+ * singleton `McpManager`.
  */
 export async function bootstrapMcpFromProject(input: {
   projectRoot: string;
   logger: McpBootstrapLogger;
-  mcpManager: McpManager | null;
 }): Promise<void> {
   try {
-    if (!input.mcpManager) return;
+    const mcpManager = getMcpManager({
+      projectRoot: input.projectRoot,
+      logger: input.logger,
+    });
 
     const mcpConfigPath = path.join(getMcpDirPath(input.projectRoot), "mcp.json");
     if (!(await fs.pathExists(mcpConfigPath))) {
@@ -39,9 +41,8 @@ export async function bootstrapMcpFromProject(input: {
       return;
     }
 
-    await input.mcpManager.initialize(mcpConfig);
+    await mcpManager.initialize(mcpConfig);
   } catch (error) {
     input.logger.warn(`Failed to initialize MCP: ${String(error)}`);
   }
 }
-

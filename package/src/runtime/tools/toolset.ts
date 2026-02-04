@@ -11,7 +11,7 @@
  */
 
 import { loadProjectDotenv, type ShipConfig } from "../../utils.js";
-import type { McpManager } from "../mcp/index.js";
+import { getMcpManager } from "../mcp/index.js";
 import { setToolRuntimeContext } from "./runtime-context.js";
 import { skillsTools } from "./skills.js";
 import { execShellTools } from "./exec-shell.js";
@@ -22,6 +22,9 @@ import type { ContactBook } from "../chat/contacts.js";
 import { createChatContactTools } from "./chat-contact.js";
 
 export interface AgentToolSetLogger {
+  info(message: string): void;
+  warn(message: string): void;
+  error(message: string): void;
   log(
     level: string,
     message: string,
@@ -32,7 +35,6 @@ export interface AgentToolSetLogger {
 export function createAgentToolSet(params: {
   projectRoot: string;
   config: ShipConfig;
-  mcpManager?: McpManager | null;
   logger?: AgentToolSetLogger | null;
   contacts: ContactBook;
 }): Record<string, any> {
@@ -50,20 +52,23 @@ export function createAgentToolSet(params: {
     ...execShellTools,
   };
 
-  if (params.mcpManager) {
-    const mcpTools = params.mcpManager.getAllTools();
-    for (const { server, tool: mcpTool } of mcpTools) {
-      const toolName = `${server}:${mcpTool.name}`;
-      tools[toolName] = createMcpAiTool({
-        server,
-        mcpTool,
-        mcpManager: params.mcpManager,
-      });
-    }
+  const mcpManager = getMcpManager({
+    projectRoot: params.projectRoot,
+    logger: params.logger ?? null,
+  });
 
-    if (mcpTools.length > 0) {
-      void params.logger?.log("info", `Registered ${mcpTools.length} MCP tool(s)`);
-    }
+  const mcpTools = mcpManager.getAllTools();
+  for (const { server, tool: mcpTool } of mcpTools) {
+    const toolName = `${server}:${mcpTool.name}`;
+    tools[toolName] = createMcpAiTool({
+      server,
+      mcpTool,
+      mcpManager,
+    });
+  }
+
+  if (mcpTools.length > 0) {
+    void params.logger?.log("info", `Registered ${mcpTools.length} MCP tool(s)`);
   }
 
   return tools;

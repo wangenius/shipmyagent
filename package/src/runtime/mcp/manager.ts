@@ -38,6 +38,17 @@ export class McpManager {
     this.logger = logger;
   }
 
+  /**
+   * 更新当前实例的 logger。
+   *
+   * 说明：
+   * - 在单例模式下，同一个 `McpManager` 可能被多个模块复用（start/agent/tools）。
+   * - 不同入口处拿到的 logger 可能不同；这里允许按需替换，保证日志归一到统一 logger。
+   */
+  setLogger(logger: McpLogger): void {
+    this.logger = logger;
+  }
+
   async initialize(config: McpConfig): Promise<void> {
     const serverNames = Object.keys(config.servers);
     if (serverNames.length === 0) {
@@ -221,4 +232,3 @@ export class McpManager {
     return resolved as McpServerConfig;
   }
 }
-

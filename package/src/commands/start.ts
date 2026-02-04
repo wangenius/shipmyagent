@@ -7,7 +7,7 @@ import { createInteractiveServer } from "../server/interactive.js";
 import { createTelegramBot } from "../adapters/telegram.js";
 import { createFeishuBot } from "../adapters/feishu.js";
 import { createQQBot } from "../adapters/qq.js";
-import { McpManager, bootstrapMcpFromProject } from "../runtime/mcp/index.js";
+import { bootstrapMcpFromProject } from "../runtime/mcp/index.js";
 import {
   getAgentMdPath,
   getShipJsonPath,
@@ -122,15 +122,11 @@ export async function startCommand(
   logger.info(`Model: ${shipConfig.llm?.provider} / ${shipConfig.llm?.model}`);
 
   // Initialize MCP (managed by the server/bootstrap layer, not AgentRuntime)
-  const mcpManager = new McpManager(projectRoot, logger);
-  await bootstrapMcpFromProject({ projectRoot, logger, mcpManager });
+  await bootstrapMcpFromProject({ projectRoot, logger });
   logger.info("MCP manager initialized");
 
   // Create Agent Runtime
-  const agentRuntime = createAgentRuntimeFromPath(projectRoot, {
-    mcpManager,
-    logger,
-  });
+  const agentRuntime = createAgentRuntimeFromPath(projectRoot, { logger });
   await agentRuntime.initialize();
   logger.info("Agent Runtime initialized");
 
@@ -150,9 +146,7 @@ export async function startCommand(
   let telegramBot = null;
   if (adapters.telegram?.enabled) {
     logger.info("Telegram adapter enabled");
-    telegramBot = createTelegramBot(projectRoot, adapters.telegram, logger, {
-      mcpManager,
-    });
+    telegramBot = createTelegramBot(projectRoot, adapters.telegram, logger);
   }
 
   // Create Feishu Adapter (if enabled)
@@ -181,9 +175,7 @@ export async function startCommand(
         : undefined,
     };
 
-    feishuBot = await createFeishuBot(projectRoot, feishuConfig, logger, {
-      mcpManager,
-    });
+    feishuBot = await createFeishuBot(projectRoot, feishuConfig, logger);
   }
 
   // Create QQ Adapter (if enabled)
@@ -211,7 +203,7 @@ export async function startCommand(
           : (process.env.QQ_SANDBOX || "").toLowerCase() === "true",
     };
 
-    qqBot = await createQQBot(projectRoot, qqConfig, logger, { mcpManager });
+    qqBot = await createQQBot(projectRoot, qqConfig, logger);
   }
 
   // 创建交互式 Web 服务器（如果已启用）

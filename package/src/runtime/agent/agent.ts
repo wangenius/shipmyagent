@@ -7,7 +7,6 @@ import {
 import { withLlmRequestContext } from "../../telemetry/index.js";
 import { generateId } from "../../utils.js";
 import { ContactBook } from "../chat/contacts.js";
-import { McpManager } from "../mcp/manager.js";
 import {
   buildContextSystemPrompt,
   transformPromptsIntoSystemMessages,
@@ -46,7 +45,6 @@ export class Agent {
   private context: AgentContext;
   private initialized: boolean = false;
   private logger: Logger;
-  private mcpManager: McpManager | null = null;
 
   private model: LanguageModel | null = null;
   private agent: ToolLoopAgent<never, any, any> | null = null;
@@ -55,13 +53,9 @@ export class Agent {
   private contacts: ContactBook;
   // Keep core: per-chatKey in-memory history + on-demand disk history loading tool.
 
-  constructor(
-    context: AgentContext,
-    deps?: { mcpManager?: McpManager | null; logger?: Logger | null },
-  ) {
+  constructor(context: AgentContext, deps?: { logger?: Logger | null }) {
     this.context = context;
     this.logger = deps?.logger ?? createLogger(context.projectRoot, "info");
-    this.mcpManager = deps?.mcpManager ?? null;
     this.contacts = new ContactBook(context.projectRoot);
   }
 
@@ -107,7 +101,6 @@ export class Agent {
       const tools = createAgentToolSet({
         projectRoot: this.context.projectRoot,
         config: this.context.config,
-        mcpManager: this.mcpManager,
         logger: this.logger,
         contacts: this.contacts,
       });

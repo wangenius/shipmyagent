@@ -737,7 +737,6 @@ export function createTelegramBot(
   projectRoot: string,
   config: TelegramConfig,
   logger: Logger,
-  deps?: { mcpManager?: McpManager | null },
 ): TelegramBot | null {
   if (!config.enabled || !config.botToken || config.botToken === "${}") {
     return null;
@@ -754,7 +753,6 @@ export function createTelegramBot(
     projectRoot, // 传递 projectRoot
     () =>
       createAgentRuntimeFromPath(projectRoot, {
-        mcpManager: deps?.mcpManager ?? null,
         logger,
       }),
   );
