@@ -1,8 +1,11 @@
-import type { ShipConfig } from "../../utils.js";
+import type { ShipConfig } from "../utils.js";
 
 export interface AgentContext {
+  // 当前项目的根目录地址
   projectRoot: string;
+  // ship 的配置
   config: ShipConfig;
+  // 多个系统提示词 ： Agent.md | ShipMyAgentPreset | Skills | CurrentContextSummary
   systems: string[];
 }
 

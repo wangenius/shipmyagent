@@ -9,7 +9,7 @@
  */
 
 import type { ModelMessage } from "ai";
-import type { ConversationMessage } from "./types.js";
+import type { ConversationMessage } from "../../types/agent.js";
 
 export class AgentSessionStore {
   private sessionMessages: Map<string, ModelMessage[]> = new Map();

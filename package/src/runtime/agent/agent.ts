@@ -9,12 +9,11 @@ import { generateId } from "../../utils.js";
 import { ContactBook } from "../chat/contacts.js";
 import { McpManager } from "../mcp/manager.js";
 import {
-  buildDefaultSystemPrompt,
+  buildContextSystemPrompt,
   transformPromptsIntoSystemMessages,
 } from "./prompt.js";
 import { AgentSessionStore } from "./session-store.js";
 import { createModel } from "./model.js";
-import { createToolSet } from "./tools.js";
 import {
   extractUserFacingTextFromStep,
   emitToolSummariesFromStep,
@@ -24,11 +23,12 @@ import type {
   AgentRunInput,
   AgentResult,
   ConversationMessage,
-} from "./types.js";
+} from "../../types/agent.js";
 import { createLogger, type Logger } from "../../telemetry/index.js";
 import type { ShipConfig } from "../../utils.js";
 import { chatRequestContext } from "../chat/request-context.js";
 import { withToolExecutionContext } from "../tools/execution-context.js";
+import { createAgentToolSet } from "../tools/toolset.js";
 
 /**
  * AgentRuntime orchestrates a single "agent brain" for a project.
@@ -104,13 +104,14 @@ export class Agent {
         `Agent.md content length: ${this.context.systems?.length || 0} chars`,
       );
 
-      const tools = createToolSet({
+      const tools = createAgentToolSet({
         projectRoot: this.context.projectRoot,
         config: this.context.config,
         mcpManager: this.mcpManager,
         logger: this.logger,
         contacts: this.contacts,
       });
+
       this.model = await createModel({
         config: this.context.config,
         logger: this.logger,
@@ -158,7 +159,7 @@ export class Agent {
       projectRoot: this.context.projectRoot,
     });
 
-    const defaultPrompt = buildDefaultSystemPrompt({
+    const defaultPrompt = buildContextSystemPrompt({
       projectRoot: this.context.projectRoot,
       chatKey,
       requestId,
@@ -455,9 +456,5 @@ export class Agent {
 
   isInitialized(): boolean {
     return this.initialized;
-  }
-
-  async cleanup(): Promise<void> {
-    if (this.mcpManager) await this.mcpManager.close();
   }
 }

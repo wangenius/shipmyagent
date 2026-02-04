@@ -2,12 +2,8 @@ import { SystemModelMessage } from "ai";
 
 /**
  * Build the default (runtime) system prompt for an agent run.
- *
- * The final system message should be:
- * - `Agent.md` content (project instructions)
- * - plus this default runtime prompt (routing/context/output rules)
  */
-export function buildDefaultSystemPrompt(input: {
+export function buildContextSystemPrompt(input: {
   projectRoot: string;
   chatKey: string;
   requestId: string;

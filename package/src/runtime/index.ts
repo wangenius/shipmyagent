@@ -20,7 +20,7 @@ export type {
   AgentContext,
   AgentRunInput,
   AgentResult,
-} from "./agent/types.js";
+} from "../types/agent.js";
 export { AgentRuntime, createAgentRuntimeFromPath } from "./agent/index.js";
 
 export { DEFAULT_SHIP_PROMPTS } from "./prompts/index.js";

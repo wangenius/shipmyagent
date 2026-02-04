@@ -1,22 +1,11 @@
 /**
- * LLM provider/model factory for AgentRuntime.
- *
- * Responsibilities:
- * - Resolve provider-specific clients (Anthropic/OpenAI/OpenAI-compatible)
- * - Normalize config placeholders (e.g. `${}`) and environment-variable API keys
- * - Wrap `fetch` with LLM request logging so runtime telemetry stays consistent
- * - Construct the AI SDK ToolLoopAgent with the runtime toolset
- *
- * This module intentionally contains only "wiring" logic; execution orchestration
- * lives in `runtime.ts`.
+ * LLM provider/model factory for Agent
  */
 
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import {
-  type LanguageModel
-} from "ai";
+import { type LanguageModel } from "ai";
 import { createLlmLoggingFetch } from "../../telemetry/index.js";
 import type { ShipConfig } from "../../utils.js";
 
