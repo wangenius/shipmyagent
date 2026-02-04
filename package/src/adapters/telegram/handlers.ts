@@ -1,5 +1,5 @@
-import { Logger } from "../../telemetry/index.js";
 import type { TelegramUpdate, TelegramUser } from "./shared.js";
+import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
 
 /**
  * Telegram command/callback handlers.
@@ -9,8 +9,6 @@ import type { TelegramUpdate, TelegramUser } from "./shared.js";
  */
 
 export type TelegramHandlerContext = {
-  projectRoot: string;
-  logger: Logger;
   buildChatKey: (chatId: string, messageThreadId?: number) => string;
   runInChat: (chatKey: string, fn: () => Promise<void>) => Promise<void>;
   sendMessage: (
@@ -31,7 +29,9 @@ export async function handleTelegramCommand(
   },
 ): Promise<void> {
   const username = params.from?.username || "Unknown";
-  ctx.logger.info(`Received command: ${params.command} (${username})`);
+  getShipRuntimeContext().logger.info(
+    `Received command: ${params.command} (${username})`,
+  );
 
   const [commandToken, ...rest] = params.command.trim().split(/\s+/);
   const cmd = (commandToken || "").split("@")[0]?.toLowerCase();

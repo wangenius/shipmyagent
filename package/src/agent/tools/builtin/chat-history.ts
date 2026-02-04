@@ -3,7 +3,7 @@
  *
  * 目标
  * - ChatStore 记录的是“用户视角的对话历史”（platform 的 chat transcript）。
- * - 当模型需要更多上文时，通过工具从 `.ship/chats/<chatKey>.jsonl` 读取历史，
+ * - 当模型需要更多上文时，通过工具从 `.ship/chats/<chatKey>/history.jsonl` 读取历史，
  *   并把结果 **合并为一条 assistant message** 注入当前上下文。
  *
  * 为什么只注入一条 assistant message？
@@ -17,13 +17,13 @@
 
 import { z } from "zod";
 import { tool } from "ai";
-import { chatRequestContext } from "../../chat/request-context.js";
-import { ChatStore, type ChatLogEntryV1 } from "../../chat/store.js";
+import { chatRequestContext } from "../../../chat/request-context.js";
 import { getToolRuntimeContext } from "../set/runtime-context.js";
 import {
   injectAssistantMessageOnce,
   toolExecutionContext,
 } from "./execution-context.js";
+import type { ChatLogEntryV1 } from "../../../chat/store.js";
 
 const chatLoadHistoryInputSchema = z.object({
   /**
@@ -90,8 +90,8 @@ export const chat_load_history = tool({
       };
     }
 
-    const { projectRoot } = getToolRuntimeContext();
-    const store = new ChatStore(projectRoot);
+    const { chatManager } = getToolRuntimeContext();
+    const chat = chatManager.get(chatKey);
 
     const requestedCount =
       typeof (input as any).count === "number" ? (input as any).count : 20;
@@ -107,12 +107,12 @@ export const chat_load_history = tool({
     let entries: ChatLogEntryV1[] = [];
     try {
       if (keyword) {
-        entries = await store.search(chatKey, {
+        entries = await chat.search({
           keyword,
           limit: Math.min(5000, (count + offset) * 3),
         });
       } else {
-        entries = await store.loadRecentEntries(chatKey, Math.min(5000, count + offset));
+        entries = await chat.loadRecentEntries(Math.min(5000, count + offset));
       }
     } catch (e) {
       return { success: false, error: String(e) };

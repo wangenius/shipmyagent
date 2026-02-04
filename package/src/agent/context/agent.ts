@@ -6,7 +6,7 @@ import {
 } from "ai";
 import { withLlmRequestContext } from "../../telemetry/index.js";
 import { generateId } from "../../utils.js";
-import { getContactBook } from "../chat/index.js";
+import { getContactBook } from "../../chat/index.js";
 import { transformPromptsIntoSystemMessages } from "./prompt.js";
 import { createModel } from "./model.js";
 import {
@@ -19,7 +19,7 @@ import type {
   AgentResult,
 } from "../../types/agent.js";
 import { getLogger, type Logger } from "../../telemetry/index.js";
-import { chatRequestContext } from "../chat/request-context.js";
+import { chatRequestContext } from "../../chat/request-context.js";
 import { withToolExecutionContext } from "../tools/builtin/execution-context.js";
 import { createAgentToolSet } from "../tools/set/toolset.js";
 import { ContextStore } from "./context-store.js";

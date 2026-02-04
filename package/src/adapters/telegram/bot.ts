@@ -1,14 +1,11 @@
 // Telegram adapter implementation (moved into submodule for maintainability).
 import path from "path";
-import { Logger } from "../../telemetry/index.js";
-import type { Agent } from "../../core/agent/index.js";
-import { createAgent } from "../../core/agent/index.js";
 import { BaseChatAdapter } from "../base-chat-adapter.js";
 import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "../platform-adapter.js";
-import { tryClaimChatIngressMessage } from "../../core/chat/idempotency.js";
+import { tryClaimChatIngressMessage } from "../../chat/idempotency.js";
 import { isTelegramAdmin } from "./access.js";
 import { TelegramApiClient } from "./api-client.js";
 import {
@@ -48,11 +45,8 @@ export class TelegramBot extends BaseChatAdapter {
     chatId: string | undefined,
     followupWindowMs: number | undefined,
     groupAccess: TelegramConfig["groupAccess"] | undefined,
-    logger: Logger,
-    projectRoot: string,
-    createAgentRuntime?: () => Agent,
   ) {
-    super({ channel: "telegram", projectRoot, logger, createAgentRuntime });
+    super({ channel: "telegram" });
     this.botToken = botToken;
     this.chatId = chatId;
     this.followupWindowMs =
@@ -62,8 +56,12 @@ export class TelegramBot extends BaseChatAdapter {
         : 10 * 60 * 1000;
     this.groupAccess =
       groupAccess === "anyone" ? "anyone" : "initiator_or_admin";
-    this.api = new TelegramApiClient({ botToken, projectRoot, logger });
-    this.stateStore = new TelegramStateStore(projectRoot);
+    this.api = new TelegramApiClient({
+      botToken,
+      projectRoot: this.projectRoot,
+      logger: this.logger,
+    });
+    this.stateStore = new TelegramStateStore(this.projectRoot);
   }
 
   private buildChatKey(chatId: string, messageThreadId?: number): string {
@@ -652,8 +650,6 @@ export class TelegramBot extends BaseChatAdapter {
   ): Promise<void> {
     await handleTelegramCommand(
       {
-        projectRoot: this.projectRoot,
-        logger: this.logger,
         buildChatKey: (c, t) => this.buildChatKey(c, t),
         runInChat: (key, fn) => this.runInChat(key, fn),
         sendMessage: (c, text, opts) => this.sendMessage(c, text, opts),
@@ -668,8 +664,6 @@ export class TelegramBot extends BaseChatAdapter {
   ): Promise<void> {
     await handleTelegramCallbackQuery(
       {
-        projectRoot: this.projectRoot,
-        logger: this.logger,
         buildChatKey: (c, t) => this.buildChatKey(c, t),
         runInChat: (key, fn) => this.runInChat(key, fn),
         sendMessage: (c, text, opts) => this.sendMessage(c, text, opts),
@@ -733,24 +727,17 @@ export class TelegramBot extends BaseChatAdapter {
 }
 
 export function createTelegramBot(
-  projectRoot: string,
   config: TelegramConfig,
-  logger: Logger,
 ): TelegramBot | null {
   if (!config.enabled || !config.botToken || config.botToken === "${}") {
     return null;
   }
 
-  // 注意：当前实现使用 BaseChatAdapter 的全局单队列 + 共享 AgentRuntime（一个进程一个“大脑”）。
-  // 并不会为每个 chatKey 维护独立 runtime 缓存。
   const bot = new TelegramBot(
     config.botToken,
     config.chatId,
     config.followupWindowMs,
     config.groupAccess,
-    logger,
-    projectRoot, // 传递 projectRoot
-    () => createAgent(projectRoot),
   );
   return bot;
 }

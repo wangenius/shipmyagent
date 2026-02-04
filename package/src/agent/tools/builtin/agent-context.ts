@@ -13,9 +13,9 @@
 
 import { z } from "zod";
 import { tool } from "ai";
-import { chatRequestContext } from "../../chat/request-context.js";
+import { chatRequestContext } from "../../../chat/request-context.js";
 import { getToolRuntimeContext } from "../set/runtime-context.js";
-import { ContextStore } from "../../agent/context-store.js";
+import { ContextStore } from "../../context/context-store.js";
 import {
   injectSystemMessageOnce,
   toolExecutionContext,

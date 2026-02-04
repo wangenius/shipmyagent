@@ -12,14 +12,42 @@ import {
   discoverClaudeSkillsSync,
   renderClaudeSkillsPromptSection,
 } from "../skills/index.js";
+import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
 import { Agent } from "./agent.js";
 import { DEFAULT_SHIP_PROMPTS } from "./prompt.js";
 
-export function createAgent(projectRoot: string): Agent {
-  loadProjectDotenv(projectRoot);
+/**
+ * 创建一个新的 Agent 实例。
+ *
+ * 说明：
+ * - `projectRoot` 理论上是启动时就能确定的全局信息
+ * - 为了避免在所有调用链上层层透传，这里允许不传 `projectRoot`：
+ *   - 若已初始化 `ShipRuntimeContext`，则自动读取其中的 `projectRoot`
+ *   - 否则抛错（避免误用 `process.cwd()` 导致读写错目录）
+ */
+export function createAgent(projectRoot?: string): Agent {
+  const resolvedProjectRoot =
+    typeof projectRoot === "string" && projectRoot.trim()
+      ? projectRoot.trim()
+      : (() => {
+          try {
+            return getShipRuntimeContext().projectRoot;
+          } catch {
+            return "";
+          }
+        })();
 
-  const agentMdPath = getAgentMdPath(projectRoot);
-  const shipJsonPath = getShipJsonPath(projectRoot);
+  if (!resolvedProjectRoot) {
+    throw new Error(
+      "createAgent() requires projectRoot (or initialize ShipRuntimeContext before calling).",
+    );
+  }
+
+  const root = path.resolve(resolvedProjectRoot);
+  loadProjectDotenv(root);
+
+  const agentMdPath = getAgentMdPath(root);
+  const shipJsonPath = getShipJsonPath(root);
 
   let agent_profiles = `# Agent Role
 You are a helpful project assistant.`;
@@ -43,7 +71,7 @@ You are a helpful project assistant.`;
     },
   };
 
-  const shipDir = getShipDirPath(projectRoot);
+  const shipDir = getShipDirPath(root);
   fs.ensureDirSync(shipDir);
   fs.ensureDirSync(path.join(shipDir, "routes"));
   fs.ensureDirSync(path.join(shipDir, "logs"));
@@ -64,21 +92,21 @@ You are a helpful project assistant.`;
 
   try {
     if (fs.existsSync(shipJsonPath)) {
-      config = loadShipConfig(projectRoot) as ShipConfig;
+      config = loadShipConfig(root) as ShipConfig;
     }
   } catch {
     // ignore
   }
 
-  const skills = discoverClaudeSkillsSync(projectRoot, config);
+  const skills = discoverClaudeSkillsSync(root, config);
   const skillsSection = renderClaudeSkillsPromptSection(
-    projectRoot,
+    root,
     config,
     skills,
   );
 
   return new Agent({
-    projectRoot,
+    projectRoot: root,
     config,
     systems: [agent_profiles, DEFAULT_SHIP_PROMPTS, skillsSection],
   });

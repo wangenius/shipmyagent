@@ -1,10 +1,10 @@
-import type { Logger } from "../telemetry/index.js";
-import type { Agent } from "../core/agent/index.js";
-import { createAgent } from "../core/agent/index.js";
-import { getContactBook } from "../core/chat/index.js";
+import type { Agent } from "../agent/context/index.js";
+import { getContactBook } from "../chat/index.js";
 import { PlatformAdapter } from "./platform-adapter.js";
-import type { ChatDispatchChannel } from "../core/chat/dispatcher.js";
+import type { ChatDispatchChannel } from "../chat/dispatcher.js";
 import { QueryQueue } from "./query-queue.js";
+import type { Logger } from "../telemetry/index.js";
+import { getShipRuntimeContext } from "../server/ShipRuntimeContext.js";
 
 export type IncomingChatMessage = {
   chatId: string;
@@ -21,7 +21,7 @@ export type IncomingChatMessage = {
  *
  * Provides:
  * - A single, global QueryQueue (concurrency=1) across all users
- * - A single, shared AgentRuntime ("one brain")
+ * - One AgentRuntime per chatKey（一个 Chat 一个 Agent 实例）
  * - Append-only ChatStore logging for user messages (audit trail)
  * - Best-effort contact book updates (username -> delivery target)
  *
@@ -30,36 +30,48 @@ export type IncomingChatMessage = {
  * - Adapters still run a conservative fallback send if the model forgets the tool.
  */
 export abstract class BaseChatAdapter extends PlatformAdapter {
-  private static agent: Agent | null = null;
   private static globalQueue: QueryQueue | null = null;
 
-  protected readonly runtime: Agent;
+  protected readonly projectRoot: string;
+  protected readonly logger: Logger;
+  private readonly createAgentRuntime: () => Agent;
+  private readonly agentsByChatKey: Map<string, Agent> = new Map();
 
   protected constructor(params: {
     channel: ChatDispatchChannel;
-    projectRoot: string;
-    logger: Logger;
-    createAgentRuntime?: () => Agent;
+    projectRoot?: string;
+    logger?: Logger;
+    createAgent?: () => Agent;
   }) {
-    super({ channel: params.channel, projectRoot: params.projectRoot, logger: params.logger });
-    this.runtime =
-      BaseChatAdapter.agent ??
-      (params.createAgentRuntime
-        ? params.createAgentRuntime()
-        : createAgent(this.projectRoot));
-    if (!BaseChatAdapter.agent) BaseChatAdapter.agent = this.runtime;
+    super({
+      channel: params.channel,
+    });
+
+    const runtime = getShipRuntimeContext();
+    this.projectRoot = params.projectRoot ?? runtime.projectRoot;
+    this.logger = params.logger ?? runtime.logger;
+    this.createAgentRuntime = params.createAgent ?? runtime.createAgent;
 
     if (!BaseChatAdapter.globalQueue) {
-      BaseChatAdapter.globalQueue = new QueryQueue({
-        runtime: this.runtime,
-        chatStore: this.chatStore,
-      });
+      BaseChatAdapter.globalQueue = new QueryQueue();
     }
   }
 
   clearChat(chatKey: string): void {
-    this.runtime.clearConversationHistory(chatKey);
+    const existing = this.agentsByChatKey.get(chatKey);
+    if (existing) {
+      existing.clearConversationHistory(chatKey);
+      this.agentsByChatKey.delete(chatKey);
+    }
     this.logger.info(`Cleared chat: ${chatKey}`);
+  }
+
+  private getOrCreateAgent(chatKey: string): Agent {
+    const existing = this.agentsByChatKey.get(chatKey);
+    if (existing) return existing;
+    const created = this.createAgentRuntime();
+    this.agentsByChatKey.set(chatKey, created);
+    return created;
   }
 
   protected async appendUserMessage(params: {
@@ -71,10 +83,9 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     meta?: Record<string, unknown>;
   }): Promise<void> {
     try {
-      await this.chatStore.append({
+      await this.chatManager.get(params.chatKey).append({
         channel: this.channel as any,
         chatId: params.chatId,
-        chatKey: params.chatKey,
         userId: params.userId,
         messageId: params.messageId,
         role: "user",
@@ -86,7 +97,9 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     }
   }
 
-  protected async enqueueMessage(msg: IncomingChatMessage): Promise<{ chatKey: string; position: number }> {
+  protected async enqueueMessage(
+    msg: IncomingChatMessage,
+  ): Promise<{ chatKey: string; position: number }> {
     const chatKey = this.getChatKey({
       chatId: msg.chatId,
       chatType: msg.chatType,
@@ -126,11 +139,13 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     }
 
     const queue = BaseChatAdapter.globalQueue!;
+    const agent = this.getOrCreateAgent(chatKey);
     const { position } = queue.enqueue({
       channel: this.channel,
       chatId: msg.chatId,
       chatKey,
       text: msg.text,
+      agent,
       chatType: msg.chatType,
       messageThreadId: msg.messageThreadId,
       messageId: msg.messageId,

@@ -1,7 +1,6 @@
-import type { Logger } from "../telemetry/index.js";
-import { ChatStore } from "../core/chat/store.js";
-import type { ChatDispatchChannel } from "../core/chat/dispatcher.js";
-import { registerChatDispatcher } from "../core/chat/dispatcher.js";
+import type { ChatDispatchChannel } from "../chat/dispatcher.js";
+import { registerChatDispatcher } from "../chat/dispatcher.js";
+import { getShipRuntimeContext } from "../server/ShipRuntimeContext.js";
 
 export type AdapterChatKeyParams = {
   chatId: string;
@@ -26,37 +25,19 @@ export type AdapterSendTextParams = AdapterChatKeyParams & {
  */
 export abstract class PlatformAdapter {
   readonly channel: ChatDispatchChannel;
-  protected readonly projectRoot: string;
-  protected readonly logger: Logger;
-  protected readonly chatStore: ChatStore;
+  protected readonly chatManager: ReturnType<typeof getShipRuntimeContext>["chatManager"];
 
   protected constructor(params: {
     channel: ChatDispatchChannel;
-    projectRoot: string;
-    logger: Logger;
-    chatStore?: ChatStore;
   }) {
     this.channel = params.channel;
-    this.projectRoot = params.projectRoot;
-    this.logger = params.logger;
-    this.chatStore = params.chatStore ?? new ChatStore(params.projectRoot);
+    const runtime = getShipRuntimeContext();
+    this.chatManager = runtime.chatManager;
 
     // Expose adapter send capabilities to the agent via dispatcher + tools.
     registerChatDispatcher(this.channel, {
       sendText: async (p) => this.sendToolText(p),
     });
-  }
-
-  getProjectRoot(): string {
-    return this.projectRoot;
-  }
-
-  getLogger(): Logger {
-    return this.logger;
-  }
-
-  getChatStore(): ChatStore {
-    return this.chatStore;
   }
 
   protected abstract getChatKey(params: AdapterChatKeyParams): string;
@@ -82,10 +63,9 @@ export abstract class PlatformAdapter {
           messageId: params.messageId,
           messageThreadId: params.messageThreadId,
         });
-        await this.chatStore.append({
+        await this.chatManager.get(chatKey).append({
           channel: this.channel as any,
           chatId,
-          chatKey,
           userId: "bot",
           role: "assistant",
           text,

@@ -6,7 +6,7 @@
  * - 用一个模块统一管理“对 LLM 输入有用的一切上下文数据”，并明确区分两条数据链：
  *
  * 1) Chat transcript（用户视角对话历史）
- *    - 由 ChatStore（`.ship/chats`）负责落盘
+ *    - 由 ChatStore（`.ship/chats/<chatKey>/history.jsonl`）负责落盘
  *    - 注入方式通常是“对话式”：作为一条 assistant message 注入（见 `chat_load_history`）
  *
  * 2) Agent execution context（工程向执行摘要）

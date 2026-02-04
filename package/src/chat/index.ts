@@ -9,6 +9,9 @@ export { ChatStore } from "./store.js";
 
 export { HistoryCache } from "./history-cache.js";
 
+export type { ChatKey } from "./manager.js";
+export { ChatManager } from "./manager.js";
+
 export type { ContactChannel, ChatContact } from "./contacts.js";
 export { ContactBook } from "./contacts.js";
 export { getContactBook } from "./contacts-singleton.js";

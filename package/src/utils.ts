@@ -54,7 +54,7 @@ export interface ShipConfig {
    * 上下文与历史管理（工程向配置）。
    *
    * 说明
-   * - ChatStore 负责落盘“用户视角对话历史”（.ship/chats）。
+   * - ChatStore 负责落盘“用户视角对话历史”（.ship/chats/<chatKey>/history.jsonl）。
    * - AgentRuntime 还需要维护“给 LLM 的上下文 messages”（in-memory），以及可选的“agent 执行上下文”（.ship/memory）。
    */
   context?: {

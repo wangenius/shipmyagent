@@ -11,17 +11,17 @@
  *   itself does not need to know platform IDs or channels.
  */
 
-import { withChatRequestContext } from "../core/chat/request-context.js";
-import type { ChatDispatchChannel } from "../core/chat/dispatcher.js";
-import { sendFinalOutputIfNeeded } from "../core/chat/final-output.js";
-import type { ChatStore } from "../core/chat/store.js";
-import type { Agent } from "../core/agent/index.js";
+import { withChatRequestContext } from "../chat/request-context.js";
+import type { ChatDispatchChannel } from "../chat/dispatcher.js";
+import { sendFinalOutputIfNeeded } from "../chat/final-output.js";
+import type { Agent } from "../agent/context/index.js";
 
 export type QueuedChatMessage = {
   channel: ChatDispatchChannel;
   chatId: string;
   chatKey: string;
   text: string;
+  agent: Agent;
   chatType?: string;
   messageThreadId?: number;
   messageId?: string;
@@ -30,18 +30,13 @@ export type QueuedChatMessage = {
 };
 
 export class QueryQueue {
-  private readonly runtime: Agent;
-  private readonly chatStore: ChatStore;
   private queue: QueuedChatMessage[] = [];
   private running: boolean = false;
 
   private lastBusySentAtByChatKey: Map<string, number> = new Map();
   private readonly BUSY_COOLDOWN_MS = 30_000;
 
-  constructor(params: { runtime: Agent; chatStore: ChatStore }) {
-    this.runtime = params.runtime;
-    this.chatStore = params.chatStore;
-  }
+  constructor() {}
 
   isBusy(): boolean {
     return this.running || this.queue.length > 0;
@@ -67,7 +62,10 @@ export class QueryQueue {
     return { position };
   }
 
-  private async sendBusyAckOncePerChat(msg: QueuedChatMessage, position: number): Promise<void> {
+  private async sendBusyAckOncePerChat(
+    msg: QueuedChatMessage,
+    position: number,
+  ): Promise<void> {
     const now = Date.now();
     const last = this.lastBusySentAtByChatKey.get(msg.chatKey) || 0;
     if (now - last < this.BUSY_COOLDOWN_MS) return;
@@ -119,8 +117,8 @@ export class QueryQueue {
   }
 
   private async processOne(msg: QueuedChatMessage): Promise<void> {
-    if (!this.runtime.isInitialized()) {
-      await this.runtime.initialize();
+    if (!msg.agent.isInitialized()) {
+      await msg.agent.initialize();
     }
 
     const result = await withChatRequestContext(
@@ -135,7 +133,7 @@ export class QueryQueue {
         messageId: msg.messageId,
       },
       () =>
-        this.runtime.run({
+        msg.agent.run({
           chatKey: msg.chatKey,
           query: msg.text,
         }),

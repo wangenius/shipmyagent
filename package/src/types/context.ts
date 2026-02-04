@@ -2,7 +2,7 @@
  * Context 相关的跨模块类型定义。
  *
  * 约定
- * - ChatStore（.ship/chats）记录的是“用户视角”的 platform transcript。
+ * - ChatStore（.ship/chats/<chatKey>/history.jsonl）记录的是“用户视角”的 platform transcript。
  * - AgentExecutionEntry 记录的是“工程向”的 agent 执行摘要（.ship/memory）。
  */
 
