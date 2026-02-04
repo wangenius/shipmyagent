@@ -14,12 +14,8 @@ import {
   renderClaudeSkillsPromptSection,
 } from "../skills/index.js";
 import { Agent } from "./agent.js";
-import type { Logger } from "../../telemetry/index.js";
 
-export function createAgent(
-  projectRoot: string,
-  opts?: { logger?: Logger | null },
-): Agent {
+export function createAgent(projectRoot: string): Agent {
   loadProjectDotenv(projectRoot);
 
   const agentMdPath = getAgentMdPath(projectRoot);
@@ -88,6 +84,5 @@ You are a helpful project assistant.`;
       config,
       systems: [userAgentMd, DEFAULT_SHIP_PROMPTS, skillsSection],
     },
-    { logger: opts?.logger ?? null },
   );
 }

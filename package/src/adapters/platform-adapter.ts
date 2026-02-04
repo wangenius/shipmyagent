@@ -1,7 +1,7 @@
 import type { Logger } from "../telemetry/index.js";
-import { ChatStore } from "../runtime/chat/store.js";
-import type { ChatDispatchChannel } from "../runtime/chat/dispatcher.js";
-import { registerChatDispatcher } from "../runtime/chat/dispatcher.js";
+import { ChatStore } from "../core/chat/store.js";
+import type { ChatDispatchChannel } from "../core/chat/dispatcher.js";
+import { registerChatDispatcher } from "../core/chat/dispatcher.js";
 
 export type AdapterChatKeyParams = {
   chatId: string;

@@ -11,9 +11,8 @@
  */
 
 export type { LogEntry } from "./logging/logger.js";
-export { Logger, createLogger } from "./logging/index.js";
+export { Logger, createLogger, getLogger } from "./logging/index.js";
 
 export type { LlmRequestContext } from "./llm-logging/context.js";
 export { llmRequestContext, withLlmRequestContext } from "./llm-logging/context.js";
 export { createLlmLoggingFetch } from "./llm-logging/fetch.js";
-

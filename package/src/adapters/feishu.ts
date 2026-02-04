@@ -8,9 +8,8 @@ import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "./platform-adapter.js";
-import type { AgentRuntime } from "../runtime/agent/index.js";
-import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
-import type { McpManager } from "../runtime/mcp/index.js";
+import type { AgentRuntime } from "../core/agent/index.js";
+import { createAgentRuntimeFromPath } from "../core/agent/index.js";
 
 /**
  * Feishu (Lark) chat adapter.
@@ -608,7 +607,6 @@ export async function createFeishuBot(
   projectRoot: string,
   config: FeishuConfig,
   logger: Logger,
-  deps?: { mcpManager?: McpManager | null },
 ): Promise<FeishuBot | null> {
   if (!config.enabled || !config.appId || !config.appSecret) {
     return null;
@@ -623,11 +621,7 @@ export async function createFeishuBot(
     logger,
     projectRoot, // 传递 projectRoot
     config.adminUserIds,
-    () =>
-      createAgentRuntimeFromPath(projectRoot, {
-        mcpManager: deps?.mcpManager ?? null,
-        logger,
-      }),
+    () => createAgentRuntimeFromPath(projectRoot),
   );
   return bot;
 }

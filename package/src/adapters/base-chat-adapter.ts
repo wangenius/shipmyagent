@@ -1,8 +1,9 @@
 import type { Logger } from "../telemetry/index.js";
-import type { AgentRuntime } from "../runtime/agent/index.js";
-import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
+import type { AgentRuntime } from "../core/agent/index.js";
+import { createAgentRuntimeFromPath } from "../core/agent/index.js";
+import { getContactBook } from "../core/chat/index.js";
 import { PlatformAdapter } from "./platform-adapter.js";
-import type { ChatDispatchChannel } from "../runtime/chat/dispatcher.js";
+import type { ChatDispatchChannel } from "../core/chat/dispatcher.js";
 import { QueryQueue } from "./query-queue.js";
 
 export type IncomingChatMessage = {
@@ -45,7 +46,7 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
       BaseChatAdapter.globalRuntime ??
       (params.createAgentRuntime
         ? params.createAgentRuntime()
-        : createAgentRuntimeFromPath(this.projectRoot, { logger: this.logger }));
+        : createAgentRuntimeFromPath(this.projectRoot));
     if (!BaseChatAdapter.globalRuntime) BaseChatAdapter.globalRuntime = this.runtime;
 
     if (!BaseChatAdapter.globalQueue) {
@@ -109,7 +110,7 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     try {
       const username = String(msg.username || "").trim();
       if (username) {
-        await this.runtime.getContactBook().upsert({
+        await getContactBook(this.projectRoot).upsert({
           channel: this.channel as any,
           chatId: msg.chatId,
           chatKey,

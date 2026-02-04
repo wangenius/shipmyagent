@@ -11,7 +11,7 @@
 import { z } from "zod";
 import { tool } from "ai";
 import { execa } from "execa";
-import { getToolRuntimeContext } from "./runtime-context.js";
+import { getToolRuntimeContext } from "../set/runtime-context.js";
 
 export const exec_shell = tool({
   description: `Execute a shell command. This is your ONLY tool for interacting with the filesystem and codebase.

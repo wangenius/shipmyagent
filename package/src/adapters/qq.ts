@@ -7,9 +7,8 @@ import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "./platform-adapter.js";
-import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
-import type { AgentRuntime } from "../runtime/agent/index.js";
-import type { McpManager } from "../runtime/mcp/index.js";
+import { createAgentRuntimeFromPath } from "../core/agent/index.js";
+import type { AgentRuntime } from "../core/agent/index.js";
 
 /**
  * QQ official bot adapter (WebSocket gateway).
@@ -920,7 +919,6 @@ export async function createQQBot(
   projectRoot: string,
   config: QQConfig,
   logger: Logger,
-  deps?: { mcpManager?: McpManager | null },
 ): Promise<QQBot | null> {
   if (!config.enabled || !config.appId || !config.appSecret) {
     return null;
@@ -932,11 +930,7 @@ export async function createQQBot(
     logger,
     projectRoot,
     config.sandbox || false,
-    () =>
-      createAgentRuntimeFromPath(projectRoot, {
-        mcpManager: deps?.mcpManager ?? null,
-        logger,
-      }),
+    () => createAgentRuntimeFromPath(projectRoot),
   );
   return bot;
 }

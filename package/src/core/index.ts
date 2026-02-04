@@ -17,7 +17,7 @@ export {
 export { createLlmLoggingFetch } from "../telemetry/index.js";
 
 export type {
-  AgentContext,
+  AgentConfigurations as AgentContext,
   AgentRunInput,
   AgentResult,
 } from "../types/agent.js";

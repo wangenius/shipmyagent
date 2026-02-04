@@ -1,15 +1,14 @@
 // Telegram adapter implementation (moved into submodule for maintainability).
 import path from "path";
 import { Logger } from "../../telemetry/index.js";
-import type { AgentRuntime } from "../../runtime/agent/index.js";
-import { createAgentRuntimeFromPath } from "../../runtime/agent/index.js";
+import type { AgentRuntime } from "../../core/agent/index.js";
+import { createAgentRuntimeFromPath } from "../../core/agent/index.js";
 import { BaseChatAdapter } from "../base-chat-adapter.js";
 import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "../platform-adapter.js";
-import { tryClaimChatIngressMessage } from "../../runtime/chat/idempotency.js";
-import type { McpManager } from "../../runtime/mcp/index.js";
+import { tryClaimChatIngressMessage } from "../../core/chat/idempotency.js";
 import { isTelegramAdmin } from "./access.js";
 import { TelegramApiClient } from "./api-client.js";
 import {
@@ -751,10 +750,7 @@ export function createTelegramBot(
     config.groupAccess,
     logger,
     projectRoot, // 传递 projectRoot
-    () =>
-      createAgentRuntimeFromPath(projectRoot, {
-        logger,
-      }),
+    () => createAgentRuntimeFromPath(projectRoot),
   );
   return bot;
 }

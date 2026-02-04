@@ -11,11 +11,11 @@
  *   itself does not need to know platform IDs or channels.
  */
 
-import { withChatRequestContext } from "../runtime/chat/request-context.js";
-import type { ChatDispatchChannel } from "../runtime/chat/dispatcher.js";
-import { sendFinalOutputIfNeeded } from "../runtime/chat/final-output.js";
-import type { ChatStore } from "../runtime/chat/store.js";
-import type { AgentRuntime } from "../runtime/agent/index.js";
+import { withChatRequestContext } from "../core/chat/request-context.js";
+import type { ChatDispatchChannel } from "../core/chat/dispatcher.js";
+import { sendFinalOutputIfNeeded } from "../core/chat/final-output.js";
+import type { ChatStore } from "../core/chat/store.js";
+import type { AgentRuntime } from "../core/agent/index.js";
 
 export type QueuedChatMessage = {
   channel: ChatDispatchChannel;

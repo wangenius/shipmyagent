@@ -12,8 +12,8 @@ import fs from "fs-extra";
 import path from "path";
 import { z } from "zod";
 import { tool } from "ai";
-import { discoverClaudeSkillsSync } from "../skills/index.js";
-import { getToolRuntimeContext } from "./runtime-context.js";
+import { discoverClaudeSkillsSync } from "../../skills/index.js";
+import { getToolRuntimeContext } from "../set/runtime-context.js";
 
 export const skills_list = tool({
   description:

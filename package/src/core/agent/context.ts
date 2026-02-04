@@ -11,19 +11,19 @@
 import type { ModelMessage } from "ai";
 import type { ConversationMessage } from "../../types/agent.js";
 
-export class AgentSessionStore {
-  private sessionMessages: Map<string, ModelMessage[]> = new Map();
+export class AgentContextStore {
+  private messages: Map<string, ModelMessage[]> = new Map();
 
   getOrCreate(chatKey: string): ModelMessage[] {
-    const existing = this.sessionMessages.get(chatKey);
+    const existing = this.messages.get(chatKey);
     if (existing) return existing;
     const fresh: ModelMessage[] = [];
-    this.sessionMessages.set(chatKey, fresh);
+    this.messages.set(chatKey, fresh);
     return fresh;
   }
 
   set(chatKey: string, messages: unknown[]): void {
-    this.sessionMessages.set(
+    this.messages.set(
       chatKey,
       this.coerceStoredMessagesToModelMessages(
         Array.isArray(messages) ? (messages as unknown[]) : [],
@@ -32,16 +32,16 @@ export class AgentSessionStore {
   }
 
   replace(chatKey: string, messages: ModelMessage[]): void {
-    this.sessionMessages.set(chatKey, messages);
+    this.messages.set(chatKey, messages);
   }
 
   delete(chatKey: string): void {
-    this.sessionMessages.delete(chatKey);
+    this.messages.delete(chatKey);
   }
 
   clear(chatKey?: string): void {
-    if (!chatKey) this.sessionMessages.clear();
-    else this.sessionMessages.delete(chatKey);
+    if (!chatKey) this.messages.clear();
+    else this.messages.delete(chatKey);
   }
 
   getConversationHistory(chatKey?: string): ConversationMessage[] {
@@ -68,13 +68,13 @@ export class AgentSessionStore {
 
     if (!chatKey) {
       const all: ConversationMessage[] = [];
-      for (const messages of this.sessionMessages.values()) {
+      for (const messages of this.messages.values()) {
         all.push(...messages.map(toLegacy));
       }
       return all;
     }
 
-    return (this.sessionMessages.get(chatKey) || []).map(toLegacy);
+    return (this.messages.get(chatKey) || []).map(toLegacy);
   }
 
   formatModelMessagesForLog(

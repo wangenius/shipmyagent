@@ -1,5 +1,5 @@
 export type {
-  AgentContext,
+  AgentConfigurations as AgentContext,
   AgentRunInput,
   AgentResult,
   ConversationMessage,

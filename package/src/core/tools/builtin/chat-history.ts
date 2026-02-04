@@ -14,9 +14,9 @@
 
 import { z } from "zod";
 import { tool, type ModelMessage } from "ai";
-import { chatRequestContext } from "../chat/request-context.js";
-import { ChatStore, type ChatLogEntryV1 } from "../chat/store.js";
-import { getToolRuntimeContext } from "./runtime-context.js";
+import { chatRequestContext } from "../../chat/request-context.js";
+import { ChatStore, type ChatLogEntryV1 } from "../../chat/store.js";
+import { getToolRuntimeContext } from "../set/runtime-context.js";
 import { toolExecutionContext } from "./execution-context.js";
 
 function entryToModelMessage(entry: ChatLogEntryV1): ModelMessage | null {

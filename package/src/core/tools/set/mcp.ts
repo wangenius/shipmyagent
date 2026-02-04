@@ -8,7 +8,7 @@
 
 import { z } from "zod";
 import { tool } from "ai";
-import type { McpToolDefinition, McpManager } from "../mcp/index.js";
+import type { McpToolDefinition, McpManager } from "../../mcp/index.js";
 
 export function createMcpAiTool(params: {
   server: string;

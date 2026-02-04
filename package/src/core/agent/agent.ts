@@ -6,28 +6,28 @@ import {
 } from "ai";
 import { withLlmRequestContext } from "../../telemetry/index.js";
 import { generateId } from "../../utils.js";
-import { ContactBook } from "../chat/contacts.js";
+import { getContactBook } from "../chat/index.js";
 import {
   buildContextSystemPrompt,
   transformPromptsIntoSystemMessages,
 } from "./prompt.js";
-import { AgentSessionStore } from "./session-store.js";
+import { AgentContextStore } from "./context.js";
 import { createModel } from "./model.js";
 import {
   extractUserFacingTextFromStep,
   emitToolSummariesFromStep,
 } from "./tool-step.js";
 import type {
-  AgentContext,
+  AgentConfigurations,
   AgentRunInput,
   AgentResult,
   ConversationMessage,
 } from "../../types/agent.js";
-import { createLogger, type Logger } from "../../telemetry/index.js";
+import { getLogger, type Logger } from "../../telemetry/index.js";
 import type { ShipConfig } from "../../utils.js";
 import { chatRequestContext } from "../chat/request-context.js";
-import { withToolExecutionContext } from "../tools/execution-context.js";
-import { createAgentToolSet } from "../tools/toolset.js";
+import { withToolExecutionContext } from "../tools/builtin/execution-context.js";
+import { createAgentToolSet } from "../tools/set/toolset.js";
 
 /**
  * AgentRuntime orchestrates a single "agent brain" for a project.
@@ -42,21 +42,17 @@ import { createAgentToolSet } from "../tools/toolset.js";
  * Note: AgentRuntime is transport-agnostic; chat adapters/server APIs provide delivery tools (e.g. dispatcher + chat_send).
  */
 export class Agent {
-  private context: AgentContext;
+  private configs: AgentConfigurations;
   private initialized: boolean = false;
-  private logger: Logger;
 
   private model: LanguageModel | null = null;
   private agent: ToolLoopAgent<never, any, any> | null = null;
 
-  private sessions: AgentSessionStore = new AgentSessionStore();
-  private contacts: ContactBook;
+  private sessions: AgentContextStore = new AgentContextStore();
   // Keep core: per-chatKey in-memory history + on-demand disk history loading tool.
 
-  constructor(context: AgentContext, deps?: { logger?: Logger | null }) {
-    this.context = context;
-    this.logger = deps?.logger ?? createLogger(context.projectRoot, "info");
-    this.contacts = new ContactBook(context.projectRoot);
+  constructor(configs: AgentConfigurations) {
+    this.configs = configs;
   }
 
   setConversationHistory(chatKey: string, messages: unknown[]): void {
@@ -71,60 +67,57 @@ export class Agent {
     this.sessions.clear(chatKey);
   }
 
-  getContactBook(): ContactBook {
-    return this.contacts;
-  }
-
   getConfig(): ShipConfig {
-    return this.context.config;
+    return this.configs.config;
   }
 
   getProjectRoot(): string {
-    return this.context.projectRoot;
+    return this.configs.projectRoot;
   }
 
   getLogger(): Logger {
-    return this.logger;
+    return getLogger(this.configs.projectRoot, "info");
   }
 
   async initialize(): Promise<void> {
+    const logger = this.getLogger();
     try {
-      await this.logger.log(
+      await logger.log(
         "info",
         "Initializing Agent Runtime with ToolLoopAgent (AI SDK v6)",
       );
-      await this.logger.log(
+      await logger.log(
         "info",
-        `Agent.md content length: ${this.context.systems?.length || 0} chars`,
+        `Agent.md content length: ${this.configs.systems?.length || 0} chars`,
       );
 
       const tools = createAgentToolSet({
-        projectRoot: this.context.projectRoot,
-        config: this.context.config,
-        logger: this.logger,
-        contacts: this.contacts,
+        projectRoot: this.configs.projectRoot,
+        config: this.configs.config,
+        logger,
+        contacts: getContactBook(this.configs.projectRoot),
       });
 
       this.model = await createModel({
-        config: this.context.config,
-        logger: this.logger,
+        config: this.configs.config,
+        logger,
       });
 
       this.agent = new ToolLoopAgent({
         model: this.model,
-        instructions: transformPromptsIntoSystemMessages(this.context.systems),
+        instructions: transformPromptsIntoSystemMessages(this.configs.systems),
         tools,
         stopWhen: stepCountIs(30),
       });
 
       this.initialized = true;
 
-      await this.logger.log(
+      await logger.log(
         "info",
         "Agent Runtime initialized with ToolLoopAgent",
       );
     } catch (error) {
-      await this.logger.log("error", "Agent Runtime initialization failed", {
+      await logger.log("error", "Agent Runtime initialization failed", {
         error: String(error),
       });
     }
@@ -134,6 +127,7 @@ export class Agent {
     const { instructions, chatKey, onStep } = input;
     const startTime = Date.now();
     const requestId = generateId();
+    const logger = this.getLogger();
 
     const chatCtx = chatRequestContext.getStore();
     const extraContextLines: string[] = [];
@@ -144,16 +138,16 @@ export class Agent {
     if (chatCtx?.username)
       extraContextLines.push(`- Username: ${chatCtx.username}`);
 
-    await this.logger.log("debug", `ChatKey: ${chatKey}`);
-    await this.logger.log("info", "Agent request started", {
+    await logger.log("debug", `ChatKey: ${chatKey}`);
+    await logger.log("info", "Agent request started", {
       requestId,
       chatKey,
       instructionsPreview: instructions?.slice(0, 200),
-      projectRoot: this.context.projectRoot,
+      projectRoot: this.configs.projectRoot,
     });
 
     const defaultPrompt = buildContextSystemPrompt({
-      projectRoot: this.context.projectRoot,
+      projectRoot: this.configs.projectRoot,
       chatKey,
       requestId,
       extraContextLines,
@@ -199,6 +193,7 @@ export class Agent {
     const compactionAttempts = opts?.compactionAttempts ?? 0;
     const onStep = opts?.onStep;
     const requestId = opts?.requestId || "";
+    const logger = this.getLogger();
 
     const emitStep = async (
       type: string,
@@ -278,7 +273,7 @@ export class Agent {
       try {
         const responseMessages = (result.response?.messages ||
           []) as ModelMessage[];
-        await this.logger.log(
+        await logger.log(
           "info",
           [
             "===== LLM RESPONSE BEGIN =====",
@@ -357,7 +352,7 @@ export class Agent {
       }
 
       const duration = Date.now() - startTime;
-      await this.logger.log("info", "Agent execution completed", {
+      await logger.log("info", "Agent execution completed", {
         duration,
         toolCallsTotal: toolCalls.length,
       });
@@ -382,7 +377,7 @@ export class Agent {
         errorMsg.includes("context window")
       ) {
         const currentHistory = this.sessions.getOrCreate(chatKey);
-        await this.logger.log(
+        await logger.log(
           "warn",
           "Context length exceeded, compacting history",
           {
@@ -436,7 +431,7 @@ export class Agent {
         );
       }
 
-      await this.logger.log("error", "Agent execution failed", {
+      await logger.log("error", "Agent execution failed", {
         error: errorMsg,
       });
       return {

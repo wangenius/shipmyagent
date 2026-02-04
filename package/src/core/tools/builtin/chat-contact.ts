@@ -10,8 +10,8 @@
 
 import { z } from "zod";
 import { tool } from "ai";
-import { getChatDispatcher, type ChatDispatchChannel } from "../chat/dispatcher.js";
-import type { ContactBook } from "../chat/contacts.js";
+import { getChatDispatcher, type ChatDispatchChannel } from "../../chat/dispatcher.js";
+import type { ContactBook } from "../../chat/contacts.js";
 
 export function createChatContactTools(params: { contacts: ContactBook }): Record<string, any> {
   const contacts = params.contacts;

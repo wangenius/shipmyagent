@@ -1,6 +1,6 @@
 import type { ShipConfig } from "../utils.js";
 
-export interface AgentContext {
+export interface AgentConfigurations {
   // 当前项目的根目录地址
   projectRoot: string;
   // ship 的配置

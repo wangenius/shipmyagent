@@ -8,8 +8,8 @@
 
 import { z } from "zod";
 import { tool } from "ai";
-import { chatRequestContext } from "../chat/request-context.js";
-import { getChatDispatcher, type ChatDispatchChannel } from "../chat/dispatcher.js";
+import { chatRequestContext } from "../../chat/request-context.js";
+import { getChatDispatcher, type ChatDispatchChannel } from "../../chat/dispatcher.js";
 
 const chatSendInputSchema = z.object({
   text: z.string().describe("Text to send back to the current chat."),

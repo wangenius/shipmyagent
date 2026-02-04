@@ -1,13 +1,13 @@
 import path from "path";
 import fs from "fs-extra";
-import { createLogger } from "../telemetry/index.js";
-import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
+import { getLogger } from "../telemetry/index.js";
+import { createAgentRuntimeFromPath } from "../core/agent/index.js";
 import { createServer, ServerContext } from "../server/index.js";
 import { createInteractiveServer } from "../server/interactive.js";
 import { createTelegramBot } from "../adapters/telegram.js";
 import { createFeishuBot } from "../adapters/feishu.js";
 import { createQQBot } from "../adapters/qq.js";
-import { bootstrapMcpFromProject } from "../runtime/mcp/index.js";
+import { bootstrapMcpFromProject } from "../core/mcp/index.js";
 import {
   getAgentMdPath,
   getShipJsonPath,
@@ -115,7 +115,7 @@ export async function startCommand(
     false;
 
   // Create logger
-  const logger = createLogger(projectRoot, "info");
+  const logger = getLogger(projectRoot, "info");
 
   logger.info("=== ShipMyAgent Starting ===");
   logger.info(`Project: ${projectRoot}`);
@@ -126,7 +126,7 @@ export async function startCommand(
   logger.info("MCP manager initialized");
 
   // Create Agent Runtime
-  const agentRuntime = createAgentRuntimeFromPath(projectRoot, { logger });
+  const agentRuntime = createAgentRuntimeFromPath(projectRoot);
   await agentRuntime.initialize();
   logger.info("Agent Runtime initialized");
 

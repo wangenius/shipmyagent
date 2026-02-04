@@ -6,7 +6,7 @@
  * minimum context they need (projectRoot + resolved ShipConfig).
  */
 
-import type { ShipConfig } from "../../utils.js";
+import type { ShipConfig } from "../../../utils.js";
 
 export interface ToolRuntimeContext {
   projectRoot: string;

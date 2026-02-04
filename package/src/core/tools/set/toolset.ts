@@ -10,16 +10,16 @@
  * - Runtime subsystems should NOT depend on tool implementations
  */
 
-import { loadProjectDotenv, type ShipConfig } from "../../utils.js";
-import { getMcpManager } from "../mcp/index.js";
+import { loadProjectDotenv, type ShipConfig } from "../../../utils.js";
+import { getMcpManager } from "../../mcp/index.js";
 import { setToolRuntimeContext } from "./runtime-context.js";
-import { skillsTools } from "./skills.js";
-import { execShellTools } from "./exec-shell.js";
+import { skillsTools } from "../builtin/skills.js";
+import { execShellTools } from "../builtin/exec-shell.js";
 import { createMcpAiTool } from "./mcp.js";
-import { chatTools } from "./chat.js";
-import { chatHistoryTools } from "./chat-history.js";
-import type { ContactBook } from "../chat/contacts.js";
-import { createChatContactTools } from "./chat-contact.js";
+import { chatTools } from "../builtin/chat.js";
+import { chatHistoryTools } from "../builtin/chat-history.js";
+import type { ContactBook } from "../../chat/contacts.js";
+import { createChatContactTools } from "../builtin/chat-contact.js";
 
 export interface AgentToolSetLogger {
   info(message: string): void;
