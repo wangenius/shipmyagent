@@ -30,6 +30,38 @@ import { withToolExecutionContext } from "../tools/builtin/execution-context.js"
 import { createAgentToolSet } from "../tools/set/toolset.js";
 
 /**
+ * Stop condition: stop the tool loop once `chat_send` has been invoked.
+ *
+ * 为什么需要这个兜底：
+ * - 在 tool-strict 的 chat 集成里，模型会用 `chat_send` 发消息。
+ * - 但部分模型会把 `chat_send` 当成“流式输出接口”，每段话都调用一次，
+ *   于是 ToolLoopAgent 会继续下一步 -> 再调用 `chat_send` -> 无限重复，最终刷屏直到 stepCount 上限。
+ * - 对用户而言，一次用户消息应只触发一次对话回复（除非显式需要分多条/发附件）。
+ */
+function stopAfterFirstChatSend(options: { steps: any[] }): boolean {
+  const store = chatRequestContext.getStore();
+  // 非聊天触发（例如 CLI / API）时，不要因为误调用 chat_send 而提前终止。
+  if (!store?.channel) return false;
+
+  const steps = Array.isArray(options.steps) ? options.steps : [];
+  for (const step of steps) {
+    const toolResults = Array.isArray((step as any)?.toolResults)
+      ? ((step as any).toolResults as any[])
+      : [];
+    for (const tr of toolResults) {
+      const toolName = String((tr as any)?.toolName || "");
+      if (toolName !== "chat_send") continue;
+      const out = (tr as any)?.output;
+      // 仅当 chat_send 成功后才停止，避免发送失败时阻断模型自救/重试。
+      if (out && typeof out === "object" && (out as any).success === true) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * AgentRuntime orchestrates a single "agent brain" for a project.
  *
  * Responsibilities:
@@ -107,7 +139,7 @@ export class Agent {
         model: this.model,
         instructions: transformPromptsIntoSystemMessages(this.configs.systems),
         tools,
-        stopWhen: stepCountIs(30),
+        stopWhen: [stopAfterFirstChatSend, stepCountIs(30)],
       });
 
       this.initialized = true;

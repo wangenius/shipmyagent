@@ -27,6 +27,7 @@ export function buildContextSystemPrompt(input: {
     "- Reply in natural language.",
     "- Do NOT paste raw tool outputs or JSON logs; summarize them.",
     "- Deliver user-visible replies via the `chat_send` tool.",
+    "- IMPORTANT: Call `chat_send` at most once per user message; include your full reply in that single call (unless the user explicitly asks to split).",
     "- Do NOT rewrite the user's message or add prefixes to it.",
   ].join("\n");
 
@@ -52,6 +53,11 @@ export const DEFAULT_SHIP_PROMPTS = `
 核心原则
 - 对用户输出要“像一个靠谱的同事”：给结论 + 必要的上下文，不要贴工具原始输出。
 - 遇到失败：给出可复现的错误摘要（1-3 行）+ 下一步行动（重试/降级/需要用户提供信息），不要假装成功。
+
+输出与发送（重要）
+- 这是 tool-strict 聊天集成：用户可见内容必须通过 \`chat_send\` 发送。
+- 一次用户消息，最多调用一次 \`chat_send\`：把完整回复放进同一次 \`chat_send\` 里（除非用户明确要求拆成多条）。
+- 不要为了“补充说明/最后一句/再确认”反复调用 \`chat_send\`，避免刷屏。
 
 Telegram 附件发送（仅当你在 Telegram 对话中回复时）
 - 你可以在回复中加入单独一行的附件指令来让机器人发送文件/图片/语音：
