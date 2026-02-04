@@ -50,35 +50,39 @@ ShipMyAgent 的核心命题是 **Repo is the Agent**：你的代码仓库不仅�
 
 ### 1) system prompt：Agent.md + 内置提示词 + Skills 概览
 
-`createAgentRuntimeFromPath()`（`package/src/runtime/agent/factory.ts`）会构建 `agentMd`：
+`createAgentRuntimeFromPath()`（`package/src/core/agent/factory.ts`）会构建 system prompts：
 
 - 读取项目 `Agent.md`（不存在则用默认角色）
-- 拼上内置默认提示词（`package/src/asset/prompts.txt`）
+- 拼上内置默认提示词（`package/src/core/agent/prompts.txt`）
 - 扫描并渲染 Skills 概览（默认 `.claude/skills`）
 
 ### 2) in-flight messages：DefaultPrompt + history + 用户原文
 
-`AgentRuntime.run()`（`package/src/runtime/agent/runtime.ts`）每次请求都会：
+`AgentRuntime.run()`（`package/src/core/agent/agent.ts`）每次请求都会：
 
-- 生成 `DefaultPrompt`（`package/src/runtime/agent/prompt.ts`），包含 projectRoot/chatKey/requestId/来源等，并规定输出方式（如必须走 `chat_send`）
-- 组装 messages：`system(Agent.md + DefaultPrompt) + history(in-memory) + user(原文)`
-- user 消息保持原样（不加前缀）；需要更多上文时可调用 `chat_load_history` 注入历史消息
+- 生成运行时 `RuntimePrompt`（`package/src/core/agent/prompt.ts`），包含 projectRoot/chatKey/requestId/来源等，并规定输出方式（优先 `chat_send`，无 chat 上下文时允许直接输出文本）
+- 组装 messages：`system(Agent.md + prompts + skills + RuntimePrompt) + history(in-memory) + user(原文)`
+- user 消息保持原样（不加前缀）；需要更多上文时可调用：
+  - `chat_load_history`：把 ChatStore 的对话历史作为 **一条 assistant message** 注入（支持 `count/offset`）
+  - `agent_load_context`：把 agent 执行上下文摘要作为 **system message** 注入（支持 `count/offset`）
 
 ## 历史太长怎么办（简化版）
 
 当前实现采用两条简单策略：
 
-- in-memory history 只保留最近 N 条（固定上限裁剪）
+- in-memory history 有上限，并在需要时将更早消息压缩为摘要（避免无脑裁剪）
 - 需要更多历史细节时，通过 `chat_load_history` 从 `.ship/chats/<chatKey>.jsonl` 按需读取/搜索并注入当前上下文
 
 ## Repo 如何成为上下文（按需检索 + 可审计）
 
 仓库上下文主要通过工具进入 Agent：
 
-- `exec_shell`（`package/src/runtime/tools/exec-shell.ts`）：在 `projectRoot` 下执行 `ls/cat/rg/git/test/build…`，按需读取/搜索仓库信息
-- `ChatStore`（`package/src/runtime/chat/store.ts`）：将聊天记录 append 到 `.ship/chats/*.jsonl`；需要更多落盘历史时可用 `chat_load_history` 按需加载
+- `exec_shell`（`package/src/core/tools/builtin/exec-shell.ts`）：在 `projectRoot` 下执行 `ls/cat/rg/git/test/build…`，按需读取/搜索仓库信息
+- `ChatStore`（`package/src/core/chat/store.ts`）：将聊天记录 append 到 `.ship/chats/*.jsonl`；需要更多落盘历史时可用 `chat_load_history` 按需加载
 - Skills/MCP：把 SOP 和外部系统能力“工程化地接进来”（`.claude/skills` 与 `.ship/mcp/mcp.json`）
 
 ---
 
-如果你想看更“偏工程实现”的版本（带更多文件路径与职责拆分），也可以直接读仓库内的 `docs/agent-context-engineering.md`。
+如果你想看更“偏工程实现”的版本（带更多文件路径与职责拆分），可以读仓库内的：
+- `docs/context-and-runtime.md`
+- `docs/platform-message-pipeline.md`

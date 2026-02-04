@@ -48,10 +48,9 @@ ShipMyAgent uses standard log levels:
 
 ShipMyAgent currently writes structured JSONL logs to `.ship/logs/<YYYY-MM-DD>.jsonl`.
 
-For LLM request logging (may include system + messages), you can toggle:
+For LLM request logging (may include system + messages), you can toggle in `ship.json`:
 
-- `SMA_LOG_LLM_MESSAGES=0` to disable request logging
-- `SMA_LOG_LLM_PAYLOAD=1` to include full JSON payload in log metadata (more sensitive)
+- `llm.logMessages=false` to disable request logging
 
 ## Interpreting Log Messages
 
@@ -173,13 +172,17 @@ By default, ShipMyAgent logs outgoing LLM requests and the AI SDK response messa
 To disable LLM request logging:
 
 ```bash
-SMA_LOG_LLM_MESSAGES=0 shipmyagent start
+Update `ship.json`:
+
+```json
+{ "llm": { "logMessages": false } }
+```
 ```
 
 To include full JSON payload metadata (more sensitive):
 
 ```bash
-SMA_LOG_LLM_PAYLOAD=1 shipmyagent start
+Note: there is no separate “payload logging” toggle in the current version. Logging is controlled solely by `llm.logMessages`.
 ```
 
 ## JSONL log analysis (jq)

@@ -51,6 +51,40 @@ export interface ShipConfig {
     // 特定模型配置
     anthropicVersion?: string;
   };
+  /**
+   * 上下文与历史管理（工程向配置）。
+   *
+   * 说明
+   * - ChatStore 负责落盘“用户视角对话历史”（.ship/chats）。
+   * - AgentRuntime 还需要维护“给 LLM 的上下文 messages”（in-memory），以及可选的“agent 执行上下文”（.ship/memory）。
+   */
+  context?: {
+    /**
+     * LLM 对话上下文（in-memory）相关策略。
+     */
+    chatHistory?: {
+      /**
+       * in-memory messages 的最大条数（按 chatKey 计）。
+       * 默认：60
+       */
+      inMemoryMaxMessages?: number;
+      /**
+       * 发生上下文过长时，压缩后保留最后多少条 messages。
+       * 默认：30
+       */
+      compactKeepLastMessages?: number;
+    };
+    /**
+     * Agent 执行上下文（可持久化）相关策略。
+     */
+    agentContext?: {
+      /**
+       * `.ship/memory/agent-context/<chatKey>.jsonl` 最多保留多少条 entry；超出后自动 compact。
+       * 默认：200
+       */
+      windowEntries?: number;
+    };
+  };
   permissions?: {
     read_repo: boolean | { paths?: string[] };
     write_repo?: boolean | {
@@ -169,6 +203,15 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
     baseUrl: "https://api.anthropic.com/v1",
     apiKey: "${API_KEY}",
     temperature: 0.7,
+  },
+  context: {
+    chatHistory: {
+      inMemoryMaxMessages: 60,
+      compactKeepLastMessages: 30,
+    },
+    agentContext: {
+      windowEntries: 200,
+    },
   },
   permissions: {
     read_repo: true,

@@ -7,13 +7,12 @@
 ## P0：API 模式与 tool-strict 输出规则冲突
 
 现状：
-- DefaultPrompt 强制要求 “用户可见回复通过 `chat_send` 工具发送”：`package/src/core/agent/prompt.ts:1`
-- `/api/execute` 并没有 `withChatRequestContext`：`package/src/server/index.ts:1`
+- DefaultPrompt 已改为“优先 `chat_send`，无 chat 上下文则允许直接输出文本”：`package/src/core/agent/prompt.ts:1`
+- `/api/execute` 已注入 `chatKey`（但不提供 channel dispatcher 回发）：`package/src/server/index.ts:1`
 - dispatcher registry 不支持 `"api"`（`ChatDispatchChannel` 仅 `telegram|feishu|qq`）：`package/src/core/chat/dispatcher.ts:1`
 
 影响：
-- API 调用链中 `chat_send` 会报 “No chat channel available / No chatId available”
-- 如果模型严格遵守工具发送，HTTP 返回 `output` 可能不稳定（取决于模型是否仍然输出文本）
+- API 调用链中 `chat_send` 仍可能失败（无 channel/chatId），但不会阻塞最终文本输出
 
 建议（建议至少做其中一项）：
 1) **让 API 请求也进入 ChatRequestContext**
@@ -36,14 +35,13 @@
 
 现状：
 - `package/src/core/agent/prompts.txt:1` 末尾包含 `{{current_time}}`
-- 但 `replaceVariblesInPrompts()` 当前为 no-op：`package/src/core/agent/prompt.ts:1`
+- `replaceVariablesInPrompts()` 已实现替换：`package/src/core/agent/prompt.ts:1`
 
 影响：
 - 模型可能误以为已拿到时间信息，或把占位符当作真实内容
 
 建议（二选一）：
-- 实现 `{{current_time}}`（以及未来需要的变量）的替换
-- 或删除占位符，避免“看起来有、实际上没有”
+- 继续扩展需要的模板变量（例如 repo 信息/运行参数），或保持只替换 `{{current_time}}` 的最小实现
 
 ## P2：工具运行时上下文（ToolRuntimeContext）是全局可变单例
 
@@ -60,8 +58,7 @@
 
 现状：
 - Telegram 继承 `BaseChatAdapter`，使用全局 runtime + 全局队列：`package/src/adapters/base-chat-adapter.ts:1`
-- 但 `package/src/adapters/telegram/bot.ts:1` 中存在“chatKey 级别 runtime 缓存”的注释，易误导维护者
+- 该注释已对齐为“全局共享 runtime + 单队列”：`package/src/adapters/telegram/bot.ts:1`
 
 建议：
 - 对齐注释与真实实现（或恢复 per-chatKey runtime 的设计，但要重新审视并发/资源与工具副作用）。
-

@@ -51,14 +51,8 @@ export async function createModel(input: {
     throw Error("No API Key configured, will use simulation mode");
   }
 
-  const envLog = process.env.SMA_LOG_LLM_MESSAGES;
   const configLog = (input.config as any)?.llm?.logMessages;
-  const logLlmMessages =
-    typeof envLog === "string"
-      ? envLog !== "0"
-      : typeof configLog === "boolean"
-        ? configLog
-        : true;
+  const logLlmMessages = typeof configLog === "boolean" ? configLog : true;
 
   const loggingFetch = createLlmLoggingFetch({
     logger: input.logger as any,

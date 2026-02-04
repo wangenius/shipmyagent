@@ -321,10 +321,9 @@ ShipMyAgent 当前会把统一的结构化日志写入：
 
 - `.ship/logs/<YYYY-MM-DD>.jsonl`（JSONL）
 
-LLM 请求日志（通常包含 system + messages）可通过环境变量控制：
+LLM 请求日志（通常包含 system + messages）可通过 `ship.json` 控制：
 
-- `SMA_LOG_LLM_MESSAGES=0` 关闭
-- `SMA_LOG_LLM_PAYLOAD=1` 在日志元信息中包含完整 payload（更敏感）
+- `llm.logMessages=false` 关闭
 
 #### cache (object)
 

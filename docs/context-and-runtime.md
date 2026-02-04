@@ -18,7 +18,7 @@
 
 这些最终通过：
 - `transformPromptsIntoSystemMessages()`：`package/src/core/agent/prompt.ts:1`
-转换为 `ToolLoopAgent.instructions`（system messages 列表）。
+转换为每次 run 的 **system messages 列表**（当前实现不使用 `ToolLoopAgent.instructions`，而是把 system messages 放进 `messages` 里，便于工具动态注入 system/context）。
 
 ## 2. 每次 run 的“运行时 system prompt”（DefaultPrompt）
 
@@ -44,19 +44,19 @@
 - `Agent.runWithToolLoopAgent()`：`package/src/core/agent/agent.ts:1`
 
 每次请求的 messages 结构：
-- `system`: DefaultPrompt（注意：它是“每次请求独有”的 system message）
-- `history`: `AgentContextStore` 保存的 in-memory 历史（按 chatKey）
+- `system`: `Agent.md + prompts + skills + RuntimePrompt`（RuntimePrompt 是“每次请求独有”的 system message）
+- `history`: `ChatSessionStore` 保存的 in-memory 历史（按 chatKey）
 - `user`: 当前用户输入原文（不加前缀）
 
 ## 4. 会话历史管理：in-memory 与 on-disk 的分工
 
 ### 4.1 in-memory（短期上下文）
 
-- `AgentContextStore`：`package/src/core/agent/context.ts:1`
+- `ContextStore`（in-memory 部分）：`package/src/core/agent/context-store.ts:1`
 - 特征：
   - 每个 `chatKey` 独立
   - 追加每轮 user + assistant/tool messages
-  - 有固定上限（默认 60 条），超过裁剪最旧部分
+  - 有上限（默认 60 条，可在 `ship.json context.chatHistory.inMemoryMaxMessages` 调整），超出时把更早 messages 压缩成一条 assistant summary
 
 ### 4.2 on-disk（审计/可追溯历史）
 
@@ -64,7 +64,7 @@
 - `append()` 把入站 user 与出站 assistant（best-effort）写入 `.ship/chats/*.jsonl`
 - 超阈值 archive：把旧的一半切到 `.archive-N.jsonl`
 
-## 5. 按需历史注入：`chat_load_history`
+## 5. 按需历史注入：`chat_load_history`（ChatStore → assistant 注入）
 
 工具：
 - `chat_load_history`：`package/src/core/tools/builtin/chat-history.ts:1`
@@ -75,11 +75,25 @@
 
 实现关键点：
 - 注入发生在 **当前 user message 之前**，不改写用户原文
+- 注入内容被合并为 **一条 assistant message**（支持 `count/offset`，默认 `20/0`）
 - 单次 run 有注入上限：
   - Agent 设置 `maxInjectedMessages: 120`：`package/src/core/agent/agent.ts:1`
-  - 工具自身 `limit` 最大 200：`package/src/core/tools/builtin/chat-history.ts:1`
+  - 工具自身 `count` 最大 200：`package/src/core/tools/builtin/chat-history.ts:1`
 
-## 6. ToolExecutionContext：工具如何“拿到当前 messages”
+## 6. 按需执行上下文注入：`agent_load_context`（.ship/memory → system 注入）
+
+工具：
+- `agent_load_context`：`package/src/core/tools/builtin/agent-context.ts:1`
+
+数据来源：
+- `ContextStore`（persisted 部分）：`package/src/core/agent/context-store.ts:1`
+- 落盘路径：`.ship/memory/agent-context/<chatKey>.jsonl`
+
+语义：
+- 这不是用户的聊天记录，而是“工程向的执行摘要”（工具调用/失败点/输出预览等）
+- 注入方式为 **system message**（支持 `count/offset`，默认 `20/0`）
+
+## 7. ToolExecutionContext：工具如何“拿到当前 messages”
 
 工具执行上下文（ALS）：
 - `ToolExecutionContext`：`package/src/core/tools/builtin/execution-context.ts:1`
@@ -87,16 +101,16 @@
 Agent 在调用 `ToolLoopAgent.generate()` 前包裹：
 - `withToolExecutionContext({ messages, currentUserMessageIndex, ... }, fn)`
 
-这样 tool（如 `chat_load_history`）就能安全地对同一 in-flight messages 引用做“受控注入”。
+这样 tool（如 `chat_load_history` / `agent_load_context` / `skills_load`）就能安全地对同一 in-flight messages 引用做“受控注入”。
 
-## 7. 运行时日志与 LLM request 追踪
+## 8. 运行时日志与 LLM request 追踪
 
-### 7.1 统一 Logger
+### 8.1 统一 Logger
 
 - `Logger`：`package/src/telemetry/logging/logger.ts:1`
 - 落盘：`.ship/logs/<YYYY-MM-DD>.jsonl`
 
-### 7.2 LLM request/response 的关联方式
+### 8.2 LLM request/response 的关联方式
 
 - request side：
   - `withLlmRequestContext({chatKey, requestId}, ...)`：`package/src/core/agent/agent.ts:1`
@@ -105,16 +119,14 @@ Agent 在调用 `ToolLoopAgent.generate()` 前包裹：
   - Agent 在 `generate()` 返回后记录 response messages block：`package/src/core/agent/agent.ts:1`
 
 开关：
-- `SMA_LOG_LLM_MESSAGES=0` 或 `ship.json llm.logMessages=false`：`package/src/core/agent/model.ts:1`
-- `SMA_LOG_LLM_PAYLOAD=1` 记录更敏感的 payload：`package/src/telemetry/llm-logging/format.ts:1`
+- `ship.json llm.logMessages=false`：`package/src/core/agent/model.ts:1`
 
-## 8. 上下文过长（context window exceeded）时的策略
+## 9. 上下文过长（context window exceeded）时的策略
 
 `Agent.run()` 捕获错误文本包含 context window 相关关键词后：
 - 记录 warn 日志
-- 进行“最小压缩”：丢弃最旧一半的 in-memory history
+- 压缩 in-memory history：把更早 messages 合并为一条 assistant summary，并保留最后 N 条
 - 最多重试 3 次，仍失败则清空该 chatKey 的 history 并返回失败信息
 
 实现位置：
 - `package/src/core/agent/agent.ts:1`
-

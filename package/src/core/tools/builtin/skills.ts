@@ -10,10 +10,19 @@
 
 import fs from "fs-extra";
 import path from "path";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { tool } from "ai";
 import { discoverClaudeSkillsSync } from "../../skills/index.js";
 import { getToolRuntimeContext } from "../set/runtime-context.js";
+import {
+  injectSystemMessageOnce,
+  toolExecutionContext,
+} from "./execution-context.js";
+
+function sha1(text: string): string {
+  return createHash("sha1").update(text).digest("hex");
+}
 
 export const skills_list = tool({
   description:
@@ -67,6 +76,29 @@ export const skills_load = tool({
       const content = fs.readFileSync(skill.skillMdPath, "utf-8");
       const relDir = path.relative(projectRoot, skill.directoryPath);
       const relMd = path.relative(projectRoot, skill.skillMdPath);
+
+      // 关键：把 skill 的全文以 system message 的方式注入到本次 run 的上下文里。
+      // 这样技能就不是“工具输出”，而是更接近“规则/流程”的系统约束。
+      const toolCtx = toolExecutionContext.getStore();
+      if (toolCtx) {
+        const systemText = [
+          "已加载 Skill（system 注入）：",
+          `- name: ${skill.name}`,
+          `- id: ${skill.id}`,
+          `- path: ${relMd}`,
+          "",
+          "SKILL.md 内容如下：",
+          content,
+        ].join("\n");
+
+        const fp = `skill:${skill.id}:${sha1(content)}`;
+        injectSystemMessageOnce({
+          ctx: toolCtx,
+          fingerprint: fp,
+          content: systemText,
+        });
+      }
+
       return {
         success: true,
         skill: {

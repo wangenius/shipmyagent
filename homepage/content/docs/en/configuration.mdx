@@ -321,10 +321,9 @@ ShipMyAgent currently writes unified structured logs to:
 
 - `.ship/logs/<YYYY-MM-DD>.jsonl` (JSONL)
 
-LLM request logging (may include system + messages) can be toggled via env vars:
+LLM request logging (may include system + messages) can be toggled via `ship.json`:
 
-- `SMA_LOG_LLM_MESSAGES=0` to disable
-- `SMA_LOG_LLM_PAYLOAD=1` to include full JSON payload in metadata (more sensitive)
+- `llm.logMessages=false` to disable
 
 #### cache (object)
 

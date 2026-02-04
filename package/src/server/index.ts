@@ -4,6 +4,7 @@ import { logger } from "hono/logger";
 import { Logger } from "../telemetry/index.js";
 import type { AgentRuntime } from "../core/agent/index.js";
 import { ChatStore } from "../core/chat/store.js";
+import { withChatRequestContext } from "../core/chat/request-context.js";
 import http from "node:http";
 import fs from "fs-extra";
 import path from "path";
@@ -174,10 +175,17 @@ export class AgentServer {
         if (!this.context.agentRuntime.isInitialized()) {
           await this.context.agentRuntime.initialize();
         }
-        const result = await this.context.agentRuntime.run({
-          chatKey,
-          instructions,
-        });
+        // API 也是一种 “chat”（有 chatKey + 可落盘历史），但它不是“平台消息回发”场景：
+        // - 允许使用 chat_load_history / agent_load_context 等依赖 chatKey 的工具
+        // - 不提供 channel/chatId 的 dispatcher 回发能力（响应通过 HTTP body 返回）
+        const result = await withChatRequestContext(
+          { chatKey, chatId, userId: actorId, messageId: typeof body?.messageId === "string" ? body.messageId : undefined },
+          () =>
+            this.context.agentRuntime.run({
+              chatKey,
+              instructions,
+            }),
+        );
 
         await this.chatStore.append({
           channel: "api",

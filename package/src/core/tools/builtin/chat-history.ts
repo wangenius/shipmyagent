@@ -1,57 +1,61 @@
 /**
- * Chat history loading tool.
+ * Chat 历史注入工具（对话式注入）。
  *
- * Motivation:
- * - The runtime defaults to a compact context: `system + assistant(summary) + user`.
- * - When the model needs more detail, it can call this tool to load additional
- *   messages from the persisted `ChatStore` and inject them into the in-flight
- *   message list (before the current user message).
+ * 目标
+ * - ChatStore 记录的是“用户视角的对话历史”（platform 的 chat transcript）。
+ * - 当模型需要更多上文时，通过工具从 `.ship/chats/<chatKey>.jsonl` 读取历史，
+ *   并把结果 **合并为一条 assistant message** 注入当前上下文。
  *
- * Notes:
- * - This tool never mutates the user message content.
- * - Injection is best-effort and bounded by `maxInjectedMessages`.
+ * 为什么只注入一条 assistant message？
+ * - 更省 tokens（避免逐条重放消息带来的 role/meta 开销）
+ * - 更稳定（减少对消息序列的结构性影响）
+ *
+ * 注意
+ * - 永远不改写用户原始输入（只在 user message 之前插入一条 assistant message）
+ * - 注入受 `maxInjectedMessages` 限制（避免单次 run 无边界膨胀）
  */
 
 import { z } from "zod";
-import { tool, type ModelMessage } from "ai";
+import { tool } from "ai";
 import { chatRequestContext } from "../../chat/request-context.js";
 import { ChatStore, type ChatLogEntryV1 } from "../../chat/store.js";
 import { getToolRuntimeContext } from "../set/runtime-context.js";
-import { toolExecutionContext } from "./execution-context.js";
-
-function entryToModelMessage(entry: ChatLogEntryV1): ModelMessage | null {
-  const text = String(entry.text ?? "").trim();
-  if (!text) return null;
-  if (entry.role === "user" || entry.role === "assistant") {
-    return { role: entry.role, content: text };
-  }
-  return null;
-}
-
-function fingerprintEntry(entry: ChatLogEntryV1): string {
-  // Keep this stable, compact, and non-sensitive (no meta).
-  return `${entry.ts}:${entry.role}:${String(entry.text ?? "").slice(0, 2000)}`;
-}
+import {
+  injectAssistantMessageOnce,
+  toolExecutionContext,
+} from "./execution-context.js";
 
 const chatLoadHistoryInputSchema = z.object({
   /**
-   * Maximum number of messages to load.
-   *
-   * Note: this counts user+assistant messages after filtering.
+   * 从“最新的历史”往前取多少条（只统计 user/assistant）。
    */
-  limit: z
+  count: z
     .number()
     .int()
     .min(1)
     .max(200)
-    .default(30)
-    .describe("Max number of messages to load (1-200)."),
+    .default(20)
+    .describe("How many chat turns to inject (default: 20)."),
+
+  /**
+   * 相对最新消息的偏移量。
+   *
+   * - offset=0：注入最近 count 条
+   * - offset=20：跳过最近 20 条，再往前取 count 条
+   */
+  offset: z
+    .number()
+    .int()
+    .min(0)
+    .max(2000)
+    .default(0)
+    .describe("Offset from the newest messages (default: 0)."),
 
   /**
    * Optional keyword search.
    *
-   * When provided, the tool searches for matching entries and returns the most
-   * recent results (up to `limit`).
+   * When provided, we search matching entries and then apply (count, offset)
+   * on the matched list.
    */
   keyword: z
     .string()
@@ -64,7 +68,7 @@ const chatLoadHistoryInputSchema = z.object({
 
 export const chat_load_history = tool({
   description:
-    "Load earlier chat messages from disk and inject them into the current context (before the current user message). Use when you need more details from prior conversation.",
+    "Load chat history from disk and inject it as ONE assistant message (before the current user message). Use when you need more context from prior conversation.",
   inputSchema: chatLoadHistoryInputSchema,
   execute: async (input) => {
     const chatCtx = chatRequestContext.getStore();
@@ -89,9 +93,12 @@ export const chat_load_history = tool({
     const { projectRoot } = getToolRuntimeContext();
     const store = new ChatStore(projectRoot);
 
-    const requestedLimit =
-      typeof (input as any).limit === "number" ? (input as any).limit : 30;
-    const limit = Math.max(1, Math.min(200, requestedLimit));
+    const requestedCount =
+      typeof (input as any).count === "number" ? (input as any).count : 20;
+    const count = Math.max(1, Math.min(200, requestedCount));
+    const requestedOffset =
+      typeof (input as any).offset === "number" ? (input as any).offset : 0;
+    const offset = Math.max(0, Math.min(2000, requestedOffset));
     const keyword =
       typeof (input as any).keyword === "string"
         ? String((input as any).keyword).trim()
@@ -100,30 +107,23 @@ export const chat_load_history = tool({
     let entries: ChatLogEntryV1[] = [];
     try {
       if (keyword) {
-        entries = await store.search(chatKey, { keyword, limit: limit * 2 });
+        entries = await store.search(chatKey, {
+          keyword,
+          limit: Math.min(5000, (count + offset) * 3),
+        });
       } else {
-        entries = await store.loadRecentEntries(chatKey, limit * 2);
+        entries = await store.loadRecentEntries(chatKey, Math.min(5000, count + offset));
       }
     } catch (e) {
       return { success: false, error: String(e) };
     }
 
-    const injected: ModelMessage[] = [];
-    for (const entry of entries) {
-      if (toolCtx.injectedFingerprints.size >= toolCtx.maxInjectedMessages)
-        break;
-      const fp = fingerprintEntry(entry);
-      if (toolCtx.injectedFingerprints.has(fp)) continue;
+    const ua = entries.filter((e) => e.role === "user" || e.role === "assistant");
+    const endExclusive = Math.max(0, ua.length - offset);
+    const startInclusive = Math.max(0, endExclusive - count);
+    const picked = ua.slice(startInclusive, endExclusive);
 
-      const msg = entryToModelMessage(entry);
-      if (!msg) continue;
-
-      toolCtx.injectedFingerprints.add(fp);
-      injected.push(msg);
-      if (injected.length >= limit) break;
-    }
-
-    if (injected.length === 0) {
+    if (picked.length === 0) {
       return {
         success: true,
         inserted: 0,
@@ -133,23 +133,46 @@ export const chat_load_history = tool({
       };
     }
 
-    // Inject before the current user message (keep user's prompt intact).
-    const insertAt = Math.max(
-      0,
-      Math.min(toolCtx.currentUserMessageIndex, toolCtx.messages.length),
+    const maxChars = 12000;
+    const lines: string[] = [];
+    lines.push(
+      [
+        "以下是从 ChatStore 注入的上文对话历史（用户视角 transcript）：",
+        `- chatKey: ${chatKey}`,
+        `- mode: ${keyword ? "search" : "recent"}`,
+        `- count: ${count}`,
+        `- offset: ${offset}`,
+        keyword ? `- keyword: ${keyword}` : "",
+        "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
     );
-    toolCtx.messages.splice(insertAt, 0, ...injected);
-    toolCtx.currentUserMessageIndex += injected.length;
+
+    for (const e of picked) {
+      const role = e.role === "user" ? "user" : "assistant";
+      const text = String(e.text ?? "").replace(/\s+$/g, "");
+      if (!text) continue;
+      lines.push(`${role}: ${text}`);
+    }
+
+    let content = lines.join("\n");
+    if (content.length > maxChars) content = content.slice(0, maxChars) + "\n…(truncated)";
+
+    const fp = `chat_history:${chatKey}:${keyword || "recent"}:${count}:${offset}:${content.slice(0, 2000)}`;
+    const injected = injectAssistantMessageOnce({
+      ctx: toolCtx,
+      fingerprint: fp,
+      content,
+    });
 
     return {
       success: true,
-      inserted: injected.length,
+      inserted: injected.injected ? 1 : 0,
+      reason: injected.injected ? undefined : injected.reason,
       mode: keyword ? "search" : "recent",
       keyword: keyword || undefined,
-      messages: injected.map((m) => ({
-        role: (m as any).role,
-        content: typeof (m as any).content === "string" ? (m as any).content : "",
-      })),
+      picked: picked.length,
     };
   },
 });

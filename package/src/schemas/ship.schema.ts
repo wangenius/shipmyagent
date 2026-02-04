@@ -48,6 +48,31 @@ export const SHIP_JSON_SCHEMA: Record<string, unknown> = {
         anthropicVersion: { type: "string" },
       },
     },
+    context: {
+      type: "object",
+      additionalProperties: true,
+      properties: {
+        chatHistory: {
+          type: "object",
+          additionalProperties: true,
+          properties: {
+            inMemoryMaxMessages: { type: "integer", minimum: 1, maximum: 5000 },
+            compactKeepLastMessages: {
+              type: "integer",
+              minimum: 1,
+              maximum: 5000,
+            },
+          },
+        },
+        agentContext: {
+          type: "object",
+          additionalProperties: true,
+          properties: {
+            windowEntries: { type: "integer", minimum: 1, maximum: 20000 },
+          },
+        },
+      },
+    },
     permissions: {
       type: "object",
       additionalProperties: true,

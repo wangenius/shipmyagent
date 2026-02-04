@@ -1,4 +1,15 @@
+/**
+ * Agent prompt helpers.
+ *
+ * 这里主要做两件事：
+ * 1) 生成每次请求的“运行时 system prompt”（包含 chatKey/requestId/来源渠道等）
+ * 2) 把 `Agent.md` / 内置 prompts / skills 概览等“瓶装 system prompts”统一转换为 system messages，
+ *    并支持模板变量替换（例如 `{{current_time}}`）
+ */
+
 import { SystemModelMessage } from "ai";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 
 /**
  * Build the default (runtime) system prompt for an agent run.
@@ -27,16 +38,19 @@ export function buildContextSystemPrompt(input: {
     "- Reply in natural language.",
     "- Do NOT paste raw tool outputs or JSON logs; summarize them.",
     "- Deliver user-visible replies via the `chat_send` tool.",
-    "- IMPORTANT: Call `chat_send` at most once per user message; include your full reply in that single call (unless the user explicitly asks to split).",
-    "- Do NOT rewrite the user's message or add prefixes to it.",
   ].join("\n");
 
   return [runtimeContextLines.join("\n"), "", outputRules].join("\n");
 }
 
-export function replaceVariblesInPrompts(prompt: string) {
-  const result = prompt;
-  return result;
+function getCurrentTimeString(): string {
+  // 使用 ISO 时间，避免 locale 造成不可预测的格式差异
+  return new Date().toISOString();
+}
+
+export function replaceVariablesInPrompts(prompt: string): string {
+  if (!prompt) return prompt;
+  return prompt.replaceAll("{{current_time}}", getCurrentTimeString());
 }
 
 export function transformPromptsIntoSystemMessages(
@@ -44,7 +58,7 @@ export function transformPromptsIntoSystemMessages(
 ): SystemModelMessage[] {
   const result: SystemModelMessage[] = [];
   prompts.forEach((item) => {
-    result.push({ role: "system", content: replaceVariblesInPrompts(item) });
+    result.push({ role: "system", content: replaceVariablesInPrompts(item) });
   });
   return result;
 }

@@ -1,9 +1,3 @@
-function envFlag(name: string): boolean | undefined {
-  const raw = process.env[name];
-  if (typeof raw !== "string") return undefined;
-  return raw !== "0";
-}
-
 function safeJsonParse(input: unknown): unknown | null {
   if (typeof input !== "string") return null;
   const trimmed = input.trim();
@@ -100,7 +94,9 @@ export function parseFetchRequestForLog(
   meta: Record<string, unknown>;
 } | null {
   const maxChars = 12000;
-  const includePayload = envFlag("SMA_LOG_LLM_PAYLOAD") ?? false;
+  // 统一开关：只由 ship.json 的 llm.logMessages 控制（见 core/agent/model.ts）。
+  // 这里不支持额外的“更敏感 payload”开关，避免不一致与误配置。
+  const includePayload = false;
 
   const url =
     typeof input === "string"

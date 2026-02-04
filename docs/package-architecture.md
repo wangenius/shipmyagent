@@ -44,7 +44,7 @@
 
 ### 3.2 会话内存（按 chatKey 隔离）
 
-`AgentContextStore`：`package/src/core/agent/context.ts:1`
+`ContextStore`（in-memory 部分）：`package/src/core/agent/context-store.ts:1`
 
 - `Map<chatKey, ModelMessage[]>` 管理每个会话的 in-memory history。
 - 运行中会将每轮 `user` + `assistant/tool` response 追加进 history。
@@ -126,4 +126,3 @@
 
 开关逻辑在 model 工厂中：
 - `package/src/core/agent/model.ts:1`
-

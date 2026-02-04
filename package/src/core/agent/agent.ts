@@ -11,7 +11,6 @@ import {
   buildContextSystemPrompt,
   transformPromptsIntoSystemMessages,
 } from "./prompt.js";
-import { AgentContextStore } from "./context.js";
 import { createModel } from "./model.js";
 import {
   extractUserFacingTextFromStep,
@@ -28,36 +27,59 @@ import type { ShipConfig } from "../../utils.js";
 import { chatRequestContext } from "../chat/request-context.js";
 import { withToolExecutionContext } from "../tools/builtin/execution-context.js";
 import { createAgentToolSet } from "../tools/set/toolset.js";
+import { ContextStore } from "./context-store.js";
 
 /**
- * Stop condition: stop the tool loop once `chat_send` has been invoked.
+ * Stop condition: stop the tool loop after too many consecutive `chat_send` calls.
  *
  * 为什么需要这个兜底：
  * - 在 tool-strict 的 chat 集成里，模型会用 `chat_send` 发消息。
  * - 但部分模型会把 `chat_send` 当成“流式输出接口”，每段话都调用一次，
  *   于是 ToolLoopAgent 会继续下一步 -> 再调用 `chat_send` -> 无限重复，最终刷屏直到 stepCount 上限。
- * - 对用户而言，一次用户消息应只触发一次对话回复（除非显式需要分多条/发附件）。
+ * - 对用户而言，一次用户消息的回复可能需要拆成少量多条（长文/附件说明），但不应无限刷屏。
  */
-function stopAfterFirstChatSend(options: { steps: any[] }): boolean {
+function stopAfterConsecutiveChatSends(
+  options: { steps: any[] },
+  maxConsecutive: number,
+): boolean {
   const store = chatRequestContext.getStore();
-  // 非聊天触发（例如 CLI / API）时，不要因为误调用 chat_send 而提前终止。
+  // 非聊天触发（例如 CLI / API）时，不要因为 chat_send 而提前终止。
   if (!store?.channel) return false;
+  if (!Number.isFinite(maxConsecutive) || maxConsecutive <= 0) return false;
 
   const steps = Array.isArray(options.steps) ? options.steps : [];
-  for (const step of steps) {
+  let streak = 0;
+
+  // 只看“结尾连续”的 chat_send 成功调用：一旦出现其它工具/无工具/失败，就认为不再连续。
+  for (let i = steps.length - 1; i >= 0; i -= 1) {
+    const step = steps[i];
     const toolResults = Array.isArray((step as any)?.toolResults)
       ? ((step as any).toolResults as any[])
       : [];
+
+    if (toolResults.length === 0) break;
+
+    let allChatSendSuccess = true;
     for (const tr of toolResults) {
       const toolName = String((tr as any)?.toolName || "");
-      if (toolName !== "chat_send") continue;
+      if (toolName !== "chat_send") {
+        allChatSendSuccess = false;
+        break;
+      }
       const out = (tr as any)?.output;
-      // 仅当 chat_send 成功后才停止，避免发送失败时阻断模型自救/重试。
-      if (out && typeof out === "object" && (out as any).success === true) {
-        return true;
+      if (!(out && typeof out === "object" && (out as any).success === true)) {
+        allChatSendSuccess = false;
+        break;
       }
     }
+
+    if (!allChatSendSuccess) break;
+
+    // 一般每 step 只有 1 次 chat_send；如果同一步多次 chat_send，也算进 streak。
+    streak += toolResults.length;
+    if (streak >= maxConsecutive) return true;
   }
+
   return false;
 }
 
@@ -68,35 +90,44 @@ function stopAfterFirstChatSend(options: { steps: any[] }): boolean {
  * - Build the runtime prompt (system prompt + user instructions + memory).
  * - Run the AI SDK ToolLoopAgent and stream step/tool summaries via `onStep`.
  * - Persist execution telemetry via the unified Logger (incl. LLM request/response blocks).
- * - Handle human-in-the-loop approvals and resume execution after decisions.
- * - Maintain per-chatKey conversation history and periodic long-term memory extraction.
+ * - Maintain per-chatKey in-memory conversation context (for the next turn).
+ * - Persist lightweight agent execution context (engineering-oriented) under `.ship/memory/`.
  *
  * Note: AgentRuntime is transport-agnostic; chat adapters/server APIs provide delivery tools (e.g. dispatcher + chat_send).
  */
 export class Agent {
+  // 配置
   private configs: AgentConfigurations;
+  // 是否初始化
   private initialized: boolean = false;
-
+  // 模型
   private model: LanguageModel | null = null;
+  // Agent 执行逻辑
   private agent: ToolLoopAgent<never, any, any> | null = null;
 
-  private sessions: AgentContextStore = new AgentContextStore();
-  // Keep core: per-chatKey in-memory history + on-demand disk history loading tool.
+  /**
+   * ContextStore（统一上下文存储）。
+   *
+   * - in-memory：LLM 的会话 messages（按 chatKey）
+   * - persisted：agent 执行摘要（.ship/memory/agent-context）
+   */
+  private contextStore: ContextStore;
 
   constructor(configs: AgentConfigurations) {
     this.configs = configs;
+    this.contextStore = new ContextStore(this.configs.projectRoot);
   }
 
   setConversationHistory(chatKey: string, messages: unknown[]): void {
-    this.sessions.set(chatKey, messages);
+    this.contextStore.setChatSession(chatKey, messages);
   }
 
   getConversationHistory(chatKey?: string): ConversationMessage[] {
-    return this.sessions.getConversationHistory(chatKey);
+    return this.contextStore.getConversationHistory(chatKey);
   }
 
   clearConversationHistory(chatKey?: string): void {
-    this.sessions.clear(chatKey);
+    this.contextStore.clearChatSessions(chatKey);
   }
 
   getConfig(): ShipConfig {
@@ -139,15 +170,12 @@ export class Agent {
         model: this.model,
         instructions: transformPromptsIntoSystemMessages(this.configs.systems),
         tools,
-        stopWhen: [stopAfterFirstChatSend, stepCountIs(30)],
+        stopWhen: [(o) => stopAfterConsecutiveChatSends(o, 8), stepCountIs(30)],
       });
 
       this.initialized = true;
 
-      await logger.log(
-        "info",
-        "Agent Runtime initialized with ToolLoopAgent",
-      );
+      await logger.log("info", "Agent Runtime initialized with ToolLoopAgent");
     } catch (error) {
       await logger.log("error", "Agent Runtime initialization failed", {
         error: String(error),
@@ -178,7 +206,7 @@ export class Agent {
       projectRoot: this.configs.projectRoot,
     });
 
-    const defaultPrompt = buildContextSystemPrompt({
+    const runtimeSystemPrompt = buildContextSystemPrompt({
       projectRoot: this.configs.projectRoot,
       chatKey,
       requestId,
@@ -189,7 +217,7 @@ export class Agent {
 
     if (this.initialized && this.agent) {
       return this.runWithToolLoopAgent(
-        defaultPrompt,
+        runtimeSystemPrompt,
         userText,
         startTime,
         chatKey,
@@ -244,13 +272,13 @@ export class Agent {
       throw new Error("Agent not initialized");
     }
 
-    const history = this.sessions.getOrCreate(chatKey);
+    const history = this.contextStore.getOrCreateChatSession(chatKey);
     const beforeLen = history.length;
     let lastEmittedAssistant = "";
 
     try {
       // Build in-flight messages for this request:
-      // - system: Agent.md + DefaultPrompt
+      // - system: runtime prompt (chatKey/requestId/来源等)
       // - history: in-memory prior turns (user/assistant/tool)
       // - user: current raw user message
       const inFlightMessages: ModelMessage[] = [
@@ -259,10 +287,20 @@ export class Agent {
         { role: "user", content: userText },
       ];
 
+      // system messages 需要保持聚合在 messages 开头，工具注入 system 指令时应插到它们之后。
+      let systemMessageInsertIndex = 0;
+      while (
+        systemMessageInsertIndex < inFlightMessages.length &&
+        (inFlightMessages[systemMessageInsertIndex] as any)?.role === "system"
+      ) {
+        systemMessageInsertIndex += 1;
+      }
+
       const currentUserMessageIndex = inFlightMessages.length - 1;
 
       const result = await withToolExecutionContext(
         {
+          systemMessageInsertIndex,
           messages: inFlightMessages,
           currentUserMessageIndex,
           injectedFingerprints: new Set(),
@@ -314,7 +352,7 @@ export class Agent {
             `historyBefore: ${beforeLen}`,
             `responseMessages: ${responseMessages.length}`,
             responseMessages.length
-              ? `\n${this.sessions.formatModelMessagesForLog(responseMessages)}`
+              ? `\n${this.contextStore.formatModelMessagesForLog(responseMessages)}`
               : "",
             "===== LLM RESPONSE END =====",
           ]
@@ -336,10 +374,20 @@ export class Agent {
       history.push({ role: "user", content: userText });
       history.push(...(result.response.messages as ModelMessage[]));
 
-      // Simple bound: keep recent N messages only to reduce runaway growth.
-      const maxHistoryMessages = 60;
+      // Simple bound: keep recent N messages (并在必要时压缩更早 messages)。
+      const maxHistoryMessages =
+        typeof this.configs.config?.context?.chatHistory
+          ?.inMemoryMaxMessages === "number"
+          ? this.configs.config.context.chatHistory.inMemoryMaxMessages
+          : 60;
       if (history.length > maxHistoryMessages) {
-        history.splice(0, history.length - maxHistoryMessages);
+        this.compactChatHistory(chatKey, history, {
+          keepLast:
+            typeof this.configs.config?.context?.chatHistory
+              ?.compactKeepLastMessages === "number"
+              ? this.configs.config.context.chatHistory.compactKeepLastMessages
+              : 30,
+        });
       }
 
       for (const step of result.steps || []) {
@@ -390,6 +438,54 @@ export class Agent {
       });
       await emitStep("done", "done", { requestId, chatKey });
 
+      // 记录 agent 执行上下文（持久化摘要），并按 window 自动 compact。
+      try {
+        const windowEntries =
+          typeof this.configs.config?.context?.agentContext?.windowEntries ===
+          "number"
+            ? this.configs.config.context.agentContext.windowEntries
+            : 200;
+
+        await this.contextStore.appendAgentExecution({
+          chatKey,
+          requestId,
+          userPreview: userText,
+          outputPreview: String(result.text || ""),
+          toolCalls: toolCalls.map((tc) => {
+            const outRaw = String(tc.output ?? "");
+            let success: boolean | undefined = undefined;
+            let error: string | undefined = undefined;
+            try {
+              const parsed = JSON.parse(outRaw);
+              if (parsed && typeof parsed === "object" && "success" in parsed) {
+                success = Boolean((parsed as any).success);
+                if (!success) {
+                  error =
+                    typeof (parsed as any).error === "string"
+                      ? (parsed as any).error
+                      : typeof (parsed as any).stderr === "string"
+                        ? (parsed as any).stderr
+                        : undefined;
+                }
+              }
+            } catch {
+              // ignore
+            }
+            return {
+              tool: String(tc.tool || ""),
+              ...(typeof success === "boolean" ? { success } : {}),
+              ...(error ? { error: String(error).slice(0, 200) } : {}),
+            };
+          }),
+        });
+        await this.contextStore.compactAgentExecutionIfNeeded(
+          chatKey,
+          windowEntries,
+        );
+      } catch {
+        // ignore
+      }
+
       return {
         success: !hadToolFailure,
         output: [
@@ -408,7 +504,8 @@ export class Agent {
         errorMsg.includes("maximum context") ||
         errorMsg.includes("context window")
       ) {
-        const currentHistory = this.sessions.getOrCreate(chatKey);
+        const currentHistory =
+          this.contextStore.getOrCreateChatSession(chatKey);
         await logger.log(
           "warn",
           "Context length exceeded, compacting history",
@@ -426,7 +523,7 @@ export class Agent {
         });
 
         if (compactionAttempts >= 3) {
-          this.sessions.delete(chatKey);
+          this.contextStore.deleteChatSession(chatKey);
           return {
             success: false,
             output:
@@ -435,13 +532,16 @@ export class Agent {
           };
         }
 
-        // Minimal compaction: drop oldest half of in-memory history and retry.
-        const h = this.sessions.getOrCreate(chatKey);
-        if (h.length >= 6) {
-          const cut = Math.floor(h.length * 0.5);
-          h.splice(0, cut);
-        } else {
-          this.sessions.delete(chatKey);
+        // 压缩策略：把更早的对话 messages 合并到一条 assistant summary，保留最后 N 条。
+        const h = this.contextStore.getOrCreateChatSession(chatKey);
+        const keepLast =
+          typeof this.configs.config?.context?.chatHistory
+            ?.compactKeepLastMessages === "number"
+            ? this.configs.config.context.chatHistory.compactKeepLastMessages
+            : 30;
+        const ok = this.compactChatHistory(chatKey, h, { keepLast });
+        if (!ok) {
+          this.contextStore.deleteChatSession(chatKey);
           return {
             success: false,
             output:
@@ -476,5 +576,62 @@ export class Agent {
 
   isInitialized(): boolean {
     return this.initialized;
+  }
+
+  /**
+   * 压缩 chat session 的 in-memory messages。
+   *
+   * 目标
+   * - 把更早的 user/assistant/tool messages 合并成一条 assistant summary
+   * - 保留最后 keepLast 条 messages（更贴近当前任务）
+   *
+   * 返回值
+   * - true：完成压缩
+   * - false：无法压缩（历史太短或输入不合法）
+   */
+  compactChatHistory(
+    chatKey: string,
+    history: ModelMessage[],
+    opts: { keepLast: number },
+  ): boolean {
+    const keepLast = Math.max(1, Math.min(5000, Math.floor(opts.keepLast)));
+    if (!Array.isArray(history)) return false;
+    if (history.length <= keepLast + 2) return false;
+
+    const cut = Math.max(1, history.length - keepLast);
+    const older = history.slice(0, cut);
+    const recent = history.slice(cut);
+
+    const lines: string[] = [];
+    lines.push("（已压缩更早的对话上下文，供参考）");
+    lines.push(`- chatKey: ${chatKey}`);
+    lines.push(`- olderMessages: ${older.length}`);
+    lines.push("");
+
+    const maxLines = 120;
+    for (const m of older) {
+      const role = String((m as any)?.role || "");
+      const content = (m as any)?.content;
+      const text =
+        typeof content === "string"
+          ? content
+          : Array.isArray(content)
+            ? JSON.stringify(content).slice(0, 400)
+            : String(content ?? "");
+      if (!role || !text) continue;
+      lines.push(`${role}: ${text.replace(/\s+$/g, "")}`.slice(0, 600));
+      if (lines.length >= maxLines) {
+        lines.push("…（省略更多压缩内容）");
+        break;
+      }
+    }
+
+    const summary: ModelMessage = {
+      role: "assistant",
+      content: lines.join("\n"),
+    };
+
+    history.splice(0, history.length, summary, ...recent);
+    return true;
   }
 }

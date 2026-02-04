@@ -48,10 +48,9 @@ ShipMyAgent 使用标准日志级别：
 
 ShipMyAgent 当前会把结构化 JSONL 日志写入 `.ship/logs/<YYYY-MM-DD>.jsonl`。
 
-如需控制 LLM 请求日志（通常包含 system + messages），可通过环境变量：
+如需控制 LLM 请求日志（通常包含 system + messages），可通过 `ship.json`：
 
-- `SMA_LOG_LLM_MESSAGES=0` 关闭请求日志
-- `SMA_LOG_LLM_PAYLOAD=1` 在日志元信息里包含完整 payload（更敏感）
+- `llm.logMessages=false` 关闭请求日志
 
 ## 解释日志消息
 

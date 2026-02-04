@@ -94,12 +94,11 @@ Telegram 使用该机制（见 `package/src/adapters/telegram/bot.ts:1`）；Fei
 
 现状：
 - 会写 ChatStore（channel=api），并直接返回 `AgentRuntime.run()` 的结果
-- 但没有设置 `withChatRequestContext`
+- 会设置 `withChatRequestContext` 注入 `chatKey`（但不提供 channel dispatcher 回发）
 - dispatcher registry 也不包含 `"api"` channel（`ChatDispatchChannel` 目前仅 `telegram|feishu|qq`）
 
 影响：
-- 若 system prompt 强制 “必须用 chat_send 回复”，则 API 模式下 `chat_send` 会失败（无 channel/chatId）
+- API 模式下通常不应该依赖 `chat_send`（没有 dispatcher 回发能力）
 - API 依赖最终 `output` 返回，而不是 `chat_send` 回发
 
 建议见 `docs/risk-and-recommendations.md`。
-

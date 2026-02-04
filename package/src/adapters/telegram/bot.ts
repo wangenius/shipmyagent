@@ -741,8 +741,8 @@ export function createTelegramBot(
     return null;
   }
 
-  // 注意：不在这里直接创建 AgentRuntime 单例；Telegram Bot 使用 chatKey 级别的 AgentRuntime 缓存
-  //（BaseChatAdapter.getOrCreateRuntime），按需创建并在一段时间无交互后自动清理。
+  // 注意：当前实现使用 BaseChatAdapter 的全局单队列 + 共享 AgentRuntime（一个进程一个“大脑”）。
+  // 并不会为每个 chatKey 维护独立 runtime 缓存。
   const bot = new TelegramBot(
     config.botToken,
     config.chatId,

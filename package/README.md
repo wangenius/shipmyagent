@@ -42,5 +42,4 @@ Content-Type: application/json
 
 By default the runtime logs every LLM request payload (messages + system) to help debugging.
 
-- Disable: `SMA_LOG_LLM_MESSAGES=0 shipmyagent start`
-- Or set `llm.logMessages=false` in `ship.json`
+- Disable: set `llm.logMessages=false` in `ship.json`
