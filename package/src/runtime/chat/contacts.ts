@@ -31,6 +31,14 @@ export type ChatContact = {
    */
   chatKey: string;
   /**
+   * Latest known inbound message id for this contact/chat (best-effort).
+   *
+   * Some platforms (e.g. QQ) require a `messageId` to send a passive reply.
+   * Persisting it here allows tools like `chat_contact_send` to work even
+   * outside the immediate request context.
+   */
+  messageId?: string;
+  /**
    * Platform actor user id (best-effort, mostly useful in group chats).
    */
   userId?: string;
@@ -83,6 +91,7 @@ export class ContactBook {
           username,
           chatId,
           chatKey,
+          messageId: typeof (c as any).messageId === "string" ? (c as any).messageId : undefined,
           userId: typeof (c as any).userId === "string" ? (c as any).userId : undefined,
           chatType: typeof (c as any).chatType === "string" ? (c as any).chatType : undefined,
           messageThreadId:
@@ -130,4 +139,3 @@ export class ContactBook {
     return best;
   }
 }
-

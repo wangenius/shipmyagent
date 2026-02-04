@@ -1,3 +1,5 @@
+import { SystemModelMessage } from "ai";
+
 /**
  * Build the default (runtime) system prompt for an agent run.
  *
@@ -33,4 +35,19 @@ export function buildDefaultSystemPrompt(input: {
   ].join("\n");
 
   return [runtimeContextLines.join("\n"), "", outputRules].join("\n");
+}
+
+export function replaceVariblesInPrompts(prompt: string) {
+  const result = prompt;
+  return result;
+}
+
+export function transformPromptsIntoSystemMessages(
+  prompts: string[],
+): SystemModelMessage[] {
+  const result: SystemModelMessage[] = [];
+  prompts.forEach((item) => {
+    result.push({ role: "system", content: replaceVariblesInPrompts(item) });
+  });
+  return result;
 }

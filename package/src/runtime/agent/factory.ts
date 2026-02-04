@@ -9,33 +9,18 @@ import {
   type ShipConfig,
 } from "../../utils.js";
 import { DEFAULT_SHIP_PROMPTS } from "../prompts/index.js";
-import { discoverClaudeSkillsSync, renderClaudeSkillsPromptSection } from "../skills/index.js";
-import { AgentRuntime } from "./runtime.js";
-import type { AgentContext } from "./types.js";
+import {
+  discoverClaudeSkillsSync,
+  renderClaudeSkillsPromptSection,
+} from "../skills/index.js";
+import { Agent } from "./agent.js";
 import type { McpManager } from "../mcp/manager.js";
 import type { Logger } from "../../telemetry/index.js";
 
-/**
- * Factory helpers for creating AgentRuntime instances.
- *
- * - `createAgentRuntime` is a thin wrapper for dependency injection (logger, MCP manager).
- * - `createAgentRuntimeFromPath` builds the final `agentMd` by composing:
- *   1) project `Agent.md` (or a default role)
- *   2) built-in prompts (`DEFAULT_SHIP_PROMPTS`)
- *   3) skills summary section (Claude Code compatible skills)
- * - It also ensures the `.ship/` runtime directory structure exists.
- */
-export function createAgentRuntime(
-  context: AgentContext,
-  deps?: { mcpManager?: McpManager | null; logger?: Logger | null },
-): AgentRuntime {
-  return new AgentRuntime(context, deps);
-}
-
-export function createAgentRuntimeFromPath(
+export function createAgent(
   projectRoot: string,
   opts?: { mcpManager?: McpManager | null; logger?: Logger | null },
-): AgentRuntime {
+): Agent {
   loadProjectDotenv(projectRoot);
 
   const agentMdPath = getAgentMdPath(projectRoot);
@@ -91,20 +76,18 @@ You are a helpful project assistant.`;
     // ignore
   }
 
-  const baseAgentMd = [userAgentMd, `---\n\n${DEFAULT_SHIP_PROMPTS}`]
-    .filter(Boolean)
-    .join("\n\n");
-
   const skills = discoverClaudeSkillsSync(projectRoot, config);
-  const skillsSection = renderClaudeSkillsPromptSection(projectRoot, config, skills);
+  const skillsSection = renderClaudeSkillsPromptSection(
+    projectRoot,
+    config,
+    skills,
+  );
 
-  const agentMd = [baseAgentMd, `---\n\n${skillsSection}`].filter(Boolean).join("\n\n");
-
-  return new AgentRuntime(
+  return new Agent(
     {
       projectRoot,
       config,
-      agentMd,
+      systems: [userAgentMd, DEFAULT_SHIP_PROMPTS, skillsSection],
     },
     { mcpManager: opts?.mcpManager ?? null, logger: opts?.logger ?? null },
   );

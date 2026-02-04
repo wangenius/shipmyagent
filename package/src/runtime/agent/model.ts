@@ -15,29 +15,30 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
-  ToolLoopAgent,
-  stepCountIs,
-  type LanguageModel,
-  type ToolLoopAgent as ToolLoopAgentType,
+  type LanguageModel
 } from "ai";
 import { createLlmLoggingFetch } from "../../telemetry/index.js";
 import type { ShipConfig } from "../../utils.js";
 
 type AgentLoggerLike = {
-  log: (level: string, message: string, data?: Record<string, unknown>) => Promise<void>;
+  log: (
+    level: string,
+    message: string,
+    data?: Record<string, unknown>,
+  ) => Promise<void>;
 };
 
 export async function createModel(input: {
   config: ShipConfig;
   logger: AgentLoggerLike;
-}): Promise<LanguageModel | null> {
+}): Promise<LanguageModel> {
   const { provider, apiKey, baseUrl, model } = input.config.llm;
   const resolvedModel = model === "${}" ? undefined : model;
   const resolvedBaseUrl = baseUrl === "${}" ? undefined : baseUrl;
 
   if (!resolvedModel) {
-    await input.logger.log("warn", "No LLM model configured, will use simulation mode");
-    return null;
+    await input.logger.log("warn", "No LLM model configured");
+    throw Error("no LLM Model Configured");
   }
 
   let resolvedApiKey = apiKey;
@@ -48,12 +49,17 @@ export async function createModel(input: {
 
   if (!resolvedApiKey) {
     resolvedApiKey =
-      process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.API_KEY;
+      process.env.ANTHROPIC_API_KEY ||
+      process.env.OPENAI_API_KEY ||
+      process.env.API_KEY;
   }
 
   if (!resolvedApiKey) {
-    await input.logger.log("warn", "No API Key configured, will use simulation mode");
-    return null;
+    await input.logger.log(
+      "warn",
+      "No API Key configured, will use simulation mode",
+    );
+    throw Error("No API Key configured, will use simulation mode");
   }
 
   const envLog = process.env.SMA_LOG_LLM_MESSAGES;
@@ -94,30 +100,4 @@ export async function createModel(input: {
     fetch: loggingFetch as any,
   });
   return openaiProvider(resolvedModel);
-}
-
-export async function createModelAndAgent(input: {
-  config: ShipConfig;
-  agentMd: string;
-  logger: AgentLoggerLike;
-  tools: Record<string, any>;
-}): Promise<{ model: LanguageModel; agent: ToolLoopAgentType<never, any, any> } | null> {
-  const modelInstance = await createModel({ config: input.config, logger: input.logger });
-  if (!modelInstance) return null;
-
-  const agent = new ToolLoopAgent({
-    model: modelInstance,
-    // The runtime provides the full system message per request (Agent.md + DefaultPrompt),
-    // so keep ToolLoopAgent-level instructions empty to avoid duplication.
-    instructions: "",
-    tools: input.tools,
-    stopWhen: stepCountIs(20),
-    maxOutputTokens: input.config.llm.maxTokens || 4096,
-    temperature: input.config.llm.temperature || 0.7,
-    topP: input.config.llm.topP,
-    frequencyPenalty: input.config.llm.frequencyPenalty,
-    presencePenalty: input.config.llm.presencePenalty,
-  });
-
-  return { model: modelInstance, agent };
 }

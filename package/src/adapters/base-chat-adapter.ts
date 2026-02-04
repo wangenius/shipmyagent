@@ -113,6 +113,7 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
           channel: this.channel as any,
           chatId: msg.chatId,
           chatKey,
+          messageId: msg.messageId,
           userId: msg.userId,
           username,
           chatType: msg.chatType,

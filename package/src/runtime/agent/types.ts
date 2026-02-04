@@ -3,7 +3,7 @@ import type { ShipConfig } from "../../utils.js";
 export interface AgentContext {
   projectRoot: string;
   config: ShipConfig;
-  agentMd: string;
+  systems: string[];
 }
 
 export interface AgentResult {

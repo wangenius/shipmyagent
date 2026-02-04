@@ -5,5 +5,5 @@ export type {
   ConversationMessage,
 } from "./types.js";
 
-export { AgentRuntime } from "./runtime.js";
-export { createAgentRuntime, createAgentRuntimeFromPath } from "./factory.js";
+export { Agent as AgentRuntime } from "./agent.js";
+export { createAgent as createAgentRuntimeFromPath } from "./factory.js";

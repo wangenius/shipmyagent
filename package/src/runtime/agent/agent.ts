@@ -1,15 +1,19 @@
 import {
+  stepCountIs,
+  ToolLoopAgent,
   type LanguageModel,
   type ModelMessage,
-  type ToolLoopAgent,
 } from "ai";
 import { withLlmRequestContext } from "../../telemetry/index.js";
 import { generateId } from "../../utils.js";
 import { ContactBook } from "../chat/contacts.js";
 import { McpManager } from "../mcp/manager.js";
-import { buildDefaultSystemPrompt } from "./prompt.js";
+import {
+  buildDefaultSystemPrompt,
+  transformPromptsIntoSystemMessages,
+} from "./prompt.js";
 import { AgentSessionStore } from "./session-store.js";
-import { createModelAndAgent } from "./model.js";
+import { createModel } from "./model.js";
 import { createToolSet } from "./tools.js";
 import {
   extractUserFacingTextFromStep,
@@ -38,7 +42,7 @@ import { withToolExecutionContext } from "../tools/execution-context.js";
  *
  * Note: AgentRuntime is transport-agnostic; chat adapters/server APIs provide delivery tools (e.g. dispatcher + chat_send).
  */
-export class AgentRuntime {
+export class Agent {
   private context: AgentContext;
   private initialized: boolean = false;
   private logger: Logger;
@@ -77,10 +81,6 @@ export class AgentRuntime {
     return this.contacts;
   }
 
-  getAgentMd(): string {
-    return this.context.agentMd;
-  }
-
   getConfig(): ShipConfig {
     return this.context.config;
   }
@@ -101,7 +101,7 @@ export class AgentRuntime {
       );
       await this.logger.log(
         "info",
-        `Agent.md content length: ${this.context.agentMd?.length || 0} chars`,
+        `Agent.md content length: ${this.context.systems?.length || 0} chars`,
       );
 
       const tools = createToolSet({
@@ -111,17 +111,18 @@ export class AgentRuntime {
         logger: this.logger,
         contacts: this.contacts,
       });
-
-      const created = await createModelAndAgent({
+      this.model = await createModel({
         config: this.context.config,
-        agentMd: this.context.agentMd,
         logger: this.logger,
-        tools,
       });
 
-      if (!created) return;
-      this.model = created.model;
-      this.agent = created.agent;
+      this.agent = new ToolLoopAgent({
+        model: this.model,
+        instructions: transformPromptsIntoSystemMessages(this.context.systems),
+        tools,
+        stopWhen: stepCountIs(30),
+      });
+
       this.initialized = true;
 
       await this.logger.log(
@@ -142,15 +143,13 @@ export class AgentRuntime {
 
     const chatCtx = chatRequestContext.getStore();
     const extraContextLines: string[] = [];
-    if (chatCtx?.channel) extraContextLines.push(`- Channel: ${chatCtx.channel}`);
+    if (chatCtx?.channel)
+      extraContextLines.push(`- Channel: ${chatCtx.channel}`);
     if (chatCtx?.chatId) extraContextLines.push(`- ChatId: ${chatCtx.chatId}`);
     if (chatCtx?.userId) extraContextLines.push(`- UserId: ${chatCtx.userId}`);
-    if (chatCtx?.username) extraContextLines.push(`- Username: ${chatCtx.username}`);
+    if (chatCtx?.username)
+      extraContextLines.push(`- Username: ${chatCtx.username}`);
 
-    await this.logger.log(
-      "debug",
-      `Using system prompt (Agent.md): ${this.context.agentMd?.substring(0, 100)}...`,
-    );
     await this.logger.log("debug", `ChatKey: ${chatKey}`);
     await this.logger.log("info", "Agent request started", {
       requestId,
@@ -166,17 +165,19 @@ export class AgentRuntime {
       extraContextLines,
     });
 
-    const systemPrompt = [String(this.context.agentMd || "").trim(), defaultPrompt]
-      .filter(Boolean)
-      .join("\n\n");
-
     const userText = String(instructions ?? "");
 
     if (this.initialized && this.agent) {
-      return this.runWithToolLoopAgent(systemPrompt, userText, startTime, chatKey, {
-        onStep,
-        requestId,
-      });
+      return this.runWithToolLoopAgent(
+        defaultPrompt,
+        userText,
+        startTime,
+        chatKey,
+        {
+          onStep,
+          requestId,
+        },
+      );
     }
 
     return {
@@ -253,7 +254,10 @@ export class AgentRuntime {
               onStepFinish: async (step) => {
                 try {
                   const userTextFromStep = extractUserFacingTextFromStep(step);
-                  if (userTextFromStep && userTextFromStep !== lastEmittedAssistant) {
+                  if (
+                    userTextFromStep &&
+                    userTextFromStep !== lastEmittedAssistant
+                  ) {
                     lastEmittedAssistant = userTextFromStep;
                     await emitStep("assistant", userTextFromStep, {
                       requestId,
@@ -425,11 +429,17 @@ export class AgentRuntime {
           };
         }
 
-        return this.runWithToolLoopAgent(systemPrompt, userText, startTime, chatKey, {
-          compactionAttempts: compactionAttempts + 1,
-          onStep,
-          requestId,
-        });
+        return this.runWithToolLoopAgent(
+          systemPrompt,
+          userText,
+          startTime,
+          chatKey,
+          {
+            compactionAttempts: compactionAttempts + 1,
+            onStep,
+            requestId,
+          },
+        );
       }
 
       await this.logger.log("error", "Agent execution failed", {

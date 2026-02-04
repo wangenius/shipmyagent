@@ -52,15 +52,27 @@ export function createChatContactTools(params: { contacts: ContactBook }): Recor
         return { success: false, error: `No dispatcher registered for channel: ${found.channel}` };
       }
 
+      if (found.channel === "qq") {
+        const chatType = typeof found.chatType === "string" ? found.chatType.trim() : "";
+        const messageId = typeof found.messageId === "string" ? found.messageId.trim() : "";
+        if (!chatType || !messageId) {
+          return {
+            success: false,
+            error:
+              "QQ requires chatType + messageId to send a reply. Ask the contact to send a message first so ShipMyAgent can learn the latest messageId.",
+          };
+        }
+      }
+
       return dispatcher.sendText({
         chatId: found.chatId,
         text,
         ...(typeof found.messageThreadId === "number" ? { messageThreadId: found.messageThreadId } : {}),
         ...(typeof found.chatType === "string" && found.chatType ? { chatType: found.chatType } : {}),
+        ...(typeof found.messageId === "string" && found.messageId ? { messageId: found.messageId } : {}),
       });
     },
   });
 
   return { chat_contact_lookup, chat_contact_send };
 }
-
