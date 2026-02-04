@@ -2,7 +2,7 @@ import type { Agent } from "../agent/context/index.js";
 import { getContactBook } from "../chat/index.js";
 import { PlatformAdapter } from "./platform-adapter.js";
 import type { ChatDispatchChannel } from "../chat/dispatcher.js";
-import { QueryQueue } from "./query-queue.js";
+import { QueryQueue } from "../chat/query-queue.js";
 import type { Logger } from "../telemetry/index.js";
 import { getShipRuntimeContext } from "../server/ShipRuntimeContext.js";
 

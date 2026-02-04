@@ -11,9 +11,9 @@
  *   itself does not need to know platform IDs or channels.
  */
 
-import { withChatRequestContext } from "../chat/request-context.js";
-import type { ChatDispatchChannel } from "../chat/dispatcher.js";
-import { sendFinalOutputIfNeeded } from "../chat/final-output.js";
+import { withChatRequestContext } from "./request-context.js";
+import type { ChatDispatchChannel } from "./dispatcher.js";
+import { sendFinalOutputIfNeeded } from "./final-output.js";
 import type { Agent } from "../agent/context/index.js";
 
 export type QueuedChatMessage = {

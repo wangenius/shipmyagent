@@ -24,18 +24,6 @@ import { withToolExecutionContext } from "../tools/builtin/execution-context.js"
 import { createAgentToolSet } from "../tools/set/toolset.js";
 import { ContextStore } from "./context-store.js";
 
-/**
- * AgentRuntime orchestrates a single "agent brain" for a project.
- *
- * Responsibilities:
- * - Build the runtime prompt (system prompt + user instructions + memory).
- * - Run the AI SDK ToolLoopAgent and stream step/tool summaries via `onStep`.
- * - Persist execution telemetry via the unified Logger (incl. LLM request/response blocks).
- * - Maintain per-chatKey in-memory conversation context (for the next turn).
- * - Persist lightweight agent execution context (engineering-oriented) under `.ship/memory/`.
- *
- * Note: AgentRuntime is transport-agnostic; chat adapters/server APIs provide delivery tools (e.g. dispatcher + chat_send).
- */
 export class Agent {
   // 配置
   private configs: AgentConfigurations;
@@ -248,36 +236,6 @@ export class Agent {
             }),
           ),
       );
-
-      try {
-        const responseMessages = (result.response?.messages ||
-          []) as ModelMessage[];
-        await logger.log(
-          "info",
-          [
-            "===== LLM RESPONSE BEGIN =====",
-            ...(requestId ? [`requestId: ${requestId}`] : []),
-            `chatKey: ${chatKey}`,
-            `historyBefore: ${beforeLen}`,
-            `responseMessages: ${responseMessages.length}`,
-            responseMessages.length
-              ? `\n${this.contextStore.formatModelMessagesForLog(responseMessages)}`
-              : "",
-            "===== LLM RESPONSE END =====",
-          ]
-            .filter(Boolean)
-            .join("\n"),
-          {
-            kind: "llm_response",
-            chatKey,
-            requestId,
-            historyBefore: beforeLen,
-            responseMessages: responseMessages.length,
-          },
-        );
-      } catch {
-        // ignore
-      }
 
       // Persist turn into in-memory history (exclude the per-request system message).
       history.push({ role: "user", content: userText });

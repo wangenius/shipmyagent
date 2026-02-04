@@ -6,6 +6,7 @@ import type { ShipRuntimeContext } from "../types/runtime.js";
  * 为什么需要它：
  * - `projectRoot` / `logger` / `chatManager` / `createAgent` 都可以从 `ship.json` + 启动参数确定
  * - 把这些参数层层透传会导致构造函数与 handler 的参数不断膨胀，且容易漏传/传错
+ * - 单进程 server 只服务一个 projectRoot，因此 `shipConfig` 与 `agentSystems` 也可在启动阶段确认并缓存
  *
  * 使用方式（关键节点）：
  * - 启动入口（如 `commands/start.ts`）调用 `setShipRuntimeContext(...)`

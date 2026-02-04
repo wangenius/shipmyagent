@@ -1,7 +1,6 @@
 import path from "path";
 import fs from "fs-extra";
 import { getLogger } from "../telemetry/index.js";
-import { createAgent } from "../agent/context/index.js";
 import { createServer, ServerContext } from "../server/index.js";
 import { createInteractiveServer } from "../server/interactive.js";
 import { createTelegramBot } from "../adapters/telegram.js";
@@ -12,10 +11,24 @@ import { ChatManager } from "../chat/manager.js";
 import { getShipRuntimeContext, setShipRuntimeContext } from "../server/ShipRuntimeContext.js";
 import {
   getAgentMdPath,
+  getCacheDirPath,
+  getChatsDirPath,
+  getLogsDirPath,
+  getMcpDirPath,
+  getRoutesDirPath,
+  getShipDirPath,
   getShipJsonPath,
-  loadShipConfig
+  loadProjectDotenv,
+  loadShipConfig,
+  type ShipConfig,
 } from "../utils.js";
 import { fileURLToPath } from "url";
+import { DEFAULT_SHIP_PROMPTS } from "../agent/context/prompt.js";
+import {
+  discoverClaudeSkillsSync,
+  renderClaudeSkillsPromptSection,
+} from "../agent/skills/index.js";
+import { Agent } from "../agent/context/agent.js";
 
 /**
  * `shipmyagent start` command entrypoint.
@@ -73,7 +86,7 @@ export async function startCommand(
 
   console.log(`🚀 Starting ShipMyAgent v${version}: ${projectRoot}`);
 
-  // Check if initialized
+  // Check if initialized（启动入口一次性确认工程根目录与关键文件）
   if (!fs.existsSync(getAgentMdPath(projectRoot))) {
     console.error(
       '❌ Project not initialized. Please run "shipmyagent init" first',
@@ -89,13 +102,43 @@ export async function startCommand(
   }
 
   // Read configuration
-  let shipConfig;
+  let shipConfig: ShipConfig;
   try {
     shipConfig = loadShipConfig(projectRoot);
   } catch (error) {
     console.error("❌ Failed to read ship.json:", error);
     process.exit(1);
   }
+
+  // 在启动时加载 dotenv，并确保 .ship 目录结构存在（避免在 createAgent 中重复确保）。
+  loadProjectDotenv(projectRoot);
+  fs.ensureDirSync(getShipDirPath(projectRoot));
+  fs.ensureDirSync(getRoutesDirPath(projectRoot));
+  fs.ensureDirSync(getLogsDirPath(projectRoot));
+  fs.ensureDirSync(getCacheDirPath(projectRoot));
+  fs.ensureDirSync(getChatsDirPath(projectRoot));
+  fs.ensureDirSync(path.join(getShipDirPath(projectRoot), "public"));
+  fs.ensureDirSync(path.join(getShipDirPath(projectRoot), "memory"));
+  fs.ensureDirSync(getMcpDirPath(projectRoot));
+
+  // Agent.md（用户可编辑的 system prompt）在启动时读取并缓存。
+  let agentProfiles = `# Agent Role
+You are a helpful project assistant.`;
+  try {
+    const content = fs.readFileSync(getAgentMdPath(projectRoot), "utf-8").trim();
+    if (content) agentProfiles = content;
+  } catch {
+    // ignore
+  }
+
+  // Skills section 在启动时渲染并缓存（需要修改 skills/ship.json 生效时请重启）。
+  const skills = discoverClaudeSkillsSync(projectRoot, shipConfig);
+  const skillsSection = renderClaudeSkillsPromptSection(
+    projectRoot,
+    shipConfig,
+    skills,
+  );
+  const agentSystems = [agentProfiles, DEFAULT_SHIP_PROMPTS, skillsSection];
 
   // Resolve startup options: CLI flags override ship.json, then built-in defaults.
   let port: number;
@@ -128,8 +171,15 @@ export async function startCommand(
     projectRoot,
     logger,
     chatManager: new ChatManager(projectRoot),
+    config: shipConfig,
+    agentSystems,
     // 一个 chat 一个 Agent 实例：这里必须返回新对象
-    createAgent: () => createAgent(),
+    createAgent: () =>
+      new Agent({
+        projectRoot,
+        config: shipConfig,
+        systems: agentSystems,
+      }),
   });
 
   // Initialize MCP (managed by the server/bootstrap layer, not AgentRuntime)
