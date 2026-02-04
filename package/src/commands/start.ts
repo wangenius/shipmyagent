@@ -1,13 +1,15 @@
 import path from "path";
 import fs from "fs-extra";
 import { getLogger } from "../telemetry/index.js";
-import { createAgent } from "../core/agent/index.js";
+import { createAgent } from "../agent/context/index.js";
 import { createServer, ServerContext } from "../server/index.js";
 import { createInteractiveServer } from "../server/interactive.js";
 import { createTelegramBot } from "../adapters/telegram.js";
 import { createFeishuBot } from "../adapters/feishu.js";
 import { createQQBot } from "../adapters/qq.js";
-import { bootstrapMcpFromProject } from "../core/mcp/index.js";
+import { bootstrapMcpFromProject } from "../agent/mcp/index.js";
+import { ChatManager } from "../chat/manager.js";
+import { getShipRuntimeContext, setShipRuntimeContext } from "../server/ShipRuntimeContext.js";
 import {
   getAgentMdPath,
   getShipJsonPath,
@@ -121,12 +123,21 @@ export async function startCommand(
   logger.info(`Project: ${projectRoot}`);
   logger.info(`Model: ${shipConfig.llm?.provider} / ${shipConfig.llm?.model}`);
 
+  // 初始化进程级 runtime 上下文（避免 projectRoot/logger/createAgent 层层透传）
+  setShipRuntimeContext({
+    projectRoot,
+    logger,
+    chatManager: new ChatManager(projectRoot),
+    // 一个 chat 一个 Agent 实例：这里必须返回新对象
+    createAgent: () => createAgent(),
+  });
+
   // Initialize MCP (managed by the server/bootstrap layer, not AgentRuntime)
   await bootstrapMcpFromProject({ projectRoot, logger });
   logger.info("MCP manager initialized");
 
   // Create Agent Runtime
-  const agentRuntime = createAgent(projectRoot);
+  const agentRuntime = getShipRuntimeContext().createAgent();
   await agentRuntime.initialize();
   logger.info("Agent Runtime initialized");
 
@@ -146,7 +157,7 @@ export async function startCommand(
   let telegramBot = null;
   if (adapters.telegram?.enabled) {
     logger.info("Telegram adapter enabled");
-    telegramBot = createTelegramBot(projectRoot, adapters.telegram, logger);
+    telegramBot = createTelegramBot(adapters.telegram);
   }
 
   // Create Feishu Adapter (if enabled)
@@ -175,7 +186,7 @@ export async function startCommand(
         : undefined,
     };
 
-    feishuBot = await createFeishuBot(projectRoot, feishuConfig, logger);
+    feishuBot = await createFeishuBot(feishuConfig);
   }
 
   // Create QQ Adapter (if enabled)
@@ -203,7 +214,7 @@ export async function startCommand(
           : (process.env.QQ_SANDBOX || "").toLowerCase() === "true",
     };
 
-    qqBot = await createQQBot(projectRoot, qqConfig, logger);
+    qqBot = await createQQBot(qqConfig);
   }
 
   // 创建交互式 Web 服务器（如果已启用）

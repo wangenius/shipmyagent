@@ -2,12 +2,13 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { Logger } from "../telemetry/index.js";
-import type { Agent } from "../core/agent/index.js";
-import { ChatStore } from "../core/chat/store.js";
-import { withChatRequestContext } from "../core/chat/request-context.js";
+import type { Agent } from "../agent/context/index.js";
+import { withChatRequestContext } from "../chat/request-context.js";
 import http from "node:http";
 import fs from "fs-extra";
 import path from "path";
+import { getShipRuntimeContext } from "./ShipRuntimeContext.js";
+import { ChatManager } from "../chat/manager.js";
 
 /**
  * HTTP server for ShipMyAgent.
@@ -33,12 +34,19 @@ export class AgentServer {
   private context: ServerContext;
   private server: ReturnType<typeof import("http").createServer> | null = null;
   private projectRoot: string;
-  private chatStore: ChatStore;
+  private chatManager: ChatManager;
 
   constructor(context: ServerContext) {
     this.context = context;
     this.projectRoot = context.projectRoot;
-    this.chatStore = new ChatStore(this.projectRoot);
+    // 优先复用进程级 ChatManager；若未初始化 runtime context，则 fallback（仅用于 HTTP API 审计）。
+    this.chatManager = (() => {
+      try {
+        return getShipRuntimeContext().chatManager;
+      } catch {
+        return new ChatManager(this.projectRoot);
+      }
+    })();
     this.app = new Hono();
 
     // Middleware
@@ -161,10 +169,10 @@ export class AgentServer {
 
       try {
         const chatKey = `api:chat:${chatId}`;
-        await this.chatStore.append({
+        const chat = this.chatManager.get(chatKey);
+        await chat.append({
           channel: "api",
           chatId,
-          chatKey,
           userId: actorId,
           messageId:
             typeof body?.messageId === "string" ? body.messageId : undefined,
@@ -187,10 +195,9 @@ export class AgentServer {
             }),
         );
 
-        await this.chatStore.append({
+        await chat.append({
           channel: "api",
           chatId,
-          chatKey,
           userId: "bot",
           messageId:
             typeof body?.messageId === "string" ? body.messageId : undefined,

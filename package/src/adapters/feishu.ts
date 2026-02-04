@@ -1,15 +1,13 @@
 import * as Lark from "@larksuiteoapi/node-sdk";
 import fs from "fs-extra";
 import path from "path";
-import { Logger } from "../telemetry/index.js";
 import { getCacheDirPath } from "../utils.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "./platform-adapter.js";
-import type { Agent } from "../core/agent/index.js";
-import { createAgent } from "../core/agent/index.js";
+import type { Agent } from "../agent/context/index.js";
 
 /**
  * Feishu (Lark) chat adapter.
@@ -67,22 +65,19 @@ export class FeishuBot extends BaseChatAdapter {
     appId: string,
     appSecret: string,
     domain: string | undefined,
-    logger: Logger,
-    projectRoot: string,
     adminUserIds: string[] | undefined,
-    createAgentRuntime?: () => Agent,
   ) {
-    super({ channel: "feishu", projectRoot, logger, createAgentRuntime });
+    super({ channel: "feishu" });
     this.appId = appId;
     this.appSecret = appSecret;
     this.domain = domain;
     this.dedupeDir = path.join(
-      getCacheDirPath(projectRoot),
+      getCacheDirPath(this.projectRoot),
       "feishu",
       "dedupe",
     );
     this.threadInitiatorsFile = path.join(
-      getCacheDirPath(projectRoot),
+      getCacheDirPath(this.projectRoot),
       "feishu",
       "threadInitiators.json",
     );
@@ -604,24 +599,17 @@ Available commands:
 }
 
 export async function createFeishuBot(
-  projectRoot: string,
   config: FeishuConfig,
-  logger: Logger,
 ): Promise<FeishuBot | null> {
   if (!config.enabled || !config.appId || !config.appSecret) {
     return null;
   }
 
-  // 注意：不在这里直接创建 AgentRuntime 单例；Feishu Bot 使用 chatKey 级别的 AgentRuntime 缓存
-  //（BaseChatAdapter.getOrCreateRuntime），按需创建并在一段时间无交互后自动清理。
   const bot = new FeishuBot(
     config.appId,
     config.appSecret,
     config.domain,
-    logger,
-    projectRoot, // 传递 projectRoot
     config.adminUserIds,
-    () => createAgent(projectRoot),
   );
   return bot;
 }

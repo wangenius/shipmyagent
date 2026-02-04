@@ -1,10 +1,16 @@
 import fs from "fs-extra";
 import path from "path";
 import type { ModelMessage } from "ai";
-import { getChatsDirPath } from "../../utils.js";
+import { getChatsDirPath } from "../utils.js";
 import { HistoryCache } from "./history-cache.js";
 
-export type ChatChannel = "telegram" | "feishu" | "qq" | "api" | "cli" | "scheduler";
+export type ChatChannel =
+  | "telegram"
+  | "feishu"
+  | "qq"
+  | "api"
+  | "cli"
+  | "scheduler";
 export type ChatRole = "user" | "assistant" | "system" | "tool";
 
 export interface ChatLogEntryV1 {
@@ -28,40 +34,60 @@ export interface SearchOptions {
   limit?: number;
 }
 
+/**
+/**
+ * ChatStore：单个 chatKey 的审计与追溯（per-chat）。
+ *
+ * 设计目标
+ * - “一个 chat 一个 store”：对上层来说它就是这个 chat 的 transcript 读写入口
+ * - 为了简化概念，本类同时承担存储引擎职责（cache/归档/路径规则都内化在这里）
+ */
 export class ChatStore {
-  private projectRoot: string;
-  private chatsDir: string;
-  private hydrated: Set<string> = new Set();
-  private cache: HistoryCache;
+  readonly chatKey: string;
+  private readonly chatsDir: string;
+  private readonly cache: HistoryCache;
+  private hydrated: boolean = false;
   private readonly ARCHIVE_THRESHOLD = 1000;
-  private archiveLocks: Map<string, Promise<void>> = new Map();
+  private archiveLock: Promise<void> | null = null;
 
-  constructor(projectRoot: string) {
-    this.projectRoot = projectRoot;
-    this.chatsDir = getChatsDirPath(projectRoot);
+  constructor(params: { projectRoot: string; chatKey: string }) {
+    const key = String(params.chatKey || "").trim();
+    if (!key) throw new Error("ChatStore requires a non-empty chatKey");
+    this.chatKey = key;
+    this.chatsDir = getChatsDirPath(params.projectRoot);
     this.cache = new HistoryCache();
   }
 
-  getChatFilePath(chatKey: string): string {
-    return path.join(this.chatsDir, `${encodeURIComponent(chatKey)}.jsonl`);
+  /**
+   * 获取该 chatKey 的落盘目录。
+   *
+   * 存储结构（每个 chatKey 一个目录）：
+   * - `.ship/chats/<encodedChatKey>/history.jsonl`
+   * - `.ship/chats/<encodedChatKey>/archive-1.jsonl`（可选）
+   * - `.ship/chats/<encodedChatKey>/archive-2.jsonl`（可选）
+   */
+  getChatDirPath(): string {
+    return path.join(this.chatsDir, encodeURIComponent(this.chatKey));
   }
 
-  getArchiveFilePath(chatKey: string, archiveIndex: number): string {
-    return path.join(
-      this.chatsDir,
-      `${encodeURIComponent(chatKey)}.archive-${archiveIndex}.jsonl`,
-    );
+  getHistoryFilePath(): string {
+    return path.join(this.getChatDirPath(), "history.jsonl");
+  }
+
+  getArchiveFilePath(archiveIndex: number): string {
+    return path.join(this.getChatDirPath(), `archive-${archiveIndex}.jsonl`);
   }
 
   async append(
-    entry: Omit<ChatLogEntryV1, "v" | "ts"> & Partial<Pick<ChatLogEntryV1, "ts">>,
+    entry: Omit<ChatLogEntryV1, "v" | "ts" | "chatKey"> &
+      Partial<Pick<ChatLogEntryV1, "ts">>,
   ): Promise<void> {
     const full: ChatLogEntryV1 = {
       v: 1,
       ts: typeof entry.ts === "number" ? entry.ts : Date.now(),
       channel: entry.channel,
       chatId: entry.chatId,
-      chatKey: entry.chatKey,
+      chatKey: this.chatKey,
       userId: entry.userId,
       messageId: entry.messageId,
       role: entry.role,
@@ -69,32 +95,60 @@ export class ChatStore {
       meta: entry.meta,
     };
 
-    await fs.ensureDir(this.chatsDir);
-    const file = this.getChatFilePath(full.chatKey);
-    await fs.appendFile(file, JSON.stringify(full) + "\n", "utf8");
+    const chatDir = this.getChatDirPath();
+    await fs.ensureDir(chatDir);
+    await fs.appendFile(this.getHistoryFilePath(), JSON.stringify(full) + "\n", "utf8");
 
-    this.cache.invalidate(full.chatKey);
-    await this.checkAndArchive(full.chatKey);
+    this.cache.invalidate(this.chatKey);
+    await this.checkAndArchive();
   }
 
-  async loadRecentEntries(chatKey: string, limit: number = 20): Promise<ChatLogEntryV1[]> {
-    const cached = this.cache.get(chatKey);
-    if (cached && cached.length >= limit) return cached.slice(-limit);
+  loadRecentEntries(limit: number = 20): Promise<ChatLogEntryV1[]> {
+    return this.loadRecentEntriesInternal(limit);
+  }
 
-    const file = this.getChatFilePath(chatKey);
+  loadRecentMessages(limit: number = 20): Promise<ModelMessage[]> {
+    return this.loadRecentMessagesInternal(limit);
+  }
+
+  hydrateOnce(
+    apply: (messages: ModelMessage[]) => void,
+    limit: number = 120,
+  ): Promise<void> {
+    return this.hydrateOnceInternal(apply, limit);
+  }
+
+  search(options: SearchOptions = {}): Promise<ChatLogEntryV1[]> {
+    return this.searchInternal(options);
+  }
+
+  getCacheStats(): { size: number; maxSize: number; keys: string[] } {
+    return this.cache.getStats();
+  }
+
+  clearCache(): void {
+    this.cache.clear();
+  }
+
+  private async loadRecentEntriesInternal(limit: number): Promise<ChatLogEntryV1[]> {
+    const safeLimit = Math.max(1, Math.min(5000, Math.floor(limit)));
+    const cached = this.cache.get(this.chatKey);
+    if (cached && cached.length >= safeLimit) return cached.slice(-safeLimit);
+
+    const file = this.getHistoryFilePath();
     if (!(await fs.pathExists(file))) return [];
 
     const raw = await fs.readFile(file, "utf8");
     const lines = raw.split("\n").filter(Boolean);
     const out: ChatLogEntryV1[] = [];
 
-    for (let i = Math.max(0, lines.length - limit); i < lines.length; i++) {
+    for (let i = Math.max(0, lines.length - safeLimit); i < lines.length; i++) {
       const line = lines[i];
       try {
         const obj = JSON.parse(line) as Partial<ChatLogEntryV1>;
         if (!obj || typeof obj !== "object") continue;
         if (obj.v !== 1) continue;
-        if (obj.chatKey !== chatKey) continue;
+        if (obj.chatKey !== this.chatKey) continue;
         if (typeof obj.ts !== "number") continue;
         if (typeof obj.role !== "string") continue;
         if (typeof obj.text !== "string") continue;
@@ -104,42 +158,39 @@ export class ChatStore {
       }
     }
 
-    if (out.length > 0) this.cache.set(chatKey, out);
+    if (out.length > 0) this.cache.set(this.chatKey, out);
     return out;
   }
 
-  async loadRecentMessages(chatKey: string, limit: number = 20): Promise<ModelMessage[]> {
-    const mainFile = this.getChatFilePath(chatKey);
+  private async loadRecentMessagesInternal(limit: number): Promise<ModelMessage[]> {
+    const safeLimit = Math.max(1, Math.min(5000, Math.floor(limit)));
+    const mainFile = this.getHistoryFilePath();
     const allLines: string[] = [];
 
     let archiveIndex = 1;
     while (true) {
-      const archiveFile = this.getArchiveFilePath(chatKey, archiveIndex);
+      const archiveFile = this.getArchiveFilePath(archiveIndex);
       if (!(await fs.pathExists(archiveFile))) break;
-
       try {
         const archiveRaw = await fs.readFile(archiveFile, "utf8");
-        const archiveLines = archiveRaw.split("\n").filter(Boolean);
-        allLines.push(...archiveLines);
+        allLines.push(...archiveRaw.split("\n").filter(Boolean));
       } catch {
         // ignore
       }
-
       archiveIndex++;
     }
 
     if (await fs.pathExists(mainFile)) {
       try {
         const mainRaw = await fs.readFile(mainFile, "utf8");
-        const mainLines = mainRaw.split("\n").filter(Boolean);
-        allLines.push(...mainLines);
+        allLines.push(...mainRaw.split("\n").filter(Boolean));
       } catch {
         // ignore
       }
     }
 
     if (allLines.length === 0) return [];
-    const recentLines = allLines.slice(-limit);
+    const recentLines = allLines.slice(-safeLimit);
 
     const out: ModelMessage[] = [];
     for (const line of recentLines) {
@@ -147,7 +198,7 @@ export class ChatStore {
         const obj = JSON.parse(line) as Partial<ChatLogEntryV1>;
         if (!obj || typeof obj !== "object") continue;
         if (obj.v !== 1) continue;
-        if (obj.chatKey !== chatKey) continue;
+        if (obj.chatKey !== this.chatKey) continue;
         const role = obj.role;
         const text = typeof obj.text === "string" ? obj.text : "";
         if (!text) continue;
@@ -166,24 +217,26 @@ export class ChatStore {
     return out;
   }
 
-  async hydrateOnce(
-    chatKey: string,
+  private async hydrateOnceInternal(
     apply: (messages: ModelMessage[]) => void,
-    limit: number = 120,
+    limit: number,
   ): Promise<void> {
-    if (this.hydrated.has(chatKey)) return;
-    const messages = await this.loadRecentMessages(chatKey, limit);
+    if (this.hydrated) return;
+    const messages = await this.loadRecentMessagesInternal(limit);
     if (messages.length > 0) apply(messages);
-    this.hydrated.add(chatKey);
+    this.hydrated = true;
   }
 
-  async search(chatKey: string, options: SearchOptions = {}): Promise<ChatLogEntryV1[]> {
+  private async searchInternal(options: SearchOptions): Promise<ChatLogEntryV1[]> {
     const { keyword, startTime, endTime, role, limit = 100 } = options;
-    const allEntries = await this.loadAllEntries(chatKey);
+    const safeLimit = Math.max(1, Math.min(5000, Math.floor(limit)));
+    const allEntries = await this.loadAllEntries();
 
     let filtered = allEntries;
-    if (startTime !== undefined) filtered = filtered.filter((e) => e.ts >= startTime);
-    if (endTime !== undefined) filtered = filtered.filter((e) => e.ts <= endTime);
+    if (startTime !== undefined)
+      filtered = filtered.filter((e) => e.ts >= startTime);
+    if (endTime !== undefined)
+      filtered = filtered.filter((e) => e.ts <= endTime);
     if (role) filtered = filtered.filter((e) => e.role === role);
 
     if (keyword) {
@@ -192,40 +245,32 @@ export class ChatStore {
         filtered = filtered.filter((e) => regex.test(e.text));
       } catch {
         const lowerKeyword = keyword.toLowerCase();
-        filtered = filtered.filter((e) => e.text.toLowerCase().includes(lowerKeyword));
+        filtered = filtered.filter((e) =>
+          e.text.toLowerCase().includes(lowerKeyword),
+        );
       }
     }
 
-    return filtered.slice(-limit);
+    return filtered.slice(-safeLimit);
   }
 
-  getCacheStats(): { size: number; maxSize: number; keys: string[] } {
-    return this.cache.getStats();
-  }
-
-  clearCache(): void {
-    this.cache.clear();
-  }
-
-  private async checkAndArchive(chatKey: string): Promise<void> {
-    const existingLock = this.archiveLocks.get(chatKey);
-    if (existingLock) {
-      await existingLock;
+  private async checkAndArchive(): Promise<void> {
+    if (this.archiveLock) {
+      await this.archiveLock;
       return;
     }
 
-    const archivePromise = this.doArchive(chatKey);
-    this.archiveLocks.set(chatKey, archivePromise);
-
+    const p = this.doArchive();
+    this.archiveLock = p;
     try {
-      await archivePromise;
+      await p;
     } finally {
-      this.archiveLocks.delete(chatKey);
+      this.archiveLock = null;
     }
   }
 
-  private async doArchive(chatKey: string): Promise<void> {
-    const file = this.getChatFilePath(chatKey);
+  private async doArchive(): Promise<void> {
+    const file = this.getHistoryFilePath();
     if (!(await fs.pathExists(file))) return;
 
     const raw = await fs.readFile(file, "utf8");
@@ -233,7 +278,7 @@ export class ChatStore {
     if (lines.length <= this.ARCHIVE_THRESHOLD) return;
 
     let archiveIndex = 1;
-    while (await fs.pathExists(this.getArchiveFilePath(chatKey, archiveIndex))) {
+    while (await fs.pathExists(this.getArchiveFilePath(archiveIndex))) {
       archiveIndex++;
     }
 
@@ -241,17 +286,21 @@ export class ChatStore {
     const archiveLines = lines.slice(0, archiveCount);
     const remainingLines = lines.slice(archiveCount);
 
-    const archiveFile = this.getArchiveFilePath(chatKey, archiveIndex);
-    await fs.writeFile(archiveFile, archiveLines.join("\n") + "\n", "utf8");
+    await fs.ensureDir(this.getChatDirPath());
+    await fs.writeFile(
+      this.getArchiveFilePath(archiveIndex),
+      archiveLines.join("\n") + "\n",
+      "utf8",
+    );
     await fs.writeFile(file, remainingLines.join("\n") + "\n", "utf8");
   }
 
-  private async loadAllEntries(chatKey: string): Promise<ChatLogEntryV1[]> {
+  private async loadAllEntries(): Promise<ChatLogEntryV1[]> {
     const entries: ChatLogEntryV1[] = [];
 
     let archiveIndex = 1;
     while (true) {
-      const archiveFile = this.getArchiveFilePath(chatKey, archiveIndex);
+      const archiveFile = this.getArchiveFilePath(archiveIndex);
       if (!(await fs.pathExists(archiveFile))) break;
 
       const raw = await fs.readFile(archiveFile, "utf8");
@@ -262,7 +311,7 @@ export class ChatStore {
           const obj = JSON.parse(line) as Partial<ChatLogEntryV1>;
           if (!obj || typeof obj !== "object") continue;
           if (obj.v !== 1) continue;
-          if (obj.chatKey !== chatKey) continue;
+          if (obj.chatKey !== this.chatKey) continue;
           if (typeof obj.ts !== "number") continue;
           if (typeof obj.role !== "string") continue;
           if (typeof obj.text !== "string") continue;
@@ -275,7 +324,7 @@ export class ChatStore {
       archiveIndex++;
     }
 
-    const mainFile = this.getChatFilePath(chatKey);
+    const mainFile = this.getHistoryFilePath();
     if (await fs.pathExists(mainFile)) {
       const raw = await fs.readFile(mainFile, "utf8");
       const lines = raw.split("\n").filter(Boolean);
@@ -285,7 +334,7 @@ export class ChatStore {
           const obj = JSON.parse(line) as Partial<ChatLogEntryV1>;
           if (!obj || typeof obj !== "object") continue;
           if (obj.v !== 1) continue;
-          if (obj.chatKey !== chatKey) continue;
+          if (obj.chatKey !== this.chatKey) continue;
           if (typeof obj.ts !== "number") continue;
           if (typeof obj.role !== "string") continue;
           if (typeof obj.text !== "string") continue;
@@ -299,4 +348,3 @@ export class ChatStore {
     return entries;
   }
 }
-

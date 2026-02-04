@@ -19,8 +19,9 @@ import { createMcpAiTool } from "./mcp.js";
 import { chatTools } from "../builtin/chat.js";
 import { chatHistoryTools } from "../builtin/chat-history.js";
 import { agentContextTools } from "../builtin/agent-context.js";
-import type { ContactBook } from "../../chat/contacts.js";
+import type { ContactBook } from "../../../chat/contacts.js";
 import { createChatContactTools } from "../builtin/chat-contact.js";
+import { ChatManager } from "../../../chat/manager.js";
 
 export interface AgentToolSetLogger {
   info(message: string): void;
@@ -40,9 +41,11 @@ export function createAgentToolSet(params: {
   contacts: ContactBook;
 }): Record<string, any> {
   loadProjectDotenv(params.projectRoot);
+  const chatManager = new ChatManager(params.projectRoot);
   setToolRuntimeContext({
     projectRoot: params.projectRoot,
     config: params.config,
+    chatManager,
   });
 
   const tools: Record<string, any> = {

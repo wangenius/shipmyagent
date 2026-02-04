@@ -18,11 +18,13 @@ export { createLlmLoggingFetch } from "../telemetry/index.js";
 
 export type {
   AgentConfigurations as AgentContext,
-  AgentRunInput,
   AgentResult,
 } from "../types/agent.js";
-export { Agent as AgentRuntime, createAgent as createAgentRuntimeFromPath } from "./agent/index.js";
+export {
+  Agent as AgentRuntime,
+  createAgent as createAgentRuntimeFromPath,
+} from "./context/index.js";
 
-export * as chat from "./chat/index.js";
+export * as chat from "../chat/index.js";
 export * as mcp from "./mcp/index.js";
 export * as skills from "./skills/index.js";
