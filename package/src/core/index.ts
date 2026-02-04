@@ -21,7 +21,7 @@ export type {
   AgentRunInput,
   AgentResult,
 } from "../types/agent.js";
-export { AgentRuntime, createAgentRuntimeFromPath } from "./agent/index.js";
+export { Agent as AgentRuntime, createAgent as createAgentRuntimeFromPath } from "./agent/index.js";
 
 export * as chat from "./chat/index.js";
 export * as mcp from "./mcp/index.js";

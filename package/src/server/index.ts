@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { Logger } from "../telemetry/index.js";
-import type { AgentRuntime } from "../core/agent/index.js";
+import type { Agent } from "../core/agent/index.js";
 import { ChatStore } from "../core/chat/store.js";
 import { withChatRequestContext } from "../core/chat/request-context.js";
 import http from "node:http";
@@ -20,7 +20,7 @@ import path from "path";
 export interface ServerContext {
   projectRoot: string;
   logger: Logger;
-  agentRuntime: AgentRuntime;
+  agentRuntime: Agent;
 }
 
 export interface StartOptions {
@@ -183,7 +183,7 @@ export class AgentServer {
           () =>
             this.context.agentRuntime.run({
               chatKey,
-              instructions,
+              query: instructions,
             }),
         );
 

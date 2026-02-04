@@ -8,8 +8,8 @@ import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "./platform-adapter.js";
-import type { AgentRuntime } from "../core/agent/index.js";
-import { createAgentRuntimeFromPath } from "../core/agent/index.js";
+import type { Agent } from "../core/agent/index.js";
+import { createAgent } from "../core/agent/index.js";
 
 /**
  * Feishu (Lark) chat adapter.
@@ -70,7 +70,7 @@ export class FeishuBot extends BaseChatAdapter {
     logger: Logger,
     projectRoot: string,
     adminUserIds: string[] | undefined,
-    createAgentRuntime?: () => AgentRuntime,
+    createAgentRuntime?: () => Agent,
   ) {
     super({ channel: "feishu", projectRoot, logger, createAgentRuntime });
     this.appId = appId;
@@ -621,7 +621,7 @@ export async function createFeishuBot(
     logger,
     projectRoot, // 传递 projectRoot
     config.adminUserIds,
-    () => createAgentRuntimeFromPath(projectRoot),
+    () => createAgent(projectRoot),
   );
   return bot;
 }

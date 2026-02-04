@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs-extra";
 import { getLogger } from "../telemetry/index.js";
-import { createAgentRuntimeFromPath } from "../core/agent/index.js";
+import { createAgent } from "../core/agent/index.js";
 import { createServer, ServerContext } from "../server/index.js";
 import { createInteractiveServer } from "../server/interactive.js";
 import { createTelegramBot } from "../adapters/telegram.js";
@@ -126,7 +126,7 @@ export async function startCommand(
   logger.info("MCP manager initialized");
 
   // Create Agent Runtime
-  const agentRuntime = createAgentRuntimeFromPath(projectRoot);
+  const agentRuntime = createAgent(projectRoot);
   await agentRuntime.initialize();
   logger.info("Agent Runtime initialized");
 

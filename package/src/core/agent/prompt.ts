@@ -8,8 +8,6 @@
  */
 
 import { SystemModelMessage } from "ai";
-import fs from "node:fs";
-import { fileURLToPath } from "node:url";
 
 /**
  * Build the default (runtime) system prompt for an agent run.

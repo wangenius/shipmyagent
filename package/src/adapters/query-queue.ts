@@ -15,7 +15,7 @@ import { withChatRequestContext } from "../core/chat/request-context.js";
 import type { ChatDispatchChannel } from "../core/chat/dispatcher.js";
 import { sendFinalOutputIfNeeded } from "../core/chat/final-output.js";
 import type { ChatStore } from "../core/chat/store.js";
-import type { AgentRuntime } from "../core/agent/index.js";
+import type { Agent } from "../core/agent/index.js";
 
 export type QueuedChatMessage = {
   channel: ChatDispatchChannel;
@@ -30,7 +30,7 @@ export type QueuedChatMessage = {
 };
 
 export class QueryQueue {
-  private readonly runtime: AgentRuntime;
+  private readonly runtime: Agent;
   private readonly chatStore: ChatStore;
   private queue: QueuedChatMessage[] = [];
   private running: boolean = false;
@@ -38,7 +38,7 @@ export class QueryQueue {
   private lastBusySentAtByChatKey: Map<string, number> = new Map();
   private readonly BUSY_COOLDOWN_MS = 30_000;
 
-  constructor(params: { runtime: AgentRuntime; chatStore: ChatStore }) {
+  constructor(params: { runtime: Agent; chatStore: ChatStore }) {
     this.runtime = params.runtime;
     this.chatStore = params.chatStore;
   }
@@ -137,7 +137,7 @@ export class QueryQueue {
       () =>
         this.runtime.run({
           chatKey: msg.chatKey,
-          instructions: msg.text,
+          query: msg.text,
         }),
     );
 

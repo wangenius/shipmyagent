@@ -1,8 +1,8 @@
 // Telegram adapter implementation (moved into submodule for maintainability).
 import path from "path";
 import { Logger } from "../../telemetry/index.js";
-import type { AgentRuntime } from "../../core/agent/index.js";
-import { createAgentRuntimeFromPath } from "../../core/agent/index.js";
+import type { Agent } from "../../core/agent/index.js";
+import { createAgent } from "../../core/agent/index.js";
 import { BaseChatAdapter } from "../base-chat-adapter.js";
 import type {
   AdapterChatKeyParams,
@@ -50,7 +50,7 @@ export class TelegramBot extends BaseChatAdapter {
     groupAccess: TelegramConfig["groupAccess"] | undefined,
     logger: Logger,
     projectRoot: string,
-    createAgentRuntime?: () => AgentRuntime,
+    createAgentRuntime?: () => Agent,
   ) {
     super({ channel: "telegram", projectRoot, logger, createAgentRuntime });
     this.botToken = botToken;
@@ -750,7 +750,7 @@ export function createTelegramBot(
     config.groupAccess,
     logger,
     projectRoot, // 传递 projectRoot
-    () => createAgentRuntimeFromPath(projectRoot),
+    () => createAgent(projectRoot),
   );
   return bot;
 }

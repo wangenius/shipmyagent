@@ -26,7 +26,7 @@ export interface AgentRunInput {
    * This is the only identifier AgentRuntime needs for multi-user operation.
    */
   chatKey: string;
-  instructions: string;
+  query: string;
   onStep?: (event: {
     type: string;
     text: string;

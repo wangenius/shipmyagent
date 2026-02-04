@@ -1,6 +1,6 @@
 import type { Logger } from "../telemetry/index.js";
-import type { AgentRuntime } from "../core/agent/index.js";
-import { createAgentRuntimeFromPath } from "../core/agent/index.js";
+import type { Agent } from "../core/agent/index.js";
+import { createAgent } from "../core/agent/index.js";
 import { getContactBook } from "../core/chat/index.js";
 import { PlatformAdapter } from "./platform-adapter.js";
 import type { ChatDispatchChannel } from "../core/chat/dispatcher.js";
@@ -30,24 +30,24 @@ export type IncomingChatMessage = {
  * - Adapters still run a conservative fallback send if the model forgets the tool.
  */
 export abstract class BaseChatAdapter extends PlatformAdapter {
-  private static globalRuntime: AgentRuntime | null = null;
+  private static agent: Agent | null = null;
   private static globalQueue: QueryQueue | null = null;
 
-  protected readonly runtime: AgentRuntime;
+  protected readonly runtime: Agent;
 
   protected constructor(params: {
     channel: ChatDispatchChannel;
     projectRoot: string;
     logger: Logger;
-    createAgentRuntime?: () => AgentRuntime;
+    createAgentRuntime?: () => Agent;
   }) {
     super({ channel: params.channel, projectRoot: params.projectRoot, logger: params.logger });
     this.runtime =
-      BaseChatAdapter.globalRuntime ??
+      BaseChatAdapter.agent ??
       (params.createAgentRuntime
         ? params.createAgentRuntime()
-        : createAgentRuntimeFromPath(this.projectRoot));
-    if (!BaseChatAdapter.globalRuntime) BaseChatAdapter.globalRuntime = this.runtime;
+        : createAgent(this.projectRoot));
+    if (!BaseChatAdapter.agent) BaseChatAdapter.agent = this.runtime;
 
     if (!BaseChatAdapter.globalQueue) {
       BaseChatAdapter.globalQueue = new QueryQueue({

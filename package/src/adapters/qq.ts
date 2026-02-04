@@ -7,8 +7,8 @@ import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "./platform-adapter.js";
-import { createAgentRuntimeFromPath } from "../core/agent/index.js";
-import type { AgentRuntime } from "../core/agent/index.js";
+import { createAgent } from "../core/agent/index.js";
+import type { Agent } from "../core/agent/index.js";
 
 /**
  * QQ official bot adapter (WebSocket gateway).
@@ -86,7 +86,7 @@ export class QQBot extends BaseChatAdapter {
     logger: Logger,
     projectRoot: string,
     useSandbox: boolean = false,
-    createAgentRuntime?: () => AgentRuntime,
+    createAgentRuntime?: () => Agent,
   ) {
     super({ channel: "qq", projectRoot, logger, createAgentRuntime });
     this.appId = appId;
@@ -930,7 +930,7 @@ export async function createQQBot(
     logger,
     projectRoot,
     config.sandbox || false,
-    () => createAgentRuntimeFromPath(projectRoot),
+    () => createAgent(projectRoot),
   );
   return bot;
 }

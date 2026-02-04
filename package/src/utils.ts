@@ -1,8 +1,7 @@
-import { createHash } from "crypto";
 import dotenv from "dotenv";
 import fs from "fs-extra";
 import path from "path";
-
+import { nanoid } from "nanoid";
 export interface ShipConfig {
   $schema?: string;
   name: string;
@@ -87,16 +86,20 @@ export interface ShipConfig {
   };
   permissions?: {
     read_repo: boolean | { paths?: string[] };
-    write_repo?: boolean | {
-      paths?: string[];
-      requiresApproval: boolean;
-    };
-    exec_shell?: boolean | {
-      deny?: string[];
-      allow?: string[];
-      requiresApproval: boolean;
-      denyRequiresApproval?: boolean;
-    };
+    write_repo?:
+      | boolean
+      | {
+          paths?: string[];
+          requiresApproval: boolean;
+        };
+    exec_shell?:
+      | boolean
+      | {
+          deny?: string[];
+          allow?: string[];
+          requiresApproval: boolean;
+          denyRequiresApproval?: boolean;
+        };
     open_pr?: boolean;
     merge?: boolean;
   };
@@ -271,10 +274,7 @@ export function loadShipConfig(projectRoot: string): ShipConfig {
 }
 
 export function generateId(): string {
-  return createHash("md5")
-    .update(Date.now().toString())
-    .digest("hex")
-    .slice(0, 8);
+  return nanoid(16);
 }
 
 export function getProjectRoot(cwd: string): string {

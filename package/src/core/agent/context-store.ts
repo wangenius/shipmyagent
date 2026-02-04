@@ -1,5 +1,6 @@
 /**
  * ContextStore（统一上下文存储）
+ * Agent Runtime 的 Context 管理
  *
  * 目标
  * - 用一个模块统一管理“对 LLM 输入有用的一切上下文数据”，并明确区分两条数据链：
@@ -21,7 +22,10 @@ import fs from "fs-extra";
 import path from "path";
 import type { ModelMessage } from "ai";
 import type { ConversationMessage } from "../../types/agent.js";
-import type { AgentExecutionEntryV1 } from "../../types/context.js";
+import type {
+  AgentExecutionEntryV1,
+  ChatHistoryCompactionOptions,
+} from "../../types/context.js";
 
 function safePreview(text: string, maxChars: number): string {
   const s = String(text ?? "");
@@ -121,6 +125,63 @@ export class ContextStore {
     }
 
     return (this.chatMessagesByChatKey.get(chatKey) || []).map(toLegacy);
+  }
+
+  /**
+   * 压缩某个 chat session 的 in-memory messages。
+   *
+   * 目标
+   * - 把更早的 user/assistant/tool messages 合并成一条 assistant summary
+   * - 保留最后 keepLast 条 messages（更贴近当前任务）
+   *
+   * 返回值
+   * - true：完成压缩
+   * - false：无法压缩（历史太短或输入不合法）
+   */
+  compactChatHistory(
+    chatKey: string,
+    opts: ChatHistoryCompactionOptions,
+  ): boolean {
+    const keepLast = Math.max(1, Math.min(5000, Math.floor(opts.keepLast)));
+    const history = this.getOrCreateChatSession(chatKey);
+    if (!Array.isArray(history)) return false;
+    if (history.length <= keepLast + 2) return false;
+
+    const cut = Math.max(1, history.length - keepLast);
+    const older = history.slice(0, cut);
+    const recent = history.slice(cut);
+
+    const lines: string[] = [];
+    lines.push("（已压缩更早的对话上下文，供参考）");
+    lines.push(`- chatKey: ${chatKey}`);
+    lines.push(`- olderMessages: ${older.length}`);
+    lines.push("");
+
+    const maxLines = 120;
+    for (const m of older) {
+      const role = String((m as any)?.role || "");
+      const content = (m as any)?.content;
+      const text =
+        typeof content === "string"
+          ? content
+          : Array.isArray(content)
+            ? JSON.stringify(content).slice(0, 400)
+            : String(content ?? "");
+      if (!role || !text) continue;
+      lines.push(`${role}: ${text.replace(/\s+$/g, "")}`.slice(0, 600));
+      if (lines.length >= maxLines) {
+        lines.push("…（省略更多压缩内容）");
+        break;
+      }
+    }
+
+    const summary: ModelMessage = {
+      role: "assistant",
+      content: lines.join("\n"),
+    };
+
+    history.splice(0, history.length, summary, ...recent);
+    return true;
   }
 
   formatModelMessagesForLog(
@@ -327,4 +388,3 @@ export class ContextStore {
     return { compacted: true, before: all.length, after: next.length };
   }
 }
-
