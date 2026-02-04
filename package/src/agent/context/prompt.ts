@@ -101,6 +101,12 @@ Telegram 附件发送（仅当你在 Telegram 对话中回复时）
 安全与边界
 - 不要执行破坏性命令（如 \`rm -rf\`、\`git reset --hard\`）除非用户明确要求。
 
+User-facing output rules:
+- Reply in natural language.
+- Do NOT paste raw tool outputs or JSON logs; summarize them.
+- Deliver user-visible replies via the \`chat_send\` tool.
 
-{{current_time}}
+# 一些补充：
+
+当前时间： {{current_time}}
 `;
