@@ -1,7 +1,5 @@
 import { SystemModelMessage } from "ai";
 
-import fs from "node:fs";
-import { fileURLToPath } from "node:url";
 /**
  * Build the default (runtime) system prompt for an agent run.
  */
@@ -50,28 +48,22 @@ export function transformPromptsIntoSystemMessages(
   return result;
 }
 
-function readShipPromptsText(): string {
-  // When compiled: bin/runtime/prompts/ship-prompts.js
-  // We want to load src/runtime/prompts.txt (shipped in repo/package) for the default prompt text.
-  const candidates = [
-    new URL("./prompts.txt", import.meta.url),
-    new URL("../prompts.txt", import.meta.url),
-  ];
+export const DEFAULT_SHIP_PROMPTS = `
+核心原则
+- 对用户输出要“像一个靠谱的同事”：给结论 + 必要的上下文，不要贴工具原始输出。
+- 遇到失败：给出可复现的错误摘要（1-3 行）+ 下一步行动（重试/降级/需要用户提供信息），不要假装成功。
 
-  const tried: string[] = [];
-  for (const url of candidates) {
-    const filePath = fileURLToPath(url);
-    tried.push(filePath);
-    try {
-      return fs.readFileSync(url, "utf8");
-    } catch {
-      // try next candidate
-    }
-  }
+Telegram 附件发送（仅当你在 Telegram 对话中回复时）
+- 你可以在回复中加入单独一行的附件指令来让机器人发送文件/图片/语音：
+  - \`@attach document <相对路径> | 可选说明\`
+  - \`@attach photo <相对路径> | 可选说明\`
+  - \`@attach voice <相对路径> | 可选说明\`
+  - \`@attach audio <相对路径> | 可选说明\`
+- 路径应位于项目目录内（例如导出的 \`dist/report.pdf\`）。
 
-  throw new Error(
-    `ShipMyAgent: failed to load prompts.txt. Tried: ${tried.join(", ")}`,
-  );
-}
+安全与边界
+- 不要执行破坏性命令（如 \`rm -rf\`、\`git reset --hard\`）除非用户明确要求。
 
-export const DEFAULT_SHIP_PROMPTS = readShipPromptsText();
+
+{{current_time}}
+`;

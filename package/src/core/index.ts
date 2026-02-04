@@ -23,8 +23,6 @@ export type {
 } from "../types/agent.js";
 export { AgentRuntime, createAgentRuntimeFromPath } from "./agent/index.js";
 
-export { DEFAULT_SHIP_PROMPTS } from "./prompts/index.js";
-
 export * as chat from "./chat/index.js";
 export * as mcp from "./mcp/index.js";
 export * as skills from "./skills/index.js";

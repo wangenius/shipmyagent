@@ -8,12 +8,12 @@ import {
   loadShipConfig,
   type ShipConfig,
 } from "../../utils.js";
-import { DEFAULT_SHIP_PROMPTS } from "../prompts/index.js";
 import {
   discoverClaudeSkillsSync,
   renderClaudeSkillsPromptSection,
 } from "../skills/index.js";
 import { Agent } from "./agent.js";
+import { DEFAULT_SHIP_PROMPTS } from "./prompt.js";
 
 export function createAgent(projectRoot: string): Agent {
   loadProjectDotenv(projectRoot);
@@ -21,8 +21,7 @@ export function createAgent(projectRoot: string): Agent {
   const agentMdPath = getAgentMdPath(projectRoot);
   const shipJsonPath = getShipJsonPath(projectRoot);
 
-  let userAgentMd = `# Agent Role
-
+  let agent_profiles = `# Agent Role
 You are a helpful project assistant.`;
 
   let config: ShipConfig = {
@@ -57,7 +56,7 @@ You are a helpful project assistant.`;
   try {
     if (fs.existsSync(agentMdPath)) {
       const content = fs.readFileSync(agentMdPath, "utf-8").trim();
-      if (content) userAgentMd = content;
+      if (content) agent_profiles = content;
     }
   } catch {
     // ignore
@@ -78,11 +77,9 @@ You are a helpful project assistant.`;
     skills,
   );
 
-  return new Agent(
-    {
-      projectRoot,
-      config,
-      systems: [userAgentMd, DEFAULT_SHIP_PROMPTS, skillsSection],
-    },
-  );
+  return new Agent({
+    projectRoot,
+    config,
+    systems: [agent_profiles, DEFAULT_SHIP_PROMPTS, skillsSection],
+  });
 }
