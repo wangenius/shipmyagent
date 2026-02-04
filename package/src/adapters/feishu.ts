@@ -85,7 +85,7 @@ export class FeishuBot extends BaseChatAdapter {
   }
 
   private buildChatKey(chatId: string): string {
-    return `feishu:chat:${chatId}`;
+    return `feishu-chat-${chatId}`;
   }
 
   protected getChatKey(params: AdapterChatKeyParams): string {

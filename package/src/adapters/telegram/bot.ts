@@ -70,9 +70,9 @@ export class TelegramBot extends BaseChatAdapter {
       Number.isFinite(messageThreadId) &&
       messageThreadId > 0
     ) {
-      return `telegram:chat:${chatId}:topic:${messageThreadId}`;
+      return `telegram-chat-${chatId}-topic-${messageThreadId}`;
     }
-    return `telegram:chat:${chatId}`;
+    return `telegram-chat-${chatId}`;
   }
 
   protected getChatKey(params: AdapterChatKeyParams): string {

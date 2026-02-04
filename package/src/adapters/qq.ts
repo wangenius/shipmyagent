@@ -94,7 +94,7 @@ export class QQBot extends BaseChatAdapter {
       typeof params.chatType === "string" && params.chatType
         ? params.chatType
         : "unknown";
-    return `qq:${chatType}:${params.chatId}`;
+    return `qq-${chatType}-${params.chatId}`;
   }
 
   protected async sendTextToPlatform(
