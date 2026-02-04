@@ -1,4 +1,6 @@
 import WebSocket from "ws";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { Logger } from "../telemetry/index.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type {
@@ -8,7 +10,6 @@ import type {
 import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
 import type { AgentRuntime } from "../runtime/agent/index.js";
 import type { McpManager } from "../runtime/mcp/index.js";
-import { sendFinalOutputIfNeeded } from "../runtime/chat/final-output.js";
 
 /**
  * QQ official bot adapter (WebSocket gateway).
@@ -78,6 +79,7 @@ export class QQBot extends BaseChatAdapter {
   // 是否使用沙箱环境
   private useSandbox: boolean = false;
   private msgSeqByMessageKey: Map<string, number> = new Map();
+  private readonly qqEventCapture: QQEventCaptureConfig;
 
   constructor(
     appId: string,
@@ -91,6 +93,7 @@ export class QQBot extends BaseChatAdapter {
     this.appId = appId;
     this.appSecret = appSecret;
     this.useSandbox = useSandbox;
+    this.qqEventCapture = getQqEventCaptureConfig(projectRoot);
   }
 
   protected getChatKey(params: AdapterChatKeyParams): string {
@@ -336,6 +339,7 @@ export class QQBot extends BaseChatAdapter {
           this.logger.debug(
             `收到 WebSocket 消息: op=${payload.op}, t=${payload.t || "N/A"}`,
           );
+          await this.captureIncomingWsPayload(payload);
           await this.handleWebSocketMessage(payload);
 
           // 首次连接成功后 resolve
@@ -432,6 +436,57 @@ export class QQBot extends BaseChatAdapter {
           }
         }, 2000);
         break;
+    }
+  }
+
+  /**
+   * Persist raw WS payloads to disk for debugging.
+   *
+   * Why:
+   * - QQ events often omit human-friendly usernames/nicknames unless you enable
+   *   extra permissions or call additional profile APIs. Capturing the raw
+   *   gateway payload helps verify what fields are actually present.
+   *
+   * How:
+   * - Enable via env:
+   *   - `SHIP_QQ_CAPTURE_EVENTS=dispatch|all`
+   *   - `SHIP_QQ_CAPTURE_DIR=/abs/or/relative/path` (optional)
+   * - Files are written as JSON snapshots with a timestamp-based filename.
+   */
+  private async captureIncomingWsPayload(payload: unknown): Promise<void> {
+    if (!this.qqEventCapture.enabled) return;
+
+    const op = (payload as any)?.op;
+    if (
+      this.qqEventCapture.mode === "dispatch" &&
+      op !== OpCode.Dispatch
+    ) {
+      return;
+    }
+
+    try {
+      const safeTag = sanitizeFileTag(`${String((payload as any)?.t ?? "N/A")}`);
+      const safeOp = sanitizeFileTag(`${String(op ?? "unknown")}`);
+      const safeSeq = sanitizeFileTag(`${String((payload as any)?.s ?? "")}`);
+      const filename = `${Date.now()}_${safeOp}_${safeTag}${safeSeq ? `_${safeSeq}` : ""}.json`;
+
+      await mkdir(this.qqEventCapture.dir, { recursive: true });
+      await writeFile(
+        join(this.qqEventCapture.dir, filename),
+        JSON.stringify(
+          {
+            receivedAt: new Date().toISOString(),
+            payload,
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+    } catch (error) {
+      this.logger.debug("QQ event capture failed (ignored)", {
+        error: String(error),
+      });
     }
   }
 
@@ -575,6 +630,7 @@ export class QQBot extends BaseChatAdapter {
 
     // 提取纯文本内容（去除 @机器人 的部分）
     const userMessage = this.extractTextContent(content);
+    const actor = this.extractAuthorIdentity(author);
 
     this.logger.info(`收到群聊消息 [${groupId}]: ${userMessage}`);
 
@@ -582,7 +638,7 @@ export class QQBot extends BaseChatAdapter {
     if (userMessage.startsWith("/")) {
       await this.handleCommand(groupId, "group", messageId, userMessage);
     } else {
-      await this.executeAndReply(groupId, "group", messageId, userMessage);
+      await this.executeAndReply(groupId, "group", messageId, userMessage, actor);
     }
   }
 
@@ -591,7 +647,7 @@ export class QQBot extends BaseChatAdapter {
    */
   private async handleC2CMessage(data: any): Promise<void> {
     const { id: messageId, author, content } = data;
-    const userId = author?.user_openid || author?.id;
+    const actor = this.extractAuthorIdentity(author);
 
     // 消息去重
     if (this.processedMessages.has(messageId)) {
@@ -602,13 +658,13 @@ export class QQBot extends BaseChatAdapter {
 
     const userMessage = this.extractTextContent(content);
 
-    this.logger.info(`收到私聊消息 [${userId}]: ${userMessage}`);
+    this.logger.info(`收到私聊消息 [${actor.userId || "unknown"}]: ${userMessage}`);
 
     // 检查是否是命令
     if (userMessage.startsWith("/")) {
-      await this.handleCommand(userId, "c2c", messageId, userMessage);
+      await this.handleCommand(actor.userId || "", "c2c", messageId, userMessage);
     } else {
-      await this.executeAndReply(userId, "c2c", messageId, userMessage);
+      await this.executeAndReply(actor.userId || "", "c2c", messageId, userMessage, actor);
     }
   }
 
@@ -625,14 +681,54 @@ export class QQBot extends BaseChatAdapter {
     this.processedMessages.add(messageId);
 
     const userMessage = this.extractTextContent(content);
+    const actor = this.extractAuthorIdentity(author);
 
     this.logger.info(`收到频道消息 [${channelId}]: ${userMessage}`);
 
     if (userMessage.startsWith("/")) {
       await this.handleCommand(channelId, "channel", messageId, userMessage);
     } else {
-      await this.executeAndReply(channelId, "channel", messageId, userMessage);
+      await this.executeAndReply(channelId, "channel", messageId, userMessage, actor);
     }
+  }
+
+  /**
+   * Extract a best-effort actor identity from QQ webhook payloads.
+   *
+   * QQ varies fields by event type (group/c2c/channel), so we accept multiple
+   * candidates and normalize into `{ userId, username }`.
+   *
+   * Notes:
+   * - ContactBook upsert only happens when `username` is provided.
+   * - For C2C events, `userId` also serves as `chatId` (DM target).
+   */
+  private extractAuthorIdentity(author: any): { userId?: string; username?: string } {
+    const userIdCandidates = [
+      author?.member_openid,
+      author?.user_openid,
+      author?.id,
+      author?.user_id,
+      author?.uid,
+    ];
+    const usernameCandidates = [
+      author?.nickname,
+      author?.username,
+      author?.name,
+      author?.user?.username,
+      author?.user?.nickname,
+    ];
+
+    const userId = userIdCandidates
+      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .find(Boolean);
+    const username = usernameCandidates
+      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .find(Boolean);
+
+    return {
+      ...(userId ? { userId } : {}),
+      ...(username ? { username } : userId ? { username: userId } : {}),
+    };
   }
 
   /**
@@ -704,37 +800,16 @@ export class QQBot extends BaseChatAdapter {
     chatType: string,
     messageId: string,
     instructions: string,
+    actor?: { userId?: string; username?: string },
   ): Promise<void> {
     try {
-      const chatKey = this.getChatKey({ chatId, chatType });
-      const agentRuntime = this.getOrCreateRuntime(chatKey);
-
-      // 初始化 agent（如果尚未初始化）
-      if (!agentRuntime.isInitialized()) {
-        await agentRuntime.initialize();
-      }
-
-      // 使用会话 agent 执行指令
-      const result = await agentRuntime.run({
-        instructions,
-        context: {
-          source: "qq" as any,
-          userId: chatId,
-          chatKey,
-          chatType,
-          messageId,
-          replyMode: "tool",
-        },
-      });
-
-      // Fallback: if agent didn't call send_message, auto-send the output
-      await sendFinalOutputIfNeeded({
-        channel: "qq",
+      await this.enqueueMessage({
         chatId,
-        output: result.output || "",
-        toolCalls: result.toolCalls as any,
+        text: instructions,
         chatType,
         messageId,
+        ...(actor?.userId ? { userId: actor.userId } : {}),
+        ...(actor?.username ? { username: actor.username } : {}),
       });
     } catch (error) {
       await this.sendMessage(
@@ -864,4 +939,48 @@ export async function createQQBot(
       }),
   );
   return bot;
+}
+
+type QQEventCaptureMode = "dispatch" | "all";
+
+interface QQEventCaptureConfig {
+  enabled: boolean;
+  mode: QQEventCaptureMode;
+  dir: string;
+}
+
+/**
+ * Read QQ raw event capture configuration from environment variables.
+ *
+ * Env:
+ * - `SHIP_QQ_CAPTURE_EVENTS=dispatch|all`
+ * - `SHIP_QQ_CAPTURE_DIR=...` (optional; defaults to `${projectRoot}/.ship/.debug/qq-events`)
+ */
+function getQqEventCaptureConfig(projectRoot: string): QQEventCaptureConfig {
+  const raw = String(process.env.SHIP_QQ_CAPTURE_EVENTS ?? "").trim().toLowerCase();
+  if (!raw || ["0", "false", "off", "no"].includes(raw)) {
+    return {
+      enabled: false,
+      mode: "dispatch",
+      dir: join(projectRoot, ".ship", ".debug", "qq-events"),
+    };
+  }
+
+  const mode: QQEventCaptureMode =
+    raw === "all" ? "all" : raw === "dispatch" ? "dispatch" : "dispatch";
+
+  const dir =
+    typeof process.env.SHIP_QQ_CAPTURE_DIR === "string" &&
+    process.env.SHIP_QQ_CAPTURE_DIR.trim()
+      ? process.env.SHIP_QQ_CAPTURE_DIR.trim()
+      : join(projectRoot, ".ship", ".debug", "qq-events");
+
+  return { enabled: true, mode, dir };
+}
+
+/**
+ * Make a string safe for use in a filename segment.
+ */
+function sanitizeFileTag(input: string): string {
+  return input.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80) || "N_A";
 }

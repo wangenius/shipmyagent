@@ -141,14 +141,17 @@ ls -la Agent.md ship.json
 tail -200 .ship/logs/$(date +%F).jsonl
 ```
 
-### 场景 2：任务未运行
+### 场景 2：消息没有被处理
 
 ```bash
-# 确认任务文件存在
-ls -la .ship/tasks
+# 确认消息已落盘
+ls -la .ship/chats
 
-# 查看最近 runs
-ls -lt .ship/runs | head
+# 查看某个 chatKey 的最近日志（替换为真实文件名）
+tail -50 .ship/chats/<encode(chatKey)>.jsonl
+
+# 查看今天的统一日志
+tail -200 .ship/logs/$(date +%F).jsonl
 ```
 
 ### 场景 3：Telegram 无响应
@@ -180,8 +183,6 @@ tail -50 .ship/logs/$(date +%F).jsonl | jq -c '{timestamp, type, message}'
 # 只看 error
 jq -c 'select(.type == "error") | {timestamp, message, details}' .ship/logs/$(date +%F).jsonl | tail -200
 
-# 只看审批相关
-jq -c 'select(.type == "approval") | {timestamp, message, details}' .ship/logs/$(date +%F).jsonl | tail -200
 ```
 
 ## 保留 / 清理

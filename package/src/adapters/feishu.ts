@@ -8,10 +8,9 @@ import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "./platform-adapter.js";
-import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
 import type { AgentRuntime } from "../runtime/agent/index.js";
+import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
 import type { McpManager } from "../runtime/mcp/index.js";
-import { sendFinalOutputIfNeeded } from "../runtime/chat/final-output.js";
 
 /**
  * Feishu (Lark) chat adapter.
@@ -113,6 +112,16 @@ export class FeishuBot extends BaseChatAdapter {
     } else {
       await this.sendChatMessage(params.chatId, chatType, text);
     }
+  }
+
+  /**
+   * Compatibility hook for older per-chat locking flows.
+   *
+   * In the "one global agent thread" architecture, messages are serialized by
+   * the QueryQueue, so we do not need additional per-chat locks here.
+   */
+  private runInChat(_chatKey: string, fn: () => Promise<void>): Promise<void> {
+    return fn();
   }
 
   private async loadDedupeSet(threadId: string): Promise<Set<string>> {
@@ -486,51 +495,15 @@ Available commands:
     actorId?: string,
   ): Promise<void> {
     try {
-      const chatKey = this.buildChatKey(chatId);
-      const agentRuntime = this.getOrCreateRuntime(chatKey);
-
-      // Initialize agent (if not already initialized)
-      if (!agentRuntime.isInitialized()) {
-        await agentRuntime.initialize();
-      }
-
-      this.knownChats.set(chatKey, { chatId, chatType });
-
-      // Persist user message into chat history (append-only)
-      await this.chatStore.append({
-        channel: "feishu",
+      const { chatKey } = await this.enqueueMessage({
         chatId,
-        chatKey,
-        userId: actorId,
-        messageId,
-        role: "user",
         text: instructions,
-        meta: { chatType },
-      });
-
-      // Execute instruction using session agent
-      const result = await agentRuntime.run({
-        instructions,
-        context: {
-          source: "feishu",
-          userId: chatId,
-          chatKey,
-          actorId,
-          chatType,
-          messageId,
-          replyMode: "tool",
-        },
-      });
-
-      // Fallback: if agent didn't call send_message, auto-send the output
-      await sendFinalOutputIfNeeded({
-        channel: "feishu",
-        chatId,
-        output: result.output || "",
-        toolCalls: result.toolCalls as any,
         chatType,
         messageId,
+        userId: actorId,
       });
+
+      this.knownChats.set(chatKey, { chatId, chatType });
     } catch (error) {
       await this.sendErrorMessage(
         chatId,

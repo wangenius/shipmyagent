@@ -1,0 +1,24 @@
+{
+  "v": 1,
+  "updatedAt": 1770188331659,
+  "contacts": [
+    {
+      "channel": "telegram",
+      "chatId": "8444574557",
+      "chatKey": "telegram:chat:8444574557",
+      "userId": "8444574557",
+      "username": "wangenius",
+      "chatType": "private",
+      "updatedAt": 1770188331659
+    },
+    {
+      "channel": "qq",
+      "chatId": "53377CF935F1D831D7ACBBCAFDC4C078",
+      "chatKey": "qq:c2c:53377CF935F1D831D7ACBBCAFDC4C078",
+      "userId": "53377CF935F1D831D7ACBBCAFDC4C078",
+      "username": "53377CF935F1D831D7ACBBCAFDC4C078",
+      "chatType": "c2c",
+      "updatedAt": 1770187982830
+    }
+  ]
+}

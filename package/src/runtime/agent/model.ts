@@ -27,12 +27,10 @@ type AgentLoggerLike = {
   log: (level: string, message: string, data?: Record<string, unknown>) => Promise<void>;
 };
 
-export async function createModelAndAgent(input: {
+export async function createModel(input: {
   config: ShipConfig;
-  agentMd: string;
   logger: AgentLoggerLike;
-  tools: Record<string, any>;
-}): Promise<{ model: LanguageModel; agent: ToolLoopAgentType<never, any, any> } | null> {
+}): Promise<LanguageModel | null> {
   const { provider, apiKey, baseUrl, model } = input.config.llm;
   const resolvedModel = model === "${}" ? undefined : model;
   const resolvedBaseUrl = baseUrl === "${}" ? undefined : baseUrl;
@@ -72,33 +70,46 @@ export async function createModelAndAgent(input: {
     enabled: logLlmMessages,
   });
 
-  let modelInstance: LanguageModel;
   if (provider === "anthropic") {
     const anthropicProvider = createAnthropic({
       apiKey: resolvedApiKey,
       fetch: loggingFetch as any,
     });
-    modelInstance = anthropicProvider(resolvedModel);
-  } else if (provider === "custom") {
+    return anthropicProvider(resolvedModel);
+  }
+
+  if (provider === "custom") {
     const compatProvider = createOpenAICompatible({
       name: "custom",
       apiKey: resolvedApiKey,
       baseURL: resolvedBaseUrl || "https://api.openai.com/v1",
       fetch: loggingFetch as any,
     });
-    modelInstance = compatProvider(resolvedModel);
-  } else {
-    const openaiProvider = createOpenAI({
-      apiKey: resolvedApiKey,
-      baseURL: resolvedBaseUrl || "https://api.openai.com/v1",
-      fetch: loggingFetch as any,
-    });
-    modelInstance = openaiProvider(resolvedModel);
+    return compatProvider(resolvedModel);
   }
+
+  const openaiProvider = createOpenAI({
+    apiKey: resolvedApiKey,
+    baseURL: resolvedBaseUrl || "https://api.openai.com/v1",
+    fetch: loggingFetch as any,
+  });
+  return openaiProvider(resolvedModel);
+}
+
+export async function createModelAndAgent(input: {
+  config: ShipConfig;
+  agentMd: string;
+  logger: AgentLoggerLike;
+  tools: Record<string, any>;
+}): Promise<{ model: LanguageModel; agent: ToolLoopAgentType<never, any, any> } | null> {
+  const modelInstance = await createModel({ config: input.config, logger: input.logger });
+  if (!modelInstance) return null;
 
   const agent = new ToolLoopAgent({
     model: modelInstance,
-    instructions: input.agentMd,
+    // The runtime provides the full system message per request (Agent.md + DefaultPrompt),
+    // so keep ToolLoopAgent-level instructions empty to avoid duplication.
+    instructions: "",
     tools: input.tools,
     stopWhen: stepCountIs(20),
     maxOutputTokens: input.config.llm.maxTokens || 4096,

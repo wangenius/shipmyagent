@@ -13,27 +13,6 @@ export const SHIP_JSON_SCHEMA: Record<string, unknown> = {
     name: { type: "string" },
     version: { type: "string" },
     description: { type: "string" },
-    oss: {
-      type: "object",
-      additionalProperties: true,
-      properties: {
-        enabled: { type: "boolean" },
-        provider: { type: "string", enum: ["s3"] },
-        endpoint: { type: "string" },
-        accessKeyId: { type: "string" },
-        secretAccessKey: { type: "string" },
-        region: { type: "string" },
-        bucket: { type: "string" },
-      },
-    },
-    cloudFiles: {
-      type: "object",
-      additionalProperties: true,
-      properties: {
-        publicBaseUrl: { type: "string" },
-        publicRoutePrefix: { type: "string" },
-      },
-    },
     start: {
       type: "object",
       additionalProperties: true,

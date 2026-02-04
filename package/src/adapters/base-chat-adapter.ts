@@ -1,8 +1,9 @@
 import type { Logger } from "../telemetry/index.js";
-import type { AgentInput, AgentResult, AgentRuntime } from "../runtime/agent/index.js";
+import type { AgentRuntime } from "../runtime/agent/index.js";
 import { createAgentRuntimeFromPath } from "../runtime/agent/index.js";
 import { PlatformAdapter } from "./platform-adapter.js";
 import type { ChatDispatchChannel } from "../runtime/chat/dispatcher.js";
+import { QueryQueue } from "./query-queue.js";
 
 export type IncomingChatMessage = {
   chatId: string;
@@ -10,29 +11,28 @@ export type IncomingChatMessage = {
   chatType?: string;
   messageId?: string;
   messageThreadId?: number;
-  actorId?: string;
-  actorUsername?: string;
+  userId?: string;
+  username?: string;
 };
 
 /**
  * Shared base for chat-style platform adapters.
  *
  * Provides:
- * - Per-thread/session AgentRuntime reuse with TTL cleanup
- * - Per-thread lock to avoid concurrent context corruption
- * - Best-effort hydration from ChatStore
- * - Append-only ChatStore logging for user messages
+ * - A single, global QueryQueue (concurrency=1) across all users
+ * - A single, shared AgentRuntime ("one brain")
+ * - Append-only ChatStore logging for user messages (audit trail)
+ * - Best-effort contact book updates (username -> delivery target)
  *
  * Tool-strict note:
- * - Adapters should NOT auto-send agent output.
  * - Agent replies should be delivered via `chat_send` tool.
+ * - Adapters still run a conservative fallback send if the model forgets the tool.
  */
 export abstract class BaseChatAdapter extends PlatformAdapter {
-  protected readonly runtimes: Map<string, AgentRuntime> = new Map();
-  protected readonly runtimeTimeouts: Map<string, NodeJS.Timeout> = new Map();
-  protected readonly chatLocks: Map<string, Promise<void>> = new Map();
-  protected readonly RUNTIME_TIMEOUT_MS = 30 * 60 * 1000;
-  private readonly createRuntime: () => AgentRuntime;
+  private static globalRuntime: AgentRuntime | null = null;
+  private static globalQueue: QueryQueue | null = null;
+
+  protected readonly runtime: AgentRuntime;
 
   protected constructor(params: {
     channel: ChatDispatchChannel;
@@ -41,103 +41,40 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     createAgentRuntime?: () => AgentRuntime;
   }) {
     super({ channel: params.channel, projectRoot: params.projectRoot, logger: params.logger });
-    this.createRuntime =
-      params.createAgentRuntime ??
-      (() => createAgentRuntimeFromPath(this.projectRoot, { logger: this.logger }));
-  }
+    this.runtime =
+      BaseChatAdapter.globalRuntime ??
+      (params.createAgentRuntime
+        ? params.createAgentRuntime()
+        : createAgentRuntimeFromPath(this.projectRoot, { logger: this.logger }));
+    if (!BaseChatAdapter.globalRuntime) BaseChatAdapter.globalRuntime = this.runtime;
 
-  /**
-   * Optional hook for custom chat history hydration strategies.
-   *
-   * Default: hydrate recent messages from ChatStore once per process.
-   * Adapters can override to apply channel-specific history shaping.
-   */
-  protected async hydrateChat(agentRuntime: AgentRuntime, chatKey: string): Promise<void> {
-    try {
-      await this.chatStore.hydrateOnce(chatKey, (msgs) => {
-        agentRuntime.setConversationHistory(chatKey, msgs);
+    if (!BaseChatAdapter.globalQueue) {
+      BaseChatAdapter.globalQueue = new QueryQueue({
+        runtime: this.runtime,
+        chatStore: this.chatStore,
       });
-    } catch {
-      // ignore
     }
-  }
-
-  runInChat(chatKey: string, fn: () => Promise<void>): Promise<void> {
-    const prev = this.chatLocks.get(chatKey) ?? Promise.resolve();
-    const run = prev.catch(() => {}).then(fn);
-    this.chatLocks.set(
-      chatKey,
-      run.finally(() => {
-        if (this.chatLocks.get(chatKey) === run) {
-          this.chatLocks.delete(chatKey);
-        }
-      }),
-    );
-    return run;
-  }
-
-  protected resetRuntimeTimeout(chatKey: string): void {
-    const oldTimeout = this.runtimeTimeouts.get(chatKey);
-    if (oldTimeout) clearTimeout(oldTimeout);
-
-    const timeout = setTimeout(() => {
-      const runtime = this.runtimes.get(chatKey);
-      this.runtimes.delete(chatKey);
-      this.runtimeTimeouts.delete(chatKey);
-      this.logger.debug(`Chat runtime timeout cleanup: ${chatKey}`);
-      if (runtime) void runtime.cleanup().catch(() => {});
-    }, this.RUNTIME_TIMEOUT_MS);
-
-    this.runtimeTimeouts.set(chatKey, timeout);
-  }
-
-  getOrCreateRuntime(chatKey: string): AgentRuntime {
-    if (this.runtimes.has(chatKey)) {
-      this.resetRuntimeTimeout(chatKey);
-      this.logger.debug(`Using chat runtime: ${chatKey}`);
-      return this.runtimes.get(chatKey)!;
-    }
-
-    const runtime = this.createRuntime();
-    this.runtimes.set(chatKey, runtime);
-    this.resetRuntimeTimeout(chatKey);
-    void this.hydrateChat(runtime, chatKey);
-    this.logger.debug(`Created new chat runtime: ${chatKey}`);
-    return runtime;
   }
 
   clearChat(chatKey: string): void {
-    const runtime = this.runtimes.get(chatKey);
-    if (runtime) {
-      runtime.clearConversationHistory(chatKey);
-      this.runtimes.delete(chatKey);
-      void runtime.cleanup().catch(() => {});
-    }
-
-    const timeout = this.runtimeTimeouts.get(chatKey);
-    if (timeout) {
-      clearTimeout(timeout);
-      this.runtimeTimeouts.delete(chatKey);
-    }
-
+    this.runtime.clearConversationHistory(chatKey);
     this.logger.info(`Cleared chat: ${chatKey}`);
   }
 
   protected async appendUserMessage(params: {
-    channel: string;
     chatId: string;
     chatKey: string;
     messageId?: string;
-    actorId?: string;
+    userId?: string;
     text: string;
     meta?: Record<string, unknown>;
   }): Promise<void> {
     try {
       await this.chatStore.append({
-        channel: params.channel as any,
+        channel: this.channel as any,
         chatId: params.chatId,
         chatKey: params.chatKey,
-        userId: params.actorId,
+        userId: params.userId,
         messageId: params.messageId,
         role: "user",
         text: params.text,
@@ -148,7 +85,7 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     }
   }
 
-  protected async runAgentForMessage(msg: IncomingChatMessage): Promise<AgentResult> {
+  protected async enqueueMessage(msg: IncomingChatMessage): Promise<{ chatKey: string; position: number }> {
     const chatKey = this.getChatKey({
       chatId: msg.chatId,
       chatType: msg.chatType,
@@ -156,34 +93,49 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
       messageId: msg.messageId,
     });
 
-    const agentRuntime = this.getOrCreateRuntime(chatKey);
-    if (!agentRuntime.isInitialized()) await agentRuntime.initialize();
-
     await this.appendUserMessage({
-      channel: this.channel,
       chatId: msg.chatId,
       chatKey,
       messageId: msg.messageId,
-      actorId: msg.actorId,
+      userId: msg.userId,
       text: msg.text,
       meta: {
         chatType: msg.chatType,
         messageThreadId: msg.messageThreadId,
-        actorUsername: msg.actorUsername,
+        username: msg.username,
       },
     });
 
-    const context: AgentInput["context"] = {
-      source: this.channel as any,
-      userId: msg.chatId,
+    try {
+      const username = String(msg.username || "").trim();
+      if (username) {
+        await this.runtime.getContactBook().upsert({
+          channel: this.channel as any,
+          chatId: msg.chatId,
+          chatKey,
+          userId: msg.userId,
+          username,
+          chatType: msg.chatType,
+          messageThreadId: msg.messageThreadId,
+        });
+      }
+    } catch {
+      // ignore contact book errors
+    }
+
+    const queue = BaseChatAdapter.globalQueue!;
+    const { position } = queue.enqueue({
+      channel: this.channel,
+      chatId: msg.chatId,
       chatKey,
-      actorId: msg.actorId,
-      actorUsername: msg.actorUsername,
+      text: msg.text,
       chatType: msg.chatType,
       messageThreadId: msg.messageThreadId,
       messageId: msg.messageId,
-    };
+      userId: msg.userId,
+      username: msg.username,
+    });
 
-    return agentRuntime.run({ instructions: msg.text, context });
+    return { chatKey, position };
   }
 }

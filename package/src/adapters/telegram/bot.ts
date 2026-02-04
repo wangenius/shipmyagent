@@ -11,14 +11,12 @@ import type {
 import { tryClaimChatIngressMessage } from "../../runtime/chat/idempotency.js";
 import type { McpManager } from "../../runtime/mcp/index.js";
 import { isTelegramAdmin } from "./access.js";
-import { sendFinalOutputIfNeeded } from "../../runtime/chat/final-output.js";
 import { TelegramApiClient } from "./api-client.js";
 import {
   handleTelegramCallbackQuery,
   handleTelegramCommand,
 } from "./handlers.js";
 import {
-  collapseChatHistoryToSingleAssistantFromEntries,
   getActorName,
   type TelegramAttachmentType,
   type TelegramConfig,
@@ -26,8 +24,6 @@ import {
   type TelegramUser,
 } from "./shared.js";
 import { TelegramStateStore } from "./state-store.js";
-
-const TELEGRAM_HISTORY_LIMIT = 20;
 
 export class TelegramBot extends BaseChatAdapter {
   private botToken: string;
@@ -38,11 +34,6 @@ export class TelegramBot extends BaseChatAdapter {
   private pollingInterval: ReturnType<typeof setInterval> | null = null;
   private isRunning: boolean = false;
   private pollInFlight: boolean = false;
-
-  // 并发控制
-  private readonly MAX_CONCURRENT = 5; // 最大并发数
-  private currentConcurrent = 0; // 当前并发数
-  private concurrencyQueue: Array<() => void> = []; // 并发队列
 
   private readonly api: TelegramApiClient;
   private readonly stateStore: TelegramStateStore;
@@ -99,23 +90,14 @@ export class TelegramBot extends BaseChatAdapter {
     });
   }
 
-  protected override async hydrateChat(
-    agentRuntime: AgentRuntime,
-    chatKey: string,
-  ): Promise<void> {
-    try {
-      const entries = await this.chatStore.loadRecentEntries(
-        chatKey,
-        TELEGRAM_HISTORY_LIMIT,
-      );
-      const collapsed =
-        collapseChatHistoryToSingleAssistantFromEntries(entries);
-      if (collapsed.length > 0) {
-        agentRuntime.setConversationHistory(chatKey, collapsed as unknown[]);
-      }
-    } catch {
-      // ignore
-    }
+  /**
+   * Compatibility hook for older per-chat locking flows.
+   *
+   * In the "one global agent thread" architecture, messages are serialized by
+   * the QueryQueue, so we do not need additional per-chat locks here.
+   */
+  private runInChat(_chatKey: string, fn: () => Promise<void>): Promise<void> {
+    return fn();
   }
 
   private getFollowupKey(threadKey: string, actorId: string): string {
@@ -311,25 +293,20 @@ export class TelegramBot extends BaseChatAdapter {
       }
       await this.stateStore.saveLastUpdateId(this.lastUpdateId);
 
-      // 并发处理所有消息（带并发限制）
-      const tasks = updates.map((update) =>
-        this.processUpdateWithLimit(update),
-      );
-
-      // 使用 Promise.allSettled 确保单个消息失败不影响其他消息
-      const results = await Promise.allSettled(tasks);
-
-      // Log failed messages
-      results.forEach((result, index) => {
-        if (result.status === "rejected") {
+      for (const update of updates) {
+        try {
+          if (update.message) {
+            await this.handleMessage(update.message);
+          } else if (update.callback_query) {
+            await this.handleCallbackQuery(update.callback_query);
+          }
+        } catch (error) {
           this.logger.error(
-            `Failed to process message (update_id: ${updates[index].update_id})`,
-            {
-              error: String(result.reason),
-            },
+            `Failed to process message (update_id: ${update.update_id})`,
+            { error: String(error) },
           );
         }
-      });
+      }
     } catch (error) {
       // Polling timeout is normal
       const msg = (error as Error)?.message || String(error);
@@ -362,54 +339,6 @@ export class TelegramBot extends BaseChatAdapter {
       }
     } finally {
       this.pollInFlight = false;
-    }
-  }
-
-  /**
-   * 获取并发槽位（使用信号量模式）
-   */
-  private async acquireConcurrencySlot(): Promise<void> {
-    if (this.currentConcurrent < this.MAX_CONCURRENT) {
-      this.currentConcurrent++;
-      return;
-    }
-
-    // 等待队列中的槽位
-    return new Promise((resolve) => {
-      this.concurrencyQueue.push(resolve);
-    });
-  }
-
-  /**
-   * 释放并发槽位
-   */
-  private releaseConcurrencySlot(): void {
-    const next = this.concurrencyQueue.shift();
-    if (next) {
-      // 有等待的任务，直接唤醒它
-      next();
-    } else {
-      // 没有等待的任务，减少计数
-      this.currentConcurrent--;
-    }
-  }
-
-  /**
-   * 带并发限制的消息处理
-   */
-  private async processUpdateWithLimit(update: TelegramUpdate): Promise<void> {
-    // 获取并发槽位
-    await this.acquireConcurrencySlot();
-
-    try {
-      if (update.message) {
-        await this.handleMessage(update.message);
-      } else if (update.callback_query) {
-        await this.handleCallbackQuery(update.callback_query);
-      }
-    } finally {
-      // 释放并发槽位
-      this.releaseConcurrencySlot();
     }
   }
 
@@ -634,7 +563,6 @@ export class TelegramBot extends BaseChatAdapter {
           messageId,
           message.chat.type,
           messageThreadId,
-          chatKey,
         );
       }
     });
@@ -759,27 +687,18 @@ export class TelegramBot extends BaseChatAdapter {
     messageId?: string,
     chatType?: NonNullable<TelegramUpdate["message"]>["chat"]["type"],
     messageThreadId?: number,
-    chatKey?: string,
   ): Promise<void> {
     try {
-      const actorId = from?.id ? String(from.id) : undefined;
-      const actorUsername = from?.username ? String(from.username) : undefined;
-      const result = await this.runAgentForMessage({
+      const userId = from?.id ? String(from.id) : undefined;
+      const username = from?.username ? String(from.username) : undefined;
+      await this.enqueueMessage({
         chatId,
         text: instructions,
         chatType,
         messageId,
         messageThreadId,
-        actorId,
-        actorUsername,
-      });
-
-      await sendFinalOutputIfNeeded({
-        channel: "telegram",
-        chatId,
-        output: result.output || "",
-        toolCalls: result.toolCalls as any,
-        messageThreadId,
+        userId,
+        username,
       });
     } catch (error) {
       await this.sendMessage(chatId, `❌ Execution error: ${String(error)}`, {

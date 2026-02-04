@@ -1,12 +1,25 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 export type ChatRequestContext = {
-  source?: "telegram" | "feishu" | "qq" | "cli" | "scheduler" | "api";
-  userId?: string;
+  /**
+   * Transport channel for the current request.
+   *
+   * This is an internal runtime detail used by delivery tools (e.g. `chat_send`)
+   * to route messages back to the correct platform dispatcher.
+   */
+  channel?: "telegram" | "feishu" | "qq" | "cli" | "scheduler" | "api";
+  /**
+   * Platform chat id (group id / dm id / channel id, platform-specific).
+   */
+  chatId?: string;
   messageThreadId?: number;
   chatKey?: string;
-  actorId?: string;
+  /**
+   * Platform user id of the actor who sent the message (group chats).
+   */
+  userId?: string;
   chatType?: string;
+  username?: string;
   messageId?: string;
 };
 

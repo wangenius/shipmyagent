@@ -1,6 +1,6 @@
 export type {
   AgentContext,
-  AgentInput,
+  AgentRunInput,
   AgentResult,
   ConversationMessage,
 } from "./types.js";

@@ -2,6 +2,7 @@ import type { ShipConfig } from "../../utils.js";
 import type { McpManager } from "../mcp/manager.js";
 import type { Logger } from "../../telemetry/index.js";
 import { createAgentToolSet } from "../tools/toolset.js";
+import type { ContactBook } from "../chat/contacts.js";
 
 /**
  * Agent toolset wiring for the runtime layer.
@@ -15,12 +16,14 @@ export function createToolSet(input: {
   config: ShipConfig;
   mcpManager: McpManager | null;
   logger: Logger;
+  contacts: ContactBook;
 }) {
   return createAgentToolSet({
     projectRoot: input.projectRoot,
     config: input.config,
     mcpManager: input.mcpManager,
     logger: input.logger,
+    contacts: input.contacts,
   });
 }
 

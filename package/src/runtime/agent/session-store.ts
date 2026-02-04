@@ -3,14 +3,12 @@
  *
  * Responsibilities:
  * - Keep the current conversation history in-memory (keyed by `chatKey`)
- * - Provide compaction helpers for context-window overflow scenarios
  * - Provide deterministic log formatting for LLM response blocks
  *
  * Persistence is handled elsewhere (e.g. ChatStore); this class is runtime-memory only.
  */
 
-import { generateText, type LanguageModel, type ModelMessage } from "ai";
-import { withLlmRequestContext } from "../../telemetry/index.js";
+import type { ModelMessage } from "ai";
 import type { ConversationMessage } from "./types.js";
 
 export class AgentSessionStore {
@@ -105,49 +103,6 @@ export class AgentSessionStore {
     );
   }
 
-  async compactConversationHistory(
-    chatKey: string,
-    model: LanguageModel | null,
-    requestId?: string,
-  ): Promise<boolean> {
-    const history = this.getOrCreate(chatKey);
-    if (history.length < 6) return false;
-    if (!model) return false;
-
-    const maxMessagesAfterCompaction = 50;
-    const cut = Math.max(1, Math.floor(history.length * 0.5));
-    const older = history.slice(0, cut);
-    const newer = history.slice(cut);
-
-    const input = this.extractTextForSummary(older, 12000);
-    const result = await withLlmRequestContext({ chatKey, requestId }, () =>
-      generateText({
-        model,
-        system:
-          "You are a summarization assistant. Summarize the conversation faithfully. Preserve key decisions, commands, file paths, IDs, and user intent. Output plain text.",
-        prompt: `Summarize the following earlier conversation into a compact summary (<= 400 words):\n\n${input}`,
-      }),
-    );
-
-    const summaryText =
-      (result.text || "").trim() ||
-      "[Auto-compact] Earlier conversation was summarized/omitted due to context limits.";
-    const summaryMessage: ModelMessage = {
-      role: "assistant",
-      content: `Summary of earlier messages:\n${summaryText}`,
-    };
-
-    const compacted = [summaryMessage, ...newer];
-    if (compacted.length > maxMessagesAfterCompaction) {
-      const keep = Math.max(0, maxMessagesAfterCompaction - 1);
-      const trimmedNewer = keep > 0 ? newer.slice(-keep) : [];
-      this.sessionMessages.set(chatKey, [summaryMessage, ...trimmedNewer]);
-    } else {
-      this.sessionMessages.set(chatKey, compacted);
-    }
-    return true;
-  }
-
   coerceStoredMessagesToModelMessages(messages: unknown[]): ModelMessage[] {
     if (
       Array.isArray(messages) &&
@@ -214,52 +169,5 @@ export class AgentSessionStore {
       }
     }
     return truncate(String(content ?? ""));
-  }
-
-  private extractTextForSummary(
-    messages: ModelMessage[],
-    maxChars: number = 12000,
-  ): string {
-    const lines: string[] = [];
-    for (const m of messages) {
-      const role =
-        (m as any).role === "assistant"
-          ? "Assistant"
-          : (m as any).role === "tool"
-            ? "Tool"
-            : (m as any).role === "user"
-              ? "User"
-              : "Other";
-
-      const content = (m as any).content;
-      if (typeof content === "string") {
-        lines.push(`${role}: ${content}`);
-        continue;
-      }
-
-      if (Array.isArray(content)) {
-        const parts = content
-          .map((p: any) => {
-            if (!p || typeof p !== "object") return "";
-            if (p.type === "text") return String(p.text ?? "");
-            if (p.type === "tool-approval-request") {
-              const toolName = (p.toolCall as any)?.toolName;
-              return `Approval requested for tool: ${String(toolName ?? "")}`;
-            }
-            if (p.type === "tool-result")
-              return `Tool result: ${String((p as any).toolName ?? "")}`;
-            if (p.type === "tool-error")
-              return `Tool error: ${String((p as any).toolName ?? "")}`;
-            return "";
-          })
-          .filter(Boolean)
-          .join("\n");
-        if (parts) lines.push(`${role}: ${parts}`);
-      }
-    }
-
-    const text = lines.join("\n\n");
-    if (text.length <= maxChars) return text;
-    return text.slice(0, maxChars) + "\n\n[TRUNCATED]";
   }
 }

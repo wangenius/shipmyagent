@@ -3,9 +3,9 @@
 本文解释 ShipMyAgent 当前版本“执行过程”的日志与审计数据分别写到哪里、记录哪些内容、如何开关，以及常见排查路径。
 
 > 代码入口（建议配合阅读）：
-> - 系统 Logger：`package/src/runtime/logging/logger.ts`
-> - Agent Logger：`package/src/runtime/agent/agent-logger.ts`、`package/src/runtime/agent/runtime.ts`
-> - LLM 请求日志：`package/src/runtime/llm-logging/*`、`package/src/runtime/agent/model.ts`
+> - 系统 Logger：`package/src/telemetry/logger.ts`
+> - AgentRuntime：`package/src/runtime/agent/runtime.ts`
+> - LLM 请求日志：`package/src/telemetry/llm-logging/*`、`package/src/runtime/agent/model.ts`
 > - 对话日志（ChatStore）：`package/src/runtime/chat/store.ts`
 
 ---
@@ -19,8 +19,6 @@
   logs/         # 日志（系统 Logger + Agent Logger + LLM 请求/响应）
   chats/        # 对话消息（jsonl，可归档）
   .cache/       # 运行缓存（含 ingress 去重等）
-  memory/       # 长期记忆（见 memory/store）
-  public/       # 对外可访问文件（可配 cloud files）
   mcp/          # MCP 配置（mcp.json + schema）
 ```
 

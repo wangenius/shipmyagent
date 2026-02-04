@@ -146,20 +146,17 @@ Common things to look for in `.ship/logs/<YYYY-MM-DD>.jsonl`:
 - missing API key (or `${...}` not resolved)
 - provider/model mismatch
 
-### Scenario 2: Task/run is not executing
+### Scenario 2: A chat message is not being processed
 
 ```bash
-# Check task definitions exist
-ls -la .ship/tasks
+# Confirm the message was persisted
+ls -la .ship/chats
 
-# Inspect recent runs
-ls -lt .ship/runs | head
-```
+# Inspect the most recent chat log entries (replace with your chatKey)
+tail -50 .ship/chats/<encode(chatKey)>.jsonl
 
-If a run is waiting for approval, check:
-
-```bash
-ls -la .ship/approvals
+# Check today's unified logs for runtime errors
+tail -200 .ship/logs/$(date +%F).jsonl
 ```
 
 ### Scenario 3: Telegram not responding
@@ -194,8 +191,6 @@ tail -50 .ship/logs/$(date +%F).jsonl | jq -c '{timestamp, type, message}'
 # Only errors
 jq -c 'select(.type == "error") | {timestamp, message, details}' .ship/logs/$(date +%F).jsonl | tail -200
 
-# Only approvals
-jq -c 'select(.type == "approval") | {timestamp, message, details}' .ship/logs/$(date +%F).jsonl | tail -200
 ```
 
 ## Retention / cleanup

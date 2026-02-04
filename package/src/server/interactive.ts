@@ -93,39 +93,6 @@ export class InteractiveServer {
       return c.text('Not Found', 404);
     });
 
-    // 代理 /public/* 到主 API 服务器（主服务器负责从 .ship/public 提供静态文件）
-    this.app.all('/public/*', async (c) => {
-      try {
-        const reqUrl = new URL(c.req.url);
-        const upstreamUrl = new URL(reqUrl.pathname + reqUrl.search, this.context.agentApiUrl).toString();
-        const method = c.req.method;
-
-        const headers = new Headers();
-        for (const [k, v] of c.req.raw.headers.entries()) {
-          const key = k.toLowerCase();
-          if (key === 'host' || key === 'content-length') continue;
-          headers.set(k, v);
-        }
-
-        const body =
-          method === 'GET' || method === 'HEAD'
-            ? undefined
-            : Buffer.from(await c.req.raw.arrayBuffer());
-
-        const response = await fetch(upstreamUrl, { method, headers, body });
-        const buf = Buffer.from(await response.arrayBuffer());
-        const contentType = response.headers.get('content-type') || 'application/octet-stream';
-        const outHeaders: Record<string, string> = { 'Content-Type': contentType };
-        const contentLength = response.headers.get('content-length');
-        if (contentLength) outHeaders['Content-Length'] = contentLength;
-        const cacheControl = response.headers.get('cache-control');
-        if (cacheControl) outHeaders['Cache-Control'] = cacheControl;
-        return new Response(buf, { status: response.status, headers: outHeaders });
-      } catch (error) {
-        return c.json({ success: false, message: `代理请求失败: ${String(error)}` }, { status: 500 });
-      }
-    });
-
     // API 代理 - 将所有 /api/* 请求代理到主 API 服务器
     this.app.all('/api/*', async (c) => {
       try {

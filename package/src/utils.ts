@@ -9,57 +9,6 @@ export interface ShipConfig {
   version: string;
   description?: string;
   /**
-   * Object storage configuration (S3-compatible, e.g. Cloudflare R2).
-   * When configured, the runtime will expose the built-in `s3_upload` tool.
-   */
-  oss?: {
-    /**
-     * Enable/disable object storage tools.
-     * Default: true when `oss` block is present and complete.
-     */
-    enabled?: boolean;
-    /**
-     * Provider type (currently only S3-compatible is supported).
-     */
-    provider?: "s3";
-    /**
-     * S3 endpoint (e.g. https://<account-id>.r2.cloudflarestorage.com).
-     */
-    endpoint?: string;
-    /**
-     * Access key id.
-     */
-    accessKeyId?: string;
-    /**
-     * Secret access key.
-     */
-    secretAccessKey?: string;
-    /**
-     * SigV4 region (R2 typically uses "auto").
-     */
-    region?: string;
-    /**
-     * Default bucket name for uploading files.
-     * Used by higher-level cloud file tools (e.g. `cloud_file_upload`).
-     */
-    bucket?: string;
-  };
-  /**
-   * Cloud file serving configuration.
-   * Used by higher-level cloud file tools to generate public URLs for `/public/*`.
-   */
-  cloudFiles?: {
-    /**
-     * Public base URL of your deployed ShipMyAgent server, e.g. https://agent.example.com
-     * (No trailing slash recommended).
-     */
-    publicBaseUrl?: string;
-    /**
-     * Route prefix for serving `.ship/public/*`. Default: "/public".
-     */
-    publicRoutePrefix?: string;
-  };
-  /**
    * Runtime startup configuration used by `shipmyagent start` / `shipmyagent .`.
    * CLI flags (if provided) take precedence over this config.
    */

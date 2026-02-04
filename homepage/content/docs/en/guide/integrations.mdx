@@ -129,6 +129,9 @@ Edit the `integrations.qq` section of `ship.json`:
 
 - **Direct Chat**: Send a message to chat with the Agent in QQ.
 - **Group Chat**: Add the bot to a group to enable team collaboration.
+- **Debug (raw events)**: If you want to see what fields QQ actually sends (e.g. sender nickname/username), enable raw gateway event capture:
+  - `SHIP_QQ_CAPTURE_EVENTS=dispatch` (business events only) or `SHIP_QQ_CAPTURE_EVENTS=all` (includes heartbeats/handshakes)
+  - Optional: `SHIP_QQ_CAPTURE_DIR=...` (defaults to `<projectRoot>/.ship/.debug/qq-events/`)
 
 ## Upcoming Integrations
 

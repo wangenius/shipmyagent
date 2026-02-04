@@ -1,0 +1,153 @@
+---
+title: 消息处理链路
+description: 一条消息进入 ShipMyAgent 后如何被 adapter/runtime 处理，并通过 chat_send/dispatcher 回发（含类型定义）
+---
+
+# 消息处理链路（Ingress → Runtime → Reply）
+
+你问的“一个消息进来之后如何处理”，在 ShipMyAgent 里对应的是一条固定的工程链路：**平台入口 → adapter → ChatStore 落盘 → QueryQueue 串行处理 → AgentRuntime.run（每次请求拼 system：Agent.md + DefaultPrompt）→ 工具循环（可按需加载历史）→ chat_send 回发（或 fallback）**。
+
+本文按环节列出关键类型，方便你对照代码定位。
+
+> 约定：本文以 `package/src` 源码为准。
+
+## 0) 全局单线程（QueryQueue）
+
+ShipMyAgent 现在使用全局 `QueryQueue`：所有用户、所有平台的消息统一入队，严格按顺序处理（并发=1）。实现：`package/src/adapters/query-queue.ts`。
+
+## 0.1) 默认 system（Agent.md + DefaultPrompt）
+
+从 v2 开始，AgentRuntime 的 system message 由两部分拼成：
+
+- `Agent.md`：项目/仓库的长期指令（人类写给 agent 的规则与偏好）
+- `DefaultPrompt`：运行时上下文 + 输出规则（包括要求用 `chat_send` 回发；不允许给 user 文本加前缀）
+
+历史上下文默认来自 runtime 的 in-memory session（同一进程内连续对话）。当模型需要更多落盘历史细节时，它可以调用 `chat_load_history` 工具按需加载更多历史消息并注入到当前上下文。
+
+## 1) 平台消息进入 adapter
+
+adapter 会把平台原始消息归一化成：
+
+```ts
+export type IncomingChatMessage = {
+  chatId: string;
+  text: string;
+  chatType?: string;
+  messageId?: string;
+  messageThreadId?: number;
+  userId?: string;
+  username?: string;
+};
+```
+
+来源：`package/src/adapters/base-chat-adapter.ts`
+
+### `messageId` 是什么？（Telegram 例子）
+
+- `messageId` 是“这条平台消息”的 ID（Telegram 里是 `message_id`，整数，通常在代码里以字符串存）
+- 不管是文本/图片/文件/语音，每条消息都有自己的 `message_id`
+- 它不是附件的 `file_id`（voice/photo/document 都有独立的 `file_id`，只在 adapter 内部处理附件时使用）
+
+## 2) 计算 chatKey（会话隔离）+ 复用 runtime
+
+`chatKey` 决定“对话历史”和“长期记忆”的隔离粒度；同一个 chatKey 的请求会落到同一份会话上下文里。
+
+相关实现：`package/src/adapters/base-chat-adapter.ts`
+
+### 为什么不总是 `chatKey === chatId`？
+
+- 私聊场景可以这么做，但多平台会撞 key（telegram/qq 都可能是纯数字/字符串）
+- 群聊 topic/thread 需要把 `messageThreadId` 纳入 key，否则不同话题上下文会混
+
+
+## 3) ChatStore 落盘（可审计）
+
+用户消息会被 append 到 `.ship/chats/<chatKey>.jsonl`：
+
+```ts
+export interface ChatLogEntryV1 {
+  v: 1;
+  ts: number;
+  channel: "telegram" | "feishu" | "qq" | "api" | "cli" | "scheduler";
+  chatId: string;
+  chatKey: string;
+  userId?: string;
+  messageId?: string;
+  role: "user" | "assistant" | "system" | "tool";
+  text: string;
+  meta?: Record<string, unknown>;
+}
+```
+
+来源：`package/src/runtime/chat/store.ts`
+
+## 4) adapter 调用 AgentRuntime.run（带上下文）
+
+```ts
+export interface AgentRunInput {
+  chatKey: string;
+  instructions: string;
+}
+```
+
+来源：`package/src/runtime/agent/types.ts`
+
+平台相关字段（channel/chatId/messageId/threadId/userId/username 等）会由 adapter 在执行时注入到 `ChatRequestContext`，供 `chat_send` 工具回发路由。
+
+## 4.1) 按需加载更多上文：chat_load_history
+
+当模型需要更多历史细节时，可以调用：
+
+```ts
+await chat_load_history({ limit: 30, keyword?: "xxx" })
+```
+
+这个工具会从 `.ship/chats/<chatKey>.jsonl` 读取/搜索历史，并把 `user/assistant` 消息插入到当前上下文（插入位置在“当前 user 消息之前”，不改 user 原文）。
+
+实现：`package/src/runtime/tools/chat-history.ts`
+
+## 5) 模型通过 chat_send 回发（tool-strict）
+
+`chat_send` 的参数（schema 可当作“类型”使用）：
+
+```ts
+{
+  text: string;
+}
+```
+
+来源：`package/src/runtime/tools/chat.ts`
+
+`chat_send` 会去 dispatcher registry 找到对应平台的 dispatcher，然后调用 `sendText(...)` 发回平台。
+
+dispatcher 注册点：`package/src/adapters/platform-adapter.ts`
+
+## 6) Fallback：模型忘了 chat_send 时也要把 output 发出去
+
+adapter 会调用 `sendFinalOutputIfNeeded(...)`：
+- 如果 toolCalls 里已经有成功的 `chat_send`，就不重复发送
+- 否则把 `AgentResult.output` 直接发回平台（避免用户收不到）
+
+实现：`package/src/runtime/chat/final-output.ts`
+
+## 7) AgentRuntime 返回结构
+
+```ts
+export interface AgentResult {
+  success: boolean;
+  output: string;
+  toolCalls: Array<{
+    tool: string;
+    input: Record<string, unknown>;
+    output: string;
+  }>;
+}
+```
+
+来源：`package/src/runtime/agent/types.ts`
+
+---
+
+更完整的“场景化（Telegram 群聊/topic）+ 调用顺序 + 依赖分层”请看：`docs/message-ingress-and-processing.md`。
+
+当前实现的“简化版运行逻辑（system = Agent.md + DefaultPrompt、无 simulation、按需加载历史）”说明见：`docs/runtime-simplified.md`。

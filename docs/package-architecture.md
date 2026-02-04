@@ -3,7 +3,7 @@
 本文档用于描述当前 `package/`（npm 包：`shipmyagent`）的**整体逻辑、文件组织逻辑、以及关键调用链路**。阅读目标：
 
 - 从 CLI 启动链路，顺着看到 Server / Adapters 如何把消息交给 `AgentRuntime`
-- 理解 Runtime 内部子系统（agent / chat / mcp / memory / storage / skills / context / prompts）的职责与依赖方向
+- 理解 Runtime 内部子系统（agent / chat / mcp / skills / prompts）的职责与依赖方向
 - 理解“工具严格（tool-strict）”的消息回传方式：`chat_send` → dispatcher → adapter
 - 定位所有“横切观测能力”（日志 + LLM 请求追踪）为何独立为 `telemetry/`
 
@@ -17,9 +17,9 @@
 
 - `package/src/cli.ts`：CLI 入口（命令解析/默认行为）
 - `package/src/commands/*`：命令实现（init/start/alias…）
-- `package/src/server/*`：HTTP API Server + 静态文件（`.ship/public`）
+- `package/src/server/*`：HTTP API Server
 - `package/src/adapters/*`：聊天平台适配器（Telegram / 飞书 / QQ）
-- `package/src/runtime/*`：运行时核心子系统（AgentRuntime + chat/mcp/memory/storage/skills…）
+- `package/src/runtime/*`：运行时核心子系统（AgentRuntime + chat/mcp/skills…）
 - `package/src/telemetry/*`：横切观测（logger + LLM request tracing）
 - `package/src/utils.ts`：路径/配置读取与工具函数（`.ship/*` 定位等）
 
@@ -42,7 +42,7 @@ runtime/*
   -/> adapters/server (禁止反向依赖)
 
 runtime/tools/*
-  -> runtime 子系统 (chat/storage/mcp/skills…)
+  -> runtime 子系统 (chat/mcp/skills…)
   -> utils
   -/> runtime 子系统不应依赖 tools (避免倒置)
 ```
@@ -56,10 +56,7 @@ runtime/tools/*
 - `runtime/agent/*`：AgentRuntime orchestrator（模型/提示词/工具/记忆/会话/执行流程）
 - `runtime/chat/*`：聊天上下文（dispatcher、request context、chat store、幂等、输出收敛）
 - `runtime/mcp/*`：MCP 管理（bootstrap/manager/types）
-- `runtime/memory/*`：长期记忆（extractor/store）
-- `runtime/context/*`：上下文压缩（ContextCompressor）
 - `runtime/skills/*`：技能发现与 prompt 片段（Claude Code style skills）
-- `runtime/storage/*`：文件与对象存储（`.ship/public` + S3/OSS 兼容）
 - `runtime/prompts/*`：内置 prompt 集合
 - `runtime/tools/*`：**模型可调用工具**（AI SDK `tool(...)` 定义与 toolset 组装）
 - `runtime/index.ts`：runtime 对外聚合出口（并 re-export 部分 telemetry 类型/方法）
@@ -99,8 +96,7 @@ runtime/tools/*
 
 - `chat_send`：把消息发回用户（tool-strict 输出）
 - `exec_shell`：在 projectRoot 下执行命令（仓库读写/搜索/测试等）
-- `cloud_file_upload` / `cloud_file_url` / `cloud_file_delete`：上传/取 URL/删除（OSS 或 `.ship/public`）
-- `s3_upload`：直接上传到 S3 兼容存储
+- `chat_load_history`：按需从 `.ship/chats/<chatKey>.jsonl` 加载历史并注入到当前上下文
 - `skills_list` / `skills_load`：技能发现与加载
 - MCP tools：由 MCP manager 动态注入（形如 `server:toolName`）
 
@@ -130,27 +126,25 @@ runtime/tools/*
 
 - 创建工具表：`runtime/agent/tools.ts` → `runtime/tools/toolset.ts`
 - 创建模型与 agent：`runtime/agent/model.ts`（根据 provider 构造，并注入 `createLlmLoggingFetch`）
-- 初始化会话与压缩器：`runtime/agent/session-store.ts` + `runtime/context/compressor.ts`
-- 初始化记忆：`runtime/memory/store.ts`（落盘到 `.ship/memory`）
+- 初始化会话：`runtime/agent/session-store.ts`
 
 ### 5.2 run(...)：每条指令/消息的执行过程（简化版）
 
 1) 计算 `chatKey`
-2) 召回记忆，拼接进 instructions（memory prompt section）
-3) 构造最终 prompt（包含 requestId/chatKey 等）
+2) 拼 system message：`Agent.md + DefaultPrompt`（包含 requestId/chatKey 等）
+3) 组装 in-flight messages：`system + history + user(原文)`，并执行 `ToolLoopAgent`
 4) `withChatRequestContext(...)` 注入 chat 上下文（供 `chat_send` 推断 channel/chatId/thread）
 5) `withLlmRequestContext({ chatKey, requestId }, () => agent.generate(...))` 注入 LLM tracing 上下文
 6) onStepFinish：抽取用户可见文本 + 工具摘要（用于流式/进度）
 7) 写 LLM response block 到 logger（便于审计）
-8) 更新 session history；必要时触发 context compaction
-9) 周期性提取长期记忆（写入 `.ship/memory`）
-10) 返回 `AgentResult`（success/output/toolCalls）
+8) 更新 session history，并裁剪到固定上限
+9) 返回 `AgentResult`（success/output/toolCalls）
 
 ### 5.3 上下文超长处理
 
 当捕获“context too long”类错误：
 
-- 触发 `sessions.compactConversationHistory(...)`
+- 丢弃 in-memory history 中较早的一部分后重试
 - 最多尝试 3 次；失败则清空该 chatKey history 并提示用户重发
 
 ---
@@ -220,7 +214,6 @@ server 提供：
 
 - health/status 等基础 endpoint
 - `/api/execute`：把 HTTP 指令转成 `AgentRuntime.run(...)`
-- `/public/*`：安全地暴露 `.ship/public`（用于 cloud files public 模式）
 
 ---
 
@@ -237,38 +230,18 @@ server 提供：
 
 ---
 
-## 10. Storage：`.ship/public` 与 OSS(S3) 的统一抽象
-
-目录：`runtime/storage/*`
-
-- public 模式：复制到 `.ship/public`，由 server 的 `/public/*` 提供访问
-- OSS 模式：S3-compatible（含 R2）上传/取 URL/删除（`storage/s3/*`）
-
-工具层包装：
-
-- `runtime/tools/cloud-files.ts`：`cloud_file_upload/url/delete`
-- `runtime/tools/s3-upload.ts`：`s3_upload`
-
-配置解析：
-
-- `runtime/tools/oss.ts`：从 `ship.json` 的 `oss.*` 解析可用的 storage config
-
----
-
-## 11. `.ship/` 运行目录：哪些数据落盘、为什么需要
+## 10. `.ship/` 运行目录：哪些数据落盘、为什么需要
 
 （以当前代码实际使用为准）
 
 - `.ship/logs/`：运行日志（JSONL）
 - `.ship/chats/`：聊天日志（每 chatKey 一个 JSONL）
-- `.ship/memory/`：长期记忆存储
 - `.ship/mcp/`：MCP 相关状态/配置（由 bootstrap/manager 读写）
-- `.ship/public/`：public 文件（cloud files public 模式）
 - `.ship/.cache/`：缓存（例如幂等/中间态）
 
 ---
 
-## 12. 快速定位：最短阅读路径
+## 11. 快速定位：最短阅读路径
 
 1) 启动链路：`package/src/commands/start.ts`
 2) 执行主循环：`package/src/runtime/agent/runtime.ts`
@@ -276,4 +249,3 @@ server 提供：
 4) tool-strict 输出：`package/src/runtime/tools/chat.ts` + `package/src/runtime/chat/dispatcher.ts`
 5) MCP 注入：`package/src/runtime/mcp/manager.ts`
 6) 观测入口：`package/src/telemetry/index.ts`
-

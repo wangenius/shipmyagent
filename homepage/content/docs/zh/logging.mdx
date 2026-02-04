@@ -16,8 +16,6 @@ ShipMyAgent 的“可审计”主要由 `.ship/` 目录下的多类数据共同�
   logs/       # 系统 Logger + Agent Logger + LLM 请求/响应
   chats/      # 对话消息（jsonl，可归档）
   .cache/     # 运行缓存（如 ingress 去重）
-  memory/     # 长期记忆
-  public/     # 对外可访问文件（通过 /public/*）
   mcp/        # MCP 配置
 ```
 
@@ -41,8 +39,7 @@ ShipMyAgent 的“可审计”主要由 `.ship/` 目录下的多类数据共同�
 
 - `SMA_LOG_LLM_PAYLOAD=1`
 
-## 对话、Runs、审批分别怎么查？
+## 对话与审计怎么查？
 
 - **对话内容**：`.ship/chats/<chatKey>.jsonl`（超过阈值会生成 `.archive-<n>.jsonl`）
-- **某次 run 的状态/输出**：`.ship/runs/<runId>.json`
-- **卡在审批**：`.ship/approvals/<approvalId>.json` + `.ship/logs/*`
+- **执行/审计日志**：`.ship/logs/<YYYY-MM-DD>.jsonl`

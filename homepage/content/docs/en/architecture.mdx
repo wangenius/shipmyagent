@@ -101,7 +101,6 @@ Extensible tool framework for agent capabilities.
 - `read_file`: Read repository files
 - `write_file`: Write to files
 - `exec_shell`: Execute shell commands
-- `s3_upload`: Upload a project-local file to S3-compatible object storage (incl. Cloudflare R2; enabled only when `oss` is configured in `ship.json`)
 - `git_op`: Git operations
 - `search`: Search codebase
 
@@ -226,199 +225,24 @@ Cron Trigger
 
 ---
 
-## Context Management System
+## Context Management System (Simplified)
 
-ShipMyAgent implements an intelligent context management mechanism that ensures information is not lost in long conversations while avoiding exceeding LLM context limits.
+The current runtime uses a minimal, predictable context strategy:
 
-### Architecture Overview
+- Per request, the runtime builds a single **system** message: `Agent.md + DefaultPrompt`
+- The **user** message stays raw (no prefixes)
+- Recent context comes from an in-memory session history scoped by `chatKey` (trimmed to a fixed bound)
+- When more detail is needed, the model can call `chat_load_history` to load and inject earlier messages from `.ship/chats/<chatKey>.jsonl`
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   Context Management System                  │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │  Chat        │  │  Context     │  │  Long-term   │     │
-│  │  Runtime     │  │  Compressor  │  │  Memory      │     │
-│  │  (Hot Data)  │  │  (Smart Sum) │  │  (Persist)   │     │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
-│         │                  │                  │               │
-│         └──────────────────┼──────────────────┘               │
-│                            │                                  │
-│                    ┌───────▼────────┐                         │
-│                    │  Chat Runtime  │                         │
-│                    │  Manager       │                         │
-│                    └────────────────┘                         │
-│                                                               │
-└─────────────────────────────────────────────────────────────┘
-```
+### Storage Locations (current)
 
-### Core Components
-
-#### 1. Chat Runtime Cache (by `chatKey`)
-
-**Features**:
-- Maintains independent in-memory `AgentRuntime` per `chatKey`
-- Fast access to recent conversation content
-- Automatic TTL cleanup of inactive chat runtimes to prevent memory leaks
-
-**Working Mechanism**:
-- Each `chatKey` stores data independently without interference
-- Uses TTL cleanup for inactive `chatKey` runtimes (best-effort)
-- Persists messages to disk via `ChatStore` (`.ship/chats/*.jsonl`)
-
-#### 2. Context Compressor
-
-**Features**:
-- Intelligently compresses conversation history to avoid token limits
-- Supports multiple compression strategies
-
-**Compression Strategies**:
-
-##### Sliding Window Strategy
-Keeps the most recent N complete messages and discards older ones. Suitable for scenarios where conversation content is relatively independent.
-
-##### Summary Generation Strategy
-Generates concise summaries for old messages, preserving key information, then combines with recent complete messages. Suitable for scenarios requiring historical context preservation.
-
-##### Smart Selection Strategy
-Selectively retains important messages based on importance scoring. Scoring factors include:
-- Message temporal position (newer is more important)
-- Message length (longer messages may contain more information)
-- Keywords (contains "important", "error", "decision", etc.)
-- Message role (user messages are typically more important)
-
-**Trigger Timing**:
-- **Proactive Compression**: Automatically triggered when message count exceeds threshold
-- **Reactive Compression**: Triggered when LLM returns token limit error
-- **Manual Compression**: Users can manually trigger via API
-
-#### 3. Long-term Memory System
-
-**Features**:
-- Extracts key information from conversations and persists it
-- Supports multiple memory types
-- Intelligent deduplication and importance scoring
-
-**Memory Types**:
-
-| Type | Description | Example |
-|------|-------------|---------|
-| Preference | User habits and preferences | "User prefers concise responses" |
-| Fact | Project-related important info | "Project uses TypeScript" |
-| Entity | People, projects, organizations | "John is the project lead" |
-| Task | Todo items and reminders | "Need to fix login page bug" |
-
-**Extraction Flow**:
-```
-Conversation Messages
-    │
-    ▼
-┌─────────────────────────────────┐
-│ 1. Frequency Control            │
-│    Avoid frequent extraction     │
-└────────────┬────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────┐
-│ 2. LLM Analysis                 │
-│    Use LLM to identify key info │
-└────────────┬────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────┐
-│ 3. Deduplication                │
-│    Filter duplicate memories    │
-└────────────┬────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────┐
-│ 4. Persistence                  │
-│    Save to local filesystem     │
-└─────────────────────────────────┘
-```
-
-### Workflow
-
-Complete conversation processing flow:
-
-```
-User Message
-    │
-    ▼
-┌─────────────────────────────────┐
-│ 1. Load Chat Context            │
-│    - Get message history        │
-│    - Load long-term memory      │
-└────────────┬────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────┐
-│ 2. Check Compression Need       │
-│    Based on message count/tokens│
-└────────────┬────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────┐
-│ 3. Build Complete Prompt        │
-│    Combine system, memory, hist │
-└────────────┬────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────┐
-│ 4. Call LLM                     │
-│    Send request and get response│
-└────────────┬────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────┐
-│ 5. Update Context               │
-│    - Save new messages          │
-│    - Async memory extraction    │
-│    - Clean stale data           │
-└────────────┬────────────────────┘
-             │
-             ▼
-       Return Response
-```
-
-### Performance Optimization
-
-#### Async Processing
-Memory extraction and data cleanup operations execute asynchronously without blocking user responses, ensuring fast feedback.
-
-#### Caching Strategy
-- **In-memory Cache**: Hot data stored in memory for fast access
-- **File Cache**: Cold data persisted to disk to save memory
-
-#### Batch Processing
-Supports batch memory extraction to improve efficiency and reduce LLM API calls.
-
-### Storage Locations
-
-```
+```text
 .ship/
-├── approvals/            # Pending approvals (human-in-the-loop)
-│   ├── {approvalId}.json
-│   └── ...
-├── chats/                # Chat history (JSONL, append-only)
-│   ├── {encode(chatKey)}.jsonl
-│   └── ...
-├── memory/              # Long-term memory storage
-│   ├── {chatKey}.json
-│   └── ...
-├── .cache/              # Temporary cache (attachments, adapter state, etc.)
-└── logs/                # Log files
-    └── {date}.jsonl
+  logs/       # execution/audit logs (JSONL)
+  chats/      # conversation history (JSONL, append-only)
+  mcp/        # MCP config/state (optional)
+  .cache/     # runtime cache (idempotency/temp)
 ```
-
-### Design Advantages
-
-1. **Seamless Long Conversations**: Automatically manages context, supports unlimited conversation length
-2. **Intelligent Memory**: Automatically extracts and saves important information without user intervention
-3. **Efficient Compression**: Multiple compression strategies balance information retention and performance
-4. **Chat Isolation**: Each `chatKey` managed independently without interference
-5. **Async Optimization**: Background processing doesn't affect response speed
 
 ---
 

@@ -16,8 +16,6 @@ ShipMyAgent’s auditability is built from multiple data streams under `.ship/`:
   logs/       # system Logger + AgentLogger + LLM request/response
   chats/      # chat messages (jsonl, with archives)
   .cache/     # runtime cache (e.g. ingress idempotency)
-  memory/     # long-term memory
-  public/     # public files (via /public/* when configured)
   mcp/        # MCP config
 ```
 
@@ -44,5 +42,4 @@ To include full payload in `meta.payload` (more sensitive):
 ## Where to look
 
 - **Chat history**: `.ship/chats/<chatKey>.jsonl` (plus `.archive-<n>.jsonl`)
-- **Run status/output**: `.ship/runs/<runId>.json`
-- **Stuck on approvals**: `.ship/approvals/<approvalId>.json` + `.ship/logs/*`
+- **Execution/audit logs**: `.ship/logs/<YYYY-MM-DD>.jsonl`

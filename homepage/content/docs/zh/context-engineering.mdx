@@ -1,0 +1,84 @@
+---
+title: 上下文工程
+description: “Repo is the Agent” 在 ShipMyAgent 里的工程落地方式（Agent.md / .ship / skills / 按需历史）
+---
+
+# 上下文工程（Context Engineering）
+
+ShipMyAgent 的核心命题是 **Repo is the Agent**：你的代码仓库不仅是代码，也是 Agent 的上下文与“可审计记忆”。本文解释它在工程上具体怎么实现，以及初始化后项目目录长什么样。
+
+> ⚠️ **简化模式（2026-02-03）**：当前发布的 `shipmyagent` 包已暂时移除 **Tasks/Runs/Scheduler** 与 **审批（Approvals）**（默认全权限执行）。本文只描述当前实现。
+
+## 上下文来自哪里（四层）
+
+从“最稳定”到“最动态”，ShipMyAgent 的上下文可以理解为四层：
+
+1) **项目静态上下文（Repo-level）**
+   - `Agent.md`：项目“宪法/角色/边界/行为规范”（系统提示词来源之一）
+   - 仓库文件：通过工具按需读取（不会把整个仓库直接塞进提示词）
+
+2) **项目配置上下文（Config-level）**
+   - `ship.json`：模型、适配器、技能路径、MCP 等配置
+   - 运行时内置默认提示词：`package/src/asset/prompts.txt`
+
+3) **会话动态上下文（Session-level）**
+   - 最近对话历史（多轮消息）
+   - 运行时元信息（projectRoot/chatKey/requestId/来源渠道等）
+
+## 初始化后目录长什么样
+
+最小可运行项目通常是：
+
+```text
+<your-repo>/
+├─ Agent.md           # Agent 宪法 / 角色定义
+├─ ship.json          # 运行配置
+└─ .ship/             # 运行时目录（日志/聊天/缓存…）
+```
+
+`.ship/` 典型结构：
+
+```text
+.ship/
+├─ logs/              # 统一日志（JSONL）
+├─ chats/             # 聊天记录（jsonl + archive）
+├─ mcp/               # MCP 配置与 schema
+└─ .cache/            # 幂等/去重/临时缓存
+```
+
+## “上下文”在运行时是怎么拼起来的
+
+### 1) system prompt：Agent.md + 内置提示词 + Skills 概览
+
+`createAgentRuntimeFromPath()`（`package/src/runtime/agent/factory.ts`）会构建 `agentMd`：
+
+- 读取项目 `Agent.md`（不存在则用默认角色）
+- 拼上内置默认提示词（`package/src/asset/prompts.txt`）
+- 扫描并渲染 Skills 概览（默认 `.claude/skills`）
+
+### 2) in-flight messages：DefaultPrompt + history + 用户原文
+
+`AgentRuntime.run()`（`package/src/runtime/agent/runtime.ts`）每次请求都会：
+
+- 生成 `DefaultPrompt`（`package/src/runtime/agent/prompt.ts`），包含 projectRoot/chatKey/requestId/来源等，并规定输出方式（如必须走 `chat_send`）
+- 组装 messages：`system(Agent.md + DefaultPrompt) + history(in-memory) + user(原文)`
+- user 消息保持原样（不加前缀）；需要更多上文时可调用 `chat_load_history` 注入历史消息
+
+## 历史太长怎么办（简化版）
+
+当前实现采用两条简单策略：
+
+- in-memory history 只保留最近 N 条（固定上限裁剪）
+- 需要更多历史细节时，通过 `chat_load_history` 从 `.ship/chats/<chatKey>.jsonl` 按需读取/搜索并注入当前上下文
+
+## Repo 如何成为上下文（按需检索 + 可审计）
+
+仓库上下文主要通过工具进入 Agent：
+
+- `exec_shell`（`package/src/runtime/tools/exec-shell.ts`）：在 `projectRoot` 下执行 `ls/cat/rg/git/test/build…`，按需读取/搜索仓库信息
+- `ChatStore`（`package/src/runtime/chat/store.ts`）：将聊天记录 append 到 `.ship/chats/*.jsonl`；需要更多落盘历史时可用 `chat_load_history` 按需加载
+- Skills/MCP：把 SOP 和外部系统能力“工程化地接进来”（`.claude/skills` 与 `.ship/mcp/mcp.json`）
+
+---
+
+如果你想看更“偏工程实现”的版本（带更多文件路径与职责拆分），也可以直接读仓库内的 `docs/agent-context-engineering.md`。

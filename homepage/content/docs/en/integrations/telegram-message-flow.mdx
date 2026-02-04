@@ -20,7 +20,6 @@ sequenceDiagram
   participant BOT as ShipMyAgent TelegramBot
   participant CS as ChatStore (.ship/chats/*.jsonl)
   participant RT as AgentRuntime
-  participant PE as PermissionEngine (.ship/approvals/*.json)
   participant T as chat_send tool
 
   U->>TG: Send message / attachment / command
@@ -29,19 +28,9 @@ sequenceDiagram
 
   BOT->>BOT: Parse text/caption, mentions, replies, attachments
   BOT->>CS: append(user message)
-  BOT->>RT: handleApprovalReply(if pending approvals)
-  alt Treated as approval reply
-    RT->>PE: Update + delete approval files
-    RT->>RT: Resume tool loop
-    RT->>T: chat_send(...)
-    T->>TG: sendMessage / attachments
-  else Normal instruction
-    BOT->>RT: run(instructions)
-    RT->>T: chat_send(...)
-    T->>TG: sendMessage / attachments
-  end
-
-  Note over BOT,PE: Approval prompts are pushed by BOT polling pending approvals
+  BOT->>RT: run(instructions)
+  RT->>T: chat_send(...)
+  T->>TG: sendMessage / attachments
 ```
 
 ## Input: Telegram update → executable instructions
@@ -86,16 +75,9 @@ Every incoming message is appended to a per-chat JSONL file:
 - `.ship/chats/<encode(chatKey)>.jsonl`
 
 Before execution, recent entries are loaded and collapsed into a compact “assistant context” that is injected back into the in-memory chat runtime for that `chatKey`.
+Before execution, the runtime uses an in-memory session history for the same `chatKey`. If the model needs more details from disk history, it can call `chat_load_history` to load and inject earlier messages from `.ship/chats/<chatKey>.jsonl`.
 
 ## Execution
-
-### Approval reply first
-
-If the `chatKey` has pending approvals, ShipMyAgent tries to interpret the message as an approval reply first via:
-
-- `agentRuntime.handleApprovalReply(...)`
-
-This supports natural-language responses like “approve”, “reject because …”, “approve all”, etc.
 
 ### Tool-strict (agent-controlled sending)
 
@@ -112,15 +94,10 @@ Telegram executes `agentRuntime.run(...)` for the current `chatKey`.
 - Fallback: if the model forgets to call `chat_send`, the adapter sends the final plain-text output.
 - Messages are chunked for Telegram size limits; Markdown is attempted first, then it falls back to plain text.
 
-### Background runs (optional)
+### On-demand history loading (optional)
 
-ShipMyAgent persists run records under `.ship/runs/`. Some integrations may implement completion notifications by scanning these records; the Telegram adapter focuses on tool-driven replies and approval notifications.
+If the model decides it needs more context than the in-memory session provides, it can call `chat_load_history` to fetch earlier messages from `.ship/chats/<chatKey>.jsonl` and inject them into the current in-flight context (before the current user message).
 
 ## Approvals (human-in-the-loop)
 
-When a tool requires approval:
-
-1. PermissionEngine writes `.ship/approvals/<id>.json` (including `meta` such as `source=telegram`, `userId`, `chatKey`, `initiatorId`)
-2. TelegramBot periodically notifies the originating chat
-3. User replies either with natural language (handled by `handleApprovalReply`) or explicit commands/buttons
-4. AgentRuntime resumes via `resumeFromApprovalActions()`, injects `ToolApprovalResponse`, deletes approval files, and continues execution
+Approvals are disabled in the current simplified runtime (tools execute directly).

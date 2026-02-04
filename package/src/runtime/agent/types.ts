@@ -16,22 +16,14 @@ export interface AgentResult {
   }>;
 }
 
-export interface AgentInput {
+export interface AgentRunInput {
+  /**
+   * Stable chat key for isolating conversation history and memory.
+   *
+   * This is the only identifier AgentRuntime needs for multi-user operation.
+   */
+  chatKey: string;
   instructions: string;
-  context?: {
-    source?: "telegram" | "feishu" | "qq" | "cli" | "api";
-    userId?: string;
-    /**
-     * Stable chat key for isolating conversation history.
-     */
-    chatKey?: string;
-    actorId?: string;
-    chatType?: string;
-    actorUsername?: string;
-    messageThreadId?: number;
-    messageId?: string;
-    replyMode?: "auto" | "tool";
-  };
   onStep?: (event: {
     type: string;
     text: string;

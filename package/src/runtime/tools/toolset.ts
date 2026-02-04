@@ -6,20 +6,20 @@
  * without reaching outside `runtime/`.
  *
  * Layering:
- * - Tool implementations may depend on runtime subsystems (chat/store/storage/mcp/etc.)
+ * - Tool implementations may depend on runtime subsystems (chat/store/mcp/etc.)
  * - Runtime subsystems should NOT depend on tool implementations
  */
 
 import { loadProjectDotenv, type ShipConfig } from "../../utils.js";
 import type { McpManager } from "../mcp/index.js";
-import { resolveOssFromConfig } from "./oss.js";
 import { setToolRuntimeContext } from "./runtime-context.js";
 import { skillsTools } from "./skills.js";
 import { execShellTools } from "./exec-shell.js";
-import { cloudFileTools } from "./cloud-files.js";
-import { s3UploadTools } from "./s3-upload.js";
 import { createMcpAiTool } from "./mcp.js";
 import { chatTools } from "./chat.js";
+import { chatHistoryTools } from "./chat-history.js";
+import type { ContactBook } from "../chat/contacts.js";
+import { createChatContactTools } from "./chat-contact.js";
 
 export interface AgentToolSetLogger {
   log(
@@ -34,6 +34,7 @@ export function createAgentToolSet(params: {
   config: ShipConfig;
   mcpManager?: McpManager | null;
   logger?: AgentToolSetLogger | null;
+  contacts: ContactBook;
 }): Record<string, any> {
   loadProjectDotenv(params.projectRoot);
   setToolRuntimeContext({
@@ -41,13 +42,12 @@ export function createAgentToolSet(params: {
     config: params.config,
   });
 
-  const ossResolved = resolveOssFromConfig(params.config);
   const tools: Record<string, any> = {
     ...chatTools,
+    ...chatHistoryTools,
+    ...createChatContactTools({ contacts: params.contacts }),
     ...skillsTools,
     ...execShellTools,
-    ...cloudFileTools,
-    ...(ossResolved.enabled ? s3UploadTools : {}),
   };
 
   if (params.mcpManager) {
