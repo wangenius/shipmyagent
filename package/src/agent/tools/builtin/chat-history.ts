@@ -4,7 +4,7 @@
  * 目标
  * - ChatStore 记录的是“用户视角的对话历史”（platform 的 chat transcript）。
  * - 当模型需要更多上文时，通过工具从 `.ship/chat/<chatKey>/conversations/history.jsonl` 读取历史，
- *   并把结果 **合并为一条 assistant message** 注入当前上下文。
+ *   并把结果 **合并为一条 assistant message** 预备注入到当前上下文（由 `prepareStep` 统一拼接到每个 step 的输入中）。
  *
  * 为什么只注入一条 assistant message？
  * - 更省 tokens（避免逐条重放消息带来的 role/meta 开销）
@@ -20,7 +20,7 @@ import { tool } from "ai";
 import { chatRequestContext } from "../../../chat/request-context.js";
 import { getToolRuntimeContext } from "../set/runtime-context.js";
 import {
-  injectAssistantMessageOnce,
+  prepareAssistantMessageOnce,
   toolExecutionContext,
 } from "./execution-context.js";
 import type { ChatLogEntryV1 } from "../../../chat/store.js";
@@ -160,7 +160,7 @@ export const chat_load_history = tool({
     if (content.length > maxChars) content = content.slice(0, maxChars) + "\n…(truncated)";
 
     const fp = `chat_history:${chatKey}:${keyword || "recent"}:${count}:${offset}:${content.slice(0, 2000)}`;
-    const injected = injectAssistantMessageOnce({
+    const prepared = prepareAssistantMessageOnce({
       ctx: toolCtx,
       fingerprint: fp,
       content,
@@ -168,8 +168,8 @@ export const chat_load_history = tool({
 
     return {
       success: true,
-      inserted: injected.injected ? 1 : 0,
-      reason: injected.injected ? undefined : injected.reason,
+      inserted: prepared.prepared ? 1 : 0,
+      reason: prepared.prepared ? undefined : prepared.reason,
       mode: keyword ? "search" : "recent",
       keyword: keyword || undefined,
       picked: picked.length,

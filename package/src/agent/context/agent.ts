@@ -5,6 +5,7 @@ import {
   ToolLoopAgent,
   type LanguageModel,
   type ModelMessage,
+  type SystemModelMessage,
 } from "ai";
 import { withLlmRequestContext } from "../../telemetry/index.js";
 import {
@@ -34,6 +35,7 @@ import { withToolExecutionContext } from "../tools/builtin/execution-context.js"
 import { createAgentTools } from "../tools/set/agent-tools.js";
 import { loadChatTranscriptAsOneAssistantMessage } from "../../chat/transcript.js";
 import { openai } from "@ai-sdk/openai";
+import { toolExecutionContext } from "../tools/builtin/execution-context.js";
 
 export class Agent {
   // 配置
@@ -76,7 +78,7 @@ export class Agent {
   }
 
   async run(input: AgentRunInput): Promise<AgentResult> {
-    const { query, chatKey, onStep } = input;
+    const { query, chatKey, onStep, drainLaneMergedText } = input;
     const startTime = Date.now();
     const requestId = generateId();
     const logger = this.getLogger();
@@ -100,6 +102,7 @@ export class Agent {
     if (this.initialized && this.agent) {
       return this.runWithToolLoopAgent(query, startTime, chatKey, {
         onStep,
+        drainLaneMergedText,
         requestId,
       });
     }
@@ -119,6 +122,7 @@ export class Agent {
     opts?: {
       retryAttempts?: number;
       onStep?: AgentRunInput["onStep"];
+      drainLaneMergedText?: AgentRunInput["drainLaneMergedText"];
       requestId?: string;
     },
   ): Promise<AgentResult> {
@@ -127,6 +131,7 @@ export class Agent {
     const toolFailureSummaries: string[] = [];
     const retryAttempts = opts?.retryAttempts ?? 0;
     const onStep = opts?.onStep;
+    const drainLaneMergedText = opts?.drainLaneMergedText;
     const requestId = opts?.requestId || "";
     const logger = this.getLogger();
 
@@ -264,6 +269,87 @@ export class Agent {
       }
 
       const currentUserMessageIndex = inFlightMessages.length - 1;
+      const currentUserMessageRef = inFlightMessages[currentUserMessageIndex];
+
+      const baseSystemMessages = transformPromptsIntoSystemMessages([
+        ...this.configs.systems,
+      ]);
+      const allToolNames = Object.keys(this.tools);
+
+      // lane “快速矫正”追加内容：仅影响 prepareStep 的 step 输入，不改写 messages。
+      let laneMergedAppendBlock = "";
+
+      const buildLoadedSkillsSystemText = (
+        loaded: Map<
+          string,
+          {
+            id: string;
+            name: string;
+            skillMdPath: string;
+            content: string;
+            allowedTools: string[];
+          }
+        >,
+      ): { systemText: string; activeTools?: string[] } | null => {
+        if (!loaded || loaded.size === 0) return null;
+
+        const skills = Array.from(loaded.values());
+        const lines: string[] = [];
+        lines.push("已加载 Skills（请严格遵循以下 SOP/约束）：");
+        lines.push(`- count: ${skills.length}`);
+        lines.push("");
+
+        const unionAllowedTools = new Set<string>();
+        let hasAnyAllowedTools = false;
+
+        for (const s of skills) {
+          lines.push(`## Skill: ${s.name}`);
+          lines.push(`- id: ${s.id}`);
+          lines.push(`- path: ${s.skillMdPath}`);
+          if (Array.isArray(s.allowedTools) && s.allowedTools.length > 0) {
+            hasAnyAllowedTools = true;
+            for (const t of s.allowedTools) unionAllowedTools.add(String(t));
+            lines.push(`- allowedTools: ${s.allowedTools.join(", ")}`);
+          } else {
+            lines.push(`- allowedTools: (not specified)`);
+          }
+          lines.push("");
+          lines.push("SKILL.md 内容：");
+          lines.push(s.content);
+          lines.push("");
+        }
+
+        const activeTools = hasAnyAllowedTools
+          ? Array.from(
+              new Set([
+                // 关键点（中文）：无论 skills 如何声明，chat_send 需要保底存在，否则无法对用户输出。
+                "chat_send",
+                ...Array.from(unionAllowedTools),
+              ]),
+            )
+              .filter((n) => allToolNames.includes(n))
+              .slice(0, 2000)
+          : undefined;
+
+        return { systemText: lines.join("\n").trim(), activeTools };
+      };
+
+      const computeChatSendBudgetGuard = (): {
+        exceeded: boolean;
+        maxCalls: number;
+        calls: number;
+      } => {
+        const maxCalls =
+          typeof this.configs.config?.context?.chatEgress
+            ?.chatSendMaxCallsPerRun === "number" &&
+          Number.isFinite(this.configs.config.context.chatEgress.chatSendMaxCallsPerRun) &&
+          this.configs.config.context.chatEgress.chatSendMaxCallsPerRun > 0
+            ? this.configs.config.context.chatEgress.chatSendMaxCallsPerRun
+            : 3;
+        const execCtx = toolExecutionContext.getStore();
+        const calls = execCtx?.toolCallCounts.get("chat_send") ?? 0;
+        return { exceeded: calls > maxCalls, maxCalls, calls };
+      };
 
       const result = await withToolExecutionContext(
         {
@@ -273,16 +359,115 @@ export class Agent {
           injectedFingerprints: new Set(),
           maxInjectedMessages: 120,
           toolCallCounts: new Map(),
+          preparedSystemMessages: [],
+          preparedAssistantMessages: [],
+          loadedSkills: new Map(),
         },
         () =>
           withLlmRequestContext({ chatKey, requestId }, () => {
             return generateText({
               model: this.model,
-              system: transformPromptsIntoSystemMessages([
-                ...this.configs.systems,
-              ]),
-              prepareStep: (messages) => {
-                return {};
+              system: baseSystemMessages,
+              prepareStep: async ({ messages }) => {
+                const execCtx = toolExecutionContext.getStore();
+
+                // 1) 在每个 step 前先检查 lane 是否有新消息，合并做快速矫正。
+                if (typeof drainLaneMergedText === "function") {
+                  try {
+                    const mergedText = await drainLaneMergedText();
+                    if (mergedText && mergedText.trim()) {
+                      laneMergedAppendBlock += `\n\n---\n\n${mergedText.trim()}\n`;
+                    }
+                  } catch {
+                    // ignore
+                  }
+                }
+
+                // 2) system prompt：按需叠加 skills / 预算 guard / 其它预备注入。
+                const systemAdditions: SystemModelMessage[] = [];
+                let activeTools: string[] | undefined;
+                let toolChoice: "none" | undefined;
+
+                if (execCtx?.preparedSystemMessages?.length) {
+                  for (const item of execCtx.preparedSystemMessages) {
+                    if (!item?.content?.trim()) continue;
+                    systemAdditions.push({ role: "system", content: item.content });
+                  }
+                }
+
+                if (execCtx?.loadedSkills?.size) {
+                  const built = buildLoadedSkillsSystemText(execCtx.loadedSkills);
+                  if (built) {
+                    systemAdditions.push({ role: "system", content: built.systemText });
+                    if (built.activeTools) activeTools = built.activeTools;
+                  }
+                }
+
+                const budget = computeChatSendBudgetGuard();
+                if (budget.exceeded) {
+                  systemAdditions.push({
+                    role: "system",
+                    content:
+                      `系统约束（重要）：你已经多次调用 chat_send（calls=${budget.calls}，max=${budget.maxCalls}）。现在禁止继续调用 chat_send；请停止工具调用并结束本次回复。`,
+                  });
+                  // 关键点（中文）：预算超限时，强制禁止继续工具调用，避免无意义循环消耗。
+                  toolChoice = "none";
+                  // 同时尽可能把 activeTools 缩到空集（防 provider 忽略 toolChoice 时仍能兜底）。
+                  activeTools = [];
+                }
+
+                const nextSystem =
+                  systemAdditions.length > 0
+                    ? ([
+                        ...baseSystemMessages,
+                        ...systemAdditions,
+                      ] as Array<SystemModelMessage>)
+                    : baseSystemMessages;
+
+                // 3) messages：把“预备注入 assistant messages”插到当前 user message 之前；
+                //    同时把 lane 合并文本追加到当前 user message（不改写原 messages 对象）。
+                let outMessages: ModelMessage[] = messages as any;
+
+                if (execCtx?.preparedAssistantMessages?.length) {
+                  const insertAt = outMessages.findIndex(
+                    (m) => m === currentUserMessageRef,
+                  );
+                  if (insertAt >= 0) {
+                    const prepared = execCtx.preparedAssistantMessages
+                      .filter((x) => x?.content?.trim())
+                      .map((x) => ({ role: "assistant", content: x.content } as any));
+                    if (prepared.length > 0) {
+                      outMessages = [
+                        ...outMessages.slice(0, insertAt),
+                        ...prepared,
+                        ...outMessages.slice(insertAt),
+                      ];
+                    }
+                  }
+                }
+
+                if (laneMergedAppendBlock.trim()) {
+                  const idx = outMessages.findIndex((m) => m === currentUserMessageRef);
+                  if (idx >= 0) {
+                    const baseUserContent = String(
+                      (currentUserMessageRef as any)?.content ?? "",
+                    );
+                    const mergedUserContent = baseUserContent + laneMergedAppendBlock;
+                    const old = outMessages[idx] as any;
+                    outMessages = [
+                      ...outMessages.slice(0, idx),
+                      { ...old, role: "user", content: mergedUserContent },
+                      ...outMessages.slice(idx + 1),
+                    ];
+                  }
+                }
+
+                return {
+                  system: nextSystem,
+                  messages: outMessages,
+                  ...(typeof toolChoice === "string" ? { toolChoice } : {}),
+                  ...(Array.isArray(activeTools) ? { activeTools } : {}),
+                };
               },
               messages: inFlightMessages,
               tools: this.tools,
@@ -421,6 +606,7 @@ export class Agent {
         return this.runWithToolLoopAgent(userText, startTime, chatKey, {
           retryAttempts: retryAttempts + 1,
           onStep,
+          drainLaneMergedText,
           requestId,
         });
       }

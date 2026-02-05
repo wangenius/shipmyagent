@@ -64,7 +64,94 @@ export type ToolExecutionContext = {
    * - 仅影响本次 run，不落盘；不用于跨请求统计。
    */
   toolCallCounts: Map<string, number>;
+
+  /**
+   * 预备注入：system messages（不直接改写 in-flight messages）。
+   *
+   * 关键点（中文）
+   * - 由工具（例如 skills_load）或运行时逻辑写入
+   * - 由 Agent 的 `prepareStep` 统一拼接到当次 step 的 system prompt 中
+   * - 这样可以避免“工具在执行时直接 splice messages”带来的时序/竞态复杂度
+   */
+  preparedSystemMessages: Array<{ fingerprint: string; content: string }>;
+
+  /**
+   * 预备注入：assistant messages（不直接改写 in-flight messages）。
+   *
+   * 典型用法
+   * - chat_load_history：把历史合并为一条 assistant message，但不立刻 splice 到 messages；
+   *   而是交由 `prepareStep` 在每个 step 的输入中稳定插入（在当前 user message 之前）。
+   */
+  preparedAssistantMessages: Array<{ fingerprint: string; content: string }>;
+
+  /**
+   * 已加载的 skills（本次 run 内）。
+   *
+   * 由 `skills_load` 填充，`prepareStep` 负责把内容作为 system prompt 约束注入。
+   */
+  loadedSkills: Map<
+    string,
+    {
+      id: string;
+      name: string;
+      skillMdPath: string;
+      content: string;
+      allowedTools: string[];
+    }
+  >;
 };
+
+/**
+ * 在当前 agent run 中“预备”一条 system message（一次性去重）。
+ *
+ * 注意（中文）
+ * - 不会改写 `ctx.messages`（不 splice）
+ * - 由 `prepareStep` 在每个 step 调用时统一合并到 system prompt
+ */
+export function prepareSystemMessageOnce(params: {
+  ctx: ToolExecutionContext;
+  fingerprint: string;
+  content: string;
+}): { prepared: boolean; reason?: string } {
+  const fp = String(params.fingerprint || "").trim();
+  const content = String(params.content ?? "");
+  if (!fp) return { prepared: false, reason: "missing_fingerprint" };
+  if (!content.trim()) return { prepared: false, reason: "empty_content" };
+  if (params.ctx.injectedFingerprints.has(fp))
+    return { prepared: false, reason: "duplicate" };
+  if (params.ctx.injectedFingerprints.size >= params.ctx.maxInjectedMessages)
+    return { prepared: false, reason: "limit_reached" };
+
+  params.ctx.preparedSystemMessages.push({ fingerprint: fp, content });
+  params.ctx.injectedFingerprints.add(fp);
+  return { prepared: true };
+}
+
+/**
+ * 在当前 agent run 中“预备”一条 assistant message（一次性去重）。
+ *
+ * 注意（中文）
+ * - 不会改写 `ctx.messages`（不 splice）
+ * - 由 `prepareStep` 在每个 step 调用时统一插入到 user message 之前
+ */
+export function prepareAssistantMessageOnce(params: {
+  ctx: ToolExecutionContext;
+  fingerprint: string;
+  content: string;
+}): { prepared: boolean; reason?: string } {
+  const fp = String(params.fingerprint || "").trim();
+  const content = String(params.content ?? "");
+  if (!fp) return { prepared: false, reason: "missing_fingerprint" };
+  if (!content.trim()) return { prepared: false, reason: "empty_content" };
+  if (params.ctx.injectedFingerprints.has(fp))
+    return { prepared: false, reason: "duplicate" };
+  if (params.ctx.injectedFingerprints.size >= params.ctx.maxInjectedMessages)
+    return { prepared: false, reason: "limit_reached" };
+
+  params.ctx.preparedAssistantMessages.push({ fingerprint: fp, content });
+  params.ctx.injectedFingerprints.add(fp);
+  return { prepared: true };
+}
 
 /**
  * 在当前 agent run 中注入一条 system message。

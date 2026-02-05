@@ -10,19 +10,11 @@
 
 import fs from "fs-extra";
 import path from "path";
-import { createHash } from "node:crypto";
 import { z } from "zod";
 import { tool } from "ai";
 import { discoverClaudeSkillsSync } from "../../skills/index.js";
 import { getToolRuntimeContext } from "../set/runtime-context.js";
-import {
-  injectSystemMessageOnce,
-  toolExecutionContext,
-} from "./execution-context.js";
-
-function sha1(text: string): string {
-  return createHash("sha1").update(text).digest("hex");
-}
+import { toolExecutionContext } from "./execution-context.js";
 
 export const skills_load = tool({
   description:
@@ -56,25 +48,19 @@ export const skills_load = tool({
       const relDir = path.relative(projectRoot, skill.directoryPath);
       const relMd = path.relative(projectRoot, skill.skillMdPath);
 
-      // 关键：把 skill 的全文以 system message 的方式注入到本次 run 的上下文里。
-      // 这样技能就不是“工具输出”，而是更接近“规则/流程”的系统约束。
+      // 关键（中文）：不在工具里直接 splice messages。
+      // 我们把已加载的 skill 缓存在本次 run 的 execution context 中，
+      // 由 Agent 的 prepareStep 统一拼接到每个 step 的 system prompt 里。
       const toolCtx = toolExecutionContext.getStore();
       if (toolCtx) {
-        const systemText = [
-          "已加载 Skill（system 注入）：",
-          `- name: ${skill.name}`,
-          `- id: ${skill.id}`,
-          `- path: ${relMd}`,
-          "",
-          "SKILL.md 内容如下：",
+        toolCtx.loadedSkills.set(skill.id, {
+          id: skill.id,
+          name: skill.name,
+          skillMdPath: relMd,
           content,
-        ].join("\n");
-
-        const fp = `skill:${skill.id}:${sha1(content)}`;
-        injectSystemMessageOnce({
-          ctx: toolCtx,
-          fingerprint: fp,
-          content: systemText,
+          allowedTools: Array.isArray(skill.allowedTools)
+            ? skill.allowedTools.map((t) => String(t)).filter(Boolean)
+            : [],
         });
       }
 

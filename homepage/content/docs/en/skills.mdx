@@ -30,7 +30,7 @@ During discovery, ShipMyAgent reads YAML front matter from `SKILL.md`:
 - `description`: human-readable description
 - `allowed-tools` (or `allowedTools` / `allowed_tools`): “allowed tools” hint
 
-> `allowed-tools` is currently metadata/prompt guidance only; it is not enforced as a hard runtime restriction.
+> `allowed-tools` is enforced **after a skill is loaded** in the current run: ShipMyAgent limits the model’s callable tools to the union of the loaded skill(s)’ `allowed-tools` (with `chat_send` always allowed so the agent can reply).
 
 ## Skill roots configuration
 
@@ -62,7 +62,7 @@ Typical flow:
 
 1. Call `skills_list` to discover what exists
 2. Call `skills_load` to read the full instructions
-3. Follow the `SKILL.md` steps using other tools as needed
+3. Follow the `SKILL.md` steps using other tools as needed (tool access may be restricted by `allowed-tools`)
 
 ## Skills section in the system prompt
 

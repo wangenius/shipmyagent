@@ -10,7 +10,7 @@ import { z } from "zod";
 import { tool } from "ai";
 import { chatRequestContext } from "../../../chat/request-context.js";
 import { getChatDispatcher, type ChatDispatchChannel } from "../../../chat/dispatcher.js";
-import { toolExecutionContext, injectSystemMessageOnce } from "./execution-context.js";
+import { toolExecutionContext } from "./execution-context.js";
 import { getToolRuntimeContext } from "../set/runtime-context.js";
 import { tryClaimChatEgressChatSend, markChatEgressChatSendDelivered, releaseChatEgressChatSendClaim } from "../../../chat/egress-idempotency.js";
 import { createHash } from "node:crypto";
@@ -50,13 +50,6 @@ export const chat_send = tool({
           : 3;
 
       if (next > maxCalls) {
-        // 超预算时，注入一次系统约束，帮助模型尽快停止继续调用（避免无意义消耗）。
-        injectSystemMessageOnce({
-          ctx: toolCtx,
-          fingerprint: "guard:chat_send_budget_exceeded",
-          content:
-            "系统约束（重要）：你已经多次调用 chat_send，已触发发送预算上限。现在禁止继续调用 chat_send；请停止工具调用并结束本次回复。",
-        });
         return {
           success: false,
           error: `chat_send budget exceeded (max ${maxCalls} calls per run).`,

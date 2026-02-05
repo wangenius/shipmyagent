@@ -15,7 +15,6 @@ import { sendFinalOutputIfNeeded } from "./final-output.js";
 import type { QueuedChatMessage } from "./query-queue.js";
 
 import type { Agent } from "../agent/context/index.js";
-import { toolExecutionContext } from "../agent/tools/builtin/execution-context.js";
 import type {
   ChatLaneEnqueueResult,
   ChatLaneSchedulerConfig,
@@ -251,13 +250,10 @@ export class ChatLaneScheduler {
     const maxRounds = enableCorrection ? this.config.correctionMaxRounds : 0;
     let roundsUsed = 0;
 
-    const drainAndInjectIfNeeded = async (): Promise<void> => {
-      if (!enableCorrection) return;
-      if (roundsUsed >= maxRounds) return;
-      if (lane.queue.length === 0) return;
-
-      const execCtx = toolExecutionContext.getStore();
-      if (!execCtx) return;
+    const drainLaneMergedTextIfNeeded = async (): Promise<string | null> => {
+      if (!enableCorrection) return null;
+      if (roundsUsed >= maxRounds) return null;
+      if (lane.queue.length === 0) return null;
 
       // drain 本 lane 的后续消息（限量，避免无限合并导致本轮执行过长）
       const extras: QueuedChatMessage[] = [];
@@ -267,23 +263,13 @@ export class ChatLaneScheduler {
       ) {
         extras.push(lane.queue.shift()!);
       }
-      if (extras.length === 0) return;
+      if (extras.length === 0) return null;
 
       const merged = buildCorrectionMergedMessage({
         original: first,
         extra: extras,
         maxChars: this.config.correctionMaxChars,
       });
-
-      // 关键点：把“补充消息”直接追加到当前 userMessage 上（用户原文保持在顶部）。
-      // 这样模型在后续 step 中能立即看到纠正信息，而不需要等整轮 run 结束再重跑。
-      const idx = execCtx.currentUserMessageIndex;
-      const current = execCtx.messages[idx] as any;
-      if (current && current.role === "user") {
-        const prev = String(current.content ?? "");
-        const appendBlock = `\n\n---\n\n${merged.mergedText}\n`;
-        current.content = prev + appendBlock;
-      }
 
       // 同步更新 chatRequestContext 的关键字段（尤其是 QQ 被动回复依赖 messageId）
       ctx.messageId = merged.latestContext.messageId;
@@ -293,17 +279,14 @@ export class ChatLaneScheduler {
       ctx.messageThreadId = merged.latestContext.messageThreadId;
 
       roundsUsed += 1;
+      return merged.mergedText;
     };
 
     const result = await withChatRequestContext(ctx, () =>
       agent.run({
         chatKey: first.chatKey,
         query: first.text,
-        onStep: async (step) => {
-          // 只在“step finish”信号上做检查，避免一次 step 内多次 onStep 调用导致重复 drain。
-          if (step?.type !== "step_finish") return;
-          await drainAndInjectIfNeeded();
-        },
+        drainLaneMergedText: drainLaneMergedTextIfNeeded,
       }),
     );
 

@@ -32,6 +32,16 @@ export interface AgentRunInput {
     text: string;
     data?: Record<string, unknown>;
   }) => Promise<void>;
+
+  /**
+   * Lane “快速矫正”合并：在每个 LLM step 之前检查当前 chatKey lane 是否有新消息，
+   * 若有则合并为一段文本并返回，Agent 会把它追加到当前 user message 的末尾。
+   *
+   * 关键点（中文）
+   * - 由调度器（ChatLaneScheduler）提供实现（它掌握 lane 队列）
+   * - Agent 通过 `prepareStep` 调用该函数，实现 step 间的快速并入处理
+   */
+  drainLaneMergedText?: () => Promise<string | null>;
 }
 
 export interface ConversationMessage {

@@ -30,7 +30,7 @@ ShipMyAgent 当前支持 **Claude Code-compatible skills**。本页解释：skil
 - `description`：描述
 - `allowed-tools`（或 `allowedTools` / `allowed_tools`）：工具白名单提示
 
-> 目前 `allowed-tools` 仅作为“提示/元数据”，不会在运行时强制阻断不在白名单的工具调用。
+> `allowed-tools` 会在 **skill 被加载后** 在当前 run 内生效：ShipMyAgent 会把模型可调用的工具限制为“已加载 skill 的 allowed-tools 的并集”（同时会强制保留 `chat_send`，以保证 agent 仍能对用户输出）。
 
 ## skills roots 的解析规则
 
@@ -62,7 +62,7 @@ skills 通过两个内置工具提供给模型：
 
 1. 模型调用 `skills_list` 发现是否有合适的 skill
 2. 调用 `skills_load` 读取 `SKILL.md`
-3. 按 `SKILL.md` 的步骤执行（必要时再调用其它工具）
+3. 按 `SKILL.md` 的步骤执行（必要时再调用其它工具；工具权限可能会被 `allowed-tools` 限制）
 
 ## system prompt 中的 skills section
 
