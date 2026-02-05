@@ -133,7 +133,7 @@ interface Tool {
 - 每次请求拼一个 **system**：`Agent.md + DefaultPrompt`
 - **user** 消息保持原文（不加前缀）
 - 上下文默认来自按 `chatKey` 隔离的 in-memory session history（裁剪到固定上限）
-- 需要更多落盘历史细节时，模型可调用 `chat_load_history` 从 `.ship/chats/<chatKey>.jsonl` 加载并注入到当前上下文
+- 需要更多落盘历史细节时，模型可调用 `chat_load_history` 从 `.ship/chat/<chatKey>/conversations/history.jsonl` 加载并注入到当前上下文
 
 ### 存储位置（当前）
 

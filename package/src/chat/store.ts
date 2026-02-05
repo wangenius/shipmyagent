@@ -1,7 +1,13 @@
 import fs from "fs-extra";
-import path from "path";
 import type { ModelMessage } from "ai";
-import { getChatsDirPath } from "../utils.js";
+import {
+  getShipChatArchivePath,
+  getShipChatConversationsDirPath,
+  getShipChatDirPath,
+  getShipChatHistoryPath,
+  getShipChatMemoryDirPath,
+  getShipChatMemoryPrimaryPath,
+} from "../utils.js";
 import { HistoryCache } from "./history-cache.js";
 
 export type ChatChannel =
@@ -44,7 +50,7 @@ export interface SearchOptions {
  */
 export class ChatStore {
   readonly chatKey: string;
-  private readonly chatsDir: string;
+  private readonly projectRoot: string;
   private readonly cache: HistoryCache;
   private hydrated: boolean = false;
   private readonly ARCHIVE_THRESHOLD = 1000;
@@ -54,7 +60,7 @@ export class ChatStore {
     const key = String(params.chatKey || "").trim();
     if (!key) throw new Error("ChatStore requires a non-empty chatKey");
     this.chatKey = key;
-    this.chatsDir = getChatsDirPath(params.projectRoot);
+    this.projectRoot = params.projectRoot;
     this.cache = new HistoryCache();
   }
 
@@ -62,20 +68,21 @@ export class ChatStore {
    * 获取该 chatKey 的落盘目录。
    *
    * 存储结构（每个 chatKey 一个目录）：
-   * - `.ship/chats/<encodedChatKey>/history.jsonl`
-   * - `.ship/chats/<encodedChatKey>/archive-1.jsonl`（可选）
-   * - `.ship/chats/<encodedChatKey>/archive-2.jsonl`（可选）
+   * - `.ship/chat/<encodedChatKey>/conversations/history.jsonl`
+   * - `.ship/chat/<encodedChatKey>/conversations/archive-1.jsonl`（可选）
+   * - `.ship/chat/<encodedChatKey>/conversations/archive-2.jsonl`（可选）
+   * - `.ship/chat/<encodedChatKey>/memory/`（按需，用于持久化记忆）
    */
   getChatDirPath(): string {
-    return path.join(this.chatsDir, encodeURIComponent(this.chatKey));
+    return getShipChatDirPath(this.projectRoot, this.chatKey);
   }
 
   getHistoryFilePath(): string {
-    return path.join(this.getChatDirPath(), "history.jsonl");
+    return getShipChatHistoryPath(this.projectRoot, this.chatKey);
   }
 
   getArchiveFilePath(archiveIndex: number): string {
-    return path.join(this.getChatDirPath(), `archive-${archiveIndex}.jsonl`);
+    return getShipChatArchivePath(this.projectRoot, this.chatKey, archiveIndex);
   }
 
   async append(
@@ -95,8 +102,11 @@ export class ChatStore {
       meta: entry.meta,
     };
 
-    const chatDir = this.getChatDirPath();
-    await fs.ensureDir(chatDir);
+    const convDir = getShipChatConversationsDirPath(this.projectRoot, this.chatKey);
+    await fs.ensureDir(convDir);
+    // 预创建 memory 目录（不要求存在 Primary.md，但保持结构一致）
+    await fs.ensureDir(getShipChatMemoryDirPath(this.projectRoot, this.chatKey));
+    await fs.ensureFile(getShipChatMemoryPrimaryPath(this.projectRoot, this.chatKey));
     await fs.appendFile(this.getHistoryFilePath(), JSON.stringify(full) + "\n", "utf8");
 
     this.cache.invalidate(this.chatKey);

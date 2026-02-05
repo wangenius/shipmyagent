@@ -41,8 +41,9 @@ ShipMyAgent 的核心命题是 **Repo is the Agent**：你的代码仓库不仅�
 ```text
 .ship/
 ├─ logs/              # 统一日志（JSONL）
-├─ chats/             # 聊天记录（jsonl + archive）
-├─ mcp/               # MCP 配置与 schema
+├─ chat/              # 聊天记录（jsonl + archive）
+├─ config/            # MCP 配置
+├─ schema/            # ship/mcp schema
 └─ .cache/            # 幂等/去重/临时缓存
 ```
 
@@ -64,22 +65,21 @@ ShipMyAgent 的核心命题是 **Repo is the Agent**：你的代码仓库不仅�
 - 组装 messages：`system(Agent.md + prompts + skills + RuntimePrompt) + history(in-memory) + user(原文)`
 - user 消息保持原样（不加前缀）；需要更多上文时可调用：
   - `chat_load_history`：把 ChatStore 的对话历史作为 **一条 assistant message** 注入（支持 `count/offset`）
-  - `agent_load_context`：把 agent 执行上下文摘要作为 **system message** 注入（支持 `count/offset`）
 
 ## 历史太长怎么办（简化版）
 
 当前实现采用两条简单策略：
 
 - in-memory history 有上限，并在需要时将更早消息压缩为摘要（避免无脑裁剪）
-- 需要更多历史细节时，通过 `chat_load_history` 从 `.ship/chats/<chatKey>.jsonl` 按需读取/搜索并注入当前上下文
+- 需要更多历史细节时，通过 `chat_load_history` 从 `.ship/chat/<chatKey>/conversations/history.jsonl` 按需读取/搜索并注入当前上下文
 
 ## Repo 如何成为上下文（按需检索 + 可审计）
 
 仓库上下文主要通过工具进入 Agent：
 
 - `exec_shell`（`package/src/core/tools/builtin/exec-shell.ts`）：在 `projectRoot` 下执行 `ls/cat/rg/git/test/build…`，按需读取/搜索仓库信息
-- `ChatStore`（`package/src/core/chat/store.ts`）：将聊天记录 append 到 `.ship/chats/*.jsonl`；需要更多落盘历史时可用 `chat_load_history` 按需加载
-- Skills/MCP：把 SOP 和外部系统能力“工程化地接进来”（`.claude/skills` 与 `.ship/mcp/mcp.json`）
+- `ChatStore`（`package/src/core/chat/store.ts`）：将聊天记录 append 到 `.ship/chat/<chatKey>/conversations/history.jsonl`；需要更多落盘历史时可用 `chat_load_history` 按需加载
+- Skills/MCP：把 SOP 和外部系统能力“工程化地接进来”（`.claude/skills` 与 `.ship/config/mcp.json`）
 
 ---
 

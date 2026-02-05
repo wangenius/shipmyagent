@@ -8,7 +8,7 @@
  * Data model (minimal)
  * - Contacts are learned opportunistically from incoming messages.
  * - We store the latest known channel + chatId for a username, and persist it
- *   under `.ship/contacts.json` for durability.
+ *   under `.ship/data/contact.json` for durability.
  *
  * Non-goals
  * - Perfect identity resolution across platforms (usernames can change, be missing,
@@ -17,6 +17,7 @@
 
 import fs from "fs-extra";
 import path from "path";
+import { getShipContactsPath } from "../utils.js";
 
 export type ContactChannel = "telegram" | "feishu" | "qq";
 
@@ -62,7 +63,7 @@ export class ContactBook {
 
   constructor(projectRoot: string) {
     this.projectRoot = projectRoot;
-    this.filePath = path.join(projectRoot, ".ship", "contacts.json");
+    this.filePath = getShipContactsPath(projectRoot);
   }
 
   private key(channel: ContactChannel, username: string): string {

@@ -232,7 +232,7 @@ The current runtime uses a minimal, predictable context strategy:
 - Per request, the runtime builds a single **system** message: `Agent.md + DefaultPrompt`
 - The **user** message stays raw (no prefixes)
 - Recent context comes from an in-memory session history scoped by `chatKey` (trimmed to a fixed bound)
-- When more detail is needed, the model can call `chat_load_history` to load and inject earlier messages from `.ship/chats/<chatKey>.jsonl`
+- When more detail is needed, the model can call `chat_load_history` to load and inject earlier messages from `.ship/chat/<chatKey>/conversations/history.jsonl`
 
 ### Storage Locations (current)
 

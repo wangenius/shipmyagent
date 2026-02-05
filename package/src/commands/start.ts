@@ -12,12 +12,16 @@ import { getShipRuntimeContext, setShipRuntimeContext } from "../server/ShipRunt
 import {
   getAgentMdPath,
   getCacheDirPath,
-  getChatsDirPath,
   getLogsDirPath,
-  getMcpDirPath,
-  getRoutesDirPath,
+  getShipChatRootDirPath,
+  getShipConfigDirPath,
+  getShipDataDirPath,
+  getShipDebugDirPath,
   getShipDirPath,
+  getShipProfileDirPath,
+  getShipPublicDirPath,
   getShipJsonPath,
+  getShipTasksDirPath,
   loadProjectDotenv,
   loadShipConfig,
   type ShipConfig,
@@ -113,13 +117,16 @@ export async function startCommand(
   // 在启动时加载 dotenv，并确保 .ship 目录结构存在（避免在 createAgent 中重复确保）。
   loadProjectDotenv(projectRoot);
   fs.ensureDirSync(getShipDirPath(projectRoot));
-  fs.ensureDirSync(getRoutesDirPath(projectRoot));
+  fs.ensureDirSync(getShipTasksDirPath(projectRoot));
   fs.ensureDirSync(getLogsDirPath(projectRoot));
   fs.ensureDirSync(getCacheDirPath(projectRoot));
-  fs.ensureDirSync(getChatsDirPath(projectRoot));
-  fs.ensureDirSync(path.join(getShipDirPath(projectRoot), "public"));
-  fs.ensureDirSync(path.join(getShipDirPath(projectRoot), "memory"));
-  fs.ensureDirSync(getMcpDirPath(projectRoot));
+  fs.ensureDirSync(getShipProfileDirPath(projectRoot));
+  fs.ensureDirSync(getShipDataDirPath(projectRoot));
+  fs.ensureDirSync(getShipChatRootDirPath(projectRoot));
+  fs.ensureDirSync(getShipPublicDirPath(projectRoot));
+  fs.ensureDirSync(getShipConfigDirPath(projectRoot));
+  fs.ensureDirSync(path.join(getShipDirPath(projectRoot), "schema"));
+  fs.ensureDirSync(getShipDebugDirPath(projectRoot));
 
   // Agent.md（用户可编辑的 system prompt）在启动时读取并缓存。
   let agentProfiles = `# Agent Role

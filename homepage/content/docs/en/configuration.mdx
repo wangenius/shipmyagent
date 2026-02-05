@@ -30,20 +30,20 @@ The main configuration file that controls the agent's capabilities and behavior.
 
 ## MCP (Model Context Protocol)
 
-ShipMyAgent MCP config is not in `ship.json`. It lives at `.ship/mcp/mcp.json`.
+ShipMyAgent MCP config is not in `ship.json`. It lives at `.ship/config/mcp.json`.
 
 Full guide: [/docs/en/mcp](/docs/en/mcp).
 
 `shipmyagent init` generates:
 
-- `.ship/mcp/mcp.json`
-- `.ship/mcp/mcp.schema.json` (and sets `$schema` in `mcp.json` for IDE validation/autocomplete)
+- `.ship/config/mcp.json`
+- `.ship/schema/mcp.schema.json` (and sets `$schema` in `mcp.json` for IDE validation/autocomplete)
 
 ### Format
 
 ```json
 {
-  "$schema": "./mcp.schema.json",
+  "$schema": "../schema/mcp.schema.json",
   "servers": {
     "my-server": {
       "type": "stdio",

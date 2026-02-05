@@ -5,7 +5,7 @@ description: Agent 执行过程的日志落盘位置、格式与开关
 
 # 日志与审计数据
 
-> ⚠️ **简化模式（2026-02-03）**：当前发布的 `shipmyagent` 包已暂时移除 Tasks/Runs 与审批；可依赖的审计数据主要是 `.ship/logs` 与 `.ship/chats`。
+> ⚠️ **简化模式（2026-02-03）**：当前发布的 `shipmyagent` 包已暂时移除 Tasks/Runs 与审批；可依赖的审计数据主要是 `.ship/logs` 与 `.ship/chat/.../conversations`。
 
 ShipMyAgent 的“可审计”主要由 `.ship/` 目录下的多类数据共同构成：系统日志、Agent 执行日志、对话日志。
 
@@ -36,5 +36,5 @@ ShipMyAgent 的“可审计”主要由 `.ship/` 目录下的多类数据共同�
 
 ## 对话与审计怎么查？
 
-- **对话内容**：`.ship/chats/<chatKey>.jsonl`（超过阈值会生成 `.archive-<n>.jsonl`）
+- **对话内容**：`.ship/chat/<chatKey>/conversations/history.jsonl`（超过阈值会生成 `archive-<n>.jsonl`）
 - **执行/审计日志**：`.ship/logs/<YYYY-MM-DD>.jsonl`

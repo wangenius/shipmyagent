@@ -18,7 +18,7 @@ sequenceDiagram
   participant U as User (Telegram)
   participant TG as Telegram API
   participant BOT as ShipMyAgent TelegramBot
-  participant CS as ChatStore (.ship/chats/*.jsonl)
+  participant CS as ChatStore (.ship/chat/*/conversations/*.jsonl)
   participant RT as AgentRuntime
   participant T as chat_send tool
 
@@ -72,10 +72,10 @@ Summarize this PDF and list action items.
 
 Every incoming message is appended to a per-chat JSONL file:
 
-- `.ship/chats/<encode(chatKey)>.jsonl`
+- `.ship/chat/<encode(chatKey)>/conversations/history.jsonl`
 
 Before execution, recent entries are loaded and collapsed into a compact “assistant context” that is injected back into the in-memory chat runtime for that `chatKey`.
-Before execution, the runtime uses an in-memory session history for the same `chatKey`. If the model needs more details from disk history, it can call `chat_load_history` to load and inject earlier messages from `.ship/chats/<chatKey>.jsonl`.
+Before execution, the runtime uses an in-memory session history for the same `chatKey`. If the model needs more details from disk history, it can call `chat_load_history` to load and inject earlier messages from `.ship/chat/<chatKey>/conversations/history.jsonl`.
 
 ## Execution
 
@@ -96,7 +96,7 @@ Telegram executes `agentRuntime.run(...)` for the current `chatKey`.
 
 ### On-demand history loading (optional)
 
-If the model decides it needs more context than the in-memory session provides, it can call `chat_load_history` to fetch earlier messages from `.ship/chats/<chatKey>.jsonl` and inject them into the current in-flight context (before the current user message).
+If the model decides it needs more context than the in-memory session provides, it can call `chat_load_history` to fetch earlier messages from `.ship/chat/<chatKey>/conversations/history.jsonl` and inject them into the current in-flight context (before the current user message).
 
 ## Approvals (human-in-the-loop)
 

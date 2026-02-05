@@ -1,0 +1,205 @@
+---
+title: .ship 目录
+description: ShipMyAgent 运行时目录结构与文件格式参考
+---
+
+# `.ship/` 目录
+
+`.ship/` 是 ShipMyAgent 在你的项目根目录下创建的**本地运行时工作目录**：用于落盘聊天历史、日志、幂等缓存、联系人簿、MCP 配置，以及持久化记忆（profile/chat memory）等。
+
+重要提醒：
+
+- `.ship/` **通常不应提交到 Git**（里面可能包含聊天内容、联系人、工具调用痕迹等敏感信息）。
+- 你一般**不需要手动编辑**其中的文件；如果要排查问题或做数据迁移，这份页面可以帮助你理解它们的结构。
+
+## 目录概览
+
+不同集成/功能会生成不同子目录；下面是典型结构（部分目录/文件可能不存在）：
+
+```text
+.ship/
+  .cache/                        # 缓存/幂等/去重（可删除）
+  profile/                       # 全局持久化记忆（影响 character）
+    Primary.md
+    other.md
+  data/                          # 运行时数据（联系人簿等）
+    contact.json
+  chat/
+    <encodedChatKey>/
+      conversations/             # 用户视角对话历史（Transcript）
+        history.jsonl
+        archive-1.jsonl          (可选)
+        archive-2.jsonl          (可选)
+      memory/                    # chat 级持久化记忆（面对不同 chat 的默认逻辑）
+        Primary.md
+        <any>.md                 (可选)
+  logs/
+    <YYYY-MM-DD>.jsonl
+  config/
+    mcp.json
+  schema/                        # schema 用于配置文件（编辑器补全/校验）
+    mcp.schema.json
+    ship.schema.json
+  public/                        # 服务器对外暴露的内容目录（可通过 URL 访问）
+  task/                          (预留)
+  .debug/                        (可选，调试/抓包输出)
+```
+
+说明：
+
+- `<encodedChatKey>` / `<encodedMessageId>` 采用 `encodeURIComponent(...)`，用于确保文件名安全可用。
+- `jsonl` 表示 **JSON Lines**：一行一个 JSON 对象，便于持续追加与流式处理。
+
+## 各目录/文件说明
+
+### `.ship/chat/<chatKey>/conversations/`：用户视角的对话历史（Transcript）
+
+用途：按 `chatKey` 归档「平台侧看到的对话记录」，用于追溯、工具读取历史（例如 `chat_load_history`）。
+
+路径规则：
+
+- `.ship/chat/<encodedChatKey>/conversations/history.jsonl`
+- `.ship/chat/<encodedChatKey>/conversations/archive-1.jsonl`（可选，历史过长会归档）
+
+`history.jsonl` 单行示例（字段会随平台/场景不同而略有差异）：
+
+```json
+{"v":1,"ts":1730000000000,"channel":"telegram","chatId":"123","chatKey":"telegram-chat-123","userId":"123","messageId":"456","role":"user","text":"...","meta":{"chatType":"private","username":"alice"}}
+```
+
+### `.ship/profile/`：全局持久化记忆（Profile）
+
+用途：存放跨 chat 的“长期记忆/角色偏好/自学摘要”等信息。运行时会把其中内容作为 system 上下文提供给模型（适合放规则、偏好、长期目标、总结性记忆）。
+
+- `.ship/profile/Primary.md`：最核心的持久化记忆
+- `.ship/profile/other.md`：其他记忆（可选）
+
+### `.ship/chat/<chatKey>/memory/`：chat 级持久化记忆（Chat Memory）
+
+用途：存放某个 chat 的默认持久化记忆/长期约束（例如某个客户/项目专属背景、沟通风格、禁忌等）。运行时会把 `Primary.md` 作为 system 上下文提供给模型。
+
+- `.ship/chat/<encodedChatKey>/memory/Primary.md`
+- `.ship/chat/<encodedChatKey>/memory/<any>.md`（可选）
+
+### `.ship/logs/`：运行日志（JSONL）
+
+用途：系统/适配器/工具执行的统一日志落盘，按日期分文件。
+
+路径规则：
+
+- `.ship/logs/<YYYY-MM-DD>.jsonl`
+
+单行示例：
+
+```json
+{"id":"ml83ggn36bblfu","timestamp":"2026-02-04T13:59:35.487Z","type":"debug","message":"发送心跳","level":"debug"}
+```
+
+### `.ship/.cache/`：幂等与适配器缓存（可删除）
+
+用途：本地幂等去重与适配器状态缓存，**主要用于避免重复收消息/重复发消息**，以及记录平台 offset 等状态。
+
+常见子目录：
+
+- **Ingress 幂等（入站去重）**
+  - `.ship/.cache/ingress/<channel>/<encodedChatKey>/<encodedMessageId>.json`
+  - 通过文件原子创建（`flag: "wx"`）实现跨进程去重
+- **Egress 幂等（出站去重，chat_send）**
+  - `.ship/.cache/egress/chat_send/<channel>/<encodedChatId>/<encodedMessageId>.json`
+  - 以“同一条 inbound messageId”为维度，尽量避免重复发送
+- **适配器自用缓存**
+  - 例如 Telegram 可能出现 `.ship/.cache/telegram/lastUpdateId.json` 等
+
+Ingress 单文件示例：
+
+```json
+{
+  "v": 1,
+  "channel": "telegram",
+  "chatKey": "telegram-chat-123",
+  "messageId": "456",
+  "claimedAt": 1730000000000,
+  "meta": { "chatId": "123", "actorId": "123", "updateHint": "telegram.message" }
+}
+```
+
+Egress 单文件示例：
+
+```json
+{
+  "v": 1,
+  "channel": "telegram",
+  "chatId": "123",
+  "messageId": "456",
+  "status": "delivered",
+  "claimedAt": 1730000000000,
+  "deliveredAt": 1730000000123
+}
+```
+
+### `.ship/data/contact.json`：联系人簿（工具发送用）
+
+用途：将 `username/别名` 映射到可投递目标（如 `chatId`/`chatKey`/`messageId`），支持类似 `chat_contact_lookup`、`chat_contact_send` 这类工具在“脱离当前请求上下文”时仍能找到收件人。
+
+示例：
+
+```json
+{
+  "v": 1,
+  "updatedAt": 1730000000000,
+  "contacts": [
+    {
+      "channel": "telegram",
+      "chatId": "123",
+      "chatKey": "telegram-chat-123",
+      "messageId": "456",
+      "userId": "123",
+      "username": "alice",
+      "chatType": "private",
+      "updatedAt": 1730000000000
+    }
+  ]
+}
+```
+
+### `.ship/config/mcp.json`：MCP 配置（可选）
+
+用途：配置 MCP servers（Model Context Protocol），让 Agent 连接外部工具/数据源（按你的 `mcp.json` 配置启用）。
+
+- `.ship/config/mcp.json`
+- `.ship/schema/mcp.schema.json`（编辑器校验用）
+
+默认 `mcp.json` 形态：
+
+```json
+{ "$schema": "../schema/mcp.schema.json", "servers": {} }
+```
+
+### `.ship/schema/`：配置文件 JSON Schema（编辑器提示用）
+
+用途：为 `ship.json` 提供 `$schema` 引用，获得 IDE 自动补全与校验。
+
+- `.ship/schema/ship.schema.json`
+
+### `.ship/public/`：公开/静态文件（按需）
+
+用途：用于存放运行时生成或下载的文件（例如附件、可被 Web/工具读取的静态资源）。
+
+访问方式：
+
+- 运行中的 agent server 会把 `.ship/public/` 暴露在 `GET /ship/public/<path>`。
+  - 例如：`.ship/public/report.pdf` -> `http://<host>:<port>/ship/public/report.pdf`
+
+### `.ship/task/`：预留目录
+
+用途：当前版本用于预留（例如未来可能放置任务/运行记录等）。没有使用到时它会保持为空目录。
+
+### `.ship/.debug/`：调试输出（可选）
+
+用途：某些适配器在开启调试/抓包时会写入调试文件（例如 QQ 事件抓取目录可能在 `.ship/.debug/qq-events`）。
+
+## 清理与迁移建议
+
+- **安全可删**：`.ship/.cache/`、`.ship/logs/`（会丢失幂等去重状态/日志，但不影响重新运行；平台适配器可能会重新拉取部分消息）。
+- **谨慎删除**：`.ship/chat/`、`.ship/profile/`、`.ship/data/contact.json`（会丢失对话历史/持久化记忆/联系人映射）。
+- **迁移项目**：如需迁移同一 agent 的本地状态到新机器，可按需拷贝 `.ship/chat/`、`.ship/profile/`、`.ship/data/contact.json`；不建议拷贝 `.ship/.cache/`（避免跨环境 offset/幂等状态混淆）。

@@ -1,13 +1,14 @@
 export const MCP_JSON_SCHEMA: Record<string, unknown> = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://shipmyagent.dev/schemas/mcp.schema.json",
-  title: "ShipMyAgent MCP config (.ship/mcp/mcp.json)",
+  title: "ShipMyAgent MCP config (.ship/config/mcp.json)",
   type: "object",
   additionalProperties: true,
   properties: {
     $schema: {
       type: "string",
-      description: "JSON Schema reference for editor/IDE validation (e.g. ./mcp.schema.json).",
+      description:
+        "JSON Schema reference for editor/IDE validation (e.g. ../schema/mcp.schema.json).",
     },
     servers: {
       type: "object",
@@ -61,4 +62,3 @@ export const MCP_JSON_SCHEMA: Record<string, unknown> = {
     },
   },
 };
-

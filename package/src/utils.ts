@@ -54,8 +54,8 @@ export interface ShipConfig {
    * 上下文与历史管理（工程向配置）。
    *
    * 说明
-   * - ChatStore 负责落盘“用户视角对话历史”（.ship/chats/<chatKey>/history.jsonl）。
-   * - AgentRuntime 还需要维护“给 LLM 的上下文 messages”（in-memory），以及可选的“agent 执行上下文”（.ship/memory）。
+   * - ChatStore 负责落盘“用户视角对话历史”（.ship/chat/<chatKey>/conversations/history.jsonl）。
+   * - AgentRuntime 还需要维护“给 LLM 的上下文 messages”（in-memory）。
    */
   context?: {
     /**
@@ -72,16 +72,6 @@ export interface ShipConfig {
        * 默认：30
        */
       compactKeepLastMessages?: number;
-    };
-    /**
-     * Agent 执行上下文（可持久化）相关策略。
-     */
-    agentContext?: {
-      /**
-       * `.ship/memory/agent-context/<chatKey>.jsonl` 最多保留多少条 entry；超出后自动 compact。
-       * 默认：200
-       */
-      windowEntries?: number;
     };
   };
   permissions?: {
@@ -212,9 +202,6 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
       inMemoryMaxMessages: 60,
       compactKeepLastMessages: 30,
     },
-    agentContext: {
-      windowEntries: 200,
-    },
   },
   permissions: {
     read_repo: true,
@@ -324,22 +311,85 @@ export function getShipSchemaPath(cwd: string): string {
   return path.join(getShipDirPath(cwd), "schema", "ship.schema.json");
 }
 
-export function getRoutesDirPath(cwd: string): string {
-  return path.join(cwd, ".ship", "routes");
+export function getShipConfigDirPath(cwd: string): string {
+  return path.join(getShipDirPath(cwd), "config");
 }
 
 export function getLogsDirPath(cwd: string): string {
-  return path.join(cwd, ".ship", "logs");
+  return path.join(getShipDirPath(cwd), "logs");
 }
 
 export function getCacheDirPath(cwd: string): string {
-  return path.join(cwd, ".ship", ".cache");
+  return path.join(getShipDirPath(cwd), ".cache");
 }
 
-export function getChatsDirPath(cwd: string): string {
-  return path.join(cwd, ".ship", "chats");
+export function getShipProfileDirPath(cwd: string): string {
+  return path.join(getShipDirPath(cwd), "profile");
 }
 
-export function getMcpDirPath(cwd: string): string {
-  return path.join(cwd, ".ship", "mcp");
+export function getShipProfilePrimaryPath(cwd: string): string {
+  return path.join(getShipProfileDirPath(cwd), "Primary.md");
+}
+
+export function getShipProfileOtherPath(cwd: string): string {
+  return path.join(getShipProfileDirPath(cwd), "other.md");
+}
+
+export function getShipDataDirPath(cwd: string): string {
+  return path.join(getShipDirPath(cwd), "data");
+}
+
+export function getShipContactsPath(cwd: string): string {
+  return path.join(getShipDataDirPath(cwd), "contact.json");
+}
+
+export function getShipChatRootDirPath(cwd: string): string {
+  return path.join(getShipDirPath(cwd), "chat");
+}
+
+export function getShipChatDirPath(cwd: string, chatKey: string): string {
+  return path.join(getShipChatRootDirPath(cwd), encodeURIComponent(chatKey));
+}
+
+export function getShipChatConversationsDirPath(cwd: string, chatKey: string): string {
+  return path.join(getShipChatDirPath(cwd, chatKey), "conversations");
+}
+
+export function getShipChatHistoryPath(cwd: string, chatKey: string): string {
+  return path.join(getShipChatConversationsDirPath(cwd, chatKey), "history.jsonl");
+}
+
+export function getShipChatArchivePath(cwd: string, chatKey: string, archiveIndex: number): string {
+  return path.join(
+    getShipChatConversationsDirPath(cwd, chatKey),
+    `archive-${archiveIndex}.jsonl`,
+  );
+}
+
+export function getShipChatMemoryDirPath(cwd: string, chatKey: string): string {
+  return path.join(getShipChatDirPath(cwd, chatKey), "memory");
+}
+
+export function getShipChatMemoryPrimaryPath(cwd: string, chatKey: string): string {
+  return path.join(getShipChatMemoryDirPath(cwd, chatKey), "Primary.md");
+}
+
+export function getShipPublicDirPath(cwd: string): string {
+  return path.join(getShipDirPath(cwd), "public");
+}
+
+export function getShipTasksDirPath(cwd: string): string {
+  return path.join(getShipDirPath(cwd), "task");
+}
+
+export function getShipDebugDirPath(cwd: string): string {
+  return path.join(getShipDirPath(cwd), ".debug");
+}
+
+export function getShipMcpConfigPath(cwd: string): string {
+  return path.join(getShipConfigDirPath(cwd), "mcp.json");
+}
+
+export function getShipMcpSchemaPath(cwd: string): string {
+  return path.join(getShipDirPath(cwd), "schema", "mcp.schema.json");
 }

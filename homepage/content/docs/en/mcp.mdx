@@ -1,6 +1,6 @@
 ---
 title: MCP Configuration
-description: Configure .ship/mcp/mcp.json to connect external tools (Model Context Protocol)
+description: Configure .ship/config/mcp.json to connect external tools (Model Context Protocol)
 ---
 
 # MCP Configuration
@@ -11,18 +11,18 @@ ShipMyAgent supports MCP (Model Context Protocol) to connect external tools/data
 
 MCP config is **not** in `ship.json`. It lives at:
 
-`/.ship/mcp/mcp.json`
+`/.ship/config/mcp.json`
 
 `shipmyagent init` generates:
 
-- `/.ship/mcp/mcp.json`
-- `/.ship/mcp/mcp.schema.json` (and sets `$schema` in `mcp.json` for IDE validation/autocomplete)
+- `/.ship/config/mcp.json`
+- `/.ship/schema/mcp.schema.json` (and sets `$schema` in `mcp.json` for IDE validation/autocomplete)
 
 ## Format
 
 ```json
 {
-  "$schema": "./mcp.schema.json",
+  "$schema": "../schema/mcp.schema.json",
   "servers": {
     "my-server": {
       "type": "stdio",
@@ -46,7 +46,7 @@ Supported `type` values:
 
 ```json
 {
-  "$schema": "./mcp.schema.json",
+  "$schema": "../schema/mcp.schema.json",
   "servers": {
     "local-tools": {
       "type": "stdio",
@@ -64,7 +64,7 @@ Supported `type` values:
 
 ```json
 {
-  "$schema": "./mcp.schema.json",
+  "$schema": "../schema/mcp.schema.json",
   "servers": {
     "my-sse": {
       "type": "sse",
@@ -78,7 +78,7 @@ Supported `type` values:
 
 ```json
 {
-  "$schema": "./mcp.schema.json",
+  "$schema": "../schema/mcp.schema.json",
   "servers": {
     "my-http": {
       "type": "http",

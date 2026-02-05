@@ -5,7 +5,7 @@ description: Where execution logs are stored, their formats, and how to toggle L
 
 # Logging & Audit Data
 
-> ⚠️ **Simplified mode (2026-02-03)**: the current `shipmyagent` package disables Tasks/Runs and Approvals. The audit data you can rely on is primarily `.ship/logs` and `.ship/chats`.
+> ⚠️ **Simplified mode (2026-02-03)**: the current `shipmyagent` package disables Tasks/Runs and Approvals. The audit data you can rely on is primarily `.ship/logs` and `.ship/chat/.../conversations`.
 
 ShipMyAgent’s auditability is built from multiple data streams under `.ship/`: system logs, agent execution logs, and chat logs.
 
@@ -36,5 +36,5 @@ To disable:
 
 ## Where to look
 
-- **Chat history**: `.ship/chats/<chatKey>.jsonl` (plus `.archive-<n>.jsonl`)
+- **Chat history**: `.ship/chat/<chatKey>/conversations/history.jsonl` (plus `archive-<n>.jsonl`)
 - **Execution/audit logs**: `.ship/logs/<YYYY-MM-DD>.jsonl`

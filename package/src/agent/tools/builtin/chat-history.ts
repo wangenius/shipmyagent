@@ -3,7 +3,7 @@
  *
  * 目标
  * - ChatStore 记录的是“用户视角的对话历史”（platform 的 chat transcript）。
- * - 当模型需要更多上文时，通过工具从 `.ship/chats/<chatKey>/history.jsonl` 读取历史，
+ * - 当模型需要更多上文时，通过工具从 `.ship/chat/<chatKey>/conversations/history.jsonl` 读取历史，
  *   并把结果 **合并为一条 assistant message** 注入当前上下文。
  *
  * 为什么只注入一条 assistant message？

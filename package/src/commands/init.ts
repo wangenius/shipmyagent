@@ -5,12 +5,20 @@ import {
   getAgentMdPath,
   getShipJsonPath,
   getShipDirPath,
-  getRoutesDirPath,
   getLogsDirPath,
   getCacheDirPath,
-  getChatsDirPath,
   getShipSchemaPath,
-  getMcpDirPath,
+  getShipChatRootDirPath,
+  getShipConfigDirPath,
+  getShipDataDirPath,
+  getShipMcpConfigPath,
+  getShipMcpSchemaPath,
+  getShipProfileDirPath,
+  getShipProfileOtherPath,
+  getShipProfilePrimaryPath,
+  getShipDebugDirPath,
+  getShipPublicDirPath,
+  getShipTasksDirPath,
   ensureDir,
   saveJson,
   DEFAULT_SHIP_JSON,
@@ -178,12 +186,16 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   // Create .ship directory structure
   const dirs = [
     getShipDirPath(projectRoot),
-    getRoutesDirPath(projectRoot),
+    getShipTasksDirPath(projectRoot),
     getLogsDirPath(projectRoot),
     getCacheDirPath(projectRoot),
-    getChatsDirPath(projectRoot),
-    path.join(getShipDirPath(projectRoot), 'public'),
-    getMcpDirPath(projectRoot),
+    getShipProfileDirPath(projectRoot),
+    getShipDataDirPath(projectRoot),
+    getShipChatRootDirPath(projectRoot),
+    getShipPublicDirPath(projectRoot),
+    getShipConfigDirPath(projectRoot),
+    path.join(getShipDirPath(projectRoot), 'schema'),
+    getShipDebugDirPath(projectRoot),
   ];
 
   for (const dir of dirs) {
@@ -197,13 +209,23 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   await saveJson(shipSchemaPath, SHIP_JSON_SCHEMA);
   console.log(`✅ Created ship.schema.json`);
 
-  // Create default mcp.json file in .ship/mcp/ directory
-  const mcpDirPath = getMcpDirPath(projectRoot);
-  const mcpSchemaPath = path.join(mcpDirPath, 'mcp.schema.json');
-  const mcpJsonPath = path.join(mcpDirPath, 'mcp.json');
+  // Create profile memory files (optional, but recommended)
+  try {
+    await ensureDir(getShipProfileDirPath(projectRoot));
+    await fs.ensureFile(getShipProfilePrimaryPath(projectRoot));
+    await fs.ensureFile(getShipProfileOtherPath(projectRoot));
+  } catch {
+    // ignore
+  }
+
+  // Create default mcp.json file in .ship/config/ directory + schema in .ship/schema/
+  const mcpSchemaPath = getShipMcpSchemaPath(projectRoot);
+  const mcpJsonPath = getShipMcpConfigPath(projectRoot);
+  await ensureDir(path.dirname(mcpSchemaPath));
+  await ensureDir(path.dirname(mcpJsonPath));
   await saveJson(mcpSchemaPath, MCP_JSON_SCHEMA);
-  await saveJson(mcpJsonPath, { $schema: './mcp.schema.json', servers: {} });
-  console.log(`✅ Created .ship/mcp/mcp.json (MCP configuration)`);
+  await saveJson(mcpJsonPath, { $schema: '../schema/mcp.schema.json', servers: {} });
+  console.log(`✅ Created .ship/config/mcp.json (MCP configuration)`);
 
   console.log('\n🎉 Initialization complete!\n');
   console.log(`📦 Current model: ${llmConfig.provider} / ${llmConfig.model}`);
@@ -227,7 +249,7 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   console.log('Next steps:');
   console.log('  1. Edit Agent.md to customize agent behavior');
   console.log('  2. Edit ship.json to modify LLM configuration (baseUrl, apiKey, temperature, etc.)');
-  console.log('  3. (Optional) Edit .ship/mcp/mcp.json to configure MCP servers for extended capabilities');
+  console.log('  3. (Optional) Edit .ship/config/mcp.json to configure MCP servers for extended capabilities');
   if (response.integration === 'feishu') {
     console.log('  4. Configure Feishu App ID and App Secret');
     console.log('  5. Run "shipmyagent start" to start the agent\n');
@@ -241,7 +263,7 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     console.log('  4. Run "shipmyagent start" to start the agent\n');
   }
   console.log('💡 Tip: API Key is recommended to use environment variables (e.g. ${ANTHROPIC_API_KEY} or ${OPENAI_API_KEY})\n');
-  console.log('🔌 MCP Support: Configure MCP servers in .ship/mcp/mcp.json to connect to databases, APIs, and more');
+  console.log('🔌 MCP Support: Configure MCP servers in .ship/config/mcp.json to connect to databases, APIs, and more');
   console.log('   Learn more: https://modelcontextprotocol.io\n');
   console.log('To switch models or modify configuration, edit the llm field in ship.json directly.\n');
 }

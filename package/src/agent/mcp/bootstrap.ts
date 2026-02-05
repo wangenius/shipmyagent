@@ -1,6 +1,5 @@
 import fs from "fs-extra";
-import path from "path";
-import { getMcpDirPath } from "../../utils.js";
+import { getShipMcpConfigPath } from "../../utils.js";
 import { getMcpManager } from "./singleton.js";
 import type { McpConfig } from "./types.js";
 
@@ -11,7 +10,7 @@ export interface McpBootstrapLogger {
 }
 
 /**
- * Bootstrap MCP connections from `.ship/mcp/mcp.json`.
+ * Bootstrap MCP connections from `.ship/config/mcp.json`.
  *
  * This MUST be called by the server/bootstrap layer (e.g. `shipmyagent start`)
  * instead of inside AgentRuntime. AgentRuntime only consumes the already-bootstrapped
@@ -27,7 +26,7 @@ export async function bootstrapMcpFromProject(input: {
       logger: input.logger,
     });
 
-    const mcpConfigPath = path.join(getMcpDirPath(input.projectRoot), "mcp.json");
+    const mcpConfigPath = getShipMcpConfigPath(input.projectRoot);
     if (!(await fs.pathExists(mcpConfigPath))) {
       input.logger.info("No MCP configuration found, skipping MCP initialization");
       return;

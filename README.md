@@ -29,7 +29,7 @@ ShipMyAgent 是一个 Agent Runtime，它将你的本地或远程代码仓库启
 - **Repo is the Agent** - 你的代码仓库就是 Agent 的上下文和记忆
 - **可对话** - 通过 Telegram / Discord / 飞书与 Agent 交互
 - **可执行** - 通过工具（如 `exec_shell`）直接操作仓库与环境
-- **完全可审计** - 日志与对话记录落盘（`.ship/logs` / `.ship/chats`）
+- **完全可审计** - 日志与对话记录落盘（`.ship/logs` / `.ship/chat/.../conversations`）
 - **全权限（临时）** - 当前版本默认不做权限/审批拦截
 
 ---
@@ -294,7 +294,7 @@ A: v1 主要支持本地运行，v2 将支持远程部署。
 
 ### Q: 安全性如何保证？
 
-A: 当前版本不提供最小权限与审批；只提供审计（`.ship/logs` / `.ship/chats`）与可追溯的执行过程。更严格的权限体系会在后续版本重新设计。
+A: 当前版本不提供最小权限与审批；只提供审计（`.ship/logs` / `.ship/chat/.../conversations`）与可追溯的执行过程。更严格的权限体系会在后续版本重新设计。
 
 ---
 

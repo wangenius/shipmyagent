@@ -62,7 +62,7 @@ export type IncomingChatMessage = {
 
 ## 3) ChatStore 落盘（可审计）
 
-用户消息会被 append 到 `.ship/chats/<chatKey>.jsonl`：
+用户消息会被 append 到 `.ship/chat/<chatKey>/conversations/history.jsonl`：
 
 ```ts
 export interface ChatLogEntryV1 {
@@ -102,7 +102,7 @@ export interface AgentRunInput {
 await chat_load_history({ limit: 30, keyword?: "xxx" })
 ```
 
-这个工具会从 `.ship/chats/<chatKey>.jsonl` 读取/搜索历史，并把 `user/assistant` 消息插入到当前上下文（插入位置在“当前 user 消息之前”，不改 user 原文）。
+这个工具会从 `.ship/chat/<chatKey>/conversations/history.jsonl` 读取/搜索历史，并把 `user/assistant` 消息插入到当前上下文（插入位置在“当前 user 消息之前”，不改 user 原文）。
 
 实现：`package/src/runtime/tools/chat-history.ts`
 

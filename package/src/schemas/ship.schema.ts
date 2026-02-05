@@ -64,13 +64,6 @@ export const SHIP_JSON_SCHEMA: Record<string, unknown> = {
             },
           },
         },
-        agentContext: {
-          type: "object",
-          additionalProperties: true,
-          properties: {
-            windowEntries: { type: "integer", minimum: 1, maximum: 20000 },
-          },
-        },
       },
     },
     permissions: {

@@ -18,7 +18,6 @@ import { execShellTools } from "../builtin/exec-shell.js";
 import { createMcpAiTool } from "./mcp.js";
 import { chatTools } from "../builtin/chat.js";
 import { chatHistoryTools } from "../builtin/chat-history.js";
-import { agentContextTools } from "../builtin/agent-context.js";
 import type { ContactBook } from "../../../chat/contacts.js";
 import { createChatContactTools } from "../builtin/chat-contact.js";
 import { ChatManager } from "../../../chat/manager.js";
@@ -51,7 +50,6 @@ export function createAgentToolSet(params: {
   const tools: Record<string, any> = {
     ...chatTools,
     ...chatHistoryTools,
-    ...agentContextTools,
     ...createChatContactTools({ contacts: params.contacts }),
     ...skillsTools,
     ...execShellTools,

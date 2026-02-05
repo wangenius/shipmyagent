@@ -1,6 +1,6 @@
 {
   "$schema": "./.ship/schema/ship.schema.json",
-  "name": "server-agent",
+  "name": "demo-agent",
   "version": "1.0.0",
   "start": {
     "port": 3000,
@@ -15,22 +15,6 @@
     "apiKey": "${LLM_API_KEY}",
     "temperature": 0.7
   },
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": [
-        "src/**",
-        "**/*.md"
-      ],
-      "requiresApproval": true
-    },
-    "exec_shell": {
-      "deny": [
-        "rm"
-      ],
-      "requiresApproval": false
-    }
-  },
   "adapters": {
     "telegram": {
       "enabled": true,
@@ -41,10 +25,8 @@
       "domain": "https://open.feishu.cn"
     },
     "qq": {
-      "enabled": true,
-      "sandbox": true,
-      "appId": "${QQ_APP_ID}",
-      "appSecret": "${QQ_APP_SECRET}"
+      "enabled": false,
+      "sandbox": false
     }
   }
 }

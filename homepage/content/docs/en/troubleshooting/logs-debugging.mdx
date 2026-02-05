@@ -149,10 +149,10 @@ Common things to look for in `.ship/logs/<YYYY-MM-DD>.jsonl`:
 
 ```bash
 # Confirm the message was persisted
-ls -la .ship/chats
+ls -la .ship/chat
 
 # Inspect the most recent chat log entries (replace with your chatKey)
-tail -50 .ship/chats/<encode(chatKey)>.jsonl
+tail -50 .ship/chat/<encode(chatKey)>/conversations/history.jsonl
 
 # Check today's unified logs for runtime errors
 tail -200 .ship/logs/$(date +%F).jsonl

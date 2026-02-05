@@ -5,10 +5,16 @@ import {
   type ModelMessage,
 } from "ai";
 import { withLlmRequestContext } from "../../telemetry/index.js";
-import { generateId } from "../../utils.js";
+import {
+  generateId,
+  getShipChatMemoryPrimaryPath,
+  getShipProfileOtherPath,
+  getShipProfilePrimaryPath,
+} from "../../utils.js";
 import { getContactBook } from "../../chat/index.js";
 import { transformPromptsIntoSystemMessages } from "./prompt.js";
 import { createModel } from "./model.js";
+import fs from "fs-extra";
 import {
   extractUserFacingTextFromStep,
   emitToolSummariesFromStep,
@@ -38,13 +44,12 @@ export class Agent {
    * ContextStore（统一上下文存储）。
    *
    * - in-memory：LLM 的会话 messages（按 chatKey）
-   * - persisted：agent 执行摘要（.ship/memory/agent-context）
    */
   private contextStore: ContextStore;
 
   constructor(configs: AgentConfigurations) {
     this.configs = configs;
-    this.contextStore = new ContextStore(this.configs.projectRoot);
+    this.contextStore = new ContextStore();
   }
 
   clearConversationHistory(chatKey?: string): void {
@@ -175,12 +180,57 @@ export class Agent {
     let lastEmittedAssistant = "";
 
     try {
+      const systemExtras: ModelMessage[] = [];
+      const readOptionalMd = async (filePath: string): Promise<string> => {
+        try {
+          if (!(await fs.pathExists(filePath))) return "";
+          const content = String(await fs.readFile(filePath, "utf-8")).trim();
+          return content;
+        } catch {
+          return "";
+        }
+      };
+
+      const profilePrimary = await readOptionalMd(
+        getShipProfilePrimaryPath(this.configs.projectRoot),
+      );
+      if (profilePrimary) {
+        systemExtras.push({
+          role: "system",
+          content: ["# Profile / Primary", profilePrimary].join("\n\n"),
+        });
+      }
+
+      const profileOther = await readOptionalMd(
+        getShipProfileOtherPath(this.configs.projectRoot),
+      );
+      if (profileOther) {
+        systemExtras.push({
+          role: "system",
+          content: ["# Profile / Other", profileOther].join("\n\n"),
+        });
+      }
+
+      const chatMemoryPrimary = await readOptionalMd(
+        getShipChatMemoryPrimaryPath(this.configs.projectRoot, chatKey),
+      );
+      if (chatMemoryPrimary) {
+        systemExtras.push({
+          role: "system",
+          content: ["# Chat Memory / Primary", chatMemoryPrimary].join("\n\n"),
+        });
+      }
+
       // Build in-flight messages for this request:
       // - system: runtime prompt (chatKey/requestId/来源等)
       // - history: in-memory prior turns (user/assistant/tool)
       // - user: current raw user message
+      const historySystem = history.filter((m) => (m as any)?.role === "system");
+      const historyNonSystem = history.filter((m) => (m as any)?.role !== "system");
       const inFlightMessages: ModelMessage[] = [
-        ...history,
+        ...systemExtras,
+        ...historySystem,
+        ...historyNonSystem,
         { role: "user", content: userText },
       ];
 
@@ -304,54 +354,6 @@ export class Agent {
         toolCallsTotal: toolCalls.length,
       });
       await emitStep("done", "done", { requestId, chatKey });
-
-      // 记录 agent 执行上下文（持久化摘要），并按 window 自动 compact。
-      try {
-        const windowEntries =
-          typeof this.configs.config?.context?.agentContext?.windowEntries ===
-          "number"
-            ? this.configs.config.context.agentContext.windowEntries
-            : 200;
-
-        await this.contextStore.appendAgentExecution({
-          chatKey,
-          requestId,
-          userPreview: userText,
-          outputPreview: String(result.text || ""),
-          toolCalls: toolCalls.map((tc) => {
-            const outRaw = String(tc.output ?? "");
-            let success: boolean | undefined = undefined;
-            let error: string | undefined = undefined;
-            try {
-              const parsed = JSON.parse(outRaw);
-              if (parsed && typeof parsed === "object" && "success" in parsed) {
-                success = Boolean((parsed as any).success);
-                if (!success) {
-                  error =
-                    typeof (parsed as any).error === "string"
-                      ? (parsed as any).error
-                      : typeof (parsed as any).stderr === "string"
-                        ? (parsed as any).stderr
-                        : undefined;
-                }
-              }
-            } catch {
-              // ignore
-            }
-            return {
-              tool: String(tc.tool || ""),
-              ...(typeof success === "boolean" ? { success } : {}),
-              ...(error ? { error: String(error).slice(0, 200) } : {}),
-            };
-          }),
-        });
-        await this.contextStore.compactAgentExecutionIfNeeded(
-          chatKey,
-          windowEntries,
-        );
-      } catch {
-        // ignore
-      }
 
       return {
         success: !hadToolFailure,

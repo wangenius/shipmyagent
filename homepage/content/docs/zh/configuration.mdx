@@ -30,20 +30,20 @@ your-project/
 
 ## MCP（Model Context Protocol）
 
-ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录下的 `.ship/mcp/mcp.json`。
+ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录下的 `.ship/config/mcp.json`。
 
 详细说明见：[/docs/zh/mcp](/docs/zh/mcp)。
 
 `shipmyagent init` 会自动生成：
 
-- `.ship/mcp/mcp.json`
-- `.ship/mcp/mcp.schema.json`（并在 `mcp.json` 里写入 `$schema`，用于 IDE 校验/补全）
+- `.ship/config/mcp.json`
+- `.ship/schema/mcp.schema.json`（并在 `mcp.json` 里写入 `$schema`，用于 IDE 校验/补全）
 
 ### 配置格式
 
 ```json
 {
-  "$schema": "./mcp.schema.json",
+  "$schema": "../schema/mcp.schema.json",
   "servers": {
     "my-server": {
       "type": "stdio",

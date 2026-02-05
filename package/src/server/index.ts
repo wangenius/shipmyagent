@@ -9,6 +9,7 @@ import fs from "fs-extra";
 import path from "path";
 import { getShipRuntimeContext } from "./ShipRuntimeContext.js";
 import { ChatManager } from "../chat/manager.js";
+import { getShipPublicDirPath } from "../utils.js";
 
 /**
  * HTTP server for ShipMyAgent.
@@ -17,6 +18,7 @@ import { ChatManager } from "../chat/manager.js";
  * - Health and status endpoints
  * - A minimal `/api/execute` endpoint for running ad-hoc instructions via AgentRuntime
  * - Static file serving for project `public/`
+ * - Static file serving for `.ship/public/` (exposed under `/ship/public/*`)
  */
 export interface ServerContext {
   projectRoot: string;
@@ -102,6 +104,54 @@ export class AgentServer {
       return c.text("Not Found", 404);
     });
 
+    // Public file service: `.ship/public/*` -> `/ship/public/*`
+    this.app.get("/ship/public/*", async (c) => {
+      const root = getShipPublicDirPath(this.projectRoot);
+      const prefix = "/ship/public/";
+      const requestPath = c.req.path;
+      const rel = requestPath.startsWith(prefix) ? requestPath.slice(prefix.length) : "";
+      if (!rel) return c.text("Not Found", 404);
+
+      const full = path.resolve(root, rel);
+      const rootResolved = path.resolve(root);
+      if (full !== rootResolved && !full.startsWith(rootResolved + path.sep)) {
+        return c.text("Forbidden", 403);
+      }
+
+      try {
+        const stat = await fs.stat(full);
+        if (!stat.isFile()) return c.text("Not Found", 404);
+      } catch {
+        return c.text("Not Found", 404);
+      }
+
+      const ext = path.extname(full).toLowerCase();
+      const contentType =
+        ext === ".html"
+          ? "text/html; charset=utf-8"
+          : ext === ".css"
+            ? "text/css; charset=utf-8"
+            : ext === ".js"
+              ? "application/javascript; charset=utf-8"
+              : ext === ".json"
+                ? "application/json; charset=utf-8"
+                : ext === ".txt" || ext === ".md"
+                  ? "text/plain; charset=utf-8"
+                  : ext === ".pdf"
+                    ? "application/pdf"
+                    : ext === ".png"
+                      ? "image/png"
+                      : ext === ".jpg" || ext === ".jpeg"
+                        ? "image/jpeg"
+                        : "application/octet-stream";
+
+      const buf = await fs.readFile(full);
+      return c.body(buf, 200, {
+        "Content-Type": contentType,
+        "Cache-Control": "no-cache",
+      });
+    });
+
     // Health check
     this.app.get("/health", (c) => {
       return c.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -184,7 +234,7 @@ export class AgentServer {
           await this.context.agentRuntime.initialize();
         }
         // API 也是一种 “chat”（有 chatKey + 可落盘历史），但它不是“平台消息回发”场景：
-        // - 允许使用 chat_load_history / agent_load_context 等依赖 chatKey 的工具
+        // - 允许使用 chat_load_history 等依赖 chatKey 的工具
         // - 不提供 channel/chatId 的 dispatcher 回发能力（响应通过 HTTP body 返回）
         const result = await withChatRequestContext(
           { chatKey, chatId, userId: actorId, messageId: typeof body?.messageId === "string" ? body.messageId : undefined },

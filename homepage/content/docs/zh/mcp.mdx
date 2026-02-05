@@ -1,6 +1,6 @@
 ---
 title: MCP 配置
-description: 配置 .ship/mcp/mcp.json 接入外部工具（Model Context Protocol）
+description: 配置 .ship/config/mcp.json 接入外部工具（Model Context Protocol）
 ---
 
 # MCP 配置
@@ -11,18 +11,18 @@ ShipMyAgent 支持通过 MCP（Model Context Protocol）接入外部工具/数�
 
 MCP 配置**不在** `ship.json`，而在：
 
-`/.ship/mcp/mcp.json`
+`/.ship/config/mcp.json`
 
 `shipmyagent init` 会自动生成：
 
-- `/.ship/mcp/mcp.json`
-- `/.ship/mcp/mcp.schema.json`（并在 `mcp.json` 里写入 `$schema`，用于 IDE 校验/补全）
+- `/.ship/config/mcp.json`
+- `/.ship/schema/mcp.schema.json`（并在 `mcp.json` 里写入 `$schema`，用于 IDE 校验/补全）
 
 ## 配置格式
 
 ```json
 {
-  "$schema": "./mcp.schema.json",
+  "$schema": "../schema/mcp.schema.json",
   "servers": {
     "my-server": {
       "type": "stdio",
@@ -46,7 +46,7 @@ MCP 配置**不在** `ship.json`，而在：
 
 ```json
 {
-  "$schema": "./mcp.schema.json",
+  "$schema": "../schema/mcp.schema.json",
   "servers": {
     "local-tools": {
       "type": "stdio",
@@ -64,7 +64,7 @@ MCP 配置**不在** `ship.json`，而在：
 
 ```json
 {
-  "$schema": "./mcp.schema.json",
+  "$schema": "../schema/mcp.schema.json",
   "servers": {
     "my-sse": {
       "type": "sse",
@@ -78,7 +78,7 @@ MCP 配置**不在** `ship.json`，而在：
 
 ```json
 {
-  "$schema": "./mcp.schema.json",
+  "$schema": "../schema/mcp.schema.json",
   "servers": {
     "my-http": {
       "type": "http",
