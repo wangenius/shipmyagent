@@ -3,20 +3,24 @@
  *
  * 约定
  * - ChatStore（.ship/chat/<chatKey>/conversations/history.jsonl）记录的是“用户视角”的 platform transcript。
+ * - Agent 不再维护“跨轮 in-memory history”；每次执行都以 ChatStore transcript 作为历史来源，
+ *   并以“一条 assistant message”注入到本次 in-flight messages 中。
  */
 
 /**
- * Chat transcript（in-memory message cache）的压缩参数。
- *
- * 说明
- * - 这里的“chat history”指 ContextStore 内维护的会话 messages（用于下一轮 LLM 输入）。
- * - 不是 ChatStore（`.ship/chat/.../conversations`）里的平台 transcript。
+ * Chat transcript 注入参数（对话式注入，单条 assistant message）。
  */
-export type ChatHistoryCompactionOptions = {
+export type ChatTranscriptInjectionOptions = {
   /**
-   * 压缩后保留最后 N 条 messages。
-   * - N 越大：更贴近当前任务，但上下文更长
-   * - N 越小：更省 tokens，但可能丢失细节
+   * 从最新往前取多少条（只统计 user/assistant entry）。
    */
-  keepLast: number;
+  count: number;
+  /**
+   * 相对最新消息的偏移量（例如 offset=10 表示跳过最近 10 条再往前取 count 条）。
+   */
+  offset?: number;
+  /**
+   * 注入内容的最大字符数（超出则截断并提示）。
+   */
+  maxChars?: number;
 };

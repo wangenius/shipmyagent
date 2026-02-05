@@ -52,16 +52,27 @@ export const SHIP_JSON_SCHEMA: Record<string, unknown> = {
       type: "object",
       additionalProperties: true,
       properties: {
-        chatHistory: {
+	        chatHistory: {
+	          type: "object",
+	          additionalProperties: true,
+	          properties: {
+	            transcriptMaxMessages: { type: "integer", minimum: 0, maximum: 200 },
+	            transcriptMaxChars: { type: "integer", minimum: 500, maximum: 50000 },
+	          },
+	        },
+        chatQueue: {
           type: "object",
           additionalProperties: true,
           properties: {
-            inMemoryMaxMessages: { type: "integer", minimum: 1, maximum: 5000 },
-            compactKeepLastMessages: {
+            maxConcurrency: { type: "integer", minimum: 1, maximum: 32 },
+            enableCorrectionMerge: { type: "boolean" },
+            correctionMaxRounds: { type: "integer", minimum: 0, maximum: 10 },
+            correctionMaxMergedMessages: {
               type: "integer",
               minimum: 1,
-              maximum: 5000,
+              maximum: 50,
             },
+            correctionMaxChars: { type: "integer", minimum: 300, maximum: 20000 },
           },
         },
       },

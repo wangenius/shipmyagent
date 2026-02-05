@@ -28,7 +28,7 @@ import { getLogger, type Logger } from "../../telemetry/index.js";
 import { chatRequestContext } from "../../chat/request-context.js";
 import { withToolExecutionContext } from "../tools/builtin/execution-context.js";
 import { createAgentToolSet } from "../tools/set/toolset.js";
-import { ContextStore } from "./context-store.js";
+import { loadChatTranscriptAsOneAssistantMessage } from "../../chat/transcript.js";
 
 export class Agent {
   // 配置
@@ -40,20 +40,15 @@ export class Agent {
   // Agent 执行逻辑
   private agent: ToolLoopAgent<never, any, any> | null = null;
 
-  /**
-   * ContextStore（统一上下文存储）。
-   *
-   * - in-memory：LLM 的会话 messages（按 chatKey）
-   */
-  private contextStore: ContextStore;
-
   constructor(configs: AgentConfigurations) {
     this.configs = configs;
-    this.contextStore = new ContextStore();
   }
 
   clearConversationHistory(chatKey?: string): void {
-    this.contextStore.clearChatSessions(chatKey);
+    // 关键点：不再维护“跨轮 in-memory history”。
+    // - 上下文来源以 ChatStore transcript（落盘）为准
+    // - 本方法保留为兼容接口，但实际无需清理任何内存状态
+    void chatKey;
   }
 
   getLogger(): Logger {
@@ -145,7 +140,7 @@ export class Agent {
     startTime: number,
     chatKey: string,
     opts?: {
-      compactionAttempts?: number;
+      retryAttempts?: number;
       onStep?: AgentRunInput["onStep"];
       requestId?: string;
     },
@@ -153,7 +148,7 @@ export class Agent {
     const toolCalls: AgentResult["toolCalls"] = [];
     let hadToolFailure = false;
     const toolFailureSummaries: string[] = [];
-    const compactionAttempts = opts?.compactionAttempts ?? 0;
+    const retryAttempts = opts?.retryAttempts ?? 0;
     const onStep = opts?.onStep;
     const requestId = opts?.requestId || "";
     const logger = this.getLogger();
@@ -175,8 +170,6 @@ export class Agent {
       throw new Error("Agent not initialized");
     }
 
-    const history = this.contextStore.getOrCreateChatSession(chatKey);
-    const beforeLen = history.length;
     let lastEmittedAssistant = "";
 
     try {
@@ -221,16 +214,40 @@ export class Agent {
         });
       }
 
+      // 从 ChatStore 抽取 transcript，并以“一条 assistant message”注入。
+      // 关键点：这里不是“持久化 in-memory history”，而是每次 run 都以落盘 transcript 作为历史来源。
+      const transcriptMaxMessages =
+        typeof this.configs.config?.context?.chatHistory
+          ?.transcriptMaxMessages === "number"
+          ? this.configs.config.context.chatHistory.transcriptMaxMessages
+          : 30;
+      const transcriptMaxChars =
+        typeof this.configs.config?.context?.chatHistory?.transcriptMaxChars ===
+        "number"
+          ? this.configs.config.context.chatHistory.transcriptMaxChars
+          : 12_000;
+
+      const transcriptCount =
+        typeof opts?.retryAttempts === "number" && opts.retryAttempts > 0
+          ? Math.max(0, Math.floor(transcriptMaxMessages / (opts.retryAttempts + 1)))
+          : transcriptMaxMessages;
+
+      const transcript = await loadChatTranscriptAsOneAssistantMessage({
+        projectRoot: this.configs.projectRoot,
+        chatKey,
+        options: {
+          count: transcriptCount,
+          maxChars: transcriptMaxChars,
+        },
+      });
+
       // Build in-flight messages for this request:
       // - system: runtime prompt (chatKey/requestId/来源等)
-      // - history: in-memory prior turns (user/assistant/tool)
+      // - history: ChatStore transcript（单条 assistant 注入）
       // - user: current raw user message
-      const historySystem = history.filter((m) => (m as any)?.role === "system");
-      const historyNonSystem = history.filter((m) => (m as any)?.role !== "system");
       const inFlightMessages: ModelMessage[] = [
         ...systemExtras,
-        ...historySystem,
-        ...historyNonSystem,
+        ...(transcript.message ? [transcript.message] : []),
         { role: "user", content: userText },
       ];
 
@@ -282,30 +299,17 @@ export class Agent {
                 } catch {
                   // ignore
                 }
+                try {
+                  // 关键点：为调度器提供“step 完成”的可靠信号。
+                  // onStepFinish 内部可能 emit 多个事件（assistant/tool summaries），调度器需要一个去抖触发点。
+                  await emitStep("step_finish", "", { requestId, chatKey });
+                } catch {
+                  // ignore
+                }
               },
             }),
           ),
       );
-
-      // Persist turn into in-memory history (exclude the per-request system message).
-      history.push({ role: "user", content: userText });
-      history.push(...(result.response.messages as ModelMessage[]));
-
-      // Simple bound: keep recent N messages (并在必要时压缩更早 messages)。
-      const maxHistoryMessages =
-        typeof this.configs.config?.context?.chatHistory
-          ?.inMemoryMaxMessages === "number"
-          ? this.configs.config.context.chatHistory.inMemoryMaxMessages
-          : 60;
-      if (history.length > maxHistoryMessages) {
-        this.contextStore.compactChatHistory(chatKey, {
-          keepLast:
-            typeof this.configs.config?.context?.chatHistory
-              ?.compactKeepLastMessages === "number"
-              ? this.configs.config.context.chatHistory.compactKeepLastMessages
-              : 30,
-        });
-      }
 
       for (const step of result.steps || []) {
         for (const tr of step.toolResults || []) {
@@ -373,53 +377,32 @@ export class Agent {
         errorMsg.includes("maximum context") ||
         errorMsg.includes("context window")
       ) {
-        const currentHistory =
-          this.contextStore.getOrCreateChatSession(chatKey);
         await logger.log(
           "warn",
-          "Context length exceeded, compacting history",
+          "Context length exceeded, retry with smaller transcript injection",
           {
             chatKey,
-            currentMessages: currentHistory.length,
             error: errorMsg,
-            compactionAttempts,
+            retryAttempts,
           },
         );
-        await emitStep("compaction", "上下文过长，已自动压缩历史记录后继续。", {
+        await emitStep("compaction", "上下文过长，已减少注入的对话历史后继续。", {
           requestId,
           chatKey,
-          compactionAttempts,
+          retryAttempts,
         });
 
-        if (compactionAttempts >= 3) {
-          this.contextStore.deleteChatSession(chatKey);
+        if (retryAttempts >= 3) {
           return {
             success: false,
             output:
-              "Context length exceeded and compaction failed. History cleared. Please resend your question.",
-            toolCalls,
-          };
-        }
-
-        // 压缩策略：把更早的对话 messages 合并到一条 assistant summary，保留最后 N 条。
-        const keepLast =
-          typeof this.configs.config?.context?.chatHistory
-            ?.compactKeepLastMessages === "number"
-            ? this.configs.config.context.chatHistory.compactKeepLastMessages
-            : 30;
-        const ok = this.contextStore.compactChatHistory(chatKey, { keepLast });
-        if (!ok) {
-          this.contextStore.deleteChatSession(chatKey);
-          return {
-            success: false,
-            output:
-              "Context length exceeded and compaction was not possible. History cleared. Please resend your question.",
+              "Context length exceeded and retries failed. Please resend your question (or reduce context.chatHistory.transcriptMaxMessages).",
             toolCalls,
           };
         }
 
         return this.runWithToolLoopAgent(userText, startTime, chatKey, {
-          compactionAttempts: compactionAttempts + 1,
+          retryAttempts: retryAttempts + 1,
           onStep,
           requestId,
         });

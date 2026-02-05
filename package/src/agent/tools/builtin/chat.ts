@@ -10,12 +10,6 @@ import { z } from "zod";
 import { tool } from "ai";
 import { chatRequestContext } from "../../../chat/request-context.js";
 import { getChatDispatcher, type ChatDispatchChannel } from "../../../chat/dispatcher.js";
-import { getToolRuntimeContext } from "../set/runtime-context.js";
-import {
-  markChatEgressChatSendDelivered,
-  releaseChatEgressChatSendClaim,
-  tryClaimChatEgressChatSend,
-} from "../../../chat/egress-idempotency.js";
 
 const chatSendInputSchema = z.object({
   text: z.string().describe("Text to send back to the current chat."),
@@ -64,27 +58,6 @@ export const chat_send = tool({
 
     const text = String(input.text ?? "");
 
-    // 关键防线：同一条 inbound messageId 只允许发送一次，避免模型在 tool-loop 中重复 chat_send 造成刷屏。
-    let markerFile: string | undefined = undefined;
-    if (typeof messageId === "string" && messageId.trim()) {
-      try {
-        const { projectRoot } = getToolRuntimeContext();
-        const claim = await tryClaimChatEgressChatSend({
-          projectRoot,
-          channel,
-          chatId,
-          messageId,
-          meta: { textPreview: text.slice(0, 200) },
-        });
-        if (!claim.claimed) {
-          return { success: true, skipped: true, reason: claim.reason };
-        }
-        markerFile = claim.markerFile || undefined;
-      } catch {
-        // ignore (best-effort)
-      }
-    }
-
     try {
       const r = await dispatcher.sendText({
         chatId,
@@ -93,21 +66,8 @@ export const chat_send = tool({
         ...(typeof chatType === "string" && chatType ? { chatType } : {}),
         ...(typeof messageId === "string" && messageId ? { messageId } : {}),
       });
-      if (r?.success && markerFile) {
-        await markChatEgressChatSendDelivered({
-          markerFile,
-          deliveredMeta: { textLen: text.length },
-        });
-      }
-      if (!r?.success && markerFile) {
-        // 发送失败：释放 claim，允许后续重试（最佳努力）。
-        await releaseChatEgressChatSendClaim(markerFile);
-      }
       return r;
     } catch (e) {
-      if (markerFile) {
-        await releaseChatEgressChatSendClaim(markerFile);
-      }
       throw e;
     }
   },

@@ -7,11 +7,11 @@
  *   导致同一条用户消息触发多条重复回复。
  *
  * 设计目标
- * - 以「同一条 inbound messageId」为维度做幂等：同一条用户消息最多发送一次（默认策略）。
+ * - 以「同一条 inbound messageId + 本次发送内容」为维度做幂等：同一条用户消息的同一段回复最多发送一次。
  * - 采用本地文件原子创建（flag: 'wx'）实现跨进程去重，避免多实例或重启造成重复发送。
  *
  * 存储布局
- * - `${projectRoot}/.ship/.cache/egress/chat_send/<channel>/<encode(chatId)>/<encode(messageId)>.json`
+ * - `${projectRoot}/.ship/.cache/egress/chat_send/<channel>/<encode(chatId)>/<encode(messageKey)>.json`
  *
  * 注意
  * - 只有在能拿到稳定的 `messageId` 时才启用去重；缺失时不阻断发送。
@@ -28,6 +28,10 @@ export async function tryClaimChatEgressChatSend(params: {
   channel: ChatDispatchChannel;
   chatId: string;
   messageId: string;
+  /**
+   * 幂等 key（建议包含 messageId + 回复内容 hash），用于允许同一条用户消息多段不同回复。
+   */
+  messageKey: string;
   meta?: Record<string, unknown>;
 }): Promise<
   | { claimed: true; markerFile?: string }
@@ -37,9 +41,10 @@ export async function tryClaimChatEgressChatSend(params: {
   const channel = params.channel;
   const chatId = String(params.chatId || "").trim();
   const messageId = String(params.messageId || "").trim();
+  const messageKey = String(params.messageKey || "").trim();
   const meta = params.meta;
 
-  if (!projectRoot || !channel || !chatId || !messageId) {
+  if (!projectRoot || !channel || !chatId || !messageId || !messageKey) {
     return { claimed: false, reason: "missing_key_fields" };
   }
 
@@ -50,7 +55,7 @@ export async function tryClaimChatEgressChatSend(params: {
     channel,
     encodeURIComponent(chatId),
   );
-  const markerFile = path.join(dir, `${encodeURIComponent(messageId)}.json`);
+  const markerFile = path.join(dir, `${encodeURIComponent(messageKey)}.json`);
 
   try {
     await fs.ensureDir(dir);
@@ -64,6 +69,7 @@ export async function tryClaimChatEgressChatSend(params: {
     channel,
     chatId,
     messageId,
+    messageKey,
     status: "inflight",
     claimedAt: Date.now(),
     ...(meta && typeof meta === "object" ? { meta } : {}),

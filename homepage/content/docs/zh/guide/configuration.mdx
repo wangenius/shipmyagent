@@ -52,6 +52,15 @@ description: 深入了解 ship.json 和 Agent.md 配置
 - **model**: 具体模型名称。
 - **apiKey**: 建议使用 `${ENV_VAR}` 引用环境变量，避免泄露。
 
+#### `context` (上下文)
+
+控制每次执行时注入多少“对话历史”和 Chat 的调度策略。
+
+- **context.chatHistory**：从 `.ship/chat/<chatKey>/conversations/history.jsonl` 读取最近的 transcript，并以**一条 assistant message** 注入本次请求（更省 tokens、更稳定）。
+  - **transcriptMaxMessages**: 注入的 user/assistant 最大条数（默认 `30`）
+  - **transcriptMaxChars**: 注入内容最大字符数（默认 `12000`）
+- **context.chatQueue**：按 `chatKey` 分 lane 的调度器（同 chatKey 串行、不同 chatKey 可并发；支持“快速纠正合并”）。
+
 #### `permissions` (权限)
 
 ShipMyAgent 遵循"最小权限原则"。

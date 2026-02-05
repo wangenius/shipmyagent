@@ -55,23 +55,61 @@ export interface ShipConfig {
    *
    * 说明
    * - ChatStore 负责落盘“用户视角对话历史”（.ship/chat/<chatKey>/conversations/history.jsonl）。
-   * - AgentRuntime 还需要维护“给 LLM 的上下文 messages”（in-memory）。
+   * - Agent 每次执行时会从 ChatStore 抽取“最近的对话 transcript”，并以“一条 assistant message”注入上下文。
    */
   context?: {
     /**
-     * LLM 对话上下文（in-memory）相关策略。
+     * Chat transcript 注入策略（把 ChatStore 历史作为对话式上下文注入）。
      */
     chatHistory?: {
       /**
-       * in-memory messages 的最大条数（按 chatKey 计）。
-       * 默认：60
-       */
-      inMemoryMaxMessages?: number;
-      /**
-       * 发生上下文过长时，压缩后保留最后多少条 messages。
+       * 从 ChatStore（仅 user/assistant）注入的最大消息条数。
        * 默认：30
        */
-      compactKeepLastMessages?: number;
+      transcriptMaxMessages?: number;
+      /**
+       * 注入内容的最大字符数（超出会截断并提示）。
+       * 默认：12000
+       */
+      transcriptMaxChars?: number;
+    };
+    /**
+     * Chat 消息调度（按 chatKey 分 lane）。
+     *
+     * 设计目标
+     * - 同一 chatKey 串行：避免上下文错乱/工具竞态
+     * - 不同 chatKey 可并发：提升整体吞吐
+     *
+     * 注意
+     * - 这是工程运行时行为配置，修改后需重启服务生效。
+     */
+    chatQueue?: {
+      /**
+       * 全局最大并发（不同 chatKey 之间）。
+       * 默认：2
+       */
+      maxConcurrency?: number;
+      /**
+       * 是否启用“快速补充/纠正”：当一次执行尚未结束时，如果该 chatKey 又收到新消息，
+       * 会把新消息合并注入当前 in-flight userMessage，帮助模型及时修正。
+       * 默认：true
+       */
+      enableCorrectionMerge?: boolean;
+      /**
+       * 每次请求最多合并注入多少轮（以 step_finish 为触发点）。
+       * 默认：2
+       */
+      correctionMaxRounds?: number;
+      /**
+       * 每轮最多合并多少条新消息。
+       * 默认：5
+       */
+      correctionMaxMergedMessages?: number;
+      /**
+       * 每轮合并注入的最大字符数（超出会截断并提示）。
+       * 默认：3000
+       */
+      correctionMaxChars?: number;
     };
   };
   permissions?: {
@@ -199,8 +237,15 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
   },
   context: {
     chatHistory: {
-      inMemoryMaxMessages: 60,
-      compactKeepLastMessages: 30,
+      transcriptMaxMessages: 30,
+      transcriptMaxChars: 12000,
+    },
+    chatQueue: {
+      maxConcurrency: 2,
+      enableCorrectionMerge: true,
+      correctionMaxRounds: 2,
+      correctionMaxMergedMessages: 5,
+      correctionMaxChars: 3000,
     },
   },
   permissions: {

@@ -73,6 +73,77 @@ function indentBlock(text: string, indent: string): string {
     .join("\n");
 }
 
+function formatToolCalls(toolCalls: any, maxArgsChars: number): any[] | null {
+  if (!Array.isArray(toolCalls) || toolCalls.length === 0) return null;
+  const out: any[] = [];
+  for (const tc of toolCalls) {
+    if (!tc || typeof tc !== "object") continue;
+    const id = typeof (tc as any).id === "string" ? (tc as any).id : undefined;
+    const type =
+      typeof (tc as any).type === "string" ? (tc as any).type : undefined;
+    const fn = (tc as any).function;
+    const name =
+      fn && typeof fn === "object" && typeof fn.name === "string"
+        ? fn.name
+        : typeof (tc as any).tool === "string"
+          ? (tc as any).tool
+          : undefined;
+    const argsRaw =
+      fn && typeof fn === "object"
+        ? (fn as any).arguments
+        : (tc as any).arguments;
+    const args =
+      typeof argsRaw === "string"
+        ? truncate(argsRaw, maxArgsChars)
+        : truncate(JSON.stringify(argsRaw ?? {}), maxArgsChars);
+
+    out.push({
+      ...(id ? { id } : {}),
+      ...(type ? { type } : {}),
+      ...(name ? { name } : {}),
+      ...(args ? { arguments: args } : {}),
+    });
+  }
+  return out.length > 0 ? out : null;
+}
+
+function formatMessagesForLog(messages: any[], opts: {
+  maxContentChars: number;
+  maxToolArgsChars: number;
+}): any[] {
+  const out: any[] = [];
+
+  for (const m of messages) {
+    if (!m || typeof m !== "object") continue;
+
+    const role = typeof (m as any).role === "string" ? (m as any).role : "unknown";
+    const name = typeof (m as any).name === "string" ? (m as any).name : undefined;
+    const toolCallId =
+      typeof (m as any).tool_call_id === "string"
+        ? (m as any).tool_call_id
+        : undefined;
+
+    const formatted: any = {
+      role,
+      ...(name ? { name } : {}),
+      ...(toolCallId ? { tool_call_id: toolCallId } : {}),
+    };
+
+    // 关键注释：不要做“整体截断”，而是每条消息独立截断，并保留完整消息序列（含 tool）。
+    if ("content" in (m as any)) {
+      formatted.content = contentToText((m as any).content, opts.maxContentChars);
+    }
+
+    // OpenAI-compatible: assistant tool_calls
+    const toolCalls = formatToolCalls((m as any).tool_calls, opts.maxToolArgsChars);
+    if (toolCalls) formatted.tool_calls = toolCalls;
+
+    out.push(formatted);
+  }
+
+  return out;
+}
+
 
 export type ProviderFetch = (input: any, init?: any) => Promise<any>;
 
@@ -93,6 +164,7 @@ export function parseFetchRequestForLog(
   requestText: string;
   meta: Record<string, unknown>;
 } | null {
+  // 关键注释：这里的 maxChars 不用于“整体截断请求日志”，仅作为 payload 兜底 stringify 的保护上限。
   const maxChars = 12000;
   // 统一开关：只由 ship.json 的 llm.logMessages 控制（见 core/agent/model.ts）。
   // 这里不支持额外的“更敏感 payload”开关，避免不一致与误配置。
@@ -158,7 +230,11 @@ export function parseFetchRequestForLog(
     );
   }
   if (messages && Array.isArray(messages)) {
-    messageTextParts.push(`messages: ${JSON.stringify(messages, null, 2)}`);
+    const formattedMessages = formatMessagesForLog(messages, {
+      maxContentChars: 2000,
+      maxToolArgsChars: 1200,
+    });
+    messageTextParts.push(`messages: ${JSON.stringify(formattedMessages, null, 2)}`);
   } else {
     messageTextParts.push(
       ["payload:", indentBlock(stringifyCompact(payload, maxChars), "  ")].join(
@@ -179,14 +255,15 @@ export function parseFetchRequestForLog(
     model,
     toolsCount,
     systemLength: typeof system === "string" ? system.length : undefined,
-    requestText: truncate(messageTextParts.join("\n"), maxChars),
+    // 注意：不做整体截断；每条消息已单独截断。
+    requestText: messageTextParts.join("\n"),
     meta: {
       kind: "llm_request",
       url,
       method,
       model,
       toolsCount,
-      messagesCount: messages,
+      messagesCount: Array.isArray(messages) ? messages.length : 0,
       systemLength: typeof system === "string" ? system.length : undefined,
       ...(includePayload ? { payload } : {}),
     },

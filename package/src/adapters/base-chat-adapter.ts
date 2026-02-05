@@ -2,7 +2,7 @@ import type { Agent } from "../agent/context/index.js";
 import { getContactBook } from "../chat/index.js";
 import { PlatformAdapter } from "./platform-adapter.js";
 import type { ChatDispatchChannel } from "../chat/dispatcher.js";
-import { QueryQueue } from "../chat/query-queue.js";
+import { ChatLaneScheduler } from "../chat/lane-scheduler.js";
 import type { Logger } from "../telemetry/index.js";
 import { getShipRuntimeContext } from "../server/ShipRuntimeContext.js";
 
@@ -20,7 +20,7 @@ export type IncomingChatMessage = {
  * Shared base for chat-style platform adapters.
  *
  * Provides:
- * - A single, global QueryQueue (concurrency=1) across all users
+ * - A single, global Lane Scheduler（按 chatKey 分 lane；同 chatKey 串行、不同 chatKey 可并发）
  * - One AgentRuntime per chatKey（一个 Chat 一个 Agent 实例）
  * - Append-only ChatStore logging for user messages (audit trail)
  * - Best-effort contact book updates (username -> delivery target)
@@ -30,7 +30,7 @@ export type IncomingChatMessage = {
  * - Adapters still run a conservative fallback send if the model forgets the tool.
  */
 export abstract class BaseChatAdapter extends PlatformAdapter {
-  private static globalQueue: QueryQueue | null = null;
+  private static globalScheduler: ChatLaneScheduler | null = null;
 
   protected readonly projectRoot: string;
   protected readonly logger: Logger;
@@ -52,8 +52,10 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     this.logger = params.logger ?? runtime.logger;
     this.createAgentRuntime = params.createAgent ?? runtime.createAgent;
 
-    if (!BaseChatAdapter.globalQueue) {
-      BaseChatAdapter.globalQueue = new QueryQueue();
+    if (!BaseChatAdapter.globalScheduler) {
+      BaseChatAdapter.globalScheduler = new ChatLaneScheduler(
+        runtime.config?.context?.chatQueue || {},
+      );
     }
   }
 
@@ -138,9 +140,9 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
       // ignore contact book errors
     }
 
-    const queue = BaseChatAdapter.globalQueue!;
+    const scheduler = BaseChatAdapter.globalScheduler!;
     const agent = this.getOrCreateAgent(chatKey);
-    const { position } = queue.enqueue({
+    const { lanePosition } = scheduler.enqueue({
       channel: this.channel,
       chatId: msg.chatId,
       chatKey,
@@ -153,6 +155,6 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
       username: msg.username,
     });
 
-    return { chatKey, position };
+    return { chatKey, position: lanePosition };
   }
 }

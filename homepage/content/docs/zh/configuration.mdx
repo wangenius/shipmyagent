@@ -213,6 +213,32 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 }
 ```
 
+#### context (object, 可选)
+
+运行时行为配置。
+
+**context.chatQueue** (object, 可选)
+
+用于控制按 chatKey 分 lane 的消息调度：
+
+- 同一 `chatKey` 串行执行（避免同一会话回复交叉/错乱）
+- 不同 `chatKey` 可并发（提升整体吞吐）
+- 如果 Agent 还在执行时又收到新消息，可以把新消息合并注入当前执行，帮助模型快速补充/纠正
+
+```json
+{
+  "context": {
+    "chatQueue": {
+      "maxConcurrency": 2,
+      "enableCorrectionMerge": true,
+      "correctionMaxRounds": 2,
+      "correctionMaxMergedMessages": 5,
+      "correctionMaxChars": 3000
+    }
+  }
+}
+```
+
 #### permissions (object, 必需)
 
 控制 agent 可以做什么。

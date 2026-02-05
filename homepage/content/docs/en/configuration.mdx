@@ -213,6 +213,50 @@ Language Model configuration.
 }
 ```
 
+#### context (object, optional)
+
+Runtime behavior configuration.
+
+**context.chatQueue** (object, optional)
+
+Controls the per-chat lane scheduler:
+
+- Same `chatKey` runs serially (no reply interleaving)
+- Different `chatKey`s can run concurrently (better overall throughput)
+- If new messages arrive while the agent is still working, they can be merged into the current run as extra context (quick correction)
+
+```json
+{
+  "context": {
+    "chatQueue": {
+      "maxConcurrency": 2,
+      "enableCorrectionMerge": true,
+      "correctionMaxRounds": 2,
+      "correctionMaxMergedMessages": 5,
+      "correctionMaxChars": 3000
+    }
+  }
+}
+```
+
+**context.chatHistory** (object, optional)
+
+Controls how much prior chat transcript is injected into each agent run:
+
+- Transcript source: `.ship/chat/<chatKey>/conversations/history.jsonl`
+- Injection format: **ONE** assistant message inserted before the current user message (stable + token-efficient)
+
+```json
+{
+  "context": {
+    "chatHistory": {
+      "transcriptMaxMessages": 30,
+      "transcriptMaxChars": 12000
+    }
+  }
+}
+```
+
 #### permissions (object, required)
 
 Control what the agent can do.

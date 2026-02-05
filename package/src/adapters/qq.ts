@@ -58,8 +58,6 @@ export class QQBot extends BaseChatAdapter {
   private lastSeq: number = 0;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
-  private processedMessages: Set<string> = new Set();
-  private messageCleanupInterval: NodeJS.Timeout | null = null;
 
   // 缓存的 access_token 和过期时间
   private accessToken: string = "";
@@ -294,17 +292,6 @@ export class QQBot extends BaseChatAdapter {
 
       // 连接 WebSocket（不再需要传递 authToken）
       await this.connectWebSocket(gatewayUrl);
-
-      // 启动消息缓存清理定时器
-      this.messageCleanupInterval = setInterval(
-        () => {
-          if (this.processedMessages.size > 1000) {
-            this.processedMessages.clear();
-            this.logger.debug("已清理消息去重缓存");
-          }
-        },
-        5 * 60 * 1000,
-      );
     } catch (error) {
       this.logger.error("启动 QQ Bot 失败", { error: String(error) });
       this.isRunning = false;
@@ -612,13 +599,7 @@ export class QQBot extends BaseChatAdapter {
    */
   private async handleGroupMessage(data: any): Promise<void> {
     const { id: messageId, group_openid: groupId, content, author } = data;
-
-    // 消息去重
-    if (this.processedMessages.has(messageId)) {
-      this.logger.debug(`消息已处理，跳过: ${messageId}`);
-      return;
-    }
-    this.processedMessages.add(messageId);
+    const chatType = "group";
 
     // 提取纯文本内容（去除 @机器人 的部分）
     const userMessage = this.extractTextContent(content);
@@ -646,13 +627,8 @@ export class QQBot extends BaseChatAdapter {
   private async handleC2CMessage(data: any): Promise<void> {
     const { id: messageId, author, content } = data;
     const actor = this.extractAuthorIdentity(author);
-
-    // 消息去重
-    if (this.processedMessages.has(messageId)) {
-      this.logger.debug(`消息已处理，跳过: ${messageId}`);
-      return;
-    }
-    this.processedMessages.add(messageId);
+    const chatType = "c2c";
+    const chatId = actor.userId || "";
 
     const userMessage = this.extractTextContent(content);
 
@@ -663,14 +639,14 @@ export class QQBot extends BaseChatAdapter {
     // 检查是否是命令
     if (userMessage.startsWith("/")) {
       await this.handleCommand(
-        actor.userId || "",
+        chatId,
         "c2c",
         messageId,
         userMessage,
       );
     } else {
       await this.executeAndReply(
-        actor.userId || "",
+        chatId,
         "c2c",
         messageId,
         userMessage,
@@ -684,12 +660,7 @@ export class QQBot extends BaseChatAdapter {
    */
   private async handleChannelMessage(data: any): Promise<void> {
     const { id: messageId, channel_id: channelId, content, author } = data;
-
-    // 消息去重
-    if (this.processedMessages.has(messageId)) {
-      return;
-    }
-    this.processedMessages.add(messageId);
+    const chatType = "channel";
 
     const userMessage = this.extractTextContent(content);
     const actor = this.extractAuthorIdentity(author);
@@ -913,15 +884,6 @@ export class QQBot extends BaseChatAdapter {
 
     // 清理心跳定时器
     this.stopHeartbeat();
-
-    // 清理消息缓存定时器
-    if (this.messageCleanupInterval) {
-      clearInterval(this.messageCleanupInterval);
-      this.messageCleanupInterval = null;
-    }
-
-    // 清理消息缓存
-    this.processedMessages.clear();
 
     // 关闭 WebSocket 连接
     if (this.ws) {

@@ -5,7 +5,6 @@ import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "../platform-adapter.js";
-import { tryClaimChatIngressMessage } from "../../chat/idempotency.js";
 import { isTelegramAdmin } from "./access.js";
 import { TelegramApiClient } from "./api-client.js";
 import {
@@ -90,8 +89,9 @@ export class TelegramBot extends BaseChatAdapter {
   /**
    * Compatibility hook for older per-chat locking flows.
    *
-   * In the "one global agent thread" architecture, messages are serialized by
-   * the QueryQueue, so we do not need additional per-chat locks here.
+   * 说明：
+   * - 当前采用“按 chatKey 分 lane”的调度器：同一 chatKey 串行、不同 chatKey 可并发。
+   * - 因此这里不再需要额外的 per-chat 锁。
    */
   private runInChat(_chatKey: string, fn: () => Promise<void>): Promise<void> {
     return fn();
@@ -397,32 +397,6 @@ export class TelegramBot extends BaseChatAdapter {
       (!!this.botUsername &&
         typeof replyToFrom?.username === "string" &&
         replyToFrom.username.toLowerCase() === this.botUsername.toLowerCase());
-
-    // Persistent idempotency: avoid executing the agent more than once for the same inbound Telegram message.
-    // This mitigates duplicate deliveries caused by restarts / multiple pollers / offset glitches.
-    if (messageId) {
-      const claim = await tryClaimChatIngressMessage({
-        projectRoot: this.projectRoot,
-        channel: "telegram",
-        chatKey,
-        messageId,
-        meta: {
-          chatId,
-          messageThreadId,
-          actorId,
-          updateHint: "telegram.message",
-        },
-      });
-      if (!claim.claimed) {
-        this.logger.debug("Ignored duplicate Telegram message (idempotency)", {
-          chatId,
-          messageId,
-          chatKey,
-          reason: claim.reason,
-        });
-        return;
-      }
-    }
 
     await this.runInChat(chatKey, async () => {
       this.logger.debug("Telegram message received", {
