@@ -90,7 +90,7 @@ export async function loadChatTranscriptAsOneAssistantMessage(params: {
   }
 
   return {
-    message: { role: "assistant", content: out.trimEnd() },
+    message: { role: "system", content: out.trimEnd() },
     picked: picked.length,
     truncated,
   };

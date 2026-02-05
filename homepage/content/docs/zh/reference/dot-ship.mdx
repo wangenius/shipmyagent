@@ -5,7 +5,7 @@ description: ShipMyAgent 运行时目录结构与文件格式参考
 
 # `.ship/` 目录
 
-`.ship/` 是 ShipMyAgent 在你的项目根目录下创建的**本地运行时工作目录**：用于落盘聊天历史、日志、幂等缓存、联系人簿、MCP 配置，以及持久化记忆（profile/chat memory）等。
+`.ship/` 是 ShipMyAgent 在你的项目根目录下创建的**本地运行时工作目录**：用于落盘聊天历史、日志、幂等缓存、MCP 配置，以及持久化记忆（profile/chat memory）等。
 
 重要提醒：
 
@@ -22,8 +22,7 @@ description: ShipMyAgent 运行时目录结构与文件格式参考
   profile/                       # 全局持久化记忆（影响 character）
     Primary.md
     other.md
-  data/                          # 运行时数据（联系人簿等）
-    contact.json
+  data/                          # 运行时数据（按需；可能为空）
   chat/
     <encodedChatKey>/
       conversations/             # 用户视角对话历史（Transcript）
@@ -137,36 +136,9 @@ Egress 单文件示例：
 }
 ```
 
-### `.ship/data/contact.json`：联系人簿（工具发送用）
+### `.ship/data/`：运行时数据（按需）
 
-用途：将 `username/别名/昵称` 映射到可投递目标（如 `chatId`/`chatKey`/`messageId`），支持类似 `chat_contact_lookup`、`chat_contact_send` 这类工具在“脱离当前请求上下文”时仍能找到收件人。
-
-使用方式：
-
-1. 先通过 `toolset_load` 加载 `contact_book` ToolSet（一次性注册联系人簿相关 tools，并注入使用说明）
-2. 再使用 `chat_contact_*` 工具：`chat_contact_lookup` / `chat_contact_list` / `chat_contact_set_nickname` / `chat_contact_upsert` / `chat_contact_remove` / `chat_contact_send`
-
-示例：
-
-```json
-{
-  "v": 1,
-  "updatedAt": 1730000000000,
-  "contacts": [
-    {
-      "channel": "telegram",
-      "chatId": "123",
-      "chatKey": "telegram-chat-123",
-      "messageId": "456",
-      "userId": "123",
-      "username": "alice",
-      "nickname": "小A",
-      "chatType": "private",
-      "updatedAt": 1730000000000
-    }
-  ]
-}
-```
+用途：用于存放一些按需生成的运行时数据。多数情况下你不需要关心该目录。
 
 ### `.ship/config/mcp.json`：MCP 配置（可选）
 
@@ -207,5 +179,5 @@ Egress 单文件示例：
 ## 清理与迁移建议
 
 - **安全可删**：`.ship/.cache/`、`.ship/logs/`（会丢失幂等去重状态/日志，但不影响重新运行；平台适配器可能会重新拉取部分消息）。
-- **谨慎删除**：`.ship/chat/`、`.ship/profile/`、`.ship/data/contact.json`（会丢失对话历史/持久化记忆/联系人映射）。
-- **迁移项目**：如需迁移同一 agent 的本地状态到新机器，可按需拷贝 `.ship/chat/`、`.ship/profile/`、`.ship/data/contact.json`；不建议拷贝 `.ship/.cache/`（避免跨环境 offset/幂等状态混淆）。
+- **谨慎删除**：`.ship/chat/`、`.ship/profile/`（会丢失对话历史/持久化记忆）。
+- **迁移项目**：如需迁移同一 agent 的本地状态到新机器，可按需拷贝 `.ship/chat/`、`.ship/profile/`；不建议拷贝 `.ship/.cache/`（避免跨环境 offset/幂等状态混淆）。

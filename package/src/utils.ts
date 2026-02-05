@@ -384,10 +384,6 @@ export function getShipDataDirPath(cwd: string): string {
   return path.join(getShipDirPath(cwd), "data");
 }
 
-export function getShipContactsPath(cwd: string): string {
-  return path.join(getShipDataDirPath(cwd), "contact.json");
-}
-
 export function getShipChatRootDirPath(cwd: string): string {
   return path.join(getShipDirPath(cwd), "chat");
 }

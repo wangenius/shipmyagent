@@ -687,7 +687,6 @@ export class QQBot extends BaseChatAdapter {
    * candidates and normalize into `{ userId, username }`.
    *
    * Notes:
-   * - ContactBook upsert only happens when `username` is provided.
    * - For C2C events, `userId` also serves as `chatId` (DM target).
    */
   private extractAuthorIdentity(author: any): {
@@ -823,13 +822,15 @@ export class QQBot extends BaseChatAdapter {
     text: string,
     msgSeq: number = 1,
   ): Promise<void> {
+    // 注意：这里必须把失败抛出去，否则 tool 层会误报 success:true，
+    //      进而出现 “QQ 有提醒但点开没有消息” 这种难排查的假成功。
     try {
       // 实时获取最新的 authToken
       const authToken = await this.getAuthToken();
 
       const apiBase = this.getApiBase();
       let url = "";
-      let body: any = {
+      const body: any = {
         content: text,
         msg_type: 0, // 文本消息
         msg_id: messageId, // 被动回复需要带上消息ID
@@ -850,8 +851,7 @@ export class QQBot extends BaseChatAdapter {
           url = `${apiBase}/channels/${chatId}/messages`;
           break;
         default:
-          this.logger.error(`未知的聊天类型: ${chatType}`);
-          return;
+          throw new Error(`未知的聊天类型: ${chatType}`);
       }
 
       this.logger.debug(`发送消息到: ${url}`);
@@ -865,14 +865,19 @@ export class QQBot extends BaseChatAdapter {
         body: JSON.stringify(body),
       });
 
+      const responseText = await response.text();
       if (!response.ok) {
-        const errorData = await response.text();
-        this.logger.error(`发送消息失败: ${response.status} - ${errorData}`);
-      } else {
-        this.logger.debug("消息发送成功");
+        this.logger.error(`发送消息失败: ${response.status} - ${responseText}`);
+        throw new Error(`QQ send failed: HTTP ${response.status}: ${responseText}`);
       }
+
+      // 成功也保留一点响应内容，便于排查“返回成功但用户侧不可见”的边界情况
+      this.logger.debug(
+        `消息发送成功: ${response.status}${responseText ? ` - ${responseText}` : ""}`,
+      );
     } catch (error) {
       this.logger.error("发送 QQ 消息失败", { error: String(error) });
+      throw error;
     }
   }
 

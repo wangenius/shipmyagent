@@ -1,6 +1,6 @@
 {
   "name": "shipmyagent",
-  "version": "1.0.83",
+  "version": "1.0.91",
   "type": "module",
   "description": "把一个代码仓库，启动成一个可对话、可审计的 Agent Runtime",
   "bin": {

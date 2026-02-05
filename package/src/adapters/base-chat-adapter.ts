@@ -1,5 +1,4 @@
 import type { Agent } from "../agent/context/index.js";
-import { getContactBook } from "../chat/index.js";
 import { PlatformAdapter } from "./platform-adapter.js";
 import type { ChatDispatchChannel } from "../chat/dispatcher.js";
 import { ChatLaneScheduler } from "../chat/lane-scheduler.js";
@@ -23,7 +22,6 @@ export type IncomingChatMessage = {
  * - A single, global Lane Scheduler（按 chatKey 分 lane；同 chatKey 串行、不同 chatKey 可并发）
  * - One AgentRuntime per chatKey（一个 Chat 一个 Agent 实例）
  * - Append-only ChatStore logging for user messages (audit trail)
- * - Best-effort contact book updates (username -> delivery target)
  *
  * Tool-strict note:
  * - Agent replies should be delivered via `chat_send` tool.
@@ -62,7 +60,6 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
   clearChat(chatKey: string): void {
     const existing = this.agentsByChatKey.get(chatKey);
     if (existing) {
-      existing.clearConversationHistory(chatKey);
       this.agentsByChatKey.delete(chatKey);
     }
     this.logger.info(`Cleared chat: ${chatKey}`);
@@ -121,24 +118,6 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
         username: msg.username,
       },
     });
-
-    try {
-      const username = String(msg.username || "").trim();
-      if (username) {
-        await getContactBook(this.projectRoot).upsert({
-          channel: this.channel as any,
-          chatId: msg.chatId,
-          chatKey,
-          messageId: msg.messageId,
-          userId: msg.userId,
-          username,
-          chatType: msg.chatType,
-          messageThreadId: msg.messageThreadId,
-        });
-      }
-    } catch {
-      // ignore contact book errors
-    }
 
     const scheduler = BaseChatAdapter.globalScheduler!;
     const agent = this.getOrCreateAgent(chatKey);

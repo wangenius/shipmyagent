@@ -1,26 +1,14 @@
 {
   "v": 1,
-  "updatedAt": 1770273847301,
+  "updatedAt": 1770275782951,
   "contacts": [
     {
       "channel": "qq",
+      "username": "53377CF935F1D831D7ACBBCAFDC4C078",
       "chatId": "53377CF935F1D831D7ACBBCAFDC4C078",
-      "chatKey": "qq-c2c-53377CF935F1D831D7ACBBCAFDC4C078",
-      "messageId": "ROBOT1.0_jongx7fDmmkMx5836eKNMWODaCzpZGfyEJm3HnJ34XLdBJ-ode58ECX-UZ01vBMzmf.00jtViQ.3gYk-UMO6CVKTBl0bDXXBybve5OK.Tdk!",
-      "userId": "53377CF935F1D831D7ACBBCAFDC4C078",
-      "username": "wangenius",
-      "chatType": "c2c",
-      "updatedAt": 1770273847300
-    },
-    {
-      "channel": "telegram",
-      "username": "wangenius",
-      "chatId": "-5072479241",
-      "chatKey": "telegram-chat--5072479241",
-      "messageId": "513",
-      "userId": "8444574557",
-      "chatType": "group",
-      "updatedAt": 1770272159221
+      "chatKey": "qq-unknown-53377CF935F1D831D7ACBBCAFDC4C078",
+      "nickname": "wz",
+      "updatedAt": 1770275782950
     }
   ]
 }

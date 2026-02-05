@@ -11,8 +11,7 @@ import {
   getShipProfileOtherPath,
   getShipProfilePrimaryPath,
 } from "../../utils.js";
-import { getContactBook } from "../../chat/index.js";
-import { transformPromptsIntoSystemMessages } from "./prompt.js";
+import { buildContextSystemPrompt, transformPromptsIntoSystemMessages } from "./prompt.js";
 import { createModel } from "./model.js";
 import fs from "fs-extra";
 import {
@@ -27,9 +26,8 @@ import type {
 import { getLogger, type Logger } from "../../telemetry/index.js";
 import { chatRequestContext } from "../../chat/request-context.js";
 import { withToolExecutionContext } from "../tools/builtin/execution-context.js";
-import { createAgentToolSet } from "../tools/set/toolset.js";
+import { createAgentTools } from "../tools/set/agent-tools.js";
 import { loadChatTranscriptAsOneAssistantMessage } from "../../chat/transcript.js";
-import type { AgentToolRegistry } from "../tools/set/tool-registry.js";
 
 export class Agent {
   // 配置
@@ -40,18 +38,9 @@ export class Agent {
   private model: LanguageModel | null = null;
   // Agent 执行逻辑
   private agent: ToolLoopAgent<never, any, any> | null = null;
-  // 工具注册表（支持运行中 toolset_load 追加工具）
-  private toolRegistry: AgentToolRegistry | null = null;
 
   constructor(configs: AgentConfigurations) {
     this.configs = configs;
-  }
-
-  clearConversationHistory(chatKey?: string): void {
-    // 关键点：不再维护“跨轮 in-memory history”。
-    // - 上下文来源以 ChatStore transcript（落盘）为准
-    // - 本方法保留为兼容接口，但实际无需清理任何内存状态
-    void chatKey;
   }
 
   getLogger(): Logger {
@@ -70,13 +59,11 @@ export class Agent {
         `Agent.md content length: ${this.configs.systems?.length || 0} chars`,
       );
 
-      const tools = createAgentToolSet({
+      const tools = createAgentTools({
         projectRoot: this.configs.projectRoot,
         config: this.configs.config,
         logger,
-        contacts: getContactBook(this.configs.projectRoot),
       });
-      this.toolRegistry = tools.registry;
 
       this.model = await createModel({
         config: this.configs.config,
@@ -188,6 +175,29 @@ export class Agent {
         }
       };
 
+      // 运行时 system prompt（每次请求都注入，包含 chatKey/requestId/来源等）。
+      // 关键点：这段信息是“强时效/强关联本次请求”的上下文，不应该缓存到启动 prompts 里。
+      const runtimeExtraContextLines: string[] = [];
+      const chatCtx = chatRequestContext.getStore();
+      if (chatCtx?.channel)
+        runtimeExtraContextLines.push(`- Channel: ${chatCtx.channel}`);
+      if (chatCtx?.chatId)
+        runtimeExtraContextLines.push(`- ChatId: ${chatCtx.chatId}`);
+      if (chatCtx?.userId)
+        runtimeExtraContextLines.push(`- UserId: ${chatCtx.userId}`);
+      if (chatCtx?.username)
+        runtimeExtraContextLines.push(`- Username: ${chatCtx.username}`);
+
+      systemExtras.push({
+        role: "system",
+        content: buildContextSystemPrompt({
+          projectRoot: this.configs.projectRoot,
+          chatKey,
+          requestId,
+          extraContextLines: runtimeExtraContextLines,
+        }),
+      });
+
       const profilePrimary = await readOptionalMd(
         getShipProfilePrimaryPath(this.configs.projectRoot),
       );
@@ -218,13 +228,6 @@ export class Agent {
         });
       }
 
-      // 关键点：已加载的 ToolSets 需要在每次 run 默认生效（system prompt）。
-      // toolset_load 在“本次 run”里会即时注入一次；这里负责“后续 run 的默认注入”。
-      const toolSetsSystem = this.toolRegistry?.buildLoadedToolSetsSystemPrompt() || "";
-      if (toolSetsSystem.trim()) {
-        systemExtras.push({ role: "system", content: toolSetsSystem });
-      }
-
       // 从 ChatStore 抽取 transcript，并以“一条 assistant message”注入。
       // 关键点：这里不是“持久化 in-memory history”，而是每次 run 都以落盘 transcript 作为历史来源。
       const transcriptMaxMessages =
@@ -240,7 +243,10 @@ export class Agent {
 
       const transcriptCount =
         typeof opts?.retryAttempts === "number" && opts.retryAttempts > 0
-          ? Math.max(0, Math.floor(transcriptMaxMessages / (opts.retryAttempts + 1)))
+          ? Math.max(
+              0,
+              Math.floor(transcriptMaxMessages / (opts.retryAttempts + 1)),
+            )
           : transcriptMaxMessages;
 
       const transcript = await loadChatTranscriptAsOneAssistantMessage({
@@ -397,11 +403,15 @@ export class Agent {
             retryAttempts,
           },
         );
-        await emitStep("compaction", "上下文过长，已减少注入的对话历史后继续。", {
-          requestId,
-          chatKey,
-          retryAttempts,
-        });
+        await emitStep(
+          "compaction",
+          "上下文过长，已减少注入的对话历史后继续。",
+          {
+            requestId,
+            chatKey,
+            retryAttempts,
+          },
+        );
 
         if (retryAttempts >= 3) {
           return {

@@ -18,12 +18,10 @@ import { execShellTools } from "../builtin/exec-shell.js";
 import { createMcpAiTool } from "./mcp.js";
 import { chatTools } from "../builtin/chat.js";
 import { chatHistoryTools } from "../builtin/chat-history.js";
-import type { ContactBook } from "../../../chat/contacts.js";
 import { ChatManager } from "../../../chat/manager.js";
-import { AgentToolRegistry } from "./tool-registry.js";
-import { toolsetTools } from "../builtin/toolset.js";
+import { chatContactSendTools } from "../builtin/chat-contact-send.js";
 
-export interface AgentToolSetLogger {
+export interface AgentToolsLogger {
   info(message: string): void;
   warn(message: string): void;
   error(message: string): void;
@@ -34,29 +32,24 @@ export interface AgentToolSetLogger {
   ): Promise<void> | void;
 }
 
-export function createAgentToolSet(params: {
+export function createAgentTools(params: {
   projectRoot: string;
   config: ShipConfig;
-  logger?: AgentToolSetLogger | null;
-  contacts: ContactBook;
-}): { tools: Record<string, any>; registry: AgentToolRegistry } {
+  logger?: AgentToolsLogger | null;
+}): { tools: Record<string, any> } {
   loadProjectDotenv(params.projectRoot);
   const chatManager = new ChatManager(params.projectRoot);
 
-  // 关键点：工具表必须是可变对象（供 toolset_load 在运行中追加新工具）。
   const tools: Record<string, any> = {};
-  const registry = new AgentToolRegistry(tools);
 
   setToolRuntimeContext({
     projectRoot: params.projectRoot,
     config: params.config,
     chatManager,
-    contacts: params.contacts,
-    toolRegistry: registry,
   });
 
   Object.assign(tools, chatTools);
-  Object.assign(tools, toolsetTools);
+  Object.assign(tools, chatContactSendTools);
   Object.assign(tools, chatHistoryTools);
   Object.assign(tools, skillsTools);
   Object.assign(tools, execShellTools);
@@ -80,5 +73,5 @@ export function createAgentToolSet(params: {
     void params.logger?.log("info", `Registered ${mcpTools.length} MCP tool(s)`);
   }
 
-  return { tools, registry };
+  return { tools };
 }

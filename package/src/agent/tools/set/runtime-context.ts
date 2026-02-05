@@ -8,8 +8,6 @@
 
 import type { ShipConfig } from "../../../utils.js";
 import type { ChatManager } from "../../../chat/manager.js";
-import type { ContactBook } from "../../../chat/contacts.js";
-import type { AgentToolRegistry } from "./tool-registry.js";
 
 export interface ToolRuntimeContext {
   projectRoot: string;
@@ -25,21 +23,9 @@ export interface ToolRuntimeContext {
   chatManager: ChatManager;
 
   /**
-   * ContactBook（联系人簿）。
-   *
-   * 说明：
-   * - 某些工具（或 ToolSet）需要复用同一个 ContactBook 实例，避免重复读盘/重复缓存。
+   * 工具运行时上下文只负责“读/写 chat 历史、读取配置”等基础能力；
+   * 不提供运行中动态追加工具的机制。
    */
-  contacts: ContactBook;
-
-  /**
-   * ToolRegistry（可变工具表）。
-   *
-   * 关键点：
-   * - 支持运行中通过 `toolset_load` 追加工具。
-   * - 由 Agent 初始化时创建，并在进程内复用。
-   */
-  toolRegistry: AgentToolRegistry;
 }
 
 let ctx: ToolRuntimeContext | null = null;

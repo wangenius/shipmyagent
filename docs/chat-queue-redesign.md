@@ -210,7 +210,7 @@ type ChatEnvelope = {
   - `idempotency.ts`（replyKey 模型）
 - `chat/transcript/`  
   - `store.ts`（现有 ChatStore）
-  - `contacts.ts`（现有 ContactBook）
+  - `contacts.ts`（已移除：改为按 chatKey 投递）
 
 ## 6. 行为示例（你提到的 3 个场景）
 
