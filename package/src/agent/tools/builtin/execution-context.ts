@@ -55,6 +55,15 @@ export type ToolExecutionContext = {
    * Hard ceiling to prevent runaway context growth in a single run.
    */
   maxInjectedMessages: number;
+
+  /**
+   * 工具调用计数器（本次 agent run 内）。
+   *
+   * 关键用途（中文）
+   * - 为关键工具提供“预算/限流”能力，例如：允许多次 `chat_send`，但在异常情况下避免无限循环刷屏。
+   * - 仅影响本次 run，不落盘；不用于跨请求统计。
+   */
+  toolCallCounts: Map<string, number>;
 };
 
 /**

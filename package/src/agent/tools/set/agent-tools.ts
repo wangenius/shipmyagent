@@ -20,6 +20,11 @@ import { chatTools } from "../builtin/chat.js";
 import { chatHistoryTools } from "../builtin/chat-history.js";
 import { ChatManager } from "../../../chat/manager.js";
 import { chatContactSendTools } from "../builtin/chat-contact-send.js";
+import { Tool } from "ai";
+
+import { getLogger } from "@/telemetry/index.js";
+import { getShipRuntimeContext } from "@/server/ShipRuntimeContext.js";
+const logger = getLogger(getShipRuntimeContext().projectRoot, "info");
 
 export interface AgentToolsLogger {
   info(message: string): void;
@@ -35,12 +40,11 @@ export interface AgentToolsLogger {
 export function createAgentTools(params: {
   projectRoot: string;
   config: ShipConfig;
-  logger?: AgentToolsLogger | null;
-}): { tools: Record<string, any> } {
+}): Record<string, Tool> {
   loadProjectDotenv(params.projectRoot);
   const chatManager = new ChatManager(params.projectRoot);
 
-  const tools: Record<string, any> = {};
+  const tools: Record<string, Tool> = {};
 
   setToolRuntimeContext({
     projectRoot: params.projectRoot,
@@ -56,7 +60,7 @@ export function createAgentTools(params: {
 
   const mcpManager = getMcpManager({
     projectRoot: params.projectRoot,
-    logger: params.logger ?? null,
+    logger: logger ?? null,
   });
 
   const mcpTools = mcpManager.getAllTools();
@@ -70,8 +74,8 @@ export function createAgentTools(params: {
   }
 
   if (mcpTools.length > 0) {
-    void params.logger?.log("info", `Registered ${mcpTools.length} MCP tool(s)`);
+    void logger.log("info", `Registered ${mcpTools.length} MCP tool(s)`);
   }
 
-  return { tools };
+  return tools;
 }

@@ -111,6 +111,29 @@ export interface ShipConfig {
        */
       correctionMaxChars?: number;
     };
+
+    /**
+     * Chat 出站（egress）控制：用于限制工具发送、避免重复与无限循环刷屏。
+     *
+     * 设计动机（中文）
+     * - 模型在 tool-loop 中可能重复调用 `chat_send`（甚至参数完全相同）。
+     * - 这里提供“允许多次发送，但有上限 + 幂等去重”的机制，避免在某些异常提示/对齐失败时刷屏。
+     */
+    chatEgress?: {
+      /**
+       * 单次 agent run 内，`chat_send` 允许调用的最大次数。
+       *
+       * 建议
+       * - 默认 3：允许「先确认/再补充/最后总结」这种多段式对话，但避免进入无限循环。
+       */
+      chatSendMaxCallsPerRun?: number;
+
+      /**
+       * 是否启用 `chat_send` 幂等去重（基于 inbound messageId + 回复内容 hash）。
+       * 默认：true
+       */
+      chatSendIdempotency?: boolean;
+    };
   };
   permissions?: {
     read_repo: boolean | { paths?: string[] };

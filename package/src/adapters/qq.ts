@@ -74,6 +74,14 @@ export class QQBot extends BaseChatAdapter {
   private useSandbox: boolean = false;
   private msgSeqByMessageKey: Map<string, number> = new Map();
   private readonly qqEventCapture: QQEventCaptureConfig;
+  /**
+   * 机器人自身的 userId（从 READY 事件里捕获）。
+   *
+   * 关键点（中文）
+   * - 部分平台/事件流可能会把机器人自己发出的消息也作为入站事件推回来。
+   * - 如果不做过滤，可能出现“自己回复自己”导致的无限循环刷屏。
+   */
+  private botUserId: string = "";
 
   constructor(
     appId: string,
@@ -568,6 +576,13 @@ export class QQBot extends BaseChatAdapter {
         this.wsSessionId = data.session_id;
         this.logger.info(`QQ Bot 已就绪，WS Session ID: ${this.wsSessionId}`);
         this.logger.info(`用户: ${data.user?.username || "N/A"}`);
+        // best-effort：记录 bot 自己的 userId，供入站过滤使用
+        this.botUserId =
+          typeof data.user?.id === "string"
+            ? data.user.id.trim()
+            : typeof data.user?.user_id === "string"
+              ? data.user.user_id.trim()
+              : "";
         break;
 
       case EventType.RESUMED:
@@ -605,6 +620,15 @@ export class QQBot extends BaseChatAdapter {
     const userMessage = this.extractTextContent(content);
     const actor = this.extractAuthorIdentity(author);
 
+    if (actor.userId && this.botUserId && actor.userId === this.botUserId) {
+      this.logger.debug("忽略机器人自身消息（group）", {
+        messageId,
+        groupId,
+        botUserId: this.botUserId,
+      });
+      return;
+    }
+
     this.logger.info(`收到群聊消息 [${groupId}]: ${userMessage}`);
 
     // 检查是否是命令
@@ -631,6 +655,14 @@ export class QQBot extends BaseChatAdapter {
     const chatId = actor.userId || "";
 
     const userMessage = this.extractTextContent(content);
+
+    if (actor.userId && this.botUserId && actor.userId === this.botUserId) {
+      this.logger.debug("忽略机器人自身消息（c2c）", {
+        messageId,
+        botUserId: this.botUserId,
+      });
+      return;
+    }
 
     this.logger.info(
       `收到私聊消息 [${actor.userId || "unknown"}]: ${userMessage}`,
@@ -664,6 +696,15 @@ export class QQBot extends BaseChatAdapter {
 
     const userMessage = this.extractTextContent(content);
     const actor = this.extractAuthorIdentity(author);
+
+    if (actor.userId && this.botUserId && actor.userId === this.botUserId) {
+      this.logger.debug("忽略机器人自身消息（channel）", {
+        messageId,
+        channelId,
+        botUserId: this.botUserId,
+      });
+      return;
+    }
 
     this.logger.info(`收到频道消息 [${channelId}]: ${userMessage}`);
 

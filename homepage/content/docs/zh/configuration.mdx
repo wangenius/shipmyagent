@@ -239,6 +239,24 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 }
 ```
 
+**context.chatEgress** (object, 可选)
+
+用于控制出站消息发送的安全策略（tool-strict）：
+
+- 限制单次 run 内 `chat_send` 最大调用次数（允许多次发送，但避免无限循环刷屏）。
+- 在能拿到稳定的 inbound `messageId` 时，对 `chat_send` 做 best-effort 幂等去重（同一条入站消息 + 相同回复内容只发送一次）。
+
+```json
+{
+  "context": {
+    "chatEgress": {
+      "chatSendMaxCallsPerRun": 3,
+      "chatSendIdempotency": true
+    }
+  }
+}
+```
+
 #### permissions (object, 必需)
 
 控制 agent 可以做什么。

@@ -257,6 +257,24 @@ Controls how much prior chat transcript is injected into each agent run:
 }
 ```
 
+**context.chatEgress** (object, optional)
+
+Controls outbound chat delivery safety (tool-strict):
+
+- Limits how many times the model can call `chat_send` in a single run (prevents runaway loops).
+- Best-effort idempotency for `chat_send` when a stable inbound `messageId` exists (dedupe: same inbound message + same reply text).
+
+```json
+{
+  "context": {
+    "chatEgress": {
+      "chatSendMaxCallsPerRun": 3,
+      "chatSendIdempotency": true
+    }
+  }
+}
+```
+
 #### permissions (object, required)
 
 Control what the agent can do.

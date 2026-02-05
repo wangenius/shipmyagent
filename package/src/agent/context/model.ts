@@ -8,25 +8,20 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { type LanguageModel } from "ai";
 import { createLlmLoggingFetch } from "../../telemetry/index.js";
 import type { ShipConfig } from "../../utils.js";
+import { getLogger } from "@/telemetry/index.js";
+import { getShipRuntimeContext } from "@/server/ShipRuntimeContext.js";
+const logger = getLogger(getShipRuntimeContext().projectRoot, "info");
 
-type AgentLoggerLike = {
-  log: (
-    level: string,
-    message: string,
-    data?: Record<string, unknown>,
-  ) => Promise<void>;
-};
 
 export async function createModel(input: {
   config: ShipConfig;
-  logger: AgentLoggerLike;
 }): Promise<LanguageModel> {
   const { provider, apiKey, baseUrl, model } = input.config.llm;
   const resolvedModel = model === "${}" ? undefined : model;
   const resolvedBaseUrl = baseUrl === "${}" ? undefined : baseUrl;
 
   if (!resolvedModel) {
-    await input.logger.log("warn", "No LLM model configured");
+    await logger.log("warn", "No LLM model configured");
     throw Error("no LLM Model Configured");
   }
 
@@ -44,7 +39,7 @@ export async function createModel(input: {
   }
 
   if (!resolvedApiKey) {
-    await input.logger.log(
+    await logger.log(
       "warn",
       "No API Key configured, will use simulation mode",
     );
@@ -55,7 +50,7 @@ export async function createModel(input: {
   const logLlmMessages = typeof configLog === "boolean" ? configLog : true;
 
   const loggingFetch = createLlmLoggingFetch({
-    logger: input.logger as any,
+    logger: logger,
     enabled: logLlmMessages,
   });
 

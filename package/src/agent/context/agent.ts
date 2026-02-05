@@ -1,5 +1,7 @@
 import {
+  generateText,
   stepCountIs,
+  Tool,
   ToolLoopAgent,
   type LanguageModel,
   type ModelMessage,
@@ -11,7 +13,10 @@ import {
   getShipProfileOtherPath,
   getShipProfilePrimaryPath,
 } from "../../utils.js";
-import { buildContextSystemPrompt, transformPromptsIntoSystemMessages } from "./prompt.js";
+import {
+  buildContextSystemPrompt,
+  transformPromptsIntoSystemMessages,
+} from "./prompt.js";
 import { createModel } from "./model.js";
 import fs from "fs-extra";
 import {
@@ -28,6 +33,7 @@ import { chatRequestContext } from "../../chat/request-context.js";
 import { withToolExecutionContext } from "../tools/builtin/execution-context.js";
 import { createAgentTools } from "../tools/set/agent-tools.js";
 import { loadChatTranscriptAsOneAssistantMessage } from "../../chat/transcript.js";
+import { openai } from "@ai-sdk/openai";
 
 export class Agent {
   // 配置
@@ -35,7 +41,9 @@ export class Agent {
   // 是否初始化
   private initialized: boolean = false;
   // 模型
-  private model: LanguageModel | null = null;
+  private model: LanguageModel = openai("gpt-5.2");
+
+  private tools: Record<string, Tool> = {};
   // Agent 执行逻辑
   private agent: ToolLoopAgent<never, any, any> | null = null;
 
@@ -48,41 +56,19 @@ export class Agent {
   }
 
   async initialize(): Promise<void> {
-    const logger = this.getLogger();
     try {
-      await logger.log(
-        "info",
-        "Initializing Agent Runtime with ToolLoopAgent (AI SDK v6)",
-      );
-      await logger.log(
-        "info",
-        `Agent.md content length: ${this.configs.systems?.length || 0} chars`,
-      );
-
-      const tools = createAgentTools({
+      this.tools = createAgentTools({
         projectRoot: this.configs.projectRoot,
         config: this.configs.config,
-        logger,
       });
 
       this.model = await createModel({
         config: this.configs.config,
-        logger,
-      });
-
-      this.agent = new ToolLoopAgent({
-        model: this.model,
-        instructions: transformPromptsIntoSystemMessages([
-          ...this.configs.systems,
-        ]),
-        tools: tools.tools,
-        stopWhen: [stepCountIs(30)],
       });
 
       this.initialized = true;
-
-      await logger.log("info", "Agent Runtime initialized with ToolLoopAgent");
     } catch (error) {
+      const logger = this.getLogger();
       await logger.log("error", "Agent Runtime initialization failed", {
         error: String(error),
       });
@@ -286,11 +272,21 @@ export class Agent {
           currentUserMessageIndex,
           injectedFingerprints: new Set(),
           maxInjectedMessages: 120,
+          toolCallCounts: new Map(),
         },
         () =>
-          withLlmRequestContext({ chatKey, requestId }, () =>
-            this.agent!.generate({
+          withLlmRequestContext({ chatKey, requestId }, () => {
+            return generateText({
+              model: this.model,
+              system: transformPromptsIntoSystemMessages([
+                ...this.configs.systems,
+              ]),
+              prepareStep: (messages) => {
+                return {};
+              },
               messages: inFlightMessages,
+              tools: this.tools,
+              stopWhen: [stepCountIs(30)],
               onStepFinish: async (step) => {
                 try {
                   const userTextFromStep = extractUserFacingTextFromStep(step);
@@ -324,8 +320,8 @@ export class Agent {
                   // ignore
                 }
               },
-            }),
-          ),
+            });
+          }),
       );
 
       for (const step of result.steps || []) {
