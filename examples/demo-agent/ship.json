@@ -21,12 +21,16 @@
       "botToken": "${TELEGRAM_BOT_TOKEN}"
     },
     "feishu": {
-      "enabled": false,
+      "enabled": true,
+      "appId": "${FEISHU_APP_ID}",
+      "appSecret": "${FEISHU_APP_SECRET}",
       "domain": "https://open.feishu.cn"
     },
     "qq": {
-      "enabled": false,
-      "sandbox": false
+      "enabled": true,
+      "appId": "${QQ_APP_ID}",
+      "appSecret": "${QQ_APP_SECRET}",
+      "sandbox": true
     }
   }
 }

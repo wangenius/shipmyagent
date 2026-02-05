@@ -26,7 +26,7 @@ The interactive guide will ask for the following information:
 
 - **Agent Name**: Give your Agent a name.
 - **LLM Model**: Select the model you want to use (Recommended `Claude 3.5 Sonnet` for the best coding experience).
-- **Telegram Integration**: Whether to enable Telegram Bot (Optional).
+- **Adapters (Multi-select)**: Optionally enable Telegram / Feishu / QQ. Unselected adapters won't be written to `ship.json`.
 
 After initialization, it will create in your directory:
 
@@ -65,7 +65,7 @@ You will see output similar to the following:
 === ShipMyAgent Started ===
 ...
 Task Scheduler Initialized
-Telegram Integration Enabled
+(Optional) An adapter is enabled (e.g. Telegram)
 ```
 
 Now, your Agent is online and starting to run according to the configuration!

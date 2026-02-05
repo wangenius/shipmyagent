@@ -1,6 +1,18 @@
-import path from 'path';
-import prompts from 'prompts';
-import fs from 'fs-extra';
+/**
+ * `shipmyagent init`：在目标目录生成最小可用的 ShipMyAgent 工程骨架与配置文件。
+ *
+ * 目标
+ * - 生成 `Agent.md` / `ship.json` / `.ship/` 目录结构与 schema 文件
+ * - 通过交互式问题收集必要配置（模型、Adapters 等）
+ *
+ * 设计要点
+ * - Adapters 支持多选：仅写入用户选择的 adapters（未选择的不出现在 `ship.json`）
+ * - 避免写入无意义的默认值：能省则省，保持配置简洁
+ */
+
+import path from "path";
+import prompts from "prompts";
+import fs from "fs-extra";
 import {
   getAgentMdPath,
   getShipJsonPath,
@@ -24,24 +36,24 @@ import {
   DEFAULT_SHIP_JSON,
   MODEL_CONFIGS,
   ShipConfig,
-} from '../utils.js';
-import { SHIP_JSON_SCHEMA } from '../schemas/ship.schema.js';
-import { MCP_JSON_SCHEMA } from '../schemas/mcp.schema.js';
+} from "../utils.js";
+import { SHIP_JSON_SCHEMA } from "../schemas/ship.schema.js";
+import { MCP_JSON_SCHEMA } from "../schemas/mcp.schema.js";
+import type { AdapterKey, InitOptions } from "../types/init.js";
 
-interface InitOptions {
-  force?: boolean;
-}
-
-export async function initCommand(cwd: string = '.', options: InitOptions = {}): Promise<void> {
+export async function initCommand(
+  cwd: string = ".",
+  options: InitOptions = {},
+): Promise<void> {
   const projectRoot = path.resolve(cwd);
-  const LLM_API_KEY = '${LLM_API_KEY}';
-  const LLM_BASE_URL = '${LLM_BASE_URL}';
-  const LLM_MODEL = '${LLM_MODEL}';
-  const TELEGRAM_BOT_TOKEN = '${TELEGRAM_BOT_TOKEN}';
-  const FEISHU_APP_ID = '${FEISHU_APP_ID}';
-  const FEISHU_APP_SECRET = '${FEISHU_APP_SECRET}';
-  const QQ_APP_ID = '${QQ_APP_ID}';
-  const QQ_APP_SECRET = '${QQ_APP_SECRET}';
+  const LLM_API_KEY = "${LLM_API_KEY}";
+  const LLM_BASE_URL = "${LLM_BASE_URL}";
+  const LLM_MODEL = "${LLM_MODEL}";
+  const TELEGRAM_BOT_TOKEN = "${TELEGRAM_BOT_TOKEN}";
+  const FEISHU_APP_ID = "${FEISHU_APP_ID}";
+  const FEISHU_APP_SECRET = "${FEISHU_APP_SECRET}";
+  const QQ_APP_ID = "${QQ_APP_ID}";
+  const QQ_APP_SECRET = "${QQ_APP_SECRET}";
 
   console.log(`🚀 Initializing ShipMyAgent project: ${projectRoot}`);
 
@@ -52,14 +64,14 @@ export async function initCommand(cwd: string = '.', options: InitOptions = {}):
   if (existingAgentMd || existingShipJson) {
     if (!options.force) {
       const response = await prompts({
-        type: 'confirm',
-        name: 'overwrite',
-        message: 'Project already initialized. Overwrite existing configuration?',
+        type: "confirm",
+        name: "overwrite",
+        message: "Project already initialized. Overwrite existing configuration?",
         initial: false,
       });
 
       if (!response.overwrite) {
-        console.log('❌ Initialization cancelled');
+        console.log("❌ Initialization cancelled");
         return;
       }
     }
@@ -68,45 +80,47 @@ export async function initCommand(cwd: string = '.', options: InitOptions = {}):
   // Collect configuration information
   const response = await prompts([
     {
-      type: 'text',
-      name: 'name',
-      message: 'Agent name',
+      type: "text",
+      name: "name",
+      message: "Agent name",
       initial: path.basename(projectRoot),
     },
     {
-      type: 'select',
-      name: 'model',
-      message: 'Select LLM model',
+      type: "select",
+      name: "model",
+      message: "Select LLM model",
       choices: [
-        { title: 'Claude Sonnet 4', value: 'claude-sonnet-4-5' },
-        { title: 'Claude Haiku', value: 'claude-haiku' },
-        { title: 'Claude 3.5 Sonnet', value: 'claude-3-5-sonnet-20241022' },
-        { title: 'Claude 3 Opus', value: 'claude-3-opus-20240229' },
-        { title: 'GPT-4', value: 'gpt-4' },
-        { title: 'GPT-4 Turbo', value: 'gpt-4-turbo' },
-        { title: 'GPT-4o', value: 'gpt-4o' },
-        { title: 'GPT-3.5 Turbo', value: 'gpt-3.5-turbo' },
-        { title: 'DeepSeek Chat', value: 'deepseek-chat' },
-        { title: 'Custom model', value: 'custom' },
+        { title: "Claude Sonnet 4", value: "claude-sonnet-4-5" },
+        { title: "Claude Haiku", value: "claude-haiku" },
+        { title: "Claude 3.5 Sonnet", value: "claude-3-5-sonnet-20241022" },
+        { title: "Claude 3 Opus", value: "claude-3-opus-20240229" },
+        { title: "GPT-4", value: "gpt-4" },
+        { title: "GPT-4 Turbo", value: "gpt-4-turbo" },
+        { title: "GPT-4o", value: "gpt-4o" },
+        { title: "GPT-3.5 Turbo", value: "gpt-3.5-turbo" },
+        { title: "DeepSeek Chat", value: "deepseek-chat" },
+        { title: "Custom model", value: "custom" },
       ],
       initial: 0,
     },
     {
-      type: 'select',
-      name: 'integration',
-      message: 'Select messaging integration',
+      // 关键交互：Adapters 允许多选，未选择的就不写入 ship.json
+      type: "multiselect",
+      name: "adapters",
+      message: "Select adapters (multi-select)",
       choices: [
-        { title: 'None', value: 'none' },
-        { title: 'Telegram', value: 'telegram' },
-        { title: 'Feishu', value: 'feishu' },
-        { title: 'QQ', value: 'qq' },
+        { title: "Telegram", value: "telegram" },
+        { title: "Feishu", value: "feishu" },
+        { title: "QQ", value: "qq" },
       ],
-      initial: 0,
     },
     {
-      type: (prev, values) => (values.integration === 'qq' ? 'confirm' : null),
-      name: 'qqSandbox',
-      message: 'Use QQ sandbox environment?',
+      type: (prev, values) =>
+        Array.isArray(values.adapters) && values.adapters.includes("qq")
+          ? "confirm"
+          : null,
+      name: "qqSandbox",
+      message: "Use QQ sandbox environment?",
       initial: false,
     },
   ]);
@@ -137,47 +151,58 @@ Help users understand and work with their codebase by exploring, analyzing, and 
 
   // Save ship.json
   // Build LLM configuration
-  const selectedModel = response.model || 'claude-sonnet-4-5';
+  const selectedModel = response.model || "claude-sonnet-4-5";
   const modelTemplate = MODEL_CONFIGS[selectedModel as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.custom;
 
   const llmConfig = {
     provider: modelTemplate.provider,
-    model: selectedModel === 'custom' ? LLM_MODEL : selectedModel, // custom needs env
-    baseUrl: selectedModel === 'custom' ? LLM_BASE_URL : modelTemplate.baseUrl,
+    model: selectedModel === "custom" ? LLM_MODEL : selectedModel, // custom needs env
+    baseUrl: selectedModel === "custom" ? LLM_BASE_URL : modelTemplate.baseUrl,
     apiKey: LLM_API_KEY,
     temperature: 0.7,
   };
 
+  const selectedAdapters = new Set<AdapterKey>(
+    Array.isArray(response.adapters) ? (response.adapters as AdapterKey[]) : [],
+  );
+
+  const adaptersConfig: NonNullable<ShipConfig["adapters"]> = {};
+  if (selectedAdapters.has("telegram")) {
+    adaptersConfig.telegram = {
+      enabled: true,
+      botToken: TELEGRAM_BOT_TOKEN,
+      chatId: undefined,
+    };
+  }
+  if (selectedAdapters.has("feishu")) {
+    adaptersConfig.feishu = {
+      enabled: true,
+      appId: FEISHU_APP_ID,
+      appSecret: FEISHU_APP_SECRET,
+      domain: "https://open.feishu.cn",
+    };
+  }
+  if (selectedAdapters.has("qq")) {
+    adaptersConfig.qq = {
+      enabled: true,
+      appId: QQ_APP_ID,
+      appSecret: QQ_APP_SECRET,
+      sandbox: Boolean(response.qqSandbox),
+    };
+  }
+
   const shipConfig: ShipConfig = {
     $schema: DEFAULT_SHIP_JSON.$schema,
     name: response.name || path.basename(projectRoot),
-    version: '1.0.0',
+    version: "1.0.0",
     start: {
       port: 3000,
-      host: '0.0.0.0',
+      host: "0.0.0.0",
       interactiveWeb: false,
       interactivePort: 3001,
     },
     llm: llmConfig,
-    adapters: {
-      telegram: {
-        enabled: response.integration === 'telegram',
-        botToken: response.integration === 'telegram' ? TELEGRAM_BOT_TOKEN : undefined,
-        chatId: undefined,
-      },
-      feishu: {
-        enabled: response.integration === 'feishu',
-        appId: response.integration === 'feishu' ? FEISHU_APP_ID : undefined,
-        appSecret: response.integration === 'feishu' ? FEISHU_APP_SECRET : undefined,
-        domain: 'https://open.feishu.cn',
-      },
-      qq: {
-        enabled: response.integration === 'qq',
-        appId: response.integration === 'qq' ? QQ_APP_ID : undefined,
-        appSecret: response.integration === 'qq' ? QQ_APP_SECRET : undefined,
-        sandbox: response.integration === 'qq' ? Boolean(response.qqSandbox) : false,
-      },
-    },
+    ...(Object.keys(adaptersConfig).length > 0 ? { adapters: adaptersConfig } : {}),
   };
 
   await saveJson(shipJsonPath, shipConfig);
@@ -194,7 +219,7 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     getShipChatRootDirPath(projectRoot),
     getShipPublicDirPath(projectRoot),
     getShipConfigDirPath(projectRoot),
-    path.join(getShipDirPath(projectRoot), 'schema'),
+    path.join(getShipDirPath(projectRoot), "schema"),
     getShipDebugDirPath(projectRoot),
   ];
 
@@ -224,46 +249,54 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   await ensureDir(path.dirname(mcpSchemaPath));
   await ensureDir(path.dirname(mcpJsonPath));
   await saveJson(mcpSchemaPath, MCP_JSON_SCHEMA);
-  await saveJson(mcpJsonPath, { $schema: '../schema/mcp.schema.json', servers: {} });
+  await saveJson(mcpJsonPath, { $schema: "../schema/mcp.schema.json", servers: {} });
   console.log(`✅ Created .ship/config/mcp.json (MCP configuration)`);
 
   console.log('\n🎉 Initialization complete!\n');
   console.log(`📦 Current model: ${llmConfig.provider} / ${llmConfig.model}`);
   console.log(`🌐 API URL: ${llmConfig.baseUrl}\n`);
 
-  if (response.integration === 'feishu') {
-    console.log('📱 Feishu integration enabled');
-    console.log('   Please configure FEISHU_APP_ID and FEISHU_APP_SECRET in ship.json');
-    console.log('   or set environment variables: FEISHU_APP_ID and FEISHU_APP_SECRET\n');
-  } else if (response.integration === 'telegram') {
-    console.log('📱 Telegram integration enabled');
-    console.log('   Please configure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID (optional) in ship.json');
-    console.log('   or set environment variables: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID\n');
-  } else if (response.integration === 'qq') {
-    console.log('📱 QQ integration enabled');
-    console.log('   Please configure QQ_APP_ID and QQ_APP_SECRET in ship.json');
-    console.log('   or set environment variables: QQ_APP_ID and QQ_APP_SECRET\n');
-    console.log('   Optional: set QQ_SANDBOX=true to use sandbox environment\n');
+  if (selectedAdapters.has("feishu")) {
+    console.log("📱 Feishu adapter enabled");
+    console.log("   Please configure FEISHU_APP_ID and FEISHU_APP_SECRET in ship.json");
+    console.log("   or set environment variables: FEISHU_APP_ID and FEISHU_APP_SECRET\n");
+  }
+  if (selectedAdapters.has("telegram")) {
+    console.log("📱 Telegram adapter enabled");
+    console.log("   Please configure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID (optional) in ship.json");
+    console.log("   or set environment variables: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID\n");
+  }
+  if (selectedAdapters.has("qq")) {
+    console.log("📱 QQ adapter enabled");
+    console.log("   Please configure QQ_APP_ID and QQ_APP_SECRET in ship.json");
+    console.log("   or set environment variables: QQ_APP_ID and QQ_APP_SECRET\n");
+    console.log("   Optional: set QQ_SANDBOX=true to use sandbox environment\n");
   }
 
-  console.log('Next steps:');
-  console.log('  1. Edit Agent.md to customize agent behavior');
-  console.log('  2. Edit ship.json to modify LLM configuration (baseUrl, apiKey, temperature, etc.)');
-  console.log('  3. (Optional) Edit .ship/config/mcp.json to configure MCP servers for extended capabilities');
-  if (response.integration === 'feishu') {
-    console.log('  4. Configure Feishu App ID and App Secret');
-    console.log('  5. Run "shipmyagent start" to start the agent\n');
-  } else if (response.integration === 'telegram') {
-    console.log('  4. Configure Telegram Bot Token and Chat ID (optional)');
-    console.log('  5. Run "shipmyagent start" to start the agent\n');
-  } else if (response.integration === 'qq') {
-    console.log('  4. Configure QQ App ID and App Secret');
-    console.log('  5. Run "shipmyagent start" to start the agent\n');
-  } else {
-    console.log('  4. Run "shipmyagent start" to start the agent\n');
+  const nextSteps: string[] = [
+    "Edit Agent.md to customize agent behavior",
+    "Edit ship.json to modify LLM configuration (baseUrl, apiKey, temperature, etc.)",
+    "(Optional) Edit .ship/config/mcp.json to configure MCP servers for extended capabilities",
+  ];
+
+  if (selectedAdapters.has("telegram")) {
+    nextSteps.push("Configure Telegram Bot Token and Chat ID (optional)");
   }
+  if (selectedAdapters.has("feishu")) {
+    nextSteps.push("Configure Feishu App ID and App Secret");
+  }
+  if (selectedAdapters.has("qq")) {
+    nextSteps.push("Configure QQ App ID and App Secret");
+  }
+  nextSteps.push('Run "shipmyagent start" to start the agent');
+
+  console.log("Next steps:");
+  for (const [idx, line] of nextSteps.entries()) {
+    console.log(`  ${idx + 1}. ${line}`);
+  }
+  console.log("");
   console.log('💡 Tip: API Key is recommended to use environment variables (e.g. ${ANTHROPIC_API_KEY} or ${OPENAI_API_KEY})\n');
-  console.log('🔌 MCP Support: Configure MCP servers in .ship/config/mcp.json to connect to databases, APIs, and more');
-  console.log('   Learn more: https://modelcontextprotocol.io\n');
-  console.log('To switch models or modify configuration, edit the llm field in ship.json directly.\n');
+  console.log("🔌 MCP Support: Configure MCP servers in .ship/config/mcp.json to connect to databases, APIs, and more");
+  console.log("   Learn more: https://modelcontextprotocol.io\n");
+  console.log("To switch models or modify configuration, edit the llm field in ship.json directly.\n");
 }

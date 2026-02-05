@@ -26,7 +26,7 @@ shipmyagent init
 
 - **Agent 名称**：为你的 Agent 起个名字。
 - **LLM 模型**：选择你想要使用的模型（推荐 `Claude 3.5 Sonnet` 以获得最佳编码体验）。
-- **Telegram 集成**：是否启用 Telegram Bot（可选）。
+- **Adapters（可多选）**：可选启用 Telegram / 飞书 / QQ；未选择的 adapters 不会写入 `ship.json`。
 
 初始化完成后，它会在你的目录中创建：
 
@@ -65,7 +65,7 @@ shipmyagent .
 === ShipMyAgent 启动 ===
 ...
 任务调度器已初始化
-Telegram 集成已启用
+（可选）某个 Adapter 已启用（例如 Telegram）
 ```
 
 现在，你的 Agent 已经在线并开始根据配置运行了！
