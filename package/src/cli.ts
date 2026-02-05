@@ -2,7 +2,10 @@
 
 import { Command } from "commander";
 import { initCommand } from "./commands/init.js";
+import { runCommand } from "./commands/run.js";
 import { startCommand } from "./commands/start.js";
+import { stopCommand } from "./commands/stop.js";
+import { restartCommand } from "./commands/restart.js";
 import { aliasCommand } from "./commands/alias.js";
 import { readFileSync } from "fs";
 import { join, dirname, basename } from "path";
@@ -52,10 +55,29 @@ const init = program
   .helpOption("--help", "display help for command")
   .action(initCommand);
 
-// Start command
+// Run command (foreground)
+const run = program
+  .command("run [path]")
+  .description("前台启动 Agent Runtime（当前终端运行）")
+  .option("-p, --port <port>", "服务端口（可在 ship.json 的 start.port 配置）", parsePort)
+  .option("-h, --host <host>", "服务主机（可在 ship.json 的 start.host 配置）")
+  .option(
+    "--interactive-web [enabled]",
+    "启动交互式 Web 界面（可在 ship.json 的 start.interactiveWeb 配置）",
+    parseBoolean,
+  )
+  .option(
+    "--interactive-port <port>",
+    "交互式 Web 界面端口（可在 ship.json 的 start.interactivePort 配置）",
+    parsePort,
+  )
+  .helpOption("--help", "display help for command")
+  .action(runCommand);
+
+// Start command (daemon)
 const start = program
   .command("start [path]")
-  .description("启动 Agent Runtime")
+  .description("后台启动 Agent Runtime（终端退出也保持运行）")
   .option("-p, --port <port>", "服务端口（可在 ship.json 的 start.port 配置）", parsePort)
   .option("-h, --host <host>", "服务主机（可在 ship.json 的 start.host 配置）")
   .option(
@@ -71,6 +93,32 @@ const start = program
   .helpOption("--help", "display help for command")
   .action(startCommand);
 
+// Stop command (daemon)
+const stop = program
+  .command("stop [path]")
+  .description("停止后台 Agent 服务器（daemon）")
+  .helpOption("--help", "display help for command")
+  .action(stopCommand);
+
+// Restart command (daemon)
+const restart = program
+  .command("restart [path]")
+  .description("重启后台 Agent 服务器（daemon）")
+  .option("-p, --port <port>", "服务端口（可在 ship.json 的 start.port 配置）", parsePort)
+  .option("-h, --host <host>", "服务主机（可在 ship.json 的 start.host 配置）")
+  .option(
+    "--interactive-web [enabled]",
+    "启动交互式 Web 界面（可在 ship.json 的 start.interactiveWeb 配置）",
+    parseBoolean,
+  )
+  .option(
+    "--interactive-port <port>",
+    "交互式 Web 界面端口（可在 ship.json 的 start.interactivePort 配置）",
+    parsePort,
+  )
+  .helpOption("--help", "display help for command")
+  .action(restartCommand);
+
 const alias = program
   .command("alias")
   .description("在 .zshrc / .bashrc 中写入 `alias sma=\"shipmyagent\"`")
@@ -80,14 +128,14 @@ const alias = program
   .helpOption("--help", "display help for command")
   .action(aliasCommand);
 
-// Default: `shipmyagent` / `shipmyagent .` / `shipmyagent [start-options]` => `shipmyagent start [path]`
+// Default: `shipmyagent` / `shipmyagent .` / `shipmyagent [run-options]` => `shipmyagent run [path]`
 const firstArg = process.argv[2];
 if (
   !firstArg ||
-  (![init.name(), start.name(), alias.name(), "help"].includes(firstArg) &&
+  (![init.name(), run.name(), start.name(), stop.name(), restart.name(), alias.name(), "help"].includes(firstArg) &&
     !["--help", "-v", "--version"].includes(firstArg))
 ) {
-  process.argv.splice(2, 0, "start");
+  process.argv.splice(2, 0, "run");
 }
 
 program.parse();

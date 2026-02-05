@@ -12,10 +12,11 @@ description: ShipMyAgent 命令行界面完整参考
 | 命令 | 描述 |
 |------|------|
 | `shipmyagent init` | 初始化新项目 |
-| `shipmyagent start` | 启动 agent 服务器 |
+| `shipmyagent .` / `shipmyagent run` | 前台启动（当前终端运行） |
+| `shipmyagent start` | 后台启动（终端关闭也保持运行） |
 | `shipmyagent alias` | 安装 shell alias `sma` |
-| `shipmyagent stop` | 停止 agent 服务器 |
-| `shipmyagent restart` | 重启 agent 服务器 |
+| `shipmyagent stop` | 停止后台 agent 服务器 |
+| `shipmyagent restart` | 重启后台 agent 服务器 |
 | `shipmyagent chat` | 向 agent 发送消息 |
 | `shipmyagent validate` | 验证配置 |
 | `shipmyagent doctor` | 运行健康诊断 |
@@ -66,19 +67,21 @@ shipmyagent init --no-git
 
 ### `shipmyagent start`
 
-启动 ShipMyAgent 服务器。
+后台启动 ShipMyAgent 服务器（daemon 模式，终端退出后仍继续运行）。
 
 ```bash
 shipmyagent start [选项] [path]
 ```
 
-也可以用更短的方式启动当前目录（等价于 `shipmyagent start .`）：
+前台启动（当前终端运行）推荐用更短的方式启动当前目录：
 
 ```bash
 shipmyagent .
 ```
 
 `shipmyagent start` 会读取 `ship.json` 里的 `start` 配置作为默认值；如果你在命令行里显式传参，则会覆盖 `ship.json`。
+
+后台启动的日志默认写入：`.ship/debug/shipmyagent.daemon.log`。
 
 **选项**：
 
@@ -88,30 +91,57 @@ shipmyagent .
 | `--host <host>` | `-h` | 服务器主机（默认：0.0.0.0）|
 | `--interactive-web [enabled]` |  | 启动交互式 Web 界面（默认：false）|
 | `--interactive-port <port>` |  | 交互式 Web 界面端口（默认：3001）|
-| `--daemon` | `-d` | 作为后台进程运行 |
-| `--log-level <level>` | `-l` | 日志级别（debug、info、warn、error）|
-| `--verbose` | `-v` | 启用详细输出 |
 
 **示例**：
 
 ```bash
-# 使用默认值启动
-shipmyagent start
-
-# 使用 `ship.json` 的 start 配置启动当前目录
+# 前台启动（当前终端）
 shipmyagent .
 
-# 在自定义端口上启动
+# 后台启动（终端退出也继续运行）
+shipmyagent start
+
+# 后台启动：自定义端口
 shipmyagent start --port 3001
 
-# 在后台运行
-shipmyagent start --daemon
+# 停止后台服务
+shipmyagent stop
 
-# 启用调试日志
-shipmyagent start --log-level debug --verbose
+# 重启后台服务
+shipmyagent restart
 ```
 
 ---
+
+### `shipmyagent run`
+
+前台启动 ShipMyAgent 服务器（当前终端运行）。
+
+```bash
+shipmyagent run [选项] [path]
+```
+
+说明：`shipmyagent .` 等价于 `shipmyagent run .`。
+
+---
+
+### `shipmyagent stop`
+
+停止后台启动的 ShipMyAgent 服务器（daemon）。
+
+```bash
+shipmyagent stop [path]
+```
+
+---
+
+### `shipmyagent restart`
+
+重启后台启动的 ShipMyAgent 服务器（daemon）。
+
+```bash
+shipmyagent restart [选项] [path]
+```
 
 ### `shipmyagent alias`
 

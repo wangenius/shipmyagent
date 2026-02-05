@@ -12,10 +12,11 @@ Complete reference for all ShipMyAgent CLI commands.
 | Command | Description |
 |---------|-------------|
 | `shipmyagent init` | Initialize a new project |
-| `shipmyagent start` | Start the agent server |
+| `shipmyagent .` / `shipmyagent run` | Start in foreground (current terminal) |
+| `shipmyagent start` | Start in background (daemon) |
 | `shipmyagent alias` | Install shell alias `sma` |
-| `shipmyagent stop` | Stop the agent server |
-| `shipmyagent restart` | Restart the agent server |
+| `shipmyagent stop` | Stop the background agent server |
+| `shipmyagent restart` | Restart the background agent server |
 | `shipmyagent chat` | Send a message to the agent |
 | `shipmyagent validate` | Validate configuration |
 | `shipmyagent doctor` | Run health diagnostics |
@@ -66,19 +67,21 @@ shipmyagent init --no-git
 
 ### `shipmyagent start`
 
-Start the ShipMyAgent server.
+Start the ShipMyAgent server in background (daemon mode, keeps running after terminal exit).
 
 ```bash
 shipmyagent start [options] [path]
 ```
 
-You can also start the current directory (equivalent to `shipmyagent start .`):
+For foreground start (current terminal), use:
 
 ```bash
 shipmyagent .
 ```
 
 `shipmyagent start` reads `ship.json` → `start` as defaults; explicit CLI flags override `ship.json`.
+
+Daemon logs are written to: `.ship/debug/shipmyagent.daemon.log`.
 
 **Options**:
 
@@ -88,30 +91,57 @@ shipmyagent .
 | `--host <host>` | `-h` | Server host (default: 0.0.0.0) |
 | `--interactive-web [enabled]` |  | Enable interactive web UI (default: false) |
 | `--interactive-port <port>` |  | Interactive web UI port (default: 3001) |
-| `--daemon` | `-d` | Run as background process |
-| `--log-level <level>` | `-l` | Log level (debug, info, warn, error) |
-| `--verbose` | `-v` | Enable verbose output |
 
 **Examples**:
 
 ```bash
-# Start with defaults
-shipmyagent start
-
-# Start current directory using `ship.json` start defaults
+# Foreground (current terminal)
 shipmyagent .
 
-# Start on custom port
+# Background (daemon)
+shipmyagent start
+
+# Background: custom port
 shipmyagent start --port 3001
 
-# Run in background
-shipmyagent start --daemon
+# Stop daemon
+shipmyagent stop
 
-# Enable debug logging
-shipmyagent start --log-level debug --verbose
+# Restart daemon
+shipmyagent restart
 ```
 
 ---
+
+### `shipmyagent run`
+
+Start the ShipMyAgent server in foreground (current terminal).
+
+```bash
+shipmyagent run [options] [path]
+```
+
+Note: `shipmyagent .` is equivalent to `shipmyagent run .`.
+
+---
+
+### `shipmyagent stop`
+
+Stop the ShipMyAgent daemon started by `shipmyagent start`.
+
+```bash
+shipmyagent stop [path]
+```
+
+---
+
+### `shipmyagent restart`
+
+Restart the ShipMyAgent daemon.
+
+```bash
+shipmyagent restart [options] [path]
+```
 
 ### `shipmyagent alias`
 

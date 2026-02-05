@@ -1,0 +1,2 @@
+{"v":1,"ts":1770258886840,"channel":"telegram","chatId":"8444574557","chatKey":"telegram-chat-8444574557","userId":"8444574557","messageId":"451","role":"user","text":"hello, 朋友。","meta":{"chatType":"private","username":"wangenius"}}
+{"v":1,"ts":1770258891310,"channel":"telegram","chatId":"8444574557","chatKey":"telegram-chat-8444574557","userId":"bot","role":"assistant","text":"你好！我是你的项目助手，很高兴见到你！我可以帮你探索、分析和理解你的代码库。有什么我可以帮你的吗？","meta":{"via":"tool","channel":"telegram"}}
