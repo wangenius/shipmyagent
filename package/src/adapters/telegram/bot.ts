@@ -160,6 +160,34 @@ export class TelegramBot extends BaseChatAdapter {
     return chatType === "group" || chatType === "supergroup";
   }
 
+  /**
+   * 将“所有入站消息”统一转成可落盘的文本形式（用于审计/回溯）。
+   *
+   * 关键点（中文）
+   * - 即使消息不会触发 agent 执行（例如：群里未 @bot），也应当入库
+   * - 但纯附件消息可能没有 text/caption，这里会生成一个稳定的占位文本
+   */
+  private buildAuditText(params: {
+    rawText: string;
+    hasIncomingAttachment: boolean;
+    message: TelegramUpdate["message"];
+  }): string {
+    const rawText = String(params.rawText ?? "");
+    if (rawText.trim()) return rawText;
+    if (!params.hasIncomingAttachment) return "";
+
+    const types: string[] = [];
+    const m = params.message as any;
+    if (m?.document) types.push("document");
+    if (Array.isArray(m?.photo) && m.photo.length > 0) types.push("photo");
+    if (m?.voice) types.push("voice");
+    if (m?.audio) types.push("audio");
+
+    const uniq = Array.from(new Set(types)).filter(Boolean);
+    const suffix = uniq.length > 0 ? ` (${uniq.join(", ")})` : "";
+    return `[attachment]${suffix}`;
+  }
+
   private isBotMentioned(
     text: string,
     entities?: NonNullable<TelegramUpdate["message"]>["entities"],
@@ -423,6 +451,21 @@ export class TelegramBot extends BaseChatAdapter {
 
       // Check if it's a command
       if (rawText.startsWith("/")) {
+        // 关键点（中文）：命令消息也要入库（否则历史会“断层”）。
+        await this.appendUserMessage({
+          chatId,
+          chatKey,
+          messageId,
+          userId: actorId,
+          text: this.buildAuditText({ rawText, hasIncomingAttachment, message }),
+          meta: {
+            chatType: message.chat.type,
+            messageThreadId,
+            username: from?.username,
+            kind: "command",
+          },
+        });
+
         if (isGroup && actorId) {
           const cmdName = (rawText.trim().split(/\s+/)[0] || "")
             .split("@")[0]
@@ -443,15 +486,30 @@ export class TelegramBot extends BaseChatAdapter {
         if (isGroup) this.touchFollowupWindow(chatKey, actorId);
         await this.handleCommand(chatId, rawText, from, messageThreadId);
       } else {
+        // 关键点（中文）：群聊“是否触发 bot” 与 “是否入库” 解耦。
+        // - 触发 bot：仍然按 mention/reply/window + 权限门禁
+        // - 入库：所有入站消息都应落盘（审计/回溯）
+        const isMentioned = isGroup ? this.isBotMentioned(rawText, entities) : false;
+        const inWindow = isGroup ? this.isWithinFollowupWindow(chatKey, actorId) : false;
+        const explicit = isGroup ? (isMentioned || isReplyToBot) : true;
+        const shouldConsider = isGroup ? (explicit || inWindow) : true;
+
         if (isGroup) {
           if (!actorId) return;
 
-          const isMentioned = this.isBotMentioned(rawText, entities);
-          const inWindow = this.isWithinFollowupWindow(chatKey, actorId);
-          const explicit = isMentioned || isReplyToBot;
-          const shouldConsider = explicit || inWindow;
-
           if (!shouldConsider) {
+            await this.appendUserMessage({
+              chatId,
+              chatKey,
+              messageId,
+              userId: actorId,
+              text: this.buildAuditText({ rawText, hasIncomingAttachment, message }),
+              meta: {
+                chatType: message.chat.type,
+                messageThreadId,
+                username: from?.username,
+              },
+            });
             this.logger.debug(
               "Ignored group message (no mention/reply/window)",
               { chatId, messageId, chatKey },
@@ -461,6 +519,18 @@ export class TelegramBot extends BaseChatAdapter {
 
           const ok = await this.isAllowedGroupActor(chatKey, chatId, actorId);
           if (!ok) {
+            await this.appendUserMessage({
+              chatId,
+              chatKey,
+              messageId,
+              userId: actorId,
+              text: this.buildAuditText({ rawText, hasIncomingAttachment, message }),
+              meta: {
+                chatType: message.chat.type,
+                messageThreadId,
+                username: from?.username,
+              },
+            });
             await this.sendMessage(
               chatId,
               "⛔️ 仅发起人或群管理员可以与我对话。",
@@ -474,14 +544,22 @@ export class TelegramBot extends BaseChatAdapter {
         if (!cleaned && !hasIncomingAttachment) return;
 
         if (isGroup && actorId) {
-          const isMentioned = this.isBotMentioned(rawText, entities);
-          const explicit = isMentioned || isReplyToBot;
-          const inWindow = this.isWithinFollowupWindow(chatKey, actorId);
-
           // Follow-up messages inside the window still need intent confirmation.
           if (!explicit && inWindow && cleaned) {
             const okIntent = this.isLikelyAddressedToBot(cleaned);
             if (!okIntent) {
+              await this.appendUserMessage({
+                chatId,
+                chatKey,
+                messageId,
+                userId: actorId,
+                text: this.buildAuditText({ rawText, hasIncomingAttachment, message }),
+                meta: {
+                  chatType: message.chat.type,
+                  messageThreadId,
+                  username: from?.username,
+                },
+              });
               this.logger.debug(
                 "Ignored follow-up (intent gate: not addressed to bot)",
                 { chatId, messageId, chatKey },

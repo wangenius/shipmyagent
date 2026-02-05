@@ -90,7 +90,11 @@ export async function loadChatTranscriptAsOneAssistantMessage(params: {
   }
 
   return {
-    message: { role: "system", content: out.trimEnd() },
+    // 关键点（中文）：这里必须以 assistant message 注入，而不是 system。
+    // 原因：
+    // - system 通常由 provider 通过单独字段承载（`system`），混入 messages 可能被忽略/丢弃，导致“有时有历史、有时没有”。
+    // - 历史 transcript 不是“系统指令”，把它放在 assistant 角色里更符合语义，也与 chat_load_history 工具保持一致。
+    message: { role: "assistant", content: out.trimEnd() },
     picked: picked.length,
     truncated,
   };

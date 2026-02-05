@@ -3,10 +3,10 @@
   "name": "demo-agent",
   "version": "1.0.0",
   "start": {
-    "port": 3000,
+    "port": 4000,
     "host": "0.0.0.0",
     "interactiveWeb": false,
-    "interactivePort": 3001
+    "interactivePort": 4001
   },
   "llm": {
     "provider": "custom",

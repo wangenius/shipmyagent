@@ -39,8 +39,17 @@ sequenceDiagram
 
 ShipMyAgent uses a `chatKey` to isolate context:
 
-- DM / regular group: `telegram:chat:<chatId>`
-- Group topics: `telegram:chat:<chatId>:topic:<messageThreadId>`
+- DM / regular group: `telegram-chat-<chatId>`
+- Group topics (forum threads): `telegram-chat-<chatId>-topic-<messageThreadId>`
+
+#### What is a Telegram “topic”?
+
+Telegram **supergroups** can enable *Topics* (also called “Forum” mode). In that mode, a single group chat is split into multiple thread-like topics. Telegram marks messages in a topic with a `message_thread_id`.
+
+ShipMyAgent treats each topic as an independent conversation context, so the bot’s memory/history is separated per topic:
+
+- A message in the group “main chat” goes to `telegram-chat-<chatId>`
+- A message in topic `#139` goes to `telegram-chat-<chatId>-topic-139`
 
 ### Group gating: mention / reply / follow-up window
 
@@ -76,6 +85,10 @@ Every incoming message is appended to a per-chat JSONL file:
 
 Before execution, recent entries are loaded and collapsed into a compact “assistant context” that is injected back into the in-memory chat runtime for that `chatKey`.
 Before execution, the runtime uses an in-memory session history for the same `chatKey`. If the model needs more details from disk history, it can call `chat_load_history` to load and inject earlier messages from `.ship/chat/<chatKey>/conversations/history.jsonl`.
+
+### “All messages are stored” and used as context
+
+In group chats, ShipMyAgent stores all incoming messages in `history.jsonl`, and the recent history may be injected back into the model context for the current `chatKey`.
 
 ## Execution
 
