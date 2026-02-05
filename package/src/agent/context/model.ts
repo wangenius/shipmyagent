@@ -8,14 +8,14 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { type LanguageModel } from "ai";
 import { createLlmLoggingFetch } from "../../telemetry/index.js";
 import type { ShipConfig } from "../../utils.js";
-import { getLogger } from "@/telemetry/index.js";
-import { getShipRuntimeContext } from "@/server/ShipRuntimeContext.js";
-const logger = getLogger(getShipRuntimeContext().projectRoot, "info");
-
+import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
 
 export async function createModel(input: {
   config: ShipConfig;
 }): Promise<LanguageModel> {
+  // 注意：不要在模块顶层读取 runtime context，否则像 `sma -v` 这种只打印版本号的场景也会因为未初始化而崩溃
+  const { logger } = getShipRuntimeContext();
+
   const { provider, apiKey, baseUrl, model } = input.config.llm;
   const resolvedModel = model === "${}" ? undefined : model;
   const resolvedBaseUrl = baseUrl === "${}" ? undefined : baseUrl;
@@ -39,10 +39,7 @@ export async function createModel(input: {
   }
 
   if (!resolvedApiKey) {
-    await logger.log(
-      "warn",
-      "No API Key configured, will use simulation mode",
-    );
+    await logger.log("warn", "No API Key configured, will use simulation mode");
     throw Error("No API Key configured, will use simulation mode");
   }
 

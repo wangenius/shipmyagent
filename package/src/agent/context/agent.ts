@@ -2,7 +2,6 @@ import {
   generateText,
   stepCountIs,
   Tool,
-  ToolLoopAgent,
   type LanguageModel,
   type ModelMessage,
   type SystemModelMessage,
@@ -46,8 +45,6 @@ export class Agent {
   private model: LanguageModel = openai("gpt-5.2");
 
   private tools: Record<string, Tool> = {};
-  // Agent 执行逻辑
-  private agent: ToolLoopAgent<never, any, any> | null = null;
 
   constructor(configs: AgentConfigurations) {
     this.configs = configs;
@@ -99,7 +96,7 @@ export class Agent {
       instructionsPreview: query?.slice(0, 200),
       projectRoot: this.configs.projectRoot,
     });
-    if (this.initialized && this.agent) {
+    if (this.initialized) {
       return this.runWithToolLoopAgent(query, startTime, chatKey, {
         onStep,
         drainLaneMergedText,
@@ -148,7 +145,7 @@ export class Agent {
       }
     };
 
-    if (!this.initialized || !this.agent) {
+    if (!this.initialized) {
       throw new Error("Agent not initialized");
     }
 

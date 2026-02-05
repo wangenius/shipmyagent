@@ -22,9 +22,7 @@ import { ChatManager } from "../../../chat/manager.js";
 import { chatContactSendTools } from "../builtin/chat-contact-send.js";
 import { Tool } from "ai";
 
-import { getLogger } from "@/telemetry/index.js";
-import { getShipRuntimeContext } from "@/server/ShipRuntimeContext.js";
-const logger = getLogger(getShipRuntimeContext().projectRoot, "info");
+import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
 
 export interface AgentToolsLogger {
   info(message: string): void;
@@ -42,6 +40,9 @@ export function createAgentTools(params: {
   config: ShipConfig;
 }): Record<string, Tool> {
   loadProjectDotenv(params.projectRoot);
+  // 注意：不要在模块顶层读取 runtime context，否则像 `sma -v` 这种只打印版本号的场景也会因为未初始化而崩溃
+  const { logger } = getShipRuntimeContext();
+
   const chatManager = new ChatManager(params.projectRoot);
 
   const tools: Record<string, Tool> = {};
