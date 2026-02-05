@@ -139,7 +139,12 @@ Egress 单文件示例：
 
 ### `.ship/data/contact.json`：联系人簿（工具发送用）
 
-用途：将 `username/别名/昵称` 映射到可投递目标（如 `chatId`/`chatKey`/`messageId`），支持类似 `chat_contact_lookup`、`chat_contact_send` 这类工具在“脱离当前请求上下文”时仍能找到收件人；也支持用 `chat_contact_list` 查看联系人、用 `chat_contact_set_nickname` 为联系人设置昵称、用 `chat_contact_upsert` 手动新增/更新联系人、用 `chat_contact_remove` 删除联系人。
+用途：将 `username/别名/昵称` 映射到可投递目标（如 `chatId`/`chatKey`/`messageId`），支持类似 `chat_contact_lookup`、`chat_contact_send` 这类工具在“脱离当前请求上下文”时仍能找到收件人。
+
+使用方式：
+
+1. 先通过 `toolset_load` 加载 `contact_book` ToolSet（一次性注册联系人簿相关 tools，并注入使用说明）
+2. 再使用 `chat_contact_*` 工具：`chat_contact_lookup` / `chat_contact_list` / `chat_contact_set_nickname` / `chat_contact_upsert` / `chat_contact_remove` / `chat_contact_send`
 
 示例：
 

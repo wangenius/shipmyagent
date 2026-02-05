@@ -29,6 +29,7 @@ import { chatRequestContext } from "../../chat/request-context.js";
 import { withToolExecutionContext } from "../tools/builtin/execution-context.js";
 import { createAgentToolSet } from "../tools/set/toolset.js";
 import { loadChatTranscriptAsOneAssistantMessage } from "../../chat/transcript.js";
+import type { AgentToolRegistry } from "../tools/set/tool-registry.js";
 
 export class Agent {
   // 配置
@@ -39,6 +40,8 @@ export class Agent {
   private model: LanguageModel | null = null;
   // Agent 执行逻辑
   private agent: ToolLoopAgent<never, any, any> | null = null;
+  // 工具注册表（支持运行中 toolset_load 追加工具）
+  private toolRegistry: AgentToolRegistry | null = null;
 
   constructor(configs: AgentConfigurations) {
     this.configs = configs;
@@ -73,6 +76,7 @@ export class Agent {
         logger,
         contacts: getContactBook(this.configs.projectRoot),
       });
+      this.toolRegistry = tools.registry;
 
       this.model = await createModel({
         config: this.configs.config,
@@ -84,7 +88,7 @@ export class Agent {
         instructions: transformPromptsIntoSystemMessages([
           ...this.configs.systems,
         ]),
-        tools,
+        tools: tools.tools,
         stopWhen: [stepCountIs(30)],
       });
 
@@ -212,6 +216,13 @@ export class Agent {
           role: "system",
           content: ["# Chat Memory / Primary", chatMemoryPrimary].join("\n\n"),
         });
+      }
+
+      // 关键点：已加载的 ToolSets 需要在每次 run 默认生效（system prompt）。
+      // toolset_load 在“本次 run”里会即时注入一次；这里负责“后续 run 的默认注入”。
+      const toolSetsSystem = this.toolRegistry?.buildLoadedToolSetsSystemPrompt() || "";
+      if (toolSetsSystem.trim()) {
+        systemExtras.push({ role: "system", content: toolSetsSystem });
       }
 
       // 从 ChatStore 抽取 transcript，并以“一条 assistant message”注入。

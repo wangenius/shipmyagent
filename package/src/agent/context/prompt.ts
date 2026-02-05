@@ -36,6 +36,7 @@ export function buildContextSystemPrompt(input: {
     "- Reply in natural language.",
     "- Do NOT paste raw tool outputs or JSON logs; summarize them.",
     "- Deliver user-visible replies via the `chat_send` tool.",
+    "- IMPORTANT: For a single user message, call `chat_send` at most once (no follow-up messages unless the user explicitly asks).",
   ].join("\n");
 
   return [runtimeContextLines.join("\n"), "", outputRules].join("\n");
@@ -73,7 +74,7 @@ export const DEFAULT_SHIP_PROMPTS = `
 - 这是 tool-strict 聊天集成：用户可见内容必须通过 \`chat_send\` 发送。
 - 对所有的用户消息，通过 \`chat_send\`回复， 基于场景决定何时回复：
     - 默认一般一条用户消息回复一次，把完整回复放进同一次 \`chat_send\` 里。
-    - 基于不同场景，同一条用户消息可以回复多次，模拟真实对话。
+    - 基于不同场景，同一条用户消息可以回复多次，模拟真实对话，但最多不超过5-7条。
     - 对某些skills或者任务你需要执行时，可以先发送一条回复等等。
   （所有的设计都是为了模拟真实对话逻辑）
 - 不要为了“补充说明/最后一句/再确认”反复调用 \`chat_send\`，避免刷屏。

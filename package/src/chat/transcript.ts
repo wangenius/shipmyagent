@@ -66,6 +66,7 @@ export async function loadChatTranscriptAsOneAssistantMessage(params: {
     `- chatKey: ${chatKey}`,
     `- picked: ${picked.length}`,
     `- offset: ${offset}`,
+    `基于用户当前的请求回复，某些历史酌情回复，与主题无关的不需要考虑，或者回答过问题的不需要考虑`,
     "",
   ].join("\n");
 
