@@ -17,13 +17,13 @@
 
 import { z } from "zod";
 import { tool } from "ai";
-import { chatRequestContext } from "../../../chat/request-context.js";
+import { chatRequestContext } from "../../../chat/context/request-context.js";
 import { getToolRuntimeContext } from "../set/runtime-context.js";
 import {
   prepareAssistantMessageOnce,
   toolExecutionContext,
 } from "./execution-context.js";
-import type { ChatLogEntryV1 } from "../../../chat/store.js";
+import type { ChatLogEntryV1 } from "../../../chat/store/store.js";
 
 const chatLoadHistoryInputSchema = z.object({
   /**
@@ -90,8 +90,8 @@ export const chat_load_history = tool({
       };
     }
 
-    const { chatManager } = getToolRuntimeContext();
-    const chat = chatManager.get(chatKey);
+    const { chat } = getToolRuntimeContext();
+    const chatStore = chat.get(chatKey);
 
     const requestedCount =
       typeof (input as any).count === "number" ? (input as any).count : 20;
@@ -107,12 +107,12 @@ export const chat_load_history = tool({
     let entries: ChatLogEntryV1[] = [];
     try {
       if (keyword) {
-        entries = await chat.search({
+        entries = await chatStore.search({
           keyword,
           limit: Math.min(5000, (count + offset) * 3),
         });
       } else {
-        entries = await chat.loadRecentEntries(Math.min(5000, count + offset));
+        entries = await chatStore.loadRecentEntries(Math.min(5000, count + offset));
       }
     } catch (e) {
       return { success: false, error: String(e) };

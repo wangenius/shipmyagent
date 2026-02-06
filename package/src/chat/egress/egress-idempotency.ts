@@ -20,7 +20,7 @@
 
 import path from "path";
 import fs from "fs-extra";
-import { getCacheDirPath } from "../utils.js";
+import { getCacheDirPath } from "../../utils.js";
 import type { ChatDispatchChannel } from "./dispatcher.js";
 
 export async function tryClaimChatEgressChatSend(params: {

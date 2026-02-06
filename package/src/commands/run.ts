@@ -8,42 +8,17 @@
  * - 后台常驻启动请使用 `shipmyagent start`（daemon 模式），并用 `shipmyagent stop|restart` 管理。
  */
 
-import path from "path";
-import fs from "fs-extra";
-import { getLogger } from "../telemetry/index.js";
-import { createServer, ServerContext } from "../server/index.js";
+import { AgentServer } from "../server/index.js";
 import { createInteractiveServer } from "../server/interactive.js";
 import { createTelegramBot } from "../adapters/telegram.js";
 import { createFeishuBot } from "../adapters/feishu.js";
 import { createQQBot } from "../adapters/qq.js";
-import { bootstrapMcpFromProject } from "../agent/mcp/index.js";
-import { ChatManager } from "../chat/manager.js";
-import { getShipRuntimeContext, setShipRuntimeContext } from "../server/ShipRuntimeContext.js";
 import {
-  getAgentMdPath,
-  getCacheDirPath,
-  getLogsDirPath,
-  getShipChatRootDirPath,
-  getShipConfigDirPath,
-  getShipDataDirPath,
-  getShipDebugDirPath,
-  getShipDirPath,
-  getShipProfileDirPath,
-  getShipPublicDirPath,
-  getShipJsonPath,
-  getShipTasksDirPath,
-  loadProjectDotenv,
-  loadShipConfig,
-  type ShipConfig,
-} from "../utils.js";
-import { fileURLToPath } from "url";
-import { DEFAULT_SHIP_PROMPTS } from "../agent/context/prompt.js";
-import {
-  discoverClaudeSkillsSync,
-  renderClaudeSkillsPromptSection,
-} from "../agent/skills/index.js";
-import { Agent } from "../agent/context/agent.js";
+  getShipRuntimeContext,
+  initShipRuntimeContext,
+} from "../server/ShipRuntimeContext.js";
 import type { StartOptions } from "../types/start.js";
+import { logger } from "@/telemetry/logging/logger.js";
 
 /**
  * `shipmyagent run` command entrypoint.
@@ -58,7 +33,8 @@ export async function runCommand(
   cwd: string = ".",
   options: StartOptions,
 ): Promise<void> {
-  const projectRoot = path.resolve(cwd);
+  // 初始化加载（进程级单例上下文：root/config/logger/chat/mcp/agents 等）
+  await initShipRuntimeContext(cwd);
   const isPlaceholder = (value?: string): boolean => value === "${}";
   const parsePort = (value: unknown, label: string): number | undefined => {
     if (value === undefined || value === null || value === "") return undefined;
@@ -81,75 +57,7 @@ export async function runCommand(
     return undefined;
   };
 
-  let version = "unknown";
-  try {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const pkg = await fs.readJson(path.join(__dirname, "../../package.json"));
-    if (pkg && typeof (pkg as any).version === "string")
-      version = (pkg as any).version;
-  } catch {
-    // ignore
-  }
-
-  console.log(`🚀 Starting ShipMyAgent v${version}: ${projectRoot}`);
-
-  // Check if initialized（启动入口一次性确认工程根目录与关键文件）
-  if (!fs.existsSync(getAgentMdPath(projectRoot))) {
-    console.error(
-      '❌ Project not initialized. Please run "shipmyagent init" first',
-    );
-    process.exit(1);
-  }
-
-  if (!fs.existsSync(getShipJsonPath(projectRoot))) {
-    console.error(
-      '❌ ship.json does not exist. Please run "shipmyagent init" first',
-    );
-    process.exit(1);
-  }
-
-  // Read configuration
-  let shipConfig: ShipConfig;
-  try {
-    shipConfig = loadShipConfig(projectRoot);
-  } catch (error) {
-    console.error("❌ Failed to read ship.json:", error);
-    process.exit(1);
-  }
-
-  // 在启动时加载 dotenv，并确保 .ship 目录结构存在（避免在 createAgent 中重复确保）。
-  loadProjectDotenv(projectRoot);
-  fs.ensureDirSync(getShipDirPath(projectRoot));
-  fs.ensureDirSync(getShipTasksDirPath(projectRoot));
-  fs.ensureDirSync(getLogsDirPath(projectRoot));
-  fs.ensureDirSync(getCacheDirPath(projectRoot));
-  fs.ensureDirSync(getShipProfileDirPath(projectRoot));
-  fs.ensureDirSync(getShipDataDirPath(projectRoot));
-  fs.ensureDirSync(getShipChatRootDirPath(projectRoot));
-  fs.ensureDirSync(getShipPublicDirPath(projectRoot));
-  fs.ensureDirSync(getShipConfigDirPath(projectRoot));
-  fs.ensureDirSync(path.join(getShipDirPath(projectRoot), "schema"));
-  fs.ensureDirSync(getShipDebugDirPath(projectRoot));
-
-  // Agent.md（用户可编辑的 system prompt）在启动时读取并缓存。
-  let agentProfiles = `# Agent Role
-You are a helpful project assistant.`;
-  try {
-    const content = fs.readFileSync(getAgentMdPath(projectRoot), "utf-8").trim();
-    if (content) agentProfiles = content;
-  } catch {
-    // ignore
-  }
-
-  // Skills section 在启动时渲染并缓存（需要修改 skills/ship.json 生效时请重启）。
-  const skills = discoverClaudeSkillsSync(projectRoot, shipConfig);
-  const skillsSection = renderClaudeSkillsPromptSection(
-    projectRoot,
-    shipConfig,
-    skills,
-  );
-  const agentSystems = [agentProfiles, DEFAULT_SHIP_PROMPTS, skillsSection];
+  const shipConfig = getShipRuntimeContext().config;
 
   // Resolve startup options: CLI flags override ship.json, then built-in defaults.
   let port: number;
@@ -170,47 +78,8 @@ You are a helpful project assistant.`;
     shipConfig.start?.interactiveWeb ??
     false;
 
-  // Create logger
-  const logger = getLogger(projectRoot, "info");
-
-  logger.info("=== ShipMyAgent Starting ===");
-  logger.info(`Project: ${projectRoot}`);
-  logger.info(`Model: ${shipConfig.llm?.provider} / ${shipConfig.llm?.model}`);
-
-  // 初始化进程级 runtime 上下文（避免 projectRoot/logger/createAgent 层层透传）
-  setShipRuntimeContext({
-    projectRoot,
-    logger,
-    chatManager: new ChatManager(projectRoot),
-    config: shipConfig,
-    agentSystems,
-    // 一个 chat 一个 Agent 实例：这里必须返回新对象
-    createAgent: () =>
-      new Agent({
-        projectRoot,
-        config: shipConfig,
-        systems: agentSystems,
-      }),
-  });
-
-  // Initialize MCP (managed by the server/bootstrap layer, not AgentRuntime)
-  await bootstrapMcpFromProject({ projectRoot, logger });
-  logger.info("MCP manager initialized");
-
-  // Create Agent Runtime
-  const agentRuntime = getShipRuntimeContext().createAgent();
-  await agentRuntime.initialize();
-  logger.info("Agent Runtime initialized");
-
-  // Create server context
-  const serverContext: ServerContext = {
-    projectRoot,
-    logger,
-    agentRuntime,
-  };
-
   // Create and start server
-  const server = createServer(serverContext);
+  const server = new AgentServer();
 
   const adapters = shipConfig.adapters || {};
 

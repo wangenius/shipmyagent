@@ -29,7 +29,7 @@ import type {
   AgentResult,
 } from "../../types/agent.js";
 import { getLogger, type Logger } from "../../telemetry/index.js";
-import { chatRequestContext } from "../../chat/request-context.js";
+import { chatRequestContext } from "../../chat/context/request-context.js";
 import { withToolExecutionContext } from "../tools/builtin/execution-context.js";
 import { createAgentTools } from "../tools/set/agent-tools.js";
 import { openai } from "@ai-sdk/openai";
@@ -37,7 +37,7 @@ import { toolExecutionContext } from "../tools/builtin/execution-context.js";
 import {
   loadActiveContextEntries,
   writeActiveContextEntries,
-} from "../../chat/contexts-store.js";
+} from "../../chat/context/contexts-store.js";
 import type { ChatContextMessageEntryV1 } from "../../types/contexts.js";
 
 function pickLastSuccessfulChatSendText(toolCalls: AgentResult["toolCalls"]): string {
@@ -70,8 +70,17 @@ export class Agent {
   private model: LanguageModel = openai("gpt-5.2");
 
   private tools: Record<string, Tool> = {};
-  // 进程内的工作上下文（per chatKey）：同一 chatKey 的两次 run 直接复用同一个 messages 数组
-  private contextMessagesByChatKey: Map<string, ModelMessage[]> = new Map();
+  /**
+   * 进程内的工作上下文（per chat 实例）。
+   *
+   * 关键点（中文）
+   * - 运行时策略是“一个 chatKey 一个 Agent 实例”（由 ShipRuntimeContext 保证）
+   * - 因此 Agent 内部不需要再做 chatKey → messages 的二次 Map 缓存
+   * - 本实例一旦首次 run 绑定到某个 chatKey，后续必须一致，避免上下文串线
+   */
+  private boundChatKey: string | null = null;
+  private contextMessages: ModelMessage[] = [];
+  private contextHydrated: boolean = false;
 
   constructor(configs: AgentConfigurations) {
     this.configs = configs;
@@ -139,38 +148,43 @@ export class Agent {
     };
   }
 
-  private normalizeChatKey(chatKey: string): string {
-    return String(chatKey || "").trim();
+  private bindChatKey(chatKey: string): string {
+    const key = String(chatKey || "").trim();
+    if (!key) throw new Error("Agent.run requires a non-empty chatKey");
+    if (this.boundChatKey && this.boundChatKey !== key) {
+      // 关键点（中文）：一个 Agent 实例只允许服务一个 chatKey，避免上下文串线。
+      throw new Error(
+        `Agent is already bound to chatKey=${this.boundChatKey}, got chatKey=${key}`,
+      );
+    }
+    this.boundChatKey = key;
+    return key;
   }
 
-  private async getOrHydrateContextMessages(chatKey: string): Promise<ModelMessage[]> {
-    const key = this.normalizeChatKey(chatKey);
-    if (!key) return [];
+  private async hydrateContextMessagesOnce(chatKey: string): Promise<ModelMessage[]> {
+    const key = this.bindChatKey(chatKey);
+    if (this.contextHydrated) return this.contextMessages;
 
-    const existing = this.contextMessagesByChatKey.get(key);
-    if (existing) return existing;
-
-    // 关键点（中文）：active.jsonl 只用于“进程重启后的恢复”，因此这里只在首次触达该 chatKey 时 hydrate 一次。
+    // 关键点（中文）：active.jsonl 只用于“进程重启后的恢复”，因此这里只在首次 run 时 hydrate 一次。
     const entries = await loadActiveContextEntries({
       projectRoot: this.configs.projectRoot,
       chatKey: key,
       options: { maxMessages: 0, maxChars: 0 },
     });
-    const messages: ModelMessage[] = entries.map((e) => ({
+    this.contextMessages = entries.map((e) => ({
       role: e.role,
       content: e.content,
     })) as any;
 
-    this.contextMessagesByChatKey.set(key, messages);
-    return messages;
+    this.contextHydrated = true;
+    return this.contextMessages;
   }
 
   private async flushContextMessagesToDisk(params: {
     chatKey: string;
     messages: ModelMessage[];
   }): Promise<void> {
-    const key = this.normalizeChatKey(params.chatKey);
-    if (!key) return;
+    const key = this.bindChatKey(params.chatKey);
 
     const t0 = Date.now();
     const entries: ChatContextMessageEntryV1[] = [];
@@ -301,9 +315,9 @@ export class Agent {
       }
 
       // 工作上下文来源（中文，关键点）
-      // - Agent 进程内维护 per-chatKey 的 `ModelMessage[]` 作为 context
+      // - Agent 进程内维护 per-chat 的 `ModelMessage[]` 作为 context
       // - active.jsonl 只用于“进程重启后的恢复”（首次 hydrate），以及 run 结束时 flush（用于下次重启）
-      const contextMessages = await this.getOrHydrateContextMessages(chatKey);
+      const contextMessages = await this.hydrateContextMessagesOnce(chatKey);
       const retryAttempts = opts?.retryAttempts ?? 0;
 
       // 关键点（中文）：重试（context_length）不重复追加 user，避免同一轮写入两次。

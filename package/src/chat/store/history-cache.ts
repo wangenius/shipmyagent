@@ -1,5 +1,9 @@
 /**
- * 历史缓存层 - 使用 LRU 策略缓存聊天历史
+ * ChatStore 历史缓存层（LRU）。
+ *
+ * 说明（中文）
+ * - 这是 store 层的纯缓存实现，属于 `chat/store/*`
+ * - 不涉及平台/回包/调度等职责
  */
 
 import type { ChatLogEntryV1 } from "./store.js";

@@ -21,13 +21,13 @@ import {
   getShipChatContextsArchiveDirPath,
   getShipChatContextsArchivePath,
   getShipChatContextsDirPath,
-} from "../utils.js";
+} from "../../utils.js";
 import type {
   ChatContextArchiveSnapshotV1,
   ChatContextIndexItemV1,
   ChatContextMessageEntryV1,
   ChatContextMessageRoleV1,
-} from "../types/contexts.js";
+} from "../../types/contexts.js";
 
 type ActiveLoadOptions = {
   /**

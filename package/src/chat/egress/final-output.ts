@@ -7,7 +7,7 @@ type ToolCallLike =
   | { tool: string; result: string };
 
 /**
- * Final-output delivery helpers for chat integrations.
+ * Final-output delivery helpers for chat integrations（egress 兜底回包）。
  *
  * Background
  * - Chat integrations often run the agent in a "tool-strict" mode where the model *should* call `chat_send`

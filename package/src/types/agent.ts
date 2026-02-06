@@ -1,7 +1,13 @@
 import type { ShipConfig } from "../utils.js";
 
 export interface AgentConfigurations {
-  // 当前项目的根目录地址
+  /**
+   * 工程根目录（projectRoot）。
+   *
+   * 关键点（中文）
+   * - 我们约束“一个进程只服务一个 projectRoot”，但 Agent 仍需要知道落盘路径
+   * - 这里作为配置显式字段，便于在构造时一次性注入
+   */
   projectRoot: string;
   // ship 的配置
   config: ShipConfig;

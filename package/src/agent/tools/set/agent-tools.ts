@@ -11,14 +11,12 @@
  */
 
 import { loadProjectDotenv, type ShipConfig } from "../../../utils.js";
-import { getMcpManager } from "../../mcp/index.js";
 import { setToolRuntimeContext } from "./runtime-context.js";
 import { skillsTools } from "../builtin/skills.js";
 import { execShellTools } from "../builtin/exec-shell.js";
 import { createMcpAiTool } from "./mcp.js";
 import { chatTools } from "../builtin/chat.js";
 import { chatHistoryTools } from "../builtin/chat-history.js";
-import { ChatManager } from "../../../chat/manager.js";
 import { chatContactSendTools } from "../builtin/chat-contact-send.js";
 import { chatContextTools } from "../builtin/chat-contexts.js";
 import { Tool } from "ai";
@@ -42,16 +40,16 @@ export function createAgentTools(params: {
 }): Record<string, Tool> {
   loadProjectDotenv(params.projectRoot);
   // 注意：不要在模块顶层读取 runtime context，否则像 `sma -v` 这种只打印版本号的场景也会因为未初始化而崩溃
-  const { logger } = getShipRuntimeContext();
-
-  const chatManager = new ChatManager(params.projectRoot);
+  const { logger, chatRuntime, mcpManager } = getShipRuntimeContext();
 
   const tools: Record<string, Tool> = {};
 
   setToolRuntimeContext({
     projectRoot: params.projectRoot,
     config: params.config,
-    chatManager,
+    chat: {
+      get: (chatKey) => chatRuntime.getStore(chatKey),
+    },
   });
 
   Object.assign(tools, chatTools);
@@ -60,11 +58,6 @@ export function createAgentTools(params: {
   Object.assign(tools, chatContextTools);
   Object.assign(tools, skillsTools);
   Object.assign(tools, execShellTools);
-
-  const mcpManager = getMcpManager({
-    projectRoot: params.projectRoot,
-    logger: logger ?? null,
-  });
 
   const mcpTools = mcpManager.getAllTools();
   for (const { server, tool: mcpTool } of mcpTools) {

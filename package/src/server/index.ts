@@ -1,30 +1,13 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { Logger } from "../telemetry/index.js";
-import type { Agent } from "../agent/context/index.js";
-import { withChatRequestContext } from "../chat/request-context.js";
+import { logger as server_logger } from "../telemetry/logging/logger.js";
+import { withChatRequestContext } from "../chat/context/request-context.js";
 import http from "node:http";
 import fs from "fs-extra";
 import path from "path";
-import { getShipRuntimeContext } from "./ShipRuntimeContext.js";
-import { ChatManager } from "../chat/manager.js";
 import { getShipPublicDirPath } from "../utils.js";
-
-/**
- * HTTP server for ShipMyAgent.
- *
- * Provides:
- * - Health and status endpoints
- * - A minimal `/api/execute` endpoint for running ad-hoc instructions via AgentRuntime
- * - Static file serving for project `public/`
- * - Static file serving for `.ship/public/` (exposed under `/ship/public/*`)
- */
-export interface ServerContext {
-  projectRoot: string;
-  logger: Logger;
-  agentRuntime: Agent;
-}
+import { getShipRuntimeContext } from "./ShipRuntimeContext.js";
 
 export interface StartOptions {
   port: number;
@@ -33,24 +16,10 @@ export interface StartOptions {
 
 export class AgentServer {
   private app: Hono;
-  private context: ServerContext;
   private server: ReturnType<typeof import("http").createServer> | null = null;
-  private projectRoot: string;
-  private chatManager: ChatManager;
 
-  constructor(context: ServerContext) {
-    this.context = context;
-    this.projectRoot = context.projectRoot;
-    // 优先复用进程级 ChatManager；若未初始化 runtime context，则 fallback（仅用于 HTTP API 审计）。
-    this.chatManager = (() => {
-      try {
-        return getShipRuntimeContext().chatManager;
-      } catch {
-        return new ChatManager(this.projectRoot);
-      }
-    })();
+  constructor() {
     this.app = new Hono();
-
     // Middleware
     this.app.use("*", logger());
     this.app.use(
@@ -69,7 +38,7 @@ export class AgentServer {
   private setupRoutes(): void {
     // Static file service (frontend pages)
     this.app.get("/", async (c) => {
-      const indexPath = path.join(this.projectRoot, "public", "index.html");
+      const indexPath = path.join(getShipRuntimeContext().root, "public", "index.html");
       if (await fs.pathExists(indexPath)) {
         const content = await fs.readFile(indexPath, "utf-8");
         return c.body(content, 200, {
@@ -81,7 +50,7 @@ export class AgentServer {
     });
 
     this.app.get("/styles.css", async (c) => {
-      const cssPath = path.join(this.projectRoot, "public", "styles.css");
+      const cssPath = path.join(getShipRuntimeContext().root, "public", "styles.css");
       if (await fs.pathExists(cssPath)) {
         const content = await fs.readFile(cssPath, "utf-8");
         return c.body(content, 200, {
@@ -93,7 +62,7 @@ export class AgentServer {
     });
 
     this.app.get("/app.js", async (c) => {
-      const jsPath = path.join(this.projectRoot, "public", "app.js");
+      const jsPath = path.join(getShipRuntimeContext().root, "public", "app.js");
       if (await fs.pathExists(jsPath)) {
         const content = await fs.readFile(jsPath, "utf-8");
         return c.body(content, 200, {
@@ -106,10 +75,12 @@ export class AgentServer {
 
     // Public file service: `.ship/public/*` -> `/ship/public/*`
     this.app.get("/ship/public/*", async (c) => {
-      const root = getShipPublicDirPath(this.projectRoot);
+      const root = getShipPublicDirPath(getShipRuntimeContext().root);
       const prefix = "/ship/public/";
       const requestPath = c.req.path;
-      const rel = requestPath.startsWith(prefix) ? requestPath.slice(prefix.length) : "";
+      const rel = requestPath.startsWith(prefix)
+        ? requestPath.slice(prefix.length)
+        : "";
       if (!rel) return c.text("Not Found", 404);
 
       const full = path.resolve(root, rel);
@@ -219,39 +190,41 @@ export class AgentServer {
 
       try {
         const chatKey = `api:chat:${chatId}`;
-        const chat = this.chatManager.get(chatKey);
-        await chat.append({
+        const runtime = getShipRuntimeContext();
+        const messageId =
+          typeof body?.messageId === "string" ? body.messageId : undefined;
+        await runtime.chatRuntime.appendUserMessage({
           channel: "api",
           chatId,
+          chatKey,
           userId: actorId,
-          messageId:
-            typeof body?.messageId === "string" ? body.messageId : undefined,
-          role: "user",
+          messageId,
           text: String(instructions),
         });
 
-        if (!this.context.agentRuntime.isInitialized()) {
-          await this.context.agentRuntime.initialize();
-        }
         // API 也是一种 “chat”（有 chatKey + 可落盘历史），但它不是“平台消息回发”场景：
         // - 允许使用 chat_load_history 等依赖 chatKey 的工具
         // - 不提供 channel/chatId 的 dispatcher 回发能力（响应通过 HTTP body 返回）
         const result = await withChatRequestContext(
-          { chatKey, chatId, userId: actorId, messageId: typeof body?.messageId === "string" ? body.messageId : undefined },
+          {
+            chatKey,
+            chatId,
+            userId: actorId,
+            messageId,
+          },
           () =>
-            this.context.agentRuntime.run({
+            runtime.chatRuntime.getAgent(chatKey).run({
               chatKey,
               query: instructions,
             }),
         );
 
-        await chat.append({
+        await runtime.chatRuntime.appendAssistantMessage({
           channel: "api",
           chatId,
+          chatKey,
           userId: "bot",
-          messageId:
-            typeof body?.messageId === "string" ? body.messageId : undefined,
-          role: "assistant",
+          messageId,
           text: String(result?.output || ""),
           meta: { success: Boolean((result as any)?.success) },
         });
@@ -305,13 +278,11 @@ export class AgentServer {
 
       this.server = server;
       server.listen(port, host, () => {
-        this.context.logger.info(
-          `🚀 Agent Server started: http://${host}:${port}`,
-        );
-        this.context.logger.info("Available APIs:");
-        this.context.logger.info("  GET  /health - Health check");
-        this.context.logger.info("  GET  /api/status - Agent status");
-        this.context.logger.info("  POST /api/execute - Execute instruction");
+        server_logger.info(`🚀 Agent Server started: http://${host}:${port}`);
+        server_logger.info("Available APIs:");
+        server_logger.info("  GET  /health - Health check");
+        server_logger.info("  GET  /api/status - Agent status");
+        server_logger.info("  POST /api/execute - Execute instruction");
         resolve();
       });
     });
@@ -319,17 +290,13 @@ export class AgentServer {
 
   async stop(): Promise<void> {
     if (this.server) {
-      await this.context.logger.saveAllLogs();
+      await server_logger.saveAllLogs();
       this.server.close();
-      this.context.logger.info("Agent Server stopped");
+      server_logger.info("Agent Server stopped");
     }
   }
 
   getApp(): Hono {
     return this.app;
   }
-}
-
-export function createServer(context: ServerContext): AgentServer {
-  return new AgentServer(context);
 }

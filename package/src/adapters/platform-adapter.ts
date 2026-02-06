@@ -1,5 +1,5 @@
-import type { ChatDispatchChannel } from "../chat/dispatcher.js";
-import { registerChatDispatcher } from "../chat/dispatcher.js";
+import type { ChatDispatchChannel } from "../chat/egress/dispatcher.js";
+import { registerChatDispatcher } from "../chat/egress/dispatcher.js";
 import { getShipRuntimeContext } from "../server/ShipRuntimeContext.js";
 
 export type AdapterChatKeyParams = {
@@ -25,14 +25,14 @@ export type AdapterSendTextParams = AdapterChatKeyParams & {
  */
 export abstract class PlatformAdapter {
   readonly channel: ChatDispatchChannel;
-  protected readonly chatManager: ReturnType<typeof getShipRuntimeContext>["chatManager"];
+  protected readonly chatRuntime: ReturnType<typeof getShipRuntimeContext>["chatRuntime"];
 
   protected constructor(params: {
     channel: ChatDispatchChannel;
   }) {
     this.channel = params.channel;
     const runtime = getShipRuntimeContext();
-    this.chatManager = runtime.chatManager;
+    this.chatRuntime = runtime.chatRuntime;
 
     // Expose adapter send capabilities to the agent via dispatcher + tools.
     registerChatDispatcher(this.channel, {
@@ -63,11 +63,11 @@ export abstract class PlatformAdapter {
           messageId: params.messageId,
           messageThreadId: params.messageThreadId,
         });
-        await this.chatManager.get(chatKey).append({
-          channel: this.channel as any,
+        await this.chatRuntime.appendAssistantMessage({
+          channel: this.channel,
           chatId,
+          chatKey,
           userId: "bot",
-          role: "assistant",
           text,
           meta: { via: "tool", channel: this.channel },
         });

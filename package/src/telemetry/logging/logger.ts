@@ -30,21 +30,37 @@ export interface LogEntry {
 
 export class Logger {
   private logs: LogEntry[] = [];
-  private projectRoot: string;
   private logLevel: string = "info";
   private writeChain: Promise<void> = Promise.resolve();
   private readonly maxInMemoryEntries = 2000;
+  private projectRoot: string | null = null;
 
-  constructor(projectRoot: string, logLevel: string = "info") {
-    this.projectRoot = projectRoot;
+  constructor(logLevel: string = "info") {
     this.logLevel = logLevel;
+  }
+
+  /**
+   * 绑定进程级 projectRoot。
+   *
+   * 关键点（中文）
+   * - 我们约束“一个进程只服务一个 projectRoot”
+   * - Logger 作为单例存在，但落盘目录必须在启动入口初始化后才能确定
+   * - 未绑定 projectRoot 时，只打印到 console，不写入 `.ship/logs/*`
+   */
+  bindProjectRoot(projectRoot: string): void {
+    const root = String(projectRoot || "").trim();
+    this.projectRoot = root || null;
   }
 
   /**
    * Generic async logger used by agent/LLM logging.
    * Accepts `info|warn|error|debug|action` (case-insensitive).
    */
-  async log(level: string, message: string, details?: Record<string, unknown>): Promise<void> {
+  async log(
+    level: string,
+    message: string,
+    details?: Record<string, unknown>,
+  ): Promise<void> {
     const type = this.normalizeType(level);
     await this.emit(type, message, details);
   }
@@ -70,7 +86,9 @@ export class Logger {
   }
 
   private normalizeType(level: string): LogEntry["type"] {
-    const s = String(level || "").trim().toLowerCase();
+    const s = String(level || "")
+      .trim()
+      .toLowerCase();
     if (s === "warn" || s === "warning") return "warn";
     if (s === "error" || s === "err") return "error";
     if (s === "debug" || s === "trace") return "debug";
@@ -131,6 +149,7 @@ export class Logger {
   }
 
   private async saveToFile(entry: LogEntry): Promise<void> {
+    if (!this.projectRoot) return;
     const logsDir = getLogsDirPath(this.projectRoot);
     const date = new Date().toISOString().split("T")[0];
     const logFile = path.join(logsDir, `${date}.jsonl`);
@@ -165,7 +184,4 @@ export class Logger {
   }
 }
 
-export function createLogger(projectRoot: string, logLevel: string = "info"): Logger {
-  return new Logger(projectRoot, logLevel);
-}
-
+export const logger = new Logger();

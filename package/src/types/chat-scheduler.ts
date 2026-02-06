@@ -1,5 +1,4 @@
-import type { ChatDispatchChannel } from "../chat/dispatcher.js";
-import type { QueuedChatMessage } from "../chat/query-queue.js";
+import type { ChatDispatchChannel } from "../chat/egress/dispatcher.js";
 
 /**
  * Chat 调度器配置（Lane Scheduler）。
@@ -70,12 +69,11 @@ export type CorrectionMergedMessage = {
    * 用于回包/工具幂等的“最新一条消息上下文”。
    * 关键点：QQ 需要 messageId 才能被动回复；同时 `chat_send` 的 egress 幂等也依赖 messageId。
    */
-  latestContext: Pick<
-    QueuedChatMessage,
-    | "messageId"
-    | "userId"
-    | "username"
-    | "chatType"
-    | "messageThreadId"
-  >;
+  latestContext: {
+    messageId?: string;
+    userId?: string;
+    username?: string;
+    chatType?: string;
+    messageThreadId?: number;
+  };
 };

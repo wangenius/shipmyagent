@@ -6,6 +6,8 @@ export type ChatRequestContext = {
    *
    * This is an internal runtime detail used by delivery tools (e.g. `chat_send`)
    * to route messages back to the correct platform dispatcher.
+   *
+   * 说明（中文）：这是 request-scope 的上下文，属于 `chat/context/*` 范畴。
    */
   channel?: "telegram" | "feishu" | "qq" | "cli" | "scheduler" | "api";
   /**

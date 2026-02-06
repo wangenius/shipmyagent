@@ -14,7 +14,7 @@
 
 import { z } from "zod";
 import { tool } from "ai";
-import { chatRequestContext } from "../../../chat/request-context.js";
+import { chatRequestContext } from "../../../chat/context/request-context.js";
 import { getToolRuntimeContext } from "../set/runtime-context.js";
 import {
   archiveContextSnapshotFromMessages,
@@ -24,7 +24,7 @@ import {
   searchArchivedContexts,
   snapshotMessagesToModelMessages,
   writeActiveContextEntries,
-} from "../../../chat/contexts-store.js";
+} from "../../../chat/context/contexts-store.js";
 import { toolExecutionContext } from "./execution-context.js";
 
 async function persistInProcessContextToActiveJsonl(params: {

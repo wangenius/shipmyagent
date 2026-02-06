@@ -10,17 +10,36 @@
  * - “快速矫正”：一次执行结束后，若该 chatKey 有新消息到达，可合并成一条 userMessage 继续让 AI 修正
  */
 
-import { withChatRequestContext } from "./request-context.js";
-import { sendFinalOutputIfNeeded } from "./final-output.js";
-import type { QueuedChatMessage } from "./query-queue.js";
+import { withChatRequestContext } from "../context/request-context.js";
+import { sendFinalOutputIfNeeded } from "../egress/final-output.js";
 
-import type { Agent } from "../agent/context/index.js";
+import type { Agent } from "../../agent/context/index.js";
 import type {
   ChatLaneEnqueueResult,
   ChatLaneSchedulerConfig,
   ChatLaneSchedulerStats,
   CorrectionMergedMessage,
-} from "../types/chat-scheduler.js";
+} from "../../types/chat-scheduler.js";
+import type { ChatDispatchChannel } from "../egress/dispatcher.js";
+
+/**
+ * Lane Scheduler 的入队消息类型。
+ *
+ * 关键点（中文）
+ * - 这是 scheduler 的内部数据结构：adapter 只需要把标准字段填齐即可
+ * - 不再复用旧的 QueryQueue 模块，避免重复队列实现
+ */
+type QueuedChatMessage = {
+  channel: ChatDispatchChannel;
+  chatId: string;
+  chatKey: string;
+  text: string;
+  chatType?: string;
+  messageThreadId?: number;
+  messageId?: string;
+  userId?: string;
+  username?: string;
+};
 
 type Lane = {
   chatKey: string;
@@ -89,10 +108,10 @@ function buildCorrectionMergedMessage(params: {
   }
 
   if (truncated) {
-    out += "\n（注意：消息过长，已截断。请优先处理最近/最关键的信息。）\n";
+    out += "\n（注意：消息过长, 已截断。请优先处理最近/最关键的信息。）\n";
   }
 
-  out += "\n请基于这些新消息，继续处理并修正你刚才的思路/回答。";
+  out += "\n请基于这些新消息, 继续处理并修正你刚才的思路/回答。";
 
   return {
     mergedText: out,
@@ -110,6 +129,7 @@ function buildCorrectionMergedMessage(params: {
 
 export class ChatLaneScheduler {
   private readonly config: ChatLaneSchedulerConfig;
+  private readonly getAgent: (chatKey: string) => Agent;
 
   private readonly lanes: Map<string, Lane> = new Map();
   private readonly runnable: string[] = [];
@@ -117,8 +137,14 @@ export class ChatLaneScheduler {
 
   private runningTotal: number = 0;
 
-  constructor(config?: Partial<ChatLaneSchedulerConfig>) {
-    this.config = normalizeConfig(config);
+  constructor(params: {
+    config?: Partial<ChatLaneSchedulerConfig>;
+    getAgent: (chatKey: string) => Agent;
+  }) {
+    // 关键点（中文）：调度器不再要求 enqueue 时传入 Agent，减少 adapter/上层的耦合。
+    // Agent 绑定由 chatKey 驱动：同一 chatKey 始终对应同一个 Agent 实例（由 runtime 侧缓存）。
+    this.config = normalizeConfig(params.config);
+    this.getAgent = params.getAgent;
   }
 
   isBusy(): boolean {
@@ -229,7 +255,7 @@ export class ChatLaneScheduler {
     lane: Lane,
     first: QueuedChatMessage,
   ): Promise<void> {
-    const agent: Agent = first.agent;
+    const agent: Agent = this.getAgent(first.chatKey);
     if (!agent.isInitialized()) {
       await agent.initialize();
     }

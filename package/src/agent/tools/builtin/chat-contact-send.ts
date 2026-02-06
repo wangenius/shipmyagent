@@ -17,9 +17,9 @@
 
 import { z } from "zod";
 import { tool } from "ai";
-import { getChatDispatcher, type ChatDispatchChannel } from "../../../chat/dispatcher.js";
+import { getChatDispatcher, type ChatDispatchChannel } from "../../../chat/egress/dispatcher.js";
 import { getToolRuntimeContext } from "../set/runtime-context.js";
-import type { ChatLogEntryV1 } from "../../../chat/store.js";
+import type { ChatLogEntryV1 } from "../../../chat/store/store.js";
 
 const chatContactSendInputSchema = z.object({
   chatKey: z
@@ -88,12 +88,12 @@ export const chat_contact_send = tool({
     if (!chatKey) return { success: false, error: "Missing chatKey" };
     if (!text.trim()) return { success: true };
 
-    const { chatManager } = getToolRuntimeContext();
-    const chat = chatManager.get(chatKey);
+    const { chat } = getToolRuntimeContext();
+    const chatStore = chat.get(chatKey);
 
     let entries: ChatLogEntryV1[] = [];
     try {
-      entries = await chat.loadRecentEntries(80);
+      entries = await chatStore.loadRecentEntries(80);
     } catch (e) {
       return { success: false, error: String(e) };
     }
@@ -144,4 +144,3 @@ export const chat_contact_send = tool({
 });
 
 export const chatContactSendTools = { chat_contact_send };
-

@@ -1,5 +1,5 @@
 import path from "path";
-import type { ChatLogEntryV1 } from "../../chat/store.js";
+import type { ChatLogEntryV1 } from "../../chat/store/store.js";
 
 export interface TelegramConfig {
   botToken?: string;

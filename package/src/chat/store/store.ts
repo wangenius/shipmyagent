@@ -7,7 +7,7 @@ import {
   getShipChatHistoryPath,
   getShipChatMemoryDirPath,
   getShipChatMemoryPrimaryPath,
-} from "../utils.js";
+} from "../../utils.js";
 import { HistoryCache } from "./history-cache.js";
 
 export type ChatChannel =
@@ -41,7 +41,6 @@ export interface SearchOptions {
 }
 
 /**
-/**
  * ChatStore：单个 chatKey 的审计与追溯（per-chat）。
  *
  * 设计目标
@@ -49,18 +48,20 @@ export interface SearchOptions {
  * - 为了简化概念，本类同时承担存储引擎职责（cache/归档/路径规则都内化在这里）
  */
 export class ChatStore {
+  readonly projectRoot: string;
   readonly chatKey: string;
-  private readonly projectRoot: string;
   private readonly cache: HistoryCache;
   private hydrated: boolean = false;
   private readonly ARCHIVE_THRESHOLD = 1000;
   private archiveLock: Promise<void> | null = null;
 
   constructor(params: { projectRoot: string; chatKey: string }) {
+    const root = String(params.projectRoot || "").trim();
+    if (!root) throw new Error("ChatStore requires a non-empty projectRoot");
     const key = String(params.chatKey || "").trim();
     if (!key) throw new Error("ChatStore requires a non-empty chatKey");
+    this.projectRoot = root;
     this.chatKey = key;
-    this.projectRoot = params.projectRoot;
     this.cache = new HistoryCache();
   }
 
@@ -102,12 +103,23 @@ export class ChatStore {
       meta: entry.meta,
     };
 
-    const convDir = getShipChatConversationsDirPath(this.projectRoot, this.chatKey);
+    const convDir = getShipChatConversationsDirPath(
+      this.projectRoot,
+      this.chatKey,
+    );
     await fs.ensureDir(convDir);
     // 预创建 memory 目录（不要求存在 Primary.md，但保持结构一致）
-    await fs.ensureDir(getShipChatMemoryDirPath(this.projectRoot, this.chatKey));
-    await fs.ensureFile(getShipChatMemoryPrimaryPath(this.projectRoot, this.chatKey));
-    await fs.appendFile(this.getHistoryFilePath(), JSON.stringify(full) + "\n", "utf8");
+    await fs.ensureDir(
+      getShipChatMemoryDirPath(this.projectRoot, this.chatKey),
+    );
+    await fs.ensureFile(
+      getShipChatMemoryPrimaryPath(this.projectRoot, this.chatKey),
+    );
+    await fs.appendFile(
+      this.getHistoryFilePath(),
+      JSON.stringify(full) + "\n",
+      "utf8",
+    );
 
     this.cache.invalidate(this.chatKey);
     await this.checkAndArchive();
@@ -140,7 +152,9 @@ export class ChatStore {
     this.cache.clear();
   }
 
-  private async loadRecentEntriesInternal(limit: number): Promise<ChatLogEntryV1[]> {
+  private async loadRecentEntriesInternal(
+    limit: number,
+  ): Promise<ChatLogEntryV1[]> {
     const safeLimit = Math.max(1, Math.min(5000, Math.floor(limit)));
     const cached = this.cache.get(this.chatKey);
     if (cached && cached.length >= safeLimit) return cached.slice(-safeLimit);
@@ -172,7 +186,9 @@ export class ChatStore {
     return out;
   }
 
-  private async loadRecentMessagesInternal(limit: number): Promise<ModelMessage[]> {
+  private async loadRecentMessagesInternal(
+    limit: number,
+  ): Promise<ModelMessage[]> {
     const safeLimit = Math.max(1, Math.min(5000, Math.floor(limit)));
     const mainFile = this.getHistoryFilePath();
     const allLines: string[] = [];
@@ -237,7 +253,9 @@ export class ChatStore {
     this.hydrated = true;
   }
 
-  private async searchInternal(options: SearchOptions): Promise<ChatLogEntryV1[]> {
+  private async searchInternal(
+    options: SearchOptions,
+  ): Promise<ChatLogEntryV1[]> {
     const { keyword, startTime, endTime, role, limit = 100 } = options;
     const safeLimit = Math.max(1, Math.min(5000, Math.floor(limit)));
     const allEntries = await this.loadAllEntries();

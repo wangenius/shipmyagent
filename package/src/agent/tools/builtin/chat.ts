@@ -8,11 +8,11 @@
 
 import { z } from "zod";
 import { tool } from "ai";
-import { chatRequestContext } from "../../../chat/request-context.js";
-import { getChatDispatcher, type ChatDispatchChannel } from "../../../chat/dispatcher.js";
+import { chatRequestContext } from "../../../chat/context/request-context.js";
+import { getChatDispatcher, type ChatDispatchChannel } from "../../../chat/egress/dispatcher.js";
 import { toolExecutionContext } from "./execution-context.js";
 import { getToolRuntimeContext } from "../set/runtime-context.js";
-import { tryClaimChatEgressChatSend, markChatEgressChatSendDelivered, releaseChatEgressChatSendClaim } from "../../../chat/egress-idempotency.js";
+import { tryClaimChatEgressChatSend, markChatEgressChatSendDelivered, releaseChatEgressChatSendClaim } from "../../../chat/egress/egress-idempotency.js";
 import { createHash } from "node:crypto";
 
 const chatSendInputSchema = z.object({

@@ -1,7 +1,5 @@
-import type { Agent } from "../agent/context/index.js";
 import { PlatformAdapter } from "./platform-adapter.js";
-import type { ChatDispatchChannel } from "../chat/dispatcher.js";
-import { ChatLaneScheduler } from "../chat/lane-scheduler.js";
+import type { ChatDispatchChannel } from "../chat/egress/dispatcher.js";
 import type { Logger } from "../telemetry/index.js";
 import { getShipRuntimeContext } from "../server/ShipRuntimeContext.js";
 
@@ -28,51 +26,36 @@ export type IncomingChatMessage = {
  * - Adapters still run a conservative fallback send if the model forgets the tool.
  */
 export abstract class BaseChatAdapter extends PlatformAdapter {
-  private static globalScheduler: ChatLaneScheduler | null = null;
-
   protected readonly projectRoot: string;
   protected readonly logger: Logger;
-  private readonly createAgentRuntime: () => Agent;
-  private readonly agentsByChatKey: Map<string, Agent> = new Map();
 
   protected constructor(params: {
     channel: ChatDispatchChannel;
     projectRoot?: string;
     logger?: Logger;
-    createAgent?: () => Agent;
   }) {
     super({
       channel: params.channel,
     });
 
     const runtime = getShipRuntimeContext();
-    this.projectRoot = params.projectRoot ?? runtime.projectRoot;
+    this.projectRoot = params.projectRoot ?? runtime.root;
     this.logger = params.logger ?? runtime.logger;
-    this.createAgentRuntime = params.createAgent ?? runtime.createAgent;
-
-    if (!BaseChatAdapter.globalScheduler) {
-      BaseChatAdapter.globalScheduler = new ChatLaneScheduler(
-        runtime.config?.context?.chatQueue || {},
-      );
-    }
   }
 
   clearChat(chatKey: string): void {
-    const existing = this.agentsByChatKey.get(chatKey);
-    if (existing) {
-      this.agentsByChatKey.delete(chatKey);
-    }
+    getShipRuntimeContext().chatRuntime.clearAgent(chatKey);
     this.logger.info(`Cleared chat: ${chatKey}`);
   }
 
-  private getOrCreateAgent(chatKey: string): Agent {
-    const existing = this.agentsByChatKey.get(chatKey);
-    if (existing) return existing;
-    const created = this.createAgentRuntime();
-    this.agentsByChatKey.set(chatKey, created);
-    return created;
-  }
-
+  /**
+   * 落盘用户消息（审计/追溯）。
+   *
+   * 说明（中文）
+   * - 大部分“正常入站消息”会走 `enqueueMessage` → ChatRuntime.enqueue，自带落盘逻辑
+   * - 但 adapter 仍可能需要记录一些“非标准入站事件”（如 pending updates / callback_query 等）
+   * - 因此这里保留一个轻量 helper，避免每个 adapter 里重复写 append 逻辑
+   */
   protected async appendUserMessage(params: {
     chatId: string;
     chatKey: string;
@@ -81,24 +64,21 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     text: string;
     meta?: Record<string, unknown>;
   }): Promise<void> {
-    try {
-      await this.chatManager.get(params.chatKey).append({
-        channel: this.channel as any,
-        chatId: params.chatId,
-        userId: params.userId,
-        messageId: params.messageId,
-        role: "user",
-        text: params.text,
-        meta: params.meta,
-      });
-    } catch {
-      // ignore
-    }
+    await this.chatRuntime.appendUserMessage({
+      channel: this.channel,
+      chatId: params.chatId,
+      chatKey: params.chatKey,
+      userId: params.userId,
+      messageId: params.messageId,
+      text: params.text,
+      meta: params.meta,
+    });
   }
 
   protected async enqueueMessage(
     msg: IncomingChatMessage,
   ): Promise<{ chatKey: string; position: number }> {
+    const runtime = getShipRuntimeContext();
     const chatKey = this.getChatKey({
       chatId: msg.chatId,
       chatType: msg.chatType,
@@ -106,27 +86,11 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
       messageId: msg.messageId,
     });
 
-    await this.appendUserMessage({
-      chatId: msg.chatId,
-      chatKey,
-      messageId: msg.messageId,
-      userId: msg.userId,
-      text: msg.text,
-      meta: {
-        chatType: msg.chatType,
-        messageThreadId: msg.messageThreadId,
-        username: msg.username,
-      },
-    });
-
-    const scheduler = BaseChatAdapter.globalScheduler!;
-    const agent = this.getOrCreateAgent(chatKey);
-    const { lanePosition } = scheduler.enqueue({
+    const { lanePosition } = await runtime.chatRuntime.enqueue({
       channel: this.channel,
       chatId: msg.chatId,
       chatKey,
       text: msg.text,
-      agent,
       chatType: msg.chatType,
       messageThreadId: msg.messageThreadId,
       messageId: msg.messageId,
