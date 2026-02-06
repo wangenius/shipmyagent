@@ -341,14 +341,14 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
       "enabled": true,
       "botToken": "${TELEGRAM_BOT_TOKEN}",
       "chatId": "123456789",  // 安全所必需！
-      "updates": {
-        "timeout": 30,
-        "limit": 10
-      }
+      "followupWindowMs": 600000,
+      "groupAccess": "initiator_or_admin"
     }
   }
 }
 ```
+
+注意：服务离线期间收到的消息，会在重启后写入对应 chat 的 history，但不会触发执行/回复。
 
 **GitHub**:
 

@@ -29,6 +29,7 @@ export class TelegramBot extends BaseChatAdapter {
   private pollingInterval: ReturnType<typeof setInterval> | null = null;
   private isRunning: boolean = false;
   private pollInFlight: boolean = false;
+  private lastDrainAttemptAt: number = 0;
 
   private readonly api: TelegramApiClient;
   private readonly stateStore: TelegramStateStore;
@@ -61,6 +62,130 @@ export class TelegramBot extends BaseChatAdapter {
       logger: this.logger,
     });
     this.stateStore = new TelegramStateStore(this.projectRoot);
+  }
+
+  private async drainPendingUpdatesToHistory(params: {
+    reason: "startup" | "webhook_conflict";
+  }): Promise<void> {
+    const now = Date.now();
+    // 避免高频 drain（尤其是 webhook 冲突 / 网络抖动时）
+    if (now - this.lastDrainAttemptAt < 30_000) return;
+    this.lastDrainAttemptAt = now;
+
+    let drained = 0;
+    try {
+      // 关键点（中文）
+      // - Telegram 会把离线期间的消息缓存为 pending updates。
+      // - 我们会把这些消息“只入库，不执行/不回复”，然后推进 offset，避免重启后补回复旧消息。
+      for (let i = 0; i < 50; i++) {
+        const updates = await this.api.requestJson<TelegramUpdate[]>(
+          "getUpdates",
+          {
+            offset: this.lastUpdateId + 1,
+            limit: 100,
+            timeout: 0,
+          },
+        );
+        if (!Array.isArray(updates) || updates.length === 0) break;
+
+        for (const update of updates) {
+          this.lastUpdateId = Math.max(this.lastUpdateId, update.update_id);
+
+          // 仅把 pending 入库，不触发执行
+          if (update.message?.chat?.id) {
+            const message = update.message;
+            const chatId = message.chat.id.toString();
+            const messageThreadId =
+              typeof message.message_thread_id === "number"
+                ? message.message_thread_id
+                : undefined;
+            const chatKey = this.buildChatKey(chatId, messageThreadId);
+            const from = message.from;
+            const fromIsBot =
+              (from as any)?.is_bot === true ||
+              (!!this.botId &&
+                typeof from?.id === "number" &&
+                from.id === this.botId) ||
+              (!!this.botUsername &&
+                typeof from?.username === "string" &&
+                from.username.toLowerCase() === this.botUsername.toLowerCase());
+            if (fromIsBot) continue;
+
+            const rawText =
+              typeof message.text === "string"
+                ? message.text
+                : typeof message.caption === "string"
+                  ? message.caption
+                  : "";
+            const hasIncomingAttachment =
+              !!message.document ||
+              (Array.isArray(message.photo) && message.photo.length > 0) ||
+              !!message.voice ||
+              !!message.audio;
+            if (!rawText && !hasIncomingAttachment) continue;
+
+            const messageId =
+              typeof message.message_id === "number"
+                ? String(message.message_id)
+                : undefined;
+            const actorId = from?.id ? String(from.id) : undefined;
+
+            await this.appendUserMessage({
+              chatId,
+              chatKey,
+              messageId,
+              userId: actorId,
+              text: this.buildAuditText({ rawText, hasIncomingAttachment, message }),
+              meta: {
+                kind: "pending",
+                pendingReason: params.reason,
+                updateId: update.update_id,
+                chatType: message.chat.type,
+                messageThreadId,
+                username: from?.username,
+              },
+            });
+          } else if (update.callback_query?.from?.id) {
+            const q = update.callback_query;
+            const chatId = q.message?.chat?.id?.toString?.() || "";
+            if (!chatId) continue;
+            const messageThreadId =
+              typeof q.message?.message_thread_id === "number"
+                ? q.message.message_thread_id
+                : undefined;
+            const chatKey = this.buildChatKey(chatId, messageThreadId);
+            await this.appendUserMessage({
+              chatId,
+              chatKey,
+              messageId: undefined,
+              userId: q.from?.id ? String(q.from.id) : undefined,
+              text: `[callback_query] ${String(q.data || "").slice(0, 1000)}`.trim(),
+              meta: {
+                kind: "pending",
+                pendingReason: params.reason,
+                updateId: update.update_id,
+                messageThreadId,
+                username: q.from?.username,
+              },
+            });
+          }
+        }
+
+        drained += updates.length;
+      }
+
+      await this.stateStore.saveLastUpdateId(this.lastUpdateId);
+      if (drained > 0) {
+        this.logger.info(`Drained ${drained} pending Telegram updates to history`, {
+          reason: params.reason,
+        });
+      }
+    } catch (error) {
+      this.logger.warn("Failed to drain pending Telegram updates to history", {
+        error: String(error),
+        reason: params.reason,
+      });
+    }
   }
 
   private buildChatKey(chatId: string, messageThreadId?: number): string {
@@ -293,6 +418,9 @@ export class TelegramBot extends BaseChatAdapter {
       return;
     }
 
+    // 关键点（中文）：把离线期间积压的 updates 入库，但不执行/不回复
+    await this.drainPendingUpdatesToHistory({ reason: "startup" });
+
     // Start polling
     this.pollingInterval = setInterval(() => this.pollUpdates(), 1000);
     this.logger.info("Telegram Bot started");
@@ -351,6 +479,7 @@ export class TelegramBot extends BaseChatAdapter {
               "Telegram polling conflict detected; cleared webhook and will retry",
               { error: msg },
             );
+            await this.drainPendingUpdatesToHistory({ reason: "webhook_conflict" });
             return;
           } catch (e) {
             this.logger.error(

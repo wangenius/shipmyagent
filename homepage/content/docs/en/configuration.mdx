@@ -359,14 +359,14 @@ External service connections.
       "enabled": true,
       "botToken": "${TELEGRAM_BOT_TOKEN}",
       "chatId": "123456789",  // Required for security!
-      "updates": {
-        "timeout": 30,
-        "limit": 10
-      }
+      "followupWindowMs": 600000,
+      "groupAccess": "initiator_or_admin"
     }
   }
 }
 ```
+
+Note: messages received while the server was offline are appended to chat history after restart, but will not trigger execution/replies.
 
 **GitHub**:
 
