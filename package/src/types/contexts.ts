@@ -54,3 +54,40 @@ export type ChatContextIndexV1 = {
   v: 1;
   items: ChatContextIndexItemV1[];
 };
+
+// ===== 兼容旧的智能压缩模块 =====
+// 以下类型用于向后兼容旧的智能压缩功能模块
+// 注意：这些模块暂时未被主代码使用，但保留以备将来迁移
+
+/**
+ * @deprecated 使用 ChatContextMessageEntryV1 代替
+ * 旧的对话轮次类型（兼容层）
+ */
+export type ChatContextTurnV1 = {
+  v: 1;
+  ts: number;
+  role: ChatContextMessageRoleV1;
+  text: string;
+  meta?: Record<string, unknown>;
+};
+
+/**
+ * @deprecated 使用 ChatContextArchiveSnapshotV1 代替
+ * 旧的快照类型（兼容层）
+ */
+export type ChatContextSnapshotV1 = {
+  v: 1;
+  chatKey: string;
+  contextId: string;
+  state: "active" | "archived";
+  createdAt: number;
+  updatedAt: number;
+  archivedAt?: number;
+  title?: string;
+  turns: ChatContextTurnV1[];
+  searchText: string;
+  checkpoint?: {
+    lastAssistantTurnIndex: number;
+    lastAssistantTextPreview: string;
+  };
+};
