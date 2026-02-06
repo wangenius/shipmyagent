@@ -12,8 +12,8 @@ import type {
 } from "./types.js";
 import { HttpTransport } from "./http-transport.js";
 import { resolveEnvVar, resolveEnvVarsInRecord } from "./env.js";
-import { logger } from "@/telemetry/logging/logger.js";
-import { getShipMcpConfigPath } from "@/utils.js";
+import { logger } from "../../telemetry/logging/logger.js";
+import { getShipMcpConfigPath } from "../../utils.js";
 
 export interface McpLogger {
   info(message: string): void;

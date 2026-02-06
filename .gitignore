@@ -33,3 +33,4 @@ package/bin
 **/.ship/chats/
 **/.ship/.cache/
 **/.ship/public/
+.secrets

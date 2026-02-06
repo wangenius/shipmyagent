@@ -326,7 +326,9 @@ export class Agent {
       }
 
       const currentUserMessageRef =
-        (contextMessages[contextMessages.length - 1] as any) || ({ role: "user", content: userText } as any);
+        (contextMessages[contextMessages.length - 1] as any) ||
+        ({ role: "user", content: userText } as any);
+      const baseCurrentUserContent = String((currentUserMessageRef as any)?.content ?? "");
 
       // in-flight messages = system（独立传入） + contextMessages（同一数组复用）
       const inFlightMessages: ModelMessage[] = contextMessages;
@@ -340,8 +342,6 @@ export class Agent {
       // 注意：contextMessages 不包含 system，因此 systemMessageInsertIndex 固定为 0
       let systemMessageInsertIndex = 0;
 
-      const currentUserMessageIndex = Math.max(0, inFlightMessages.length - 1);
-
       // 关键点（中文）：system prompt 不再放入 context messages（避免污染跨轮复用的数组），
       // 统一通过 `system` 参数注入（runtime + 配置 + tools 追加）。
       const runtimeSystemMessages: SystemModelMessage[] = systemExtras
@@ -354,8 +354,78 @@ export class Agent {
       ];
       const allToolNames = Object.keys(this.tools);
 
-      // lane “快速矫正”追加内容：仅影响 prepareStep 的 step 输入，不改写 messages。
+      /**
+       * lane “快速矫正”合并。
+       *
+       * 关键点（中文）
+       * - 关键约束：本次 run 只维护“1 条 user message”（本轮 query 对应的那条），lane 合并内容只追加到它的末尾。
+       * - 可见性：我们会在每次 tool 结束后 drain 一次，并在每个 `prepareStep` 前再 drain 一次；
+       *   同时在 `prepareStep` 返回的 messages 里强制把合并块写入当前 user，避免 SDK 内部复制导致丢失更新。
+       */
       let laneMergedAppendBlock = "";
+
+      const appendLaneMergedBlockToCurrentUser = (mergedText: string, trigger: string): void => {
+        const trimmed = String(mergedText ?? "").trim();
+        if (!trimmed) return;
+        laneMergedAppendBlock += `\n\n---\n\n${trimmed}\n`;
+
+        const last = currentUserMessageRef as any;
+        if (last && last.role === "user") {
+          last.content = baseCurrentUserContent + laneMergedAppendBlock;
+        }
+
+        void logger.log("debug", "Lane merged text appended to current user message", {
+          chatKey,
+          requestId,
+          trigger,
+          mergedChars: trimmed.length,
+        });
+      };
+
+      const drainAndAppendLaneMergedTextIfNeeded = async (
+        trigger: string,
+      ): Promise<{ merged: boolean; mergedText?: string }> => {
+        if (typeof drainLaneMergedText !== "function") return { merged: false };
+        try {
+          const mergedText = await drainLaneMergedText();
+          if (!mergedText || !mergedText.trim()) return { merged: false };
+          appendLaneMergedBlockToCurrentUser(mergedText, trigger);
+          return { merged: true, mergedText: mergedText.trim() };
+        } catch {
+          // ignore
+          return { merged: false };
+        }
+      };
+
+      const toolsWithLaneMerge: Record<string, Tool> = {};
+      for (const [toolName, tool] of Object.entries(this.tools)) {
+        const exec = (tool as any)?.execute;
+        if (typeof exec !== "function") {
+          toolsWithLaneMerge[toolName] = tool;
+          continue;
+        }
+
+        toolsWithLaneMerge[toolName] = {
+          ...(tool as any),
+          execute: async (...args: any[]) => {
+            try {
+              return await exec.apply(tool, args);
+            } finally {
+              // 关键点（中文）：工具结束后立即 drain，一旦有新消息就并入当前 user message。
+              const merged = await drainAndAppendLaneMergedTextIfNeeded(
+                `after_tool:${toolName}`,
+              );
+              if (merged.merged && onStep) {
+                try {
+                  await emitStep("lane_merge", merged.mergedText || "", { requestId, chatKey });
+                } catch {
+                  // ignore
+                }
+              }
+            }
+          },
+        } as any;
+      }
 
       const buildLoadedSkillsSystemText = (
         loaded: Map<
@@ -433,7 +503,7 @@ export class Agent {
         {
           systemMessageInsertIndex,
           messages: inFlightMessages,
-          currentUserMessageIndex,
+          currentUserMessageIndex: Math.max(0, inFlightMessages.length - 1),
           injectedFingerprints: new Set(),
           maxInjectedMessages: 120,
           toolCallCounts: new Map(),
@@ -450,12 +520,10 @@ export class Agent {
                 const execCtx = toolExecutionContext.getStore();
 
                 // 1) 在每个 step 前先检查 lane 是否有新消息，合并做快速矫正。
-                if (typeof drainLaneMergedText === "function") {
+                const merged = await drainAndAppendLaneMergedTextIfNeeded("before_step");
+                if (merged.merged && onStep) {
                   try {
-                    const mergedText = await drainLaneMergedText();
-                    if (mergedText && mergedText.trim()) {
-                      laneMergedAppendBlock += `\n\n---\n\n${mergedText.trim()}\n`;
-                    }
+                    await emitStep("lane_merge", merged.mergedText || "", { requestId, chatKey });
                   } catch {
                     // ignore
                   }
@@ -503,13 +571,11 @@ export class Agent {
                     : baseSystemMessages;
 
                 // 3) messages：把“预备注入 assistant messages”插到当前 user message 之前；
-                //    同时把 lane 合并文本追加到当前 user message（不改写原 messages 对象）。
+                //    并且把 lane 合并块强制写入当前 user（避免 SDK 内部复制导致丢失更新）。
                 let outMessages: ModelMessage[] = messages as any;
 
                 if (execCtx?.preparedAssistantMessages?.length) {
-                  const insertAt = outMessages.findIndex(
-                    (m) => m === currentUserMessageRef,
-                  );
+                  const insertAt = outMessages.findIndex((m) => m === currentUserMessageRef);
                   if (insertAt >= 0) {
                     const prepared = execCtx.preparedAssistantMessages
                       .filter((x) => x?.content?.trim())
@@ -525,16 +591,26 @@ export class Agent {
                 }
 
                 if (laneMergedAppendBlock.trim()) {
-                  const idx = outMessages.findIndex((m) => m === currentUserMessageRef);
+                  const idx = (() => {
+                    // 优先按引用匹配；若 SDK 内部复制导致引用不一致，则兜底取最后一条 user。
+                    const byRef = outMessages.findIndex((m) => m === currentUserMessageRef);
+                    if (byRef >= 0) return byRef;
+                    for (let i = outMessages.length - 1; i >= 0; i -= 1) {
+                      const m: any = outMessages[i];
+                      if (m && m.role === "user") return i;
+                    }
+                    return -1;
+                  })();
+
                   if (idx >= 0) {
-                    const baseUserContent = String(
-                      (currentUserMessageRef as any)?.content ?? "",
-                    );
-                    const mergedUserContent = baseUserContent + laneMergedAppendBlock;
                     const old = outMessages[idx] as any;
                     outMessages = [
                       ...outMessages.slice(0, idx),
-                      { ...old, role: "user", content: mergedUserContent },
+                      {
+                        ...old,
+                        role: "user",
+                        content: baseCurrentUserContent + laneMergedAppendBlock,
+                      },
                       ...outMessages.slice(idx + 1),
                     ];
                   }
@@ -548,30 +624,21 @@ export class Agent {
                 };
               },
               messages: inFlightMessages,
-              tools: this.tools,
+              tools: toolsWithLaneMerge,
               stopWhen: [stepCountIs(30)],
               onStepFinish: async (step) => {
                 try {
                   const userTextFromStep = extractUserFacingTextFromStep(step);
-                  if (
-                    userTextFromStep &&
-                    userTextFromStep !== lastEmittedAssistant
-                  ) {
+                  if (userTextFromStep && userTextFromStep !== lastEmittedAssistant) {
                     lastEmittedAssistant = userTextFromStep;
-                    await emitStep("assistant", userTextFromStep, {
-                      requestId,
-                      chatKey,
-                    });
+                    await emitStep("assistant", userTextFromStep, { requestId, chatKey });
                   }
                 } catch {
                   // ignore
                 }
                 if (!onStep) return;
                 try {
-                  await emitToolSummariesFromStep(step, emitStep, {
-                    requestId,
-                    chatKey,
-                  });
+                  await emitToolSummariesFromStep(step, emitStep, { requestId, chatKey });
                 } catch {
                   // ignore
                 }
@@ -639,14 +706,6 @@ export class Agent {
       try {
         const assistantText =
           pickLastSuccessfulChatSendText(toolCalls) || String(result.text || "").trim();
-
-        if (laneMergedAppendBlock.trim()) {
-          // 关键点（中文）：把 lane 合并块补写回当前 user message，保证下一轮复用的 context 与模型看到的一致
-          const last = inFlightMessages[inFlightMessages.length - 1] as any;
-          if (last && last.role === "user") {
-            last.content = String(last.content ?? "") + laneMergedAppendBlock;
-          }
-        }
 
         if (assistantText) inFlightMessages.push({ role: "assistant", content: assistantText } as any);
 

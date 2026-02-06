@@ -41,7 +41,10 @@ export interface AgentRunInput {
 
   /**
    * Lane “快速矫正”合并：在每个 LLM step 之前检查当前 chatKey lane 是否有新消息，
-   * 若有则合并为一段文本并返回，Agent 会把它追加到当前 user message 的末尾。
+   * 若有则合并为一段文本并返回，Agent 会把它追加到“本轮的 user message”末尾（保持只有一条 user）。
+   *
+   * 同时（关键点，中文）
+   * - 新消息“无法抢占”正在进行的模型调用；只能在下一次模型调用前并入（例如工具调用完成后进入下一 step）。
    *
    * 关键点（中文）
    * - 由调度器（ChatLaneScheduler）提供实现（它掌握 lane 队列）

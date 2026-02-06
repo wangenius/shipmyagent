@@ -18,7 +18,7 @@ import {
   initShipRuntimeContext,
 } from "../server/ShipRuntimeContext.js";
 import type { StartOptions } from "../types/start.js";
-import { logger } from "@/telemetry/logging/logger.js";
+import { logger } from "../telemetry/logging/logger.js";
 
 /**
  * `shipmyagent run` command entrypoint.
