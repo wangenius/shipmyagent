@@ -1,0 +1,10 @@
+{
+  "name": "server-agent",
+  "version": "1.0.0",
+  "description": "Connect and control remote server agents",
+  "scripts": {
+    "ssh": "node scripts/ssh_exec.js",
+    "http": "node scripts/http_call.js",
+    "sync": "node scripts/sync_files.js"
+  }
+}

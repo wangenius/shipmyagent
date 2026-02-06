@@ -134,32 +134,6 @@ export interface ShipConfig {
        */
       chatSendIdempotency?: boolean;
     };
-
-    /**
-     * contexts（工作上下文快照）：用于显式创建“新上下文”，并在需要时按快照恢复旧上下文。
-     *
-     * 说明（中文）
-     * - conversations/ 下的 transcript 仍是平台审计账本（不变）。
-     * - contexts/ 下保存的是“工作上下文快照”（user/assistant 关键消息），由工具驱动创建/恢复。
-     */
-    contexts?: {
-      /**
-       * 是否启用 contexts 功能。默认：true（但只有 active.json 存在时才会注入）。
-       */
-      enabled?: boolean;
-      /**
-       * active context 最大保留 turns 数。默认：120
-       */
-      maxTurns?: number;
-      /**
-       * active context 最大保留字符数。默认：48000
-       */
-      maxChars?: number;
-      /**
-       * 归档索引/检索文本的最大字符数。默认：12000
-       */
-      searchTextMaxChars?: number;
-    };
   };
   permissions?: {
     read_repo: boolean | { paths?: string[] };
@@ -476,7 +450,8 @@ export function getShipChatContextsDirPath(cwd: string, chatKey: string): string
 }
 
 export function getShipChatContextsActivePath(cwd: string, chatKey: string): string {
-  return path.join(getShipChatContextsDirPath(cwd, chatKey), "active.json");
+  // 关键点（中文）：active 采用 JSONL（append-only），便于每轮直接追加 messages。
+  return path.join(getShipChatContextsDirPath(cwd, chatKey), "active.jsonl");
 }
 
 export function getShipChatContextsIndexPath(cwd: string, chatKey: string): string {

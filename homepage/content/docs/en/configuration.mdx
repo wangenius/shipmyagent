@@ -257,27 +257,6 @@ Controls how much prior chat transcript is injected into each agent run:
 }
 ```
 
-**context.contexts** (object, optional)
-
-Controls the optional per-chat **working context snapshots** stored under `.ship/chat/<chatKey>/contexts/`.
-
-Use cases:
-- When the conversation background becomes too long/noisy, the agent can start a **fresh working context** via `chat_context_new` (the old context is snapshotted to disk).
-- Later, the agent can restore a snapshot by searching and injecting it via `chat_context_load` (reference-only).
-
-```json
-{
-  "context": {
-    "contexts": {
-      "enabled": true,
-      "maxTurns": 120,
-      "maxChars": 48000,
-      "searchTextMaxChars": 12000
-    }
-  }
-}
-```
-
 **context.chatEgress** (object, optional)
 
 Controls outbound chat delivery safety (tool-strict):
@@ -408,6 +387,7 @@ LLM request logging (may include system + messages) can be toggled via `ship.jso
 
 - `llm.logMessages=false` to disable
 
+Note: LLM request logs are incremental per `chatKey`—each request only prints newly appended `messages`. The `system` prompt is only logged when it changes.
 #### cache (object)
 
 Configure response caching.

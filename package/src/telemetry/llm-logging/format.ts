@@ -144,7 +144,6 @@ function formatMessagesForLog(messages: any[], opts: {
   return out;
 }
 
-
 export type ProviderFetch = (input: any, init?: any) => Promise<any>;
 
 export function parseFetchRequestForLog(
@@ -229,6 +228,7 @@ export function parseFetchRequestForLog(
       ["system:", indentBlock(truncate(system, 4000), "  ")].join("\n"),
     );
   }
+
   if (messages && Array.isArray(messages)) {
     const formattedMessages = formatMessagesForLog(messages, {
       maxContentChars: 2000,

@@ -16,16 +16,18 @@ export function createLlmLoggingFetch(args: {
         const ctx = llmRequestContext.getStore() as LlmRequestContext | undefined;
 
         if (parsed) {
+          const chatKey = ctx?.chatKey;
+          const requestId = ctx?.requestId;
           const message = parsed.requestText
             .replace(/\n===== LLM REQUEST END =====$/, "") +
-            `${ctx?.chatKey ? `\nchatKey: ${ctx.chatKey}` : ""}` +
-            `${ctx?.requestId ? `\nrequestId: ${ctx.requestId}` : ""}` +
+            `${chatKey ? `\nchatKey: ${chatKey}` : ""}` +
+            `${requestId ? `\nrequestId: ${requestId}` : ""}` +
             `\n===== LLM REQUEST END =====`;
 
           await args.logger.log("info", message.slice(0, maxChars), {
             ...parsed.meta,
-            chatKey: ctx?.chatKey,
-            requestId: ctx?.requestId,
+            chatKey,
+            requestId,
           });
         }
       } catch {
@@ -36,4 +38,3 @@ export function createLlmLoggingFetch(args: {
     return baseFetch(input, init);
   };
 }
-

@@ -32,10 +32,13 @@ import { getLogger, type Logger } from "../../telemetry/index.js";
 import { chatRequestContext } from "../../chat/request-context.js";
 import { withToolExecutionContext } from "../tools/builtin/execution-context.js";
 import { createAgentTools } from "../tools/set/agent-tools.js";
-import { loadChatTranscriptAsOneAssistantMessage } from "../../chat/transcript.js";
 import { openai } from "@ai-sdk/openai";
 import { toolExecutionContext } from "../tools/builtin/execution-context.js";
-import { appendTurnsToActiveChatContext, loadActiveChatContext } from "../../chat/contexts-store.js";
+import {
+  loadActiveContextEntries,
+  writeActiveContextEntries,
+} from "../../chat/contexts-store.js";
+import type { ChatContextMessageEntryV1 } from "../../types/contexts.js";
 
 function pickLastSuccessfulChatSendText(toolCalls: AgentResult["toolCalls"]): string {
   // 关键点（中文）：优先从 chat_send 的 input.text 还原“用户可见回复”，因为 tool-strict 下 result.text 可能为空。
@@ -58,32 +61,6 @@ function pickLastSuccessfulChatSendText(toolCalls: AgentResult["toolCalls"]): st
   return "";
 }
 
-function formatActiveContextTurnsAsOneAssistantMessage(params: {
-  chatKey: string;
-  turns: Array<{ role: "user" | "assistant"; text: string }>;
-  maxChars: number;
-}): string {
-  const lines: string[] = [];
-  lines.push("以下是该 chat 的当前工作上下文（contexts/active.json，用户/助手消息，供参考）：");
-  lines.push(`- chatKey: ${params.chatKey}`);
-  lines.push(`- turns: ${params.turns.length}`);
-  lines.push("");
-
-  let out = lines.join("\n");
-  for (const t of params.turns) {
-    const role = t.role === "user" ? "user" : "assistant";
-    const text = String(t.text ?? "").replace(/\s+$/g, "");
-    if (!text.trim()) continue;
-    const next = out + `${role}: ${text}\n`;
-    if (next.length > params.maxChars) {
-      out = out.trimEnd() + "\n…（注意：上下文过长，已截断。）\n";
-      break;
-    }
-    out = next;
-  }
-  return out.trimEnd();
-}
-
 export class Agent {
   // 配置
   private configs: AgentConfigurations;
@@ -93,6 +70,8 @@ export class Agent {
   private model: LanguageModel = openai("gpt-5.2");
 
   private tools: Record<string, Tool> = {};
+  // 进程内的工作上下文（per chatKey）：同一 chatKey 的两次 run 直接复用同一个 messages 数组
+  private contextMessagesByChatKey: Map<string, ModelMessage[]> = new Map();
 
   constructor(configs: AgentConfigurations) {
     this.configs = configs;
@@ -158,6 +137,63 @@ export class Agent {
         "LLM is not configured (or runtime not initialized). Please configure `ship.json.llm` (model + apiKey) and restart.",
       toolCalls: [],
     };
+  }
+
+  private normalizeChatKey(chatKey: string): string {
+    return String(chatKey || "").trim();
+  }
+
+  private async getOrHydrateContextMessages(chatKey: string): Promise<ModelMessage[]> {
+    const key = this.normalizeChatKey(chatKey);
+    if (!key) return [];
+
+    const existing = this.contextMessagesByChatKey.get(key);
+    if (existing) return existing;
+
+    // 关键点（中文）：active.jsonl 只用于“进程重启后的恢复”，因此这里只在首次触达该 chatKey 时 hydrate 一次。
+    const entries = await loadActiveContextEntries({
+      projectRoot: this.configs.projectRoot,
+      chatKey: key,
+      options: { maxMessages: 0, maxChars: 0 },
+    });
+    const messages: ModelMessage[] = entries.map((e) => ({
+      role: e.role,
+      content: e.content,
+    })) as any;
+
+    this.contextMessagesByChatKey.set(key, messages);
+    return messages;
+  }
+
+  private async flushContextMessagesToDisk(params: {
+    chatKey: string;
+    messages: ModelMessage[];
+  }): Promise<void> {
+    const key = this.normalizeChatKey(params.chatKey);
+    if (!key) return;
+
+    const t0 = Date.now();
+    const entries: ChatContextMessageEntryV1[] = [];
+    let ts = t0;
+    for (const m of params.messages || []) {
+      if (!m || typeof m !== "object") continue;
+      const role = String((m as any).role || "");
+      if (role !== "user" && role !== "assistant") continue;
+      const content = String((m as any).content ?? "");
+      if (!content.trim()) continue;
+      entries.push({ v: 1, ts, role: role as any, content });
+      ts += 1;
+    }
+
+    try {
+      await writeActiveContextEntries({
+        projectRoot: this.configs.projectRoot,
+        chatKey: key,
+        entries,
+      });
+    } catch {
+      // ignore
+    }
   }
 
   private async runWithToolLoopAgent(
@@ -264,100 +300,44 @@ export class Agent {
         });
       }
 
-      // contexts/active.json：显式“工作上下文”（不等同于 transcript）。
-      // 关键点（中文）：只有当 active 存在且有 turns 时才注入；否则沿用现有 transcript 注入逻辑。
-      const contextsEnabled =
-        this.configs.config?.context?.contexts?.enabled === undefined
-          ? true
-          : Boolean(this.configs.config.context.contexts.enabled);
-      const activeContext = contextsEnabled
-        ? await loadActiveChatContext({
-            projectRoot: this.configs.projectRoot,
-            chatKey,
-          })
-        : null;
+      // 工作上下文来源（中文，关键点）
+      // - Agent 进程内维护 per-chatKey 的 `ModelMessage[]` 作为 context
+      // - active.jsonl 只用于“进程重启后的恢复”（首次 hydrate），以及 run 结束时 flush（用于下次重启）
+      const contextMessages = await this.getOrHydrateContextMessages(chatKey);
+      const retryAttempts = opts?.retryAttempts ?? 0;
 
-      // 从 ChatStore 抽取 transcript，并以“一条 assistant message”注入。
-      // 关键点：这里不是“持久化 in-memory history”，而是每次 run 都以落盘 transcript 作为历史来源。
-      const transcriptMaxMessages =
-        typeof this.configs.config?.context?.chatHistory
-          ?.transcriptMaxMessages === "number"
-          ? this.configs.config.context.chatHistory.transcriptMaxMessages
-          : 30;
-      const transcriptMaxChars =
-        typeof this.configs.config?.context?.chatHistory?.transcriptMaxChars ===
-        "number"
-          ? this.configs.config.context.chatHistory.transcriptMaxChars
-          : 12_000;
-
-      const transcriptCount =
-        typeof opts?.retryAttempts === "number" && opts.retryAttempts > 0
-          ? Math.max(
-              0,
-              Math.floor(transcriptMaxMessages / (opts.retryAttempts + 1)),
-            )
-          : transcriptMaxMessages;
-
-      const transcript = await loadChatTranscriptAsOneAssistantMessage({
-        projectRoot: this.configs.projectRoot,
-        chatKey,
-        options: {
-          count: transcriptCount,
-          maxChars: transcriptMaxChars,
-        },
-      });
-
-      const configuredActiveMaxChars =
-        typeof this.configs.config?.context?.contexts?.maxChars === "number" &&
-        Number.isFinite(this.configs.config.context.contexts.maxChars) &&
-        this.configs.config.context.contexts.maxChars > 1000
-          ? Math.floor(this.configs.config.context.contexts.maxChars)
-          : null;
-      const activeContextMaxChars = Math.max(
-        2000,
-        Math.min(50_000, configuredActiveMaxChars ?? transcriptMaxChars),
-      );
-      const activeContextMessage =
-        activeContext && Array.isArray((activeContext as any).turns) && activeContext.turns.length > 0
-          ? ({
-              role: "assistant",
-              content: formatActiveContextTurnsAsOneAssistantMessage({
-                chatKey,
-                turns: (activeContext.turns || []).map((t: any) => ({
-                  role: t.role,
-                  text: t.text,
-                })),
-                maxChars: activeContextMaxChars,
-              }),
-            } as any)
-          : null;
-
-      // Build in-flight messages for this request:
-      // - system: runtime prompt (chatKey/requestId/来源等)
-      // - history: contexts/active（优先）或 ChatStore transcript（单条 assistant 注入）
-      // - user: current raw user message
-      const inFlightMessages: ModelMessage[] = [
-        ...systemExtras,
-        ...(activeContextMessage ? [activeContextMessage] : []),
-        ...(!activeContextMessage && transcript.message ? [transcript.message] : []),
-        { role: "user", content: userText },
-      ];
-
-      // system messages 需要保持聚合在 messages 开头，工具注入 system 指令时应插到它们之后。
-      let systemMessageInsertIndex = 0;
-      while (
-        systemMessageInsertIndex < inFlightMessages.length &&
-        (inFlightMessages[systemMessageInsertIndex] as any)?.role === "system"
-      ) {
-        systemMessageInsertIndex += 1;
+      // 关键点（中文）：重试（context_length）不重复追加 user，避免同一轮写入两次。
+      if (retryAttempts === 0) {
+        contextMessages.push({ role: "user", content: userText } as any);
       }
 
-      const currentUserMessageIndex = inFlightMessages.length - 1;
-      const currentUserMessageRef = inFlightMessages[currentUserMessageIndex];
+      const currentUserMessageRef =
+        (contextMessages[contextMessages.length - 1] as any) || ({ role: "user", content: userText } as any);
 
-      const baseSystemMessages = transformPromptsIntoSystemMessages([
-        ...this.configs.systems,
-      ]);
+      // in-flight messages = system（独立传入） + contextMessages（同一数组复用）
+      const inFlightMessages: ModelMessage[] = contextMessages;
+      await logger.log("debug", "Context injection selected", {
+        chatKey,
+        historySource: "in_process_context_messages",
+        activeMessages: Array.isArray(inFlightMessages) ? inFlightMessages.length : 0,
+      });
+
+      // system messages 需要保持聚合在 messages 开头，工具注入 system 指令时应插到它们之后。
+      // 注意：contextMessages 不包含 system，因此 systemMessageInsertIndex 固定为 0
+      let systemMessageInsertIndex = 0;
+
+      const currentUserMessageIndex = Math.max(0, inFlightMessages.length - 1);
+
+      // 关键点（中文）：system prompt 不再放入 context messages（避免污染跨轮复用的数组），
+      // 统一通过 `system` 参数注入（runtime + 配置 + tools 追加）。
+      const runtimeSystemMessages: SystemModelMessage[] = systemExtras
+        .filter((m) => (m as any)?.role === "system")
+        .map((m) => ({ role: "system", content: String((m as any)?.content ?? "") }));
+
+      const baseSystemMessages: SystemModelMessage[] = [
+        ...runtimeSystemMessages,
+        ...transformPromptsIntoSystemMessages([...this.configs.systems]),
+      ];
       const allToolNames = Object.keys(this.tools);
 
       // lane “快速矫正”追加内容：仅影响 prepareStep 的 step 输入，不改写 messages。
@@ -641,54 +621,22 @@ export class Agent {
       });
       await emitStep("done", "done", { requestId, chatKey });
 
-      // best-effort：把本轮 user/assistant 关键消息追加到 contexts/active.json（若存在或已由工具创建）。
-      // 关键点（中文）：这不是 judge；只是做工作上下文的持续 checkpoint。
+      // run 结束：把 assistant 追加到进程内 context；然后 flush 全量到 active.jsonl（用于进程重启恢复）
       try {
-        if (contextsEnabled) {
-          const currentActive = await loadActiveChatContext({
-            projectRoot: this.configs.projectRoot,
-            chatKey,
-          });
-          if (currentActive) {
-            const configuredMaxTurns =
-              typeof this.configs.config?.context?.contexts?.maxTurns === "number" &&
-              Number.isFinite(this.configs.config.context.contexts.maxTurns) &&
-              this.configs.config.context.contexts.maxTurns > 10
-                ? Math.floor(this.configs.config.context.contexts.maxTurns)
-                : undefined;
-            const configuredMaxChars =
-              typeof this.configs.config?.context?.contexts?.maxChars === "number" &&
-              Number.isFinite(this.configs.config.context.contexts.maxChars) &&
-              this.configs.config.context.contexts.maxChars > 1000
-                ? Math.floor(this.configs.config.context.contexts.maxChars)
-                : undefined;
-            const configuredSearchMax =
-              typeof this.configs.config?.context?.contexts?.searchTextMaxChars === "number" &&
-              Number.isFinite(this.configs.config.context.contexts.searchTextMaxChars) &&
-              this.configs.config.context.contexts.searchTextMaxChars > 200
-                ? Math.floor(this.configs.config.context.contexts.searchTextMaxChars)
-                : undefined;
+        const assistantText =
+          pickLastSuccessfulChatSendText(toolCalls) || String(result.text || "").trim();
 
-          const assistantText =
-            pickLastSuccessfulChatSendText(toolCalls) || String(result.text || "").trim();
-          const turns: Array<{ role: "user" | "assistant"; text: string }> = [
-            { role: "user", text: userText },
-            ...(assistantText ? [{ role: "assistant" as const, text: assistantText }] : []),
-          ];
-          await appendTurnsToActiveChatContext({
-            projectRoot: this.configs.projectRoot,
-            chatKey,
-            turns,
-            limits: {
-              ...(typeof configuredMaxTurns === "number" ? { maxTurns: configuredMaxTurns } : {}),
-              ...(typeof configuredMaxChars === "number" ? { maxChars: configuredMaxChars } : {}),
-              ...(typeof configuredSearchMax === "number"
-                ? { searchTextMaxChars: configuredSearchMax }
-                : {}),
-            },
-          });
+        if (laneMergedAppendBlock.trim()) {
+          // 关键点（中文）：把 lane 合并块补写回当前 user message，保证下一轮复用的 context 与模型看到的一致
+          const last = inFlightMessages[inFlightMessages.length - 1] as any;
+          if (last && last.role === "user") {
+            last.content = String(last.content ?? "") + laneMergedAppendBlock;
+          }
         }
-        }
+
+        if (assistantText) inFlightMessages.push({ role: "assistant", content: assistantText } as any);
+
+        await this.flushContextMessagesToDisk({ chatKey, messages: inFlightMessages });
       } catch {
         // ignore
       }

@@ -8,7 +8,7 @@
 ## 1. 关键定义（不改变 chat 概念）
 
 - **chat / transcript**：平台侧的用户对话历史（审计账本），仍落在 `.ship/chat/<encodedChatKey>/conversations/history.jsonl`，不变。
-- **context（本机制）**：Agent 的“工作上下文快照”（只保留 user/assistant 关键消息），落在 `.ship/chat/<encodedChatKey>/contexts/`。
+- **context（本机制）**：Agent 的“工作上下文 messages 列表（持久化）”，落在 `.ship/chat/<encodedChatKey>/contexts/`。
 
 > 关键点（中文）：context 不是长期记忆，也不替代 transcript；它是“当你觉得背景太乱时，显式开新上下文”的工具化能力。
 
@@ -29,7 +29,7 @@
 
 行为：
 1) 以“**最后一条 assistant 消息**”作为 checkpoint，把旧的 active context 落盘为快照（archive）。
-2) 清空本次 run 的 in-flight messages（只保留 system + 当前 user），让后续 step 在干净上下文继续。
+2) 清空 active（开始新的 messages 列表），并清空本次 run 的 in-flight messages（只保留 system + 当前 user）。
 
 ### 2.2 恢复旧上下文：`chat_context_load`
 
@@ -39,7 +39,7 @@
 
 行为：
 - 根据 `query` 在归档快照里做 best-effort 文本检索（或直接用 `contextId` 指定）。
-- 把匹配快照以“**一条 assistant message（仅供参考）**”注入到当前上下文（类似 `chat_load_history` 的注入方式）。
+- 把匹配快照**切换为当前 active context**（覆盖 active.jsonl），本次 run 也会立刻使用该 messages 列表继续。
 
 辅助：
 - `chat_context_list()`：列出可用快照的 `contextId/标题/预览`。
@@ -53,36 +53,24 @@
   conversations/
     history.jsonl                 # 现有 transcript（不动）
   contexts/
-    active.json                   # 当前活跃 context（最多 1 份）
+    active.jsonl                  # 当前活跃 context（messages，持续追加）
     index.json                    # 归档索引（轻量）
     archive/
       <contextId>.json            # 归档 context（完成后落盘）
 ```
 
-### 3.1 `active.json`（最小模型）
+### 3.1 `active.jsonl`（当前工作上下文，JSON Lines）
 
-```jsonc
-{
-  "v": 1,
-  "contextId": "c_20260205_abcd",
-  "status": "active",
-  "createdAt": 1738713600000,
-  "updatedAt": 1738713900000,
-  "title": "修复跨轮 context 保持（进行中）",
-  "turns": [
-    { "v": 1, "ts": 1738713600000, "role": "user", "text": "..." },
-    { "v": 1, "ts": 1738713610000, "role": "assistant", "text": "..." }
-  ],
-  "meta": {
-    "lastUserTextPreview": "请把 config 发我…",
-    "lastRequestId": "..."
-  }
-}
+每行一个 message entry（append-only），示例：
+
+```json
+{"v":1,"ts":1738713600000,"role":"user","content":"..."}
+{"v":1,"ts":1738713610000,"role":"assistant","content":"..."}
 ```
 
 约束：
-- `turns` 必须严格预算（`maxTurns/maxChars`），避免无限膨胀。
-- 不要把大段 tool 原始输出塞进 turns；只保留“用户可见输出 + 关键结论”。
+- active 只保存 `user/assistant` 的 `role+content`（不保存 system/tool），避免污染与泄露。
+- active 读取时会按窗口限制加载（避免文件无限增长影响性能）。
 
 ### 3.2 `archive/<contextId>.json`
 
@@ -125,9 +113,8 @@
 1) `chat_context_list({ limit? })`
 - 返回 `contextId/title/createdAt/archivedAt/summaryPreview`
 
-2) `chat_context_recall({ contextId, mode })`
-- `mode: "summary" | "recent" | "full"`
-- 行为：把归档 context 作为“参考信息”注入到当前 run（合并为一条 assistant message）
+2) `chat_context_load({ contextId | query })`
+- 行为：把归档 context **切换为当前 active context**（覆盖 active.jsonl）
 
 注入模板（建议）：
 
@@ -145,26 +132,9 @@
 
 ---
 
-## 5. 配置项（ship.json，建议）
+## 5. 配置项
 
-```jsonc
-{
-  "context": {
-    "contexts": {
-      "enabled": true,
-      "activeMaxMessages": 80,
-      "activeMaxChars": 24000,
-      "enabled": true,
-      "maxTurns": 120,
-      "maxChars": 48000,
-      "searchTextMaxChars": 12000
-    }
-  }
-}
-```
-
-说明：
-- 默认无需配置，只有在你希望限制快照大小或关闭功能时才配置。
+本机制不需要 `ship.json` 配置项。
 
 ---
 
@@ -174,14 +144,10 @@
 
 推荐落点：
 - 在 `package/src/agent/context/agent.ts` 构造 messages 前：
-  - 读取 `.ship/chat/<chatKey>/contexts/active.json`（若存在）
-  - 判定 `shouldReuseContext`
-  - 选择复用或走现有逻辑
+  - 读取 `.ship/chat/<chatKey>/contexts/active.jsonl`（若存在 messages，则直接沿用；否则沿用 transcript 注入）
 - 在 `Agent.run` 结束后：
-  - 更新 activeContext（追加本轮 user/assistant 关键消息）
-  - 调用 completion judge（heuristic/AI）
-  - archive 或 keep
-- tools 放在 `package/src/agent/tools/builtin/`，复用现有 `prepareAssistantMessageOnce` 注入机制
+  - best-effort 追加本轮 user + assistant 到 active.jsonl（append-only）
+- tools 放在 `package/src/agent/tools/builtin/`，用于显式 new/load/list/clear
 
 ---
 

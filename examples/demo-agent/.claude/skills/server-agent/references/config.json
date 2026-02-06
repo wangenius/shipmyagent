@@ -1,0 +1,11 @@
+{
+  "servers": [
+    {
+      "name": "example",
+      "host": "your-server.com",
+      "user": "root",
+      "key": "~/.ssh/id_rsa",
+      "apiEndpoint": "http://your-server.com:8080"
+    }
+  ]
+}

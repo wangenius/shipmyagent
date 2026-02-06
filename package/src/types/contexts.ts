@@ -3,47 +3,40 @@
  *
  * 术语（中文，关键点）
  * - transcript（ChatStore / conversations/history.jsonl）：平台侧“用户视角”对话历史，append-only，用于审计与追溯。
- * - context（本模块）：Agent 运行时为了“跨轮继续完成任务”而维护的工作上下文（只保留 user/assistant 关键消息）。
+ * - context（本模块）：Agent 的“工作上下文 messages 列表”，会被持久化到 `.ship/chat/<chatKey>/contexts/active.jsonl`，
+ *   以便下一轮直接沿用（无需任何 judge）。
  *
  * 设计目标
- * - 结构稳定：不要把 provider 内部的 messages 结构原封不动落盘（避免升级/迁移成本）。
- * - 预算可控：快照应有硬上限（maxTurns/maxChars），宁可截断也不要无边界膨胀。
+ * - 结构稳定：active.jsonl 不直接落盘 provider 的内部结构，只存 role+content 的必要字段。
+ * - 可恢复：archive 快照是一次性 JSON（用于切换/回滚/检索），active 是 JSONL（便于持续追加）。
+ * - checkpoint：以“最后一条 assistant 消息”为节点归档快照。
  */
 
-export type ChatContextTurnRoleV1 = "user" | "assistant";
+export type ChatContextMessageRoleV1 = "user" | "assistant";
 
-export type ChatContextCompletionStateV1 = "active" | "archived";
-
-export type ChatContextCheckpointV1 = {
-  /**
-   * 以“最后一条 assistant 消息”为 checkpoint 节点（用户提出的约束）。
-   */
-  lastAssistantTurnIndex: number;
-  lastAssistantTextPreview: string;
-};
-
-export type ChatContextTurnV1 = {
+export type ChatContextMessageEntryV1 = {
   v: 1;
   ts: number;
-  role: ChatContextTurnRoleV1;
-  text: string;
+  role: ChatContextMessageRoleV1;
+  content: string;
   meta?: Record<string, unknown>;
 };
 
-export type ChatContextSnapshotV1 = {
+export type ChatContextCheckpointV1 = {
+  lastAssistantIndex: number;
+  lastAssistantPreview: string;
+};
+
+export type ChatContextArchiveSnapshotV1 = {
   v: 1;
   chatKey: string;
   contextId: string;
-  state: ChatContextCompletionStateV1;
   createdAt: number;
-  updatedAt: number;
-  archivedAt?: number;
+  archivedAt: number;
   title?: string;
+  reason?: string;
   checkpoint?: ChatContextCheckpointV1;
-  turns: ChatContextTurnV1[];
-  /**
-   * 用于检索的扁平文本（可截断）。只用于本地 best-effort 搜索。
-   */
+  messages: ChatContextMessageEntryV1[];
   searchText?: string;
 };
 
@@ -53,7 +46,7 @@ export type ChatContextIndexItemV1 = {
   title?: string;
   createdAt: number;
   archivedAt: number;
-  turns: number;
+  messages: number;
   searchTextPreview?: string;
 };
 
@@ -61,4 +54,3 @@ export type ChatContextIndexV1 = {
   v: 1;
   items: ChatContextIndexItemV1[];
 };
-
