@@ -20,6 +20,7 @@ import { chatTools } from "../builtin/chat.js";
 import { chatHistoryTools } from "../builtin/chat-history.js";
 import { ChatManager } from "../../../chat/manager.js";
 import { chatContactSendTools } from "../builtin/chat-contact-send.js";
+import { chatContextTools } from "../builtin/chat-contexts.js";
 import { Tool } from "ai";
 
 import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
@@ -56,6 +57,7 @@ export function createAgentTools(params: {
   Object.assign(tools, chatTools);
   Object.assign(tools, chatContactSendTools);
   Object.assign(tools, chatHistoryTools);
+  Object.assign(tools, chatContextTools);
   Object.assign(tools, skillsTools);
   Object.assign(tools, execShellTools);
 

@@ -35,6 +35,54 @@ import { createAgentTools } from "../tools/set/agent-tools.js";
 import { loadChatTranscriptAsOneAssistantMessage } from "../../chat/transcript.js";
 import { openai } from "@ai-sdk/openai";
 import { toolExecutionContext } from "../tools/builtin/execution-context.js";
+import { appendTurnsToActiveChatContext, loadActiveChatContext } from "../../chat/contexts-store.js";
+
+function pickLastSuccessfulChatSendText(toolCalls: AgentResult["toolCalls"]): string {
+  // 关键点（中文）：优先从 chat_send 的 input.text 还原“用户可见回复”，因为 tool-strict 下 result.text 可能为空。
+  for (let i = toolCalls.length - 1; i >= 0; i -= 1) {
+    const tc = toolCalls[i];
+    if (!tc) continue;
+    if (String(tc.tool || "") !== "chat_send") continue;
+    const text = String((tc.input as any)?.text ?? "").trim();
+    if (!text) continue;
+    const raw = String(tc.output || "").trim();
+    if (!raw) return text; // 无输出时 best-effort 认为成功
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && (parsed as any).success === true) return text;
+    } catch {
+      // unknown format：best-effort 使用 text
+      return text;
+    }
+  }
+  return "";
+}
+
+function formatActiveContextTurnsAsOneAssistantMessage(params: {
+  chatKey: string;
+  turns: Array<{ role: "user" | "assistant"; text: string }>;
+  maxChars: number;
+}): string {
+  const lines: string[] = [];
+  lines.push("以下是该 chat 的当前工作上下文（contexts/active.json，用户/助手消息，供参考）：");
+  lines.push(`- chatKey: ${params.chatKey}`);
+  lines.push(`- turns: ${params.turns.length}`);
+  lines.push("");
+
+  let out = lines.join("\n");
+  for (const t of params.turns) {
+    const role = t.role === "user" ? "user" : "assistant";
+    const text = String(t.text ?? "").replace(/\s+$/g, "");
+    if (!text.trim()) continue;
+    const next = out + `${role}: ${text}\n`;
+    if (next.length > params.maxChars) {
+      out = out.trimEnd() + "\n…（注意：上下文过长，已截断。）\n";
+      break;
+    }
+    out = next;
+  }
+  return out.trimEnd();
+}
 
 export class Agent {
   // 配置
@@ -216,6 +264,19 @@ export class Agent {
         });
       }
 
+      // contexts/active.json：显式“工作上下文”（不等同于 transcript）。
+      // 关键点（中文）：只有当 active 存在且有 turns 时才注入；否则沿用现有 transcript 注入逻辑。
+      const contextsEnabled =
+        this.configs.config?.context?.contexts?.enabled === undefined
+          ? true
+          : Boolean(this.configs.config.context.contexts.enabled);
+      const activeContext = contextsEnabled
+        ? await loadActiveChatContext({
+            projectRoot: this.configs.projectRoot,
+            chatKey,
+          })
+        : null;
+
       // 从 ChatStore 抽取 transcript，并以“一条 assistant message”注入。
       // 关键点：这里不是“持久化 in-memory history”，而是每次 run 都以落盘 transcript 作为历史来源。
       const transcriptMaxMessages =
@@ -246,13 +307,39 @@ export class Agent {
         },
       });
 
+      const configuredActiveMaxChars =
+        typeof this.configs.config?.context?.contexts?.maxChars === "number" &&
+        Number.isFinite(this.configs.config.context.contexts.maxChars) &&
+        this.configs.config.context.contexts.maxChars > 1000
+          ? Math.floor(this.configs.config.context.contexts.maxChars)
+          : null;
+      const activeContextMaxChars = Math.max(
+        2000,
+        Math.min(50_000, configuredActiveMaxChars ?? transcriptMaxChars),
+      );
+      const activeContextMessage =
+        activeContext && Array.isArray((activeContext as any).turns) && activeContext.turns.length > 0
+          ? ({
+              role: "assistant",
+              content: formatActiveContextTurnsAsOneAssistantMessage({
+                chatKey,
+                turns: (activeContext.turns || []).map((t: any) => ({
+                  role: t.role,
+                  text: t.text,
+                })),
+                maxChars: activeContextMaxChars,
+              }),
+            } as any)
+          : null;
+
       // Build in-flight messages for this request:
       // - system: runtime prompt (chatKey/requestId/来源等)
-      // - history: ChatStore transcript（单条 assistant 注入）
+      // - history: contexts/active（优先）或 ChatStore transcript（单条 assistant 注入）
       // - user: current raw user message
       const inFlightMessages: ModelMessage[] = [
         ...systemExtras,
-        ...(transcript.message ? [transcript.message] : []),
+        ...(activeContextMessage ? [activeContextMessage] : []),
+        ...(!activeContextMessage && transcript.message ? [transcript.message] : []),
         { role: "user", content: userText },
       ];
 
@@ -342,7 +429,7 @@ export class Agent {
           Number.isFinite(this.configs.config.context.chatEgress.chatSendMaxCallsPerRun) &&
           this.configs.config.context.chatEgress.chatSendMaxCallsPerRun > 0
             ? this.configs.config.context.chatEgress.chatSendMaxCallsPerRun
-            : 3;
+            : 30;
         const execCtx = toolExecutionContext.getStore();
         const calls = execCtx?.toolCallCounts.get("chat_send") ?? 0;
         return { exceeded: calls > maxCalls, maxCalls, calls };
@@ -553,6 +640,58 @@ export class Agent {
         toolCallsTotal: toolCalls.length,
       });
       await emitStep("done", "done", { requestId, chatKey });
+
+      // best-effort：把本轮 user/assistant 关键消息追加到 contexts/active.json（若存在或已由工具创建）。
+      // 关键点（中文）：这不是 judge；只是做工作上下文的持续 checkpoint。
+      try {
+        if (contextsEnabled) {
+          const currentActive = await loadActiveChatContext({
+            projectRoot: this.configs.projectRoot,
+            chatKey,
+          });
+          if (currentActive) {
+            const configuredMaxTurns =
+              typeof this.configs.config?.context?.contexts?.maxTurns === "number" &&
+              Number.isFinite(this.configs.config.context.contexts.maxTurns) &&
+              this.configs.config.context.contexts.maxTurns > 10
+                ? Math.floor(this.configs.config.context.contexts.maxTurns)
+                : undefined;
+            const configuredMaxChars =
+              typeof this.configs.config?.context?.contexts?.maxChars === "number" &&
+              Number.isFinite(this.configs.config.context.contexts.maxChars) &&
+              this.configs.config.context.contexts.maxChars > 1000
+                ? Math.floor(this.configs.config.context.contexts.maxChars)
+                : undefined;
+            const configuredSearchMax =
+              typeof this.configs.config?.context?.contexts?.searchTextMaxChars === "number" &&
+              Number.isFinite(this.configs.config.context.contexts.searchTextMaxChars) &&
+              this.configs.config.context.contexts.searchTextMaxChars > 200
+                ? Math.floor(this.configs.config.context.contexts.searchTextMaxChars)
+                : undefined;
+
+          const assistantText =
+            pickLastSuccessfulChatSendText(toolCalls) || String(result.text || "").trim();
+          const turns: Array<{ role: "user" | "assistant"; text: string }> = [
+            { role: "user", text: userText },
+            ...(assistantText ? [{ role: "assistant" as const, text: assistantText }] : []),
+          ];
+          await appendTurnsToActiveChatContext({
+            projectRoot: this.configs.projectRoot,
+            chatKey,
+            turns,
+            limits: {
+              ...(typeof configuredMaxTurns === "number" ? { maxTurns: configuredMaxTurns } : {}),
+              ...(typeof configuredMaxChars === "number" ? { maxChars: configuredMaxChars } : {}),
+              ...(typeof configuredSearchMax === "number"
+                ? { searchTextMaxChars: configuredSearchMax }
+                : {}),
+            },
+          });
+        }
+        }
+      } catch {
+        // ignore
+      }
 
       return {
         success: !hadToolFailure,

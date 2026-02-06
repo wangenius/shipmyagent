@@ -124,7 +124,7 @@ export interface ShipConfig {
        * 单次 agent run 内，`chat_send` 允许调用的最大次数。
        *
        * 建议
-       * - 默认 3：允许「先确认/再补充/最后总结」这种多段式对话，但避免进入无限循环。
+       * - 默认 30：允许较长的分段输出，但仍可避免进入无限循环刷屏。
        */
       chatSendMaxCallsPerRun?: number;
 
@@ -133,6 +133,32 @@ export interface ShipConfig {
        * 默认：true
        */
       chatSendIdempotency?: boolean;
+    };
+
+    /**
+     * contexts（工作上下文快照）：用于显式创建“新上下文”，并在需要时按快照恢复旧上下文。
+     *
+     * 说明（中文）
+     * - conversations/ 下的 transcript 仍是平台审计账本（不变）。
+     * - contexts/ 下保存的是“工作上下文快照”（user/assistant 关键消息），由工具驱动创建/恢复。
+     */
+    contexts?: {
+      /**
+       * 是否启用 contexts 功能。默认：true（但只有 active.json 存在时才会注入）。
+       */
+      enabled?: boolean;
+      /**
+       * active context 最大保留 turns 数。默认：120
+       */
+      maxTurns?: number;
+      /**
+       * active context 最大保留字符数。默认：48000
+       */
+      maxChars?: number;
+      /**
+       * 归档索引/检索文本的最大字符数。默认：12000
+       */
+      searchTextMaxChars?: number;
     };
   };
   permissions?: {
@@ -436,6 +462,40 @@ export function getShipChatMemoryDirPath(cwd: string, chatKey: string): string {
 
 export function getShipChatMemoryPrimaryPath(cwd: string, chatKey: string): string {
   return path.join(getShipChatMemoryDirPath(cwd, chatKey), "Primary.md");
+}
+
+/**
+ * Chat contexts：跨轮“工作上下文”快照目录（per chatKey）。
+ *
+ * 注意（中文）
+ * - conversations/ 下的 history.jsonl 是“平台 transcript”（审计账本），不应被替代或改写。
+ * - contexts/ 下保存的是“Agent 工作上下文快照”，用于显式创建新上下文、以及按需恢复旧上下文。
+ */
+export function getShipChatContextsDirPath(cwd: string, chatKey: string): string {
+  return path.join(getShipChatDirPath(cwd, chatKey), "contexts");
+}
+
+export function getShipChatContextsActivePath(cwd: string, chatKey: string): string {
+  return path.join(getShipChatContextsDirPath(cwd, chatKey), "active.json");
+}
+
+export function getShipChatContextsIndexPath(cwd: string, chatKey: string): string {
+  return path.join(getShipChatContextsDirPath(cwd, chatKey), "index.json");
+}
+
+export function getShipChatContextsArchiveDirPath(cwd: string, chatKey: string): string {
+  return path.join(getShipChatContextsDirPath(cwd, chatKey), "archive");
+}
+
+export function getShipChatContextsArchivePath(
+  cwd: string,
+  chatKey: string,
+  contextId: string,
+): string {
+  return path.join(
+    getShipChatContextsArchiveDirPath(cwd, chatKey),
+    `${encodeURIComponent(String(contextId || "").trim())}.json`,
+  );
 }
 
 export function getShipPublicDirPath(cwd: string): string {
