@@ -1,14 +1,11 @@
 import fs from "fs-extra";
-import type { ModelMessage } from "ai";
 import {
-  getShipChatArchivePath,
   getShipChatConversationsDirPath,
   getShipChatDirPath,
   getShipChatHistoryPath,
   getShipChatMemoryDirPath,
   getShipChatMemoryPrimaryPath,
 } from "../../utils.js";
-import { HistoryCache } from "./history-cache.js";
 
 export type ChatChannel =
   | "telegram"
@@ -32,28 +29,16 @@ export interface ChatLogEntryV1 {
   meta?: Record<string, unknown>;
 }
 
-export interface SearchOptions {
-  keyword?: string;
-  startTime?: number;
-  endTime?: number;
-  role?: ChatRole;
-  limit?: number;
-}
-
 /**
  * ChatStore：单个 chatKey 的审计与追溯（per-chat）。
  *
  * 设计目标
- * - “一个 chat 一个 store”：对上层来说它就是这个 chat 的 transcript 读写入口
- * - 为了简化概念，本类同时承担存储引擎职责（cache/归档/路径规则都内化在这里）
+ * - "一个 chat 一个 store"：对上层来说它就是这个 chat 的 transcript 读写入口
+ * - 简化存储：只使用 history.jsonl，无归档、无缓存、无搜索
  */
 export class ChatStore {
   readonly projectRoot: string;
   readonly chatKey: string;
-  private readonly cache: HistoryCache;
-  private hydrated: boolean = false;
-  private readonly ARCHIVE_THRESHOLD = 1000;
-  private archiveLock: Promise<void> | null = null;
 
   constructor(params: { projectRoot: string; chatKey: string }) {
     const root = String(params.projectRoot || "").trim();
@@ -62,7 +47,6 @@ export class ChatStore {
     if (!key) throw new Error("ChatStore requires a non-empty chatKey");
     this.projectRoot = root;
     this.chatKey = key;
-    this.cache = new HistoryCache();
   }
 
   /**
@@ -70,8 +54,6 @@ export class ChatStore {
    *
    * 存储结构（每个 chatKey 一个目录）：
    * - `.ship/chat/<encodedChatKey>/conversations/history.jsonl`
-   * - `.ship/chat/<encodedChatKey>/conversations/archive-1.jsonl`（可选）
-   * - `.ship/chat/<encodedChatKey>/conversations/archive-2.jsonl`（可选）
    * - `.ship/chat/<encodedChatKey>/memory/`（按需，用于持久化记忆）
    */
   getChatDirPath(): string {
@@ -80,10 +62,6 @@ export class ChatStore {
 
   getHistoryFilePath(): string {
     return getShipChatHistoryPath(this.projectRoot, this.chatKey);
-  }
-
-  getArchiveFilePath(archiveIndex: number): string {
-    return getShipChatArchivePath(this.projectRoot, this.chatKey, archiveIndex);
   }
 
   async append(
@@ -120,46 +98,138 @@ export class ChatStore {
       JSON.stringify(full) + "\n",
       "utf8",
     );
-
-    this.cache.invalidate(this.chatKey);
-    await this.checkAndArchive();
   }
 
-  loadRecentEntries(limit: number = 20): Promise<ChatLogEntryV1[]> {
-    return this.loadRecentEntriesInternal(limit);
-  }
-
-  loadRecentMessages(limit: number = 20): Promise<ModelMessage[]> {
-    return this.loadRecentMessagesInternal(limit);
-  }
-
-  hydrateOnce(
-    apply: (messages: ModelMessage[]) => void,
-    limit: number = 120,
-  ): Promise<void> {
-    return this.hydrateOnceInternal(apply, limit);
-  }
-
-  search(options: SearchOptions = {}): Promise<ChatLogEntryV1[]> {
-    return this.searchInternal(options);
-  }
-
-  getCacheStats(): { size: number; maxSize: number; keys: string[] } {
-    return this.cache.getStats();
-  }
-
-  clearCache(): void {
-    this.cache.clear();
-  }
-
-  private async loadRecentEntriesInternal(
-    limit: number,
-  ): Promise<ChatLogEntryV1[]> {
+  /**
+   * 加载最近的消息记录（转换为纯文本格式）
+   * @param limit 加载条数限制，默认10条
+   * @param maxChars 最大字符数限制，超过时从旧消息开始截断
+   * @returns 格式化的对话历史文本
+   */
+  async loadRecentMessagesAsText(limit: number = 10, maxChars?: number): Promise<string> {
     const safeLimit = Math.max(1, Math.min(5000, Math.floor(limit)));
-    const cached = this.cache.get(this.chatKey);
-    if (cached && cached.length >= safeLimit) return cached.slice(-safeLimit);
-
     const file = this.getHistoryFilePath();
+
+    if (!(await fs.pathExists(file))) return "";
+
+    try {
+      const raw = await fs.readFile(file, "utf8");
+      const lines = raw.split("\n").filter(Boolean);
+      const recentLines = lines.slice(-safeLimit);
+
+      // 先解析所有条目
+      const entries: Array<{role: string; text: string}> = [];
+      for (const line of recentLines) {
+        try {
+          const obj = JSON.parse(line) as Partial<ChatLogEntryV1>;
+          if (!obj || typeof obj !== "object") continue;
+          if (obj.v !== 1) continue;
+          if (obj.chatKey !== this.chatKey) continue;
+          if (typeof obj.role !== "string") continue;
+
+          entries.push({
+            role: obj.role,
+            text: typeof obj.text === "string" ? obj.text : "",
+          });
+        } catch {
+          // ignore invalid lines
+        }
+      }
+
+      // 找到并移除最后一条 user 消息（避免与当前请求的 user message 重复）
+      let lastUserIndex = -1;
+      for (let i = entries.length - 1; i >= 0; i--) {
+        if (entries[i].role === "user") {
+          lastUserIndex = i;
+          break;
+        }
+      }
+      if (lastUserIndex >= 0) {
+        entries.splice(lastUserIndex, 1);
+      }
+
+      // 格式化剩余条目
+      const historyLines: string[] = [];
+      for (const entry of entries) {
+        const role = entry.role;
+        const text = entry.text;
+
+        if (role === "user") {
+          historyLines.push(`User: ${text}`);
+        } else if (role === "assistant") {
+          if (text.trim()) {
+            historyLines.push(`Assistant: ${text}`);
+          }
+        } else if (role === "tool") {
+          // 解析工具调用并格式化为文本
+          try {
+            const toolCalls = JSON.parse(text);
+            if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+              const toolLines: string[] = [];
+              for (const tc of toolCalls) {
+                if (!tc || typeof tc !== "object" || typeof tc.tool !== "string") continue;
+
+                // 格式化工具调用
+                const toolName = tc.tool;
+                const inputStr = typeof tc.input === "object" && tc.input !== null
+                  ? JSON.stringify(tc.input)
+                  : "{}";
+                const outputStr = typeof tc.output === "string"
+                  ? tc.output
+                  : (tc.output !== undefined && tc.output !== null)
+                    ? JSON.stringify(tc.output)
+                    : "";
+
+                toolLines.push(`[Tool] ${toolName}(${inputStr}) → ${outputStr}`);
+              }
+              if (toolLines.length > 0) {
+                historyLines.push(toolLines.join("\n"));
+              }
+            }
+          } catch {
+            // 如果解析失败，忽略该条
+          }
+        } else if (role === "system") {
+          historyLines.push(`[System] ${text}`);
+        }
+      }
+
+      if (historyLines.length === 0) return "";
+
+      let result = "=== Chat History ===\n\n" + historyLines.join("\n\n") + "\n\n=====================";
+
+      // 字符截断：如果设置了 maxChars 且超长，从头部开始截断
+      if (typeof maxChars === "number" && maxChars > 0 && result.length > maxChars) {
+        const header = "=== Chat History ===\n\n";
+        const footer = "\n\n=====================";
+        const availableChars = maxChars - header.length - footer.length - 50; // 留50字符给截断提示
+
+        if (availableChars > 0) {
+          // 从后往前保留消息，确保最新的消息被保留
+          let truncated = "";
+          for (let i = historyLines.length - 1; i >= 0; i--) {
+            const line = historyLines[i] + "\n\n";
+            if (truncated.length + line.length > availableChars) break;
+            truncated = line + truncated;
+          }
+          result = header + "(注：历史过长已截断)\n\n" + truncated + footer;
+        }
+      }
+
+      return result;
+    } catch {
+      return "";
+    }
+  }
+
+  /**
+   * 加载最近的原始日志条目
+   * @param limit 加载条数限制，默认20条
+   */
+  async loadRecentEntries(limit: number = 20): Promise<ChatLogEntryV1[]> {
+    const safeLimit = Math.max(1, Math.min(5000, Math.floor(limit)));
+    const file = this.getHistoryFilePath();
+
     if (!(await fs.pathExists(file))) return [];
 
     const raw = await fs.readFile(file, "utf8");
@@ -178,163 +248,48 @@ export class ChatStore {
         if (typeof obj.text !== "string") continue;
         out.push(obj as ChatLogEntryV1);
       } catch {
-        // ignore
-      }
-    }
-
-    if (out.length > 0) this.cache.set(this.chatKey, out);
-    return out;
-  }
-
-  private async loadRecentMessagesInternal(
-    limit: number,
-  ): Promise<ModelMessage[]> {
-    const safeLimit = Math.max(1, Math.min(5000, Math.floor(limit)));
-    const mainFile = this.getHistoryFilePath();
-    const allLines: string[] = [];
-
-    let archiveIndex = 1;
-    while (true) {
-      const archiveFile = this.getArchiveFilePath(archiveIndex);
-      if (!(await fs.pathExists(archiveFile))) break;
-      try {
-        const archiveRaw = await fs.readFile(archiveFile, "utf8");
-        allLines.push(...archiveRaw.split("\n").filter(Boolean));
-      } catch {
-        // ignore
-      }
-      archiveIndex++;
-    }
-
-    if (await fs.pathExists(mainFile)) {
-      try {
-        const mainRaw = await fs.readFile(mainFile, "utf8");
-        allLines.push(...mainRaw.split("\n").filter(Boolean));
-      } catch {
-        // ignore
-      }
-    }
-
-    if (allLines.length === 0) return [];
-    const recentLines = allLines.slice(-safeLimit);
-
-    const out: ModelMessage[] = [];
-    for (const line of recentLines) {
-      try {
-        const obj = JSON.parse(line) as Partial<ChatLogEntryV1>;
-        if (!obj || typeof obj !== "object") continue;
-        if (obj.v !== 1) continue;
-        if (obj.chatKey !== this.chatKey) continue;
-        const role = obj.role;
-        const text = typeof obj.text === "string" ? obj.text : "";
-        if (!text) continue;
-        if (role === "user" || role === "assistant") {
-          out.push({ role, content: text });
-        } else if (role === "tool") {
-          out.push({ role: "tool", content: text as any });
-        } else if (role === "system") {
-          out.push({ role: "assistant", content: `[system] ${text}` });
-        }
-      } catch {
-        // ignore
+        // ignore invalid lines
       }
     }
 
     return out;
   }
 
-  private async hydrateOnceInternal(
-    apply: (messages: ModelMessage[]) => void,
-    limit: number,
-  ): Promise<void> {
-    if (this.hydrated) return;
-    const messages = await this.loadRecentMessagesInternal(limit);
-    if (messages.length > 0) apply(messages);
-    this.hydrated = true;
-  }
-
-  private async searchInternal(
-    options: SearchOptions,
-  ): Promise<ChatLogEntryV1[]> {
-    const { keyword, startTime, endTime, role, limit = 100 } = options;
-    const safeLimit = Math.max(1, Math.min(5000, Math.floor(limit)));
-    const allEntries = await this.loadAllEntries();
-
-    let filtered = allEntries;
-    if (startTime !== undefined)
-      filtered = filtered.filter((e) => e.ts >= startTime);
-    if (endTime !== undefined)
-      filtered = filtered.filter((e) => e.ts <= endTime);
-    if (role) filtered = filtered.filter((e) => e.role === role);
-
-    if (keyword) {
-      try {
-        const regex = new RegExp(keyword, "i");
-        filtered = filtered.filter((e) => regex.test(e.text));
-      } catch {
-        const lowerKeyword = keyword.toLowerCase();
-        filtered = filtered.filter((e) =>
-          e.text.toLowerCase().includes(lowerKeyword),
-        );
-      }
-    }
-
-    return filtered.slice(-safeLimit);
-  }
-
-  private async checkAndArchive(): Promise<void> {
-    if (this.archiveLock) {
-      await this.archiveLock;
-      return;
-    }
-
-    const p = this.doArchive();
-    this.archiveLock = p;
-    try {
-      await p;
-    } finally {
-      this.archiveLock = null;
-    }
-  }
-
-  private async doArchive(): Promise<void> {
+  /**
+   * 获取总记录数
+   */
+  async getTotalEntryCount(): Promise<number> {
     const file = this.getHistoryFilePath();
-    if (!(await fs.pathExists(file))) return;
+    if (!(await fs.pathExists(file))) return 0;
 
-    const raw = await fs.readFile(file, "utf8");
-    const lines = raw.split("\n").filter(Boolean);
-    if (lines.length <= this.ARCHIVE_THRESHOLD) return;
-
-    let archiveIndex = 1;
-    while (await fs.pathExists(this.getArchiveFilePath(archiveIndex))) {
-      archiveIndex++;
+    try {
+      const raw = await fs.readFile(file, "utf8");
+      const lines = raw.split("\n").filter(Boolean);
+      return lines.length;
+    } catch {
+      return 0;
     }
-
-    const archiveCount = Math.floor(lines.length * 0.5);
-    const archiveLines = lines.slice(0, archiveCount);
-    const remainingLines = lines.slice(archiveCount);
-
-    await fs.ensureDir(this.getChatDirPath());
-    await fs.writeFile(
-      this.getArchiveFilePath(archiveIndex),
-      archiveLines.join("\n") + "\n",
-      "utf8",
-    );
-    await fs.writeFile(file, remainingLines.join("\n") + "\n", "utf8");
   }
 
-  private async loadAllEntries(): Promise<ChatLogEntryV1[]> {
-    const entries: ChatLogEntryV1[] = [];
+  /**
+   * 加载指定范围的记录（用于记忆提取）
+   * @param startIndex 起始索引（从0开始）
+   * @param endIndex 结束索引（不包含）
+   */
+  async loadEntriesByRange(
+    startIndex: number,
+    endIndex: number
+  ): Promise<ChatLogEntryV1[]> {
+    const file = this.getHistoryFilePath();
+    if (!(await fs.pathExists(file))) return [];
 
-    let archiveIndex = 1;
-    while (true) {
-      const archiveFile = this.getArchiveFilePath(archiveIndex);
-      if (!(await fs.pathExists(archiveFile))) break;
-
-      const raw = await fs.readFile(archiveFile, "utf8");
+    try {
+      const raw = await fs.readFile(file, "utf8");
       const lines = raw.split("\n").filter(Boolean);
+      const targetLines = lines.slice(startIndex, endIndex);
 
-      for (const line of lines) {
+      const entries: ChatLogEntryV1[] = [];
+      for (const line of targetLines) {
         try {
           const obj = JSON.parse(line) as Partial<ChatLogEntryV1>;
           if (!obj || typeof obj !== "object") continue;
@@ -345,34 +300,44 @@ export class ChatStore {
           if (typeof obj.text !== "string") continue;
           entries.push(obj as ChatLogEntryV1);
         } catch {
-          // ignore
+          // ignore invalid lines
         }
       }
-
-      archiveIndex++;
+      return entries;
+    } catch {
+      return [];
     }
+  }
 
-    const mainFile = this.getHistoryFilePath();
-    if (await fs.pathExists(mainFile)) {
-      const raw = await fs.readFile(mainFile, "utf8");
-      const lines = raw.split("\n").filter(Boolean);
+  /**
+   * 加载指定范围的记录并格式化为文本（用于记忆提取）
+   */
+  async loadEntriesByRangeAsText(
+    startIndex: number,
+    endIndex: number
+  ): Promise<string> {
+    const entries = await this.loadEntriesByRange(startIndex, endIndex);
 
-      for (const line of lines) {
-        try {
-          const obj = JSON.parse(line) as Partial<ChatLogEntryV1>;
-          if (!obj || typeof obj !== "object") continue;
-          if (obj.v !== 1) continue;
-          if (obj.chatKey !== this.chatKey) continue;
-          if (typeof obj.ts !== "number") continue;
-          if (typeof obj.role !== "string") continue;
-          if (typeof obj.text !== "string") continue;
-          entries.push(obj as ChatLogEntryV1);
-        } catch {
-          // ignore
+    const historyLines: string[] = [];
+    for (const entry of entries) {
+      const role = entry.role;
+      const text = entry.text;
+
+      if (role === "user") {
+        historyLines.push(`User: ${text}`);
+      } else if (role === "assistant") {
+        if (text.trim()) {
+          historyLines.push(`Assistant: ${text}`);
         }
+      } else if (role === "tool") {
+        // Tool 消息已在保存时截断，这里跳过以节省上下文
+        continue;
+      } else if (role === "system") {
+        historyLines.push(`[System] ${text}`);
       }
     }
 
-    return entries;
+    if (historyLines.length === 0) return "";
+    return historyLines.join("\n\n");
   }
 }

@@ -34,14 +34,10 @@ import { withToolExecutionContext } from "../tools/builtin/execution-context.js"
 import { createAgentTools } from "../tools/set/agent-tools.js";
 import { openai } from "@ai-sdk/openai";
 import { toolExecutionContext } from "../tools/builtin/execution-context.js";
-import {
-  loadActiveContextEntries,
-  writeActiveContextEntries,
-} from "../../chat/context/contexts-store.js";
-import type { ChatContextMessageEntryV1 } from "../../types/contexts.js";
+import { ChatStore } from "../../chat/store/store.js";
 
-function pickLastSuccessfulChatSendText(toolCalls: AgentResult["toolCalls"]): string {
-  // 关键点（中文）：优先从 chat_send 的 input.text 还原“用户可见回复”，因为 tool-strict 下 result.text 可能为空。
+export function pickLastSuccessfulChatSendText(toolCalls: any[]): string {
+  // 关键点（中文）：优先从 chat_send 的 input.text 还原"用户可见回复"，因为 tool-strict 下 result.text 可能为空。
   for (let i = toolCalls.length - 1; i >= 0; i -= 1) {
     const tc = toolCalls[i];
     if (!tc) continue;
@@ -71,16 +67,13 @@ export class Agent {
 
   private tools: Record<string, Tool> = {};
   /**
-   * 进程内的工作上下文（per chat 实例）。
+   * chatKey 绑定检查。
    *
    * 关键点（中文）
-   * - 运行时策略是“一个 chatKey 一个 Agent 实例”（由 ShipRuntimeContext 保证）
-   * - 因此 Agent 内部不需要再做 chatKey → messages 的二次 Map 缓存
+   * - 运行时策略是"一个 chatKey 一个 Agent 实例"（由 ChatRuntime 保证）
    * - 本实例一旦首次 run 绑定到某个 chatKey，后续必须一致，避免上下文串线
    */
   private boundChatKey: string | null = null;
-  private contextMessages: ModelMessage[] = [];
-  private contextHydrated: boolean = false;
 
   constructor(configs: AgentConfigurations) {
     this.configs = configs;
@@ -111,7 +104,7 @@ export class Agent {
   }
 
   async run(input: AgentRunInput): Promise<AgentResult> {
-    const { query, chatKey, onStep, drainLaneMergedText } = input;
+    const { query, chatKey, onStep, drainLaneMergedText, chatRuntime } = input;
     const startTime = Date.now();
     const requestId = generateId();
     const logger = this.getLogger();
@@ -137,6 +130,7 @@ export class Agent {
         onStep,
         drainLaneMergedText,
         requestId,
+        chatRuntime,
       });
     }
 
@@ -161,55 +155,6 @@ export class Agent {
     return key;
   }
 
-  private async hydrateContextMessagesOnce(chatKey: string): Promise<ModelMessage[]> {
-    const key = this.bindChatKey(chatKey);
-    if (this.contextHydrated) return this.contextMessages;
-
-    // 关键点（中文）：active.jsonl 只用于“进程重启后的恢复”，因此这里只在首次 run 时 hydrate 一次。
-    const entries = await loadActiveContextEntries({
-      projectRoot: this.configs.projectRoot,
-      chatKey: key,
-      options: { maxMessages: 0, maxChars: 0 },
-    });
-    this.contextMessages = entries.map((e) => ({
-      role: e.role,
-      content: e.content,
-    })) as any;
-
-    this.contextHydrated = true;
-    return this.contextMessages;
-  }
-
-  private async flushContextMessagesToDisk(params: {
-    chatKey: string;
-    messages: ModelMessage[];
-  }): Promise<void> {
-    const key = this.bindChatKey(params.chatKey);
-
-    const t0 = Date.now();
-    const entries: ChatContextMessageEntryV1[] = [];
-    let ts = t0;
-    for (const m of params.messages || []) {
-      if (!m || typeof m !== "object") continue;
-      const role = String((m as any).role || "");
-      if (role !== "user" && role !== "assistant") continue;
-      const content = String((m as any).content ?? "");
-      if (!content.trim()) continue;
-      entries.push({ v: 1, ts, role: role as any, content });
-      ts += 1;
-    }
-
-    try {
-      await writeActiveContextEntries({
-        projectRoot: this.configs.projectRoot,
-        chatKey: key,
-        entries,
-      });
-    } catch {
-      // ignore
-    }
-  }
-
   private async runWithToolLoopAgent(
     userText: string,
     startTime: number,
@@ -219,6 +164,7 @@ export class Agent {
       onStep?: AgentRunInput["onStep"];
       drainLaneMergedText?: AgentRunInput["drainLaneMergedText"];
       requestId?: string;
+      chatRuntime?: any;
     },
   ): Promise<AgentResult> {
     const toolCalls: AgentResult["toolCalls"] = [];
@@ -228,6 +174,7 @@ export class Agent {
     const onStep = opts?.onStep;
     const drainLaneMergedText = opts?.drainLaneMergedText;
     const requestId = opts?.requestId || "";
+    const chatRuntime = opts?.chatRuntime;
     const logger = this.getLogger();
 
     const emitStep = async (
@@ -315,35 +262,42 @@ export class Agent {
       }
 
       // 工作上下文来源（中文，关键点）
-      // - Agent 进程内维护 per-chat 的 `ModelMessage[]` 作为 context
-      // - active.jsonl 只用于“进程重启后的恢复”（首次 hydrate），以及 run 结束时 flush（用于下次重启）
-      const contextMessages = await this.hydrateContextMessagesOnce(chatKey);
-      const retryAttempts = opts?.retryAttempts ?? 0;
+      // - 每次 run 都从 ChatStore 实时加载最近 10 条历史消息（纯文本格式）
+      // - 简化策略：无内存缓存、无 active.jsonl、只从 history.jsonl 读取
+      // - 文本格式避免了 tool_calls 的复杂格式转换问题
+      // - 注意：历史对话会在 prepareStep 中注入，确保在所有 base system prompts 之后
+      this.bindChatKey(chatKey);
 
-      // 关键点（中文）：重试（context_length）不重复追加 user，避免同一轮写入两次。
-      if (retryAttempts === 0) {
-        contextMessages.push({ role: "user", content: userText } as any);
-      }
+      const chatStore = new ChatStore({
+        projectRoot: this.configs.projectRoot,
+        chatKey: chatKey,
+      });
 
-      const currentUserMessageRef =
-        (contextMessages[contextMessages.length - 1] as any) ||
-        ({ role: "user", content: userText } as any);
-      const baseCurrentUserContent = String((currentUserMessageRef as any)?.content ?? "");
+      // 从配置读取历史消息加载参数
+      const historyLimit =
+        this.configs.config?.context?.chatHistory?.transcriptMaxMessages ?? 50;
+      const historyMaxChars =
+        this.configs.config?.context?.chatHistory?.transcriptMaxChars ?? 25000;
 
-      // in-flight messages = system（独立传入） + contextMessages（同一数组复用）
-      const inFlightMessages: ModelMessage[] = contextMessages;
+      const historyText = await chatStore.loadRecentMessagesAsText(
+        historyLimit,
+        historyMaxChars,
+      );
+
+      // in-flight messages = 仅包含当前用户消息（历史已通过 system 注入）
+      const currentUserMessage: ModelMessage = { role: "user", content: userText } as any;
+      const inFlightMessages: ModelMessage[] = [currentUserMessage];
+
       await logger.log("debug", "Context injection selected", {
         chatKey,
-        historySource: "in_process_context_messages",
+        historySource: "history_jsonl",
         activeMessages: Array.isArray(inFlightMessages) ? inFlightMessages.length : 0,
       });
 
       // system messages 需要保持聚合在 messages 开头，工具注入 system 指令时应插到它们之后。
-      // 注意：contextMessages 不包含 system，因此 systemMessageInsertIndex 固定为 0
       let systemMessageInsertIndex = 0;
 
-      // 关键点（中文）：system prompt 不再放入 context messages（避免污染跨轮复用的数组），
-      // 统一通过 `system` 参数注入（runtime + 配置 + tools 追加）。
+      // 关键点（中文）：system prompt 每次 run 独立注入，不污染历史记录。
       const runtimeSystemMessages: SystemModelMessage[] = systemExtras
         .filter((m) => (m as any)?.role === "system")
         .map((m) => ({ role: "system", content: String((m as any)?.content ?? "") }));
@@ -355,24 +309,22 @@ export class Agent {
       const allToolNames = Object.keys(this.tools);
 
       /**
-       * lane “快速矫正”合并。
+       * lane "快速矫正"合并。
        *
        * 关键点（中文）
-       * - 关键约束：本次 run 只维护“1 条 user message”（本轮 query 对应的那条），lane 合并内容只追加到它的末尾。
-       * - 可见性：我们会在每次 tool 结束后 drain 一次，并在每个 `prepareStep` 前再 drain 一次；
-       *   同时在 `prepareStep` 返回的 messages 里强制把合并块写入当前 user，避免 SDK 内部复制导致丢失更新。
+       * - 现在只维护一个简单的 user message（当前轮），lane 合并内容会追加到它末尾
+       * - 由于历史已通过 system 注入，不再需要复杂的引用管理
        */
       let laneMergedAppendBlock = "";
+      const baseCurrentUserContent = userText;
 
       const appendLaneMergedBlockToCurrentUser = (mergedText: string, trigger: string): void => {
         const trimmed = String(mergedText ?? "").trim();
         if (!trimmed) return;
         laneMergedAppendBlock += `\n\n---\n\n${trimmed}\n`;
 
-        const last = currentUserMessageRef as any;
-        if (last && last.role === "user") {
-          last.content = baseCurrentUserContent + laneMergedAppendBlock;
-        }
+        // 更新 currentUserMessage 的内容
+        currentUserMessage.content = baseCurrentUserContent + laneMergedAppendBlock;
 
         void logger.log("debug", "Lane merged text appended to current user message", {
           chatKey,
@@ -562,6 +514,15 @@ export class Agent {
                   activeTools = [];
                 }
 
+                // 关键点（中文）：在所有 base system prompts 之后注入历史对话
+                // 这样确保历史对话在用户自定义的 system prompts 之后
+                if (historyText.trim()) {
+                  systemAdditions.push({
+                    role: "system",
+                    content: historyText,
+                  });
+                }
+
                 const nextSystem =
                   systemAdditions.length > 0
                     ? ([
@@ -570,48 +531,33 @@ export class Agent {
                       ] as Array<SystemModelMessage>)
                     : baseSystemMessages;
 
-                // 3) messages：把“预备注入 assistant messages”插到当前 user message 之前；
-                //    并且把 lane 合并块强制写入当前 user（避免 SDK 内部复制导致丢失更新）。
+                // 3) messages：把"预备注入 assistant messages"插到当前 user message 之前；
+                //    由于现在只有一条 user message，逻辑大大简化
                 let outMessages: ModelMessage[] = messages as any;
 
                 if (execCtx?.preparedAssistantMessages?.length) {
-                  const insertAt = outMessages.findIndex((m) => m === currentUserMessageRef);
-                  if (insertAt >= 0) {
-                    const prepared = execCtx.preparedAssistantMessages
-                      .filter((x) => x?.content?.trim())
-                      .map((x) => ({ role: "assistant", content: x.content } as any));
-                    if (prepared.length > 0) {
-                      outMessages = [
-                        ...outMessages.slice(0, insertAt),
-                        ...prepared,
-                        ...outMessages.slice(insertAt),
-                      ];
-                    }
+                  const prepared = execCtx.preparedAssistantMessages
+                    .filter((x) => x?.content?.trim())
+                    .map((x) => ({ role: "assistant", content: x.content } as any));
+                  if (prepared.length > 0) {
+                    // 在当前 user message 之前插入 assistant messages
+                    outMessages = [...prepared, currentUserMessage];
                   }
                 }
 
+                // 如果有 lane 合并内容，更新 currentUserMessage
                 if (laneMergedAppendBlock.trim()) {
-                  const idx = (() => {
-                    // 优先按引用匹配；若 SDK 内部复制导致引用不一致，则兜底取最后一条 user。
-                    const byRef = outMessages.findIndex((m) => m === currentUserMessageRef);
-                    if (byRef >= 0) return byRef;
-                    for (let i = outMessages.length - 1; i >= 0; i -= 1) {
-                      const m: any = outMessages[i];
-                      if (m && m.role === "user") return i;
-                    }
-                    return -1;
-                  })();
-
-                  if (idx >= 0) {
-                    const old = outMessages[idx] as any;
+                  // 找到当前的 user message 并更新
+                  const userIdx = outMessages.findIndex((m) => m === currentUserMessage);
+                  if (userIdx >= 0) {
                     outMessages = [
-                      ...outMessages.slice(0, idx),
+                      ...outMessages.slice(0, userIdx),
                       {
-                        ...old,
+                        ...currentUserMessage,
                         role: "user",
                         content: baseCurrentUserContent + laneMergedAppendBlock,
                       },
-                      ...outMessages.slice(idx + 1),
+                      ...outMessages.slice(userIdx + 1),
                     ];
                   }
                 }
@@ -627,8 +573,62 @@ export class Agent {
               tools: toolsWithLaneMerge,
               stopWhen: [stepCountIs(30)],
               onStepFinish: async (step) => {
+                // 1. 实时保存 tool 消息（如果有工具调用）
+                if (chatRuntime && step.toolResults && step.toolResults.length > 0) {
+                  try {
+                    const maxOutputLength = 500;
+                    const truncatedCalls = step.toolResults.map((tr: any) => {
+                      let output = tr.output;
+                      if (typeof output === "string" && output.length > maxOutputLength) {
+                        output = output.slice(0, maxOutputLength) + "...(output truncated)";
+                      }
+                      return {
+                        tool: String(tr.toolName || "unknown_tool"),
+                        input: tr.input || {},
+                        output,
+                      };
+                    });
+
+                    const ctx = chatRequestContext.getStore();
+                    await chatRuntime.getStore(chatKey).append({
+                      channel: ctx?.channel || "api",
+                      chatId: ctx?.chatId || chatKey,
+                      userId: "bot",
+                      role: "tool",
+                      text: JSON.stringify(truncatedCalls),
+                      meta: { via: "agent" },
+                    });
+
+                    // 异步检查记忆提取（不阻塞）
+                    void chatRuntime.checkAndExtractMemoryAsync(chatKey);
+                  } catch {
+                    // 保存失败不影响执行
+                  }
+                }
+
+                // 2. 实时保存 assistant 消息（如果有文本输出）
+                const userTextFromStep = extractUserFacingTextFromStep(step);
+                if (chatRuntime && userTextFromStep && userTextFromStep !== lastEmittedAssistant) {
+                  try {
+                    const ctx = chatRequestContext.getStore();
+                    await chatRuntime.getStore(chatKey).append({
+                      channel: ctx?.channel || "api",
+                      chatId: ctx?.chatId || chatKey,
+                      userId: "bot",
+                      role: "assistant",
+                      text: userTextFromStep,
+                      meta: { via: "agent" },
+                    });
+
+                    // 异步检查记忆提取（不阻塞）
+                    void chatRuntime.checkAndExtractMemoryAsync(chatKey);
+                  } catch {
+                    // 保存失败不影响执行
+                  }
+                }
+
+                // 3. Emit events
                 try {
-                  const userTextFromStep = extractUserFacingTextFromStep(step);
                   if (userTextFromStep && userTextFromStep !== lastEmittedAssistant) {
                     lastEmittedAssistant = userTextFromStep;
                     await emitStep("assistant", userTextFromStep, { requestId, chatKey });
@@ -643,7 +643,7 @@ export class Agent {
                   // ignore
                 }
                 try {
-                  // 关键点：为调度器提供“step 完成”的可靠信号。
+                  // 关键点：为调度器提供"step 完成"的可靠信号。
                   // onStepFinish 内部可能 emit 多个事件（assistant/tool summaries），调度器需要一个去抖触发点。
                   await emitStep("step_finish", "", { requestId, chatKey });
                 } catch {
@@ -702,17 +702,7 @@ export class Agent {
       });
       await emitStep("done", "done", { requestId, chatKey });
 
-      // run 结束：把 assistant 追加到进程内 context；然后 flush 全量到 active.jsonl（用于进程重启恢复）
-      try {
-        const assistantText =
-          pickLastSuccessfulChatSendText(toolCalls) || String(result.text || "").trim();
-
-        if (assistantText) inFlightMessages.push({ role: "assistant", content: assistantText } as any);
-
-        await this.flushContextMessagesToDisk({ chatKey, messages: inFlightMessages });
-      } catch {
-        // ignore
-      }
+      // 简化策略：不再持久化上下文，所有历史由 ChatRuntime 管理并写入 history.jsonl
 
       return {
         success: !hadToolFailure,
@@ -765,6 +755,7 @@ export class Agent {
           onStep,
           drainLaneMergedText,
           requestId,
+          chatRuntime,
         });
       }
 

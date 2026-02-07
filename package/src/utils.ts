@@ -63,13 +63,13 @@ export interface ShipConfig {
      */
     chatHistory?: {
       /**
-       * 从 ChatStore（仅 user/assistant）注入的最大消息条数。
-       * 默认：30
+       * 从 ChatStore 注入的最大消息条数。
+       * 默认：50
        */
       transcriptMaxMessages?: number;
       /**
        * 注入内容的最大字符数（超出会截断并提示）。
-       * 默认：12000
+       * 默认：25000
        */
       transcriptMaxChars?: number;
     };
@@ -110,6 +110,42 @@ export interface ShipConfig {
        * 默认：3000
        */
       correctionMaxChars?: number;
+    };
+
+    /**
+     * 记忆管理配置。
+     *
+     * 设计目标
+     * - 自动提取对话摘要到 memory/Primary.md
+     * - 智能压缩避免记忆文件过长
+     * - 异步处理不阻塞主对话流程
+     */
+    memory?: {
+      /**
+       * 是否启用自动记忆提取。
+       * 默认：true
+       */
+      autoExtractEnabled?: boolean;
+      /**
+       * 触发记忆提取的最小未记忆化记录数。
+       * 默认：40
+       */
+      extractMinEntries?: number;
+      /**
+       * memory/Primary.md 的最大字符数，超过时触发压缩。
+       * 默认：15000
+       */
+      maxPrimaryChars?: number;
+      /**
+       * 超过阈值时是否自动压缩（使用 LLM）。
+       * 默认：true
+       */
+      compressOnOverflow?: boolean;
+      /**
+       * 压缩前是否备份到 memory/backup/。
+       * 默认：true
+       */
+      backupBeforeCompress?: boolean;
     };
 
     /**
@@ -438,8 +474,27 @@ export function getShipChatMemoryPrimaryPath(cwd: string, chatKey: string): stri
   return path.join(getShipChatMemoryDirPath(cwd, chatKey), "Primary.md");
 }
 
+export function getShipChatMemoryBackupDirPath(cwd: string, chatKey: string): string {
+  return path.join(getShipChatMemoryDirPath(cwd, chatKey), "backup");
+}
+
+export function getShipChatMemoryBackupPath(
+  cwd: string,
+  chatKey: string,
+  timestamp: number,
+): string {
+  return path.join(
+    getShipChatMemoryBackupDirPath(cwd, chatKey),
+    `Primary-${timestamp}.md`,
+  );
+}
+
+export function getShipChatMemoryMetaPath(cwd: string, chatKey: string): string {
+  return path.join(getShipChatMemoryDirPath(cwd, chatKey), ".meta.json");
+}
+
 /**
- * Chat contexts：跨轮“工作上下文”快照目录（per chatKey）。
+ * Chat contexts：跨轮"工作上下文"快照目录（per chatKey）。
  *
  * 注意（中文）
  * - conversations/ 下的 history.jsonl 是“平台 transcript”（审计账本），不应被替代或改写。

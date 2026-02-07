@@ -56,24 +56,8 @@ export abstract class PlatformAdapter {
 
     try {
       await this.sendTextToPlatform({ ...params, chatId, text });
-      try {
-        const chatKey = this.getChatKey({
-          chatId,
-          chatType: params.chatType,
-          messageId: params.messageId,
-          messageThreadId: params.messageThreadId,
-        });
-        await this.chatRuntime.appendAssistantMessage({
-          channel: this.channel,
-          chatId,
-          chatKey,
-          userId: "bot",
-          text,
-          meta: { via: "tool", channel: this.channel },
-        });
-      } catch {
-        // ignore chat log failures
-      }
+      // 注意：不在这里保存消息到 history.jsonl
+      // 消息保存由 lane-scheduler 统一处理，避免重复保存
       return { success: true };
     } catch (e) {
       return { success: false, error: String(e) };

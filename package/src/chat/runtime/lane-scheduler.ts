@@ -12,8 +12,10 @@
 
 import { withChatRequestContext } from "../context/request-context.js";
 import { sendFinalOutputIfNeeded } from "../egress/final-output.js";
+import { pickLastSuccessfulChatSendText } from "../../agent/context/agent.js";
 
 import type { Agent } from "../../agent/context/index.js";
+import type { ChatRuntime } from "./runtime.js";
 import type {
   ChatLaneEnqueueResult,
   ChatLaneSchedulerConfig,
@@ -130,6 +132,7 @@ function buildCorrectionMergedMessage(params: {
 export class ChatLaneScheduler {
   private readonly config: ChatLaneSchedulerConfig;
   private readonly getAgent: (chatKey: string) => Agent;
+  private readonly getChatRuntime: () => ChatRuntime;
 
   private readonly lanes: Map<string, Lane> = new Map();
   private readonly runnable: string[] = [];
@@ -140,11 +143,13 @@ export class ChatLaneScheduler {
   constructor(params: {
     config?: Partial<ChatLaneSchedulerConfig>;
     getAgent: (chatKey: string) => Agent;
+    getChatRuntime: () => ChatRuntime;
   }) {
     // 关键点（中文）：调度器不再要求 enqueue 时传入 Agent，减少 adapter/上层的耦合。
     // Agent 绑定由 chatKey 驱动：同一 chatKey 始终对应同一个 Agent 实例（由 runtime 侧缓存）。
     this.config = normalizeConfig(params.config);
     this.getAgent = params.getAgent;
+    this.getChatRuntime = params.getChatRuntime;
   }
 
   isBusy(): boolean {
@@ -313,8 +318,11 @@ export class ChatLaneScheduler {
         chatKey: first.chatKey,
         query: first.text,
         drainLaneMergedText: drainLaneMergedTextIfNeeded,
+        chatRuntime: this.getChatRuntime(),
       }),
     );
+
+    // 关键点（中文）：实时保存已在 Agent.onStepFinish 中完成，这里不再需要保存逻辑
 
     await sendFinalOutputIfNeeded({
       channel: ctx.channel,

@@ -40,17 +40,26 @@ export interface AgentRunInput {
   }) => Promise<void>;
 
   /**
-   * Lane “快速矫正”合并：在每个 LLM step 之前检查当前 chatKey lane 是否有新消息，
-   * 若有则合并为一段文本并返回，Agent 会把它追加到“本轮的 user message”末尾（保持只有一条 user）。
+   * Lane "快速矫正"合并：在每个 LLM step 之前检查当前 chatKey lane 是否有新消息，
+   * 若有则合并为一段文本并返回，Agent 会把它追加到"本轮的 user message"末尾（保持只有一条 user）。
    *
    * 同时（关键点，中文）
-   * - 新消息“无法抢占”正在进行的模型调用；只能在下一次模型调用前并入（例如工具调用完成后进入下一 step）。
+   * - 新消息"无法抢占"正在进行的模型调用；只能在下一次模型调用前并入（例如工具调用完成后进入下一 step）。
    *
    * 关键点（中文）
    * - 由调度器（ChatLaneScheduler）提供实现（它掌握 lane 队列）
    * - Agent 通过 `prepareStep` 调用该函数，实现 step 间的快速并入处理
    */
   drainLaneMergedText?: () => Promise<string | null>;
+
+  /**
+   * ChatRuntime 引用，用于实时保存和记忆检查。
+   *
+   * 关键点（中文）
+   * - Agent 在每个 step 完成后会立即保存 tool 和 assistant 消息到 ChatStore
+   * - 保存后会异步检查是否需要提取记忆（不阻塞）
+   */
+  chatRuntime?: any; // 使用 any 避免循环依赖，实际类型是 ChatRuntime
 }
 
 export interface ConversationMessage {

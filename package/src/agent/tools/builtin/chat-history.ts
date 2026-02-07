@@ -106,13 +106,14 @@ export const chat_load_history = tool({
 
     let entries: ChatLogEntryV1[] = [];
     try {
+      entries = await chatStore.loadRecentEntries(Math.min(5000, (count + offset) * 3));
+
+      // 如果有关键词，在内存中进行简单过滤
       if (keyword) {
-        entries = await chatStore.search({
-          keyword,
-          limit: Math.min(5000, (count + offset) * 3),
-        });
-      } else {
-        entries = await chatStore.loadRecentEntries(Math.min(5000, count + offset));
+        const lowerKeyword = keyword.toLowerCase();
+        entries = entries.filter((e) =>
+          e.text.toLowerCase().includes(lowerKeyword)
+        );
       }
     } catch (e) {
       return { success: false, error: String(e) };
