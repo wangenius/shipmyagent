@@ -1,0 +1,4 @@
+interface:
+  display_name: "Chrome CDP 自动化"
+  short_description: "用 agent-browser 通过 CDP 控制 Chrome（隔离profile）"
+  default_prompt: "使用 $chrome-cdp-agent-browser 启动隔离的 Chrome CDP 并用 agent-browser 自动化一个网页流程。"
