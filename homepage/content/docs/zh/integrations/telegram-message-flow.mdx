@@ -7,9 +7,9 @@ description: 以 Telegram 为例，解释从用户发消息到 Agent 执行，�
 
 > ⚠️ **简化模式（2026-02-03）**：当前发布的 `shipmyagent` 包已暂时移除审批（默认全权限执行）。本文档中与审批相关的部分已过期。
 
-这篇文档以 Telegram 为例，说明 **一条用户消息如何进入 ShipMyAgent**，以及 **AgentRuntime 如何执行、以及消息如何通过 `chat_send` tool 发送回 Telegram**。
+这篇文档以 Telegram 为例，说明 **一条用户消息如何进入 ShipMyAgent**，以及 **Agent 如何执行、以及消息如何通过 `chat_send` tool 发送回 Telegram**。
 
-> 代码参考：`package/src/adapters/telegram/bot.ts`、`package/src/adapters/base-chat-adapter.ts`、`package/src/runtime/agent/runtime.ts`、`package/src/runtime/chat/*`
+> 代码参考：`package/src/adapters/telegram/*`、`package/src/adapters/base-chat-adapter.ts`、`package/src/core/runtime/*`、`package/src/core/runtime/agent.ts`
 
 ## 1）总体流程（概览）
 
@@ -18,8 +18,8 @@ sequenceDiagram
   participant U as 用户 (Telegram)
   participant TG as Telegram API
   participant BOT as ShipMyAgent TelegramBot
-  participant CS as ChatStore (.ship/chat/*/conversations/*.jsonl)
-  participant RT as AgentRuntime
+  participant CS as History (.ship/chat/*/messages/history.jsonl)
+  participant RT as Agent
   participant T as chat_send tool
 
   U->>TG: 发送消息/附件/命令
@@ -28,7 +28,7 @@ sequenceDiagram
 
   BOT->>BOT: 解析文本/mention/回复关系/附件
   BOT->>CS: append(user message)
-  BOT->>RT: run(instructions)
+  BOT->>RT: run(query)
   RT->>T: chat_send(...)
   T->>TG: sendMessage/附件
 ```
@@ -44,8 +44,8 @@ sequenceDiagram
 
 ShipMyAgent 会把 Telegram 的聊天抽象为一个 **chatKey**，用来隔离上下文与日志：
 
-- 私聊 / 普通群聊：`telegram:chat:<chatId>`
-- Topics（话题）的群：`telegram:chat:<chatId>:topic:<messageThreadId>`
+- 私聊 / 普通群聊：`telegram-chat-<chatId>`
+- Topics（话题）的群：`telegram-chat-<chatId>-topic-<messageThreadId>`
 
 ### 2.3 群聊里哪些消息会被处理（mention / reply / follow-up window）
 
@@ -69,7 +69,7 @@ ShipMyAgent 会把 Telegram 的聊天抽象为一个 **chatKey**，用来隔离�
 2. 写入本地缓存目录：`.ship/.cache/telegram/`
 3. 在最终指令文本前拼一段 `@attach ...` 行（相对 `projectRoot` 的路径）
 
-示例（最终送入 AgentRuntime 的 instructions）：
+示例（最终送入 Agent 的 query）：
 
 ```text
 @attach document .ship/.cache/telegram/1738...-xxx.pdf | xxx.pdf
@@ -79,16 +79,16 @@ ShipMyAgent 会把 Telegram 的聊天抽象为一个 **chatKey**，用来隔离�
 
 > 说明：如果用户在发送文件时写了 caption，caption 会作为“文本指令”的来源（与纯 text 同等对待）。
 
-## 3）持久化：ChatStore 如何记录上下文
+## 3）持久化：history 如何记录上下文
 
-每次收到用户消息，TelegramBot 都会先写入一条聊天日志（append-only）：
+每次收到用户消息，TelegramBot 都会先把它写入对话 history（JSONL，append-only）：
 
-- 路径：`.ship/chat/<encode(chatKey)>/conversations/history.jsonl`
-- 格式：`ChatLogEntryV1`（包含 channel/chatId/chatKey/userId/messageId/role/text/meta 等）
+- 路径：`.ship/chat/<encode(chatKey)>/messages/history.jsonl`
+- 格式：`UIMessage`（包含 `role/parts/metadata` 等）
 
-在真正执行之前，runtime 默认使用同一 `chatKey` 的 in-memory session history（不会自动把 `.jsonl` 的历史加载进模型上下文）。当模型需要更多落盘历史细节时，可调用 `chat_load_history` 从 `.ship/chat/<chatKey>/conversations/history.jsonl` 按需读取/搜索并注入到当前上下文。
+在真正执行之前，runtime 会直接使用该 `chatKey` 的 history 作为模型的 `messages` 输入；当 history 接近上下文窗口时会自动 compact。
 
-## 4）执行：AgentRuntime 如何跑起来（sync / async）
+## 4）执行：Agent 如何跑起来（sync / async）
 
 ### 4.1 tool-strict：由 Agent 主动发消息
 
@@ -99,9 +99,9 @@ ShipMyAgent 的聊天集成采用 tool-strict：
 
 ### 4.2 执行与回复（run + delivery）
 
-如果不是审批回复，TelegramBot 会直接调用：
+如果不是审批回复，TelegramBot 会调用 Agent 执行（概念示意）：
 
-- `agentRuntime.run({ instructions, context })`
+- `agent.run({ chatKey, query })`
 
 回复发送遵循 tool-strict：
 
@@ -113,10 +113,6 @@ ShipMyAgent 的聊天集成采用 tool-strict：
 - 按 3900 字符分片（避开 Telegram 4096 限制）
 - 优先用 `parse_mode=Markdown`，失败则回退纯文本
 - 解析输出中的 `@attach ...` 并以真正的 Telegram 附件形式发送（支持本地路径或 URL）
-
-### 4.3 按需加载历史（可选）
-
-当模型判断当前 in-memory session history 不够时，可以调用 `chat_load_history`，把 `.ship/chat/<chatKey>/conversations/history.jsonl` 中更早的消息加载并注入到当前上下文（插入位置在当前 user 消息之前）。
 
 ## 5）用户可能收到的“各种消息”
 

@@ -64,6 +64,8 @@ skills 通过两个内置工具提供给模型：
 2. 调用 `skills_load` 读取 `SKILL.md`
 3. 按 `SKILL.md` 的步骤执行（必要时再调用其它工具；工具权限可能会被 `allowed-tools` 限制）
 
+> 说明：当模型调用 `skills_load` 成功后，ShipMyAgent 会把该 `skillId` 持久化到当前 `chatKey` 的 `.ship/chat/<encodedChatKey>/messages/meta.json`（pinnedSkillIds），后续每次对话都会自动注入对应 `SKILL.md`；在 history compact 时系统可能自动移除不再需要的 pinned skills。
+
 ## system prompt 中的 skills section
 
 当前 `shipmyagent start` 与聊天适配器默认都会把 skills 摘要 section 拼进 system prompt（`Agent.md` 拼接结果），让模型在对话一开始就知道：

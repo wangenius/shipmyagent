@@ -1,4 +1,4 @@
-import type { ChatDispatchChannel } from "../chat/egress/dispatcher.js";
+import type { ChatDispatchChannel } from "../core/egress/dispatcher.js";
 
 /**
  * Chat 调度器配置（Lane Scheduler）。
@@ -29,11 +29,6 @@ export type ChatLaneSchedulerConfig = {
   correctionMaxMergedMessages: number;
 
   /**
-   * 每轮矫正合并后的最大字符数（超出则截断并提示）。
-   */
-  correctionMaxChars: number;
-
-  /**
    * 是否启用“矫正合并”能力。
    */
   enableCorrectionMerge: boolean;
@@ -61,19 +56,4 @@ export type ChatLaneEnqueueResult = {
   pendingTotal: number;
 };
 
-export type CorrectionMergedMessage = {
-  mergedText: string;
-  mergedCount: number;
-  truncated: boolean;
-  /**
-   * 用于回包/工具幂等的“最新一条消息上下文”。
-   * 关键点：QQ 需要 messageId 才能被动回复；同时 `chat_send` 的 egress 幂等也依赖 messageId。
-   */
-  latestContext: {
-    messageId?: string;
-    userId?: string;
-    username?: string;
-    chatType?: string;
-    messageThreadId?: number;
-  };
-};
+// 说明（中文）：旧的 “mergedText 注入” 数据结构已移除。lane merge 现在只负责 drain + 触发 Agent 重载 history。

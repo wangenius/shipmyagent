@@ -132,15 +132,16 @@ interface Tool {
 
 - 每次请求拼一个 **system**：`Agent.md + DefaultPrompt`
 - **user** 消息保持原文（不加前缀）
-- 上下文默认来自按 `chatKey` 隔离的 in-memory session history（裁剪到固定上限）
-- 需要更多落盘历史细节时，模型可调用 `chat_load_history` 从 `.ship/chat/<chatKey>/conversations/history.jsonl` 加载并注入到当前上下文
+- 每个 `chatKey` 都有一份持续增长的 history（`UIMessage[]`，落盘在 `.ship/chat/<encodedChatKey>/messages/history.jsonl`）
+- 每次请求直接把该 history 转成 `messages` 送给模型（不再把历史折叠成字符串块，也不需要“加载历史”工具）
+- 当 history 接近上下文窗口时会自动 compact：更早段压缩为摘要消息，并保留最近窗口
 
 ### 存储位置（当前）
 
 ```text
 .ship/
   logs/       # 执行/审计日志（JSONL）
-  chats/      # 对话历史（JSONL，append-only）
+  chat/       # 每个 chatKey 的 history/memory（UIMessage JSONL + meta + archive）
   mcp/        # MCP 配置/状态（可选）
   .cache/     # 临时缓存（幂等等）
 ```

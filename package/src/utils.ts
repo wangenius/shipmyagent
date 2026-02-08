@@ -54,24 +54,35 @@ export interface ShipConfig {
    * 上下文与历史管理（工程向配置）。
    *
    * 说明
-   * - ChatStore 负责落盘“用户视角对话历史”（.ship/chat/<chatKey>/conversations/history.jsonl）。
-   * - Agent 每次执行时会从 ChatStore 抽取“最近的对话 transcript”，并以“一条 assistant message”注入上下文。
+   * - 历史以 UIMessage[] 为唯一事实源（.ship/chat/<chatKey>/messages/history.jsonl）。
+   * - Agent 每次执行直接把 UIMessage[] 转成 ModelMessage[] 作为 messages 输入。
+   * - 超出上下文窗口时会自动 compact（更早段压缩为摘要 + 保留最近窗口）。
    */
   context?: {
     /**
-     * Chat transcript 注入策略（把 ChatStore 历史作为对话式上下文注入）。
+     * History（唯一历史来源）的 compact 策略。
      */
-    chatHistory?: {
+    history?: {
       /**
-       * 从 ChatStore 注入的最大消息条数。
-       * 默认：50
+       * compact 后保留最近多少条消息（user/assistant 都计入）。
+       * 默认：30
        */
-      transcriptMaxMessages?: number;
+      keepLastMessages?: number;
       /**
-       * 注入内容的最大字符数（超出会截断并提示）。
-       * 默认：25000
+       * 输入预算（近似 token 数）。
+       *
+       * 说明（中文）
+       * - 这里是近似值，用于在调用 provider 前提前触发 compact
+       * - 实际超窗仍会被 provider 拒绝并进入 retry（更激进 compact）
+       *
+       * 默认：12000
        */
-      transcriptMaxChars?: number;
+      maxInputTokensApprox?: number;
+      /**
+       * compact 时是否归档被折叠的原始消息段（写入 messages/archive/）。
+       * 默认：true
+       */
+      archiveOnCompact?: boolean;
     };
     /**
      * Chat 消息调度（按 chatKey 分 lane）。
@@ -105,11 +116,6 @@ export interface ShipConfig {
        * 默认：5
        */
       correctionMaxMergedMessages?: number;
-      /**
-       * 每轮合并注入的最大字符数（超出会截断并提示）。
-       * 默认：3000
-       */
-      correctionMaxChars?: number;
     };
 
     /**
@@ -295,16 +301,16 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
     temperature: 0.7,
   },
   context: {
-    chatHistory: {
-      transcriptMaxMessages: 30,
-      transcriptMaxChars: 12000,
+    history: {
+      keepLastMessages: 30,
+      maxInputTokensApprox: 12000,
+      archiveOnCompact: true,
     },
     chatQueue: {
       maxConcurrency: 2,
       enableCorrectionMerge: true,
       correctionMaxRounds: 2,
       correctionMaxMergedMessages: 5,
-      correctionMaxChars: 3000,
     },
   },
   permissions: {
@@ -451,18 +457,37 @@ export function getShipChatDirPath(cwd: string, chatKey: string): string {
   return path.join(getShipChatRootDirPath(cwd), encodeURIComponent(chatKey));
 }
 
-export function getShipChatConversationsDirPath(cwd: string, chatKey: string): string {
-  return path.join(getShipChatDirPath(cwd, chatKey), "conversations");
+/**
+ * History Messages（对话历史，唯一事实源）。
+ *
+ * 关键点（中文）
+ * - `.ship/chat/<encodedChatKey>/messages/history.jsonl`：每行一个 UIMessage（user/assistant）
+ * - compact 会把被折叠的原始段写入 `messages/archive/*`（可审计）
+ */
+export function getShipChatMessagesDirPath(cwd: string, chatKey: string): string {
+  return path.join(getShipChatDirPath(cwd, chatKey), "messages");
 }
 
 export function getShipChatHistoryPath(cwd: string, chatKey: string): string {
-  return path.join(getShipChatConversationsDirPath(cwd, chatKey), "history.jsonl");
+  return path.join(getShipChatMessagesDirPath(cwd, chatKey), "history.jsonl");
 }
 
-export function getShipChatArchivePath(cwd: string, chatKey: string, archiveIndex: number): string {
+export function getShipChatHistoryMetaPath(cwd: string, chatKey: string): string {
+  return path.join(getShipChatMessagesDirPath(cwd, chatKey), "meta.json");
+}
+
+export function getShipChatHistoryArchiveDirPath(cwd: string, chatKey: string): string {
+  return path.join(getShipChatMessagesDirPath(cwd, chatKey), "archive");
+}
+
+export function getShipChatHistoryArchivePath(
+  cwd: string,
+  chatKey: string,
+  archiveId: string,
+): string {
   return path.join(
-    getShipChatConversationsDirPath(cwd, chatKey),
-    `archive-${archiveIndex}.jsonl`,
+    getShipChatHistoryArchiveDirPath(cwd, chatKey),
+    `${encodeURIComponent(String(archiveId || "").trim())}.json`,
   );
 }
 
@@ -491,41 +516,6 @@ export function getShipChatMemoryBackupPath(
 
 export function getShipChatMemoryMetaPath(cwd: string, chatKey: string): string {
   return path.join(getShipChatMemoryDirPath(cwd, chatKey), ".meta.json");
-}
-
-/**
- * Chat contexts：跨轮"工作上下文"快照目录（per chatKey）。
- *
- * 注意（中文）
- * - conversations/ 下的 history.jsonl 是“平台 transcript”（审计账本），不应被替代或改写。
- * - contexts/ 下保存的是“Agent 工作上下文快照”，用于显式创建新上下文、以及按需恢复旧上下文。
- */
-export function getShipChatContextsDirPath(cwd: string, chatKey: string): string {
-  return path.join(getShipChatDirPath(cwd, chatKey), "contexts");
-}
-
-export function getShipChatContextsActivePath(cwd: string, chatKey: string): string {
-  // 关键点（中文）：active 采用 JSONL（append-only），便于每轮直接追加 messages。
-  return path.join(getShipChatContextsDirPath(cwd, chatKey), "active.jsonl");
-}
-
-export function getShipChatContextsIndexPath(cwd: string, chatKey: string): string {
-  return path.join(getShipChatContextsDirPath(cwd, chatKey), "index.json");
-}
-
-export function getShipChatContextsArchiveDirPath(cwd: string, chatKey: string): string {
-  return path.join(getShipChatContextsDirPath(cwd, chatKey), "archive");
-}
-
-export function getShipChatContextsArchivePath(
-  cwd: string,
-  chatKey: string,
-  contextId: string,
-): string {
-  return path.join(
-    getShipChatContextsArchiveDirPath(cwd, chatKey),
-    `${encodeURIComponent(String(contextId || "").trim())}.json`,
-  );
 }
 
 export function getShipPublicDirPath(cwd: string): string {

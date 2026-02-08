@@ -1,5 +1,5 @@
 import { PlatformAdapter } from "./platform-adapter.js";
-import type { ChatDispatchChannel } from "../chat/egress/dispatcher.js";
+import type { ChatDispatchChannel } from "../core/egress/dispatcher.js";
 import type { Logger } from "../telemetry/index.js";
 import { getShipRuntimeContext } from "../server/ShipRuntimeContext.js";
 
@@ -19,7 +19,7 @@ export type IncomingChatMessage = {
  * Provides:
  * - A single, global Lane Scheduler（按 chatKey 分 lane；同 chatKey 串行、不同 chatKey 可并发）
  * - One AgentRuntime per chatKey（一个 Chat 一个 Agent 实例）
- * - Append-only ChatStore logging for user messages (audit trail)
+ * - Append-only UIMessage history for user/assistant（唯一 history）
  *
  * Tool-strict note:
  * - Agent replies should be delivered via `chat_send` tool.
@@ -64,14 +64,22 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     text: string;
     meta?: Record<string, unknown>;
   }): Promise<void> {
-    await this.chatRuntime.appendUserMessage({
-      channel: this.channel,
-      chatId: params.chatId,
-      chatKey: params.chatKey,
+    const meta = (params.meta || {}) as any;
+	    await this.chatRuntime.appendUserMessage({
+	      channel: this.channel,
+	      chatId: params.chatId,
+	      chatKey: params.chatKey,
       userId: params.userId,
       messageId: params.messageId,
       text: params.text,
-      meta: params.meta,
+      username: typeof meta.username === "string" ? meta.username : undefined,
+      messageThreadId:
+        typeof meta.messageThreadId === "number" && Number.isFinite(meta.messageThreadId)
+          ? meta.messageThreadId
+          : undefined,
+      chatType: typeof meta.chatType === "string" ? meta.chatType : undefined,
+      // 关键点（中文）：保留 adapter 侧额外审计信息（pending/progress/actorName 等）
+      extra: params.meta,
     });
   }
 

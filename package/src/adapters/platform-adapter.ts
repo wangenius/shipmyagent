@@ -1,5 +1,5 @@
-import type { ChatDispatchChannel } from "../chat/egress/dispatcher.js";
-import { registerChatDispatcher } from "../chat/egress/dispatcher.js";
+import type { ChatDispatchChannel } from "../core/egress/dispatcher.js";
+import { registerChatDispatcher } from "../core/egress/dispatcher.js";
 import { getShipRuntimeContext } from "../server/ShipRuntimeContext.js";
 
 export type AdapterChatKeyParams = {
@@ -54,13 +54,13 @@ export abstract class PlatformAdapter {
     if (!chatId) return { success: false, error: "Missing chatId" };
     if (!text.trim()) return { success: true };
 
-    try {
-      await this.sendTextToPlatform({ ...params, chatId, text });
-      // 注意：不在这里保存消息到 history.jsonl
-      // 消息保存由 lane-scheduler 统一处理，避免重复保存
-      return { success: true };
-    } catch (e) {
-      return { success: false, error: String(e) };
-    }
-  }
+	    try {
+	      await this.sendTextToPlatform({ ...params, chatId, text });
+		      // 注意：不在这里保存消息到 history（history.jsonl）
+	      // 消息保存由 lane-scheduler 统一处理（以用户可见回复为准），避免重复保存
+	      return { success: true };
+	    } catch (e) {
+	      return { success: false, error: String(e) };
+	    }
+	  }
 }

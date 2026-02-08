@@ -7,7 +7,7 @@ import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "./platform-adapter.js";
-import type { Agent } from "../agent/context/index.js";
+import type { Agent } from "../core/runtime/index.js";
 
 /**
  * Feishu (Lark) chat adapter.
@@ -16,7 +16,7 @@ import type { Agent } from "../agent/context/index.js";
  * - Receive Feishu message events and translate them into AgentRuntime inputs
  * - Enforce basic access policy (optional admin allowlist)
  * - Relay tool-strict replies back to Feishu via dispatcher + `chat_send` tool
- * - Persist chat logs through ChatStore via BaseChatAdapter helpers
+ * - Persist chat logs through UIMessage history via BaseChatAdapter helpers
  */
 
 interface FeishuConfig {

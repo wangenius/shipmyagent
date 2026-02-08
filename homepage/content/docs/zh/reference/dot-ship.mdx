@@ -25,14 +25,10 @@ description: ShipMyAgent 运行时目录结构与文件格式参考
   data/                          # 运行时数据（按需；可能为空）
   chat/
     <encodedChatKey>/
-      conversations/             # 用户视角对话历史（Transcript）
+      messages/                  # 对话历史（UIMessage JSONL，唯一事实源）
         history.jsonl
-        archive-1.jsonl          (可选)
-        archive-2.jsonl          (可选)
-      contexts/                  # 工作上下文快照（可选，工具驱动）
-        active.jsonl
-        index.json
-        archive/
+        meta.json                (可选，compact 元数据 + pinned skills)
+        archive/                 (可选，compact 归档段)
       memory/                    # chat 级持久化记忆（面对不同 chat 的默认逻辑）
         Primary.md
         <any>.md                 (可选)
@@ -55,19 +51,20 @@ description: ShipMyAgent 运行时目录结构与文件格式参考
 
 ## 各目录/文件说明
 
-### `.ship/chat/<chatKey>/conversations/`：用户视角的对话历史（Transcript）
+### `.ship/chat/<chatKey>/messages/`：对话历史（History）
 
-用途：按 `chatKey` 归档「平台侧看到的对话记录」，用于追溯、工具读取历史（例如 `chat_load_history`）。
+用途：按 `chatKey` 归档对话历史（`UIMessage[]`），用于 UI 展示与模型输入（同一份数据，唯一事实源）。
 
 路径规则：
 
-- `.ship/chat/<encodedChatKey>/conversations/history.jsonl`
-- `.ship/chat/<encodedChatKey>/conversations/archive-1.jsonl`（可选，历史过长会归档）
+- `.ship/chat/<encodedChatKey>/messages/history.jsonl`
+- `.ship/chat/<encodedChatKey>/messages/meta.json`（可选；包含 compact 元数据与 `pinnedSkillIds`）
+- `.ship/chat/<encodedChatKey>/messages/archive/*.json`（可选，compact 时归档被折叠的原始段）
 
 `history.jsonl` 单行示例（字段会随平台/场景不同而略有差异）：
 
 ```json
-{"v":1,"ts":1730000000000,"channel":"telegram","chatId":"123","chatKey":"telegram-chat-123","userId":"123","messageId":"456","role":"user","text":"...","meta":{"chatType":"private","username":"alice"}}
+{"id":"u:telegram-chat-123:456","role":"user","parts":[{"type":"text","text":"..."}],"metadata":{"v":1,"ts":1730000000000,"channel":"telegram","chatId":"123","chatKey":"telegram-chat-123","userId":"123","messageId":"456","chatType":"private","username":"alice"}}
 ```
 
 ### `.ship/profile/`：全局持久化记忆（Profile）

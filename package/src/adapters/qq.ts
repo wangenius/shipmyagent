@@ -14,7 +14,7 @@ import type {
  * - Maintain WS connection + heartbeats + reconnection
  * - Translate inbound group/private messages into AgentRuntime runs
  * - Deliver outbound tool-strict replies via dispatcher + `chat_send`
- * - Persist inbound/outbound logs via ChatStore through BaseChatAdapter
+ * - Persist inbound/outbound logs via UIMessage history through BaseChatAdapter
  */
 
 interface QQConfig {

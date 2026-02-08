@@ -18,6 +18,7 @@ bin
 bun.*
 # Package build output
 package/bin
+!examples/demo-agent/bin
 # Runtime data
 .ship/logs/
 .ship/approvals/

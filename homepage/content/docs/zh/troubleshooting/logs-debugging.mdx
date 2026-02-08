@@ -146,8 +146,8 @@ tail -200 .ship/logs/$(date +%F).jsonl
 # 确认消息已落盘
 ls -la .ship/chat
 
-# 查看某个 chatKey 的最近日志（替换为真实文件名）
-tail -50 .ship/chat/<encode(chatKey)>/conversations/history.jsonl
+# 查看某个 chatKey 的最近对话历史（替换为真实文件名）
+tail -50 .ship/chat/<encode(chatKey)>/messages/history.jsonl
 
 # 查看今天的统一日志
 tail -200 .ship/logs/$(date +%F).jsonl

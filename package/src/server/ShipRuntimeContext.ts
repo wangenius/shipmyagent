@@ -1,11 +1,11 @@
-import { Agent } from "../agent/context/index.js";
-import { discoverClaudeSkillsSync } from "../agent/skills/discovery.js";
-import { renderClaudeSkillsPromptSection } from "../agent/skills/prompt.js";
-import { DEFAULT_SHIP_PROMPTS } from "../agent/context/prompt.js";
+import { Agent } from "../core/runtime/index.js";
+import { discoverClaudeSkillsSync } from "../core/skills/discovery.js";
+import { renderClaudeSkillsPromptSection } from "../core/skills/prompt.js";
+import { DEFAULT_SHIP_PROMPTS } from "../core/runtime/prompt.js";
 import type { Logger } from "../telemetry/index.js";
 import { logger as defaultLogger } from "../telemetry/logging/logger.js";
-import { McpManager } from "../agent/mcp/manager.js";
-import { ChatRuntime } from "../chat/runtime/runtime.js";
+import { McpManager } from "../core/mcp/manager.js";
+import { ChatRuntime } from "../core/runtime/chat-runtime.js";
 import {
   getAgentMdPath,
   getCacheDirPath,
@@ -88,7 +88,7 @@ export type ShipRuntimeContext = {
    */
   systems: string[];
 
-  // 说明：Agent/ChatStore 的缓存现在由 ChatRuntime 统一管理（按 chatKey 隔离）。
+  // 说明：Agent/history store 的缓存现在由 ChatRuntime 统一管理（按 chatKey 隔离）。
 };
 
 /**

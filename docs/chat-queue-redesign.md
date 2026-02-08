@@ -8,18 +8,18 @@
 当前架构的关键事实：
 
 - **全局单队列串行**：所有平台、所有会话共用一个 `QueryQueue`，严格一次只处理一条消息（FIFO）。  
-  参考：`package/src/chat/query-queue.ts`、`package/src/adapters/base-chat-adapter.ts`
+  参考：`package/src/core/runtime/lane-scheduler.ts`、`package/src/adapters/base-chat-adapter.ts`
 - **一个 chatKey 一个 Agent 实例**：每个会话隔离上下文，但仍被全局队列串行调度。  
   参考：`package/src/adapters/base-chat-adapter.ts`
 - **忙碌 ACK**：队列忙时会主动回一条「已收到，稍后回复」，并显示“队列第 N 条”（N 是全局位置）。  
-  参考：`package/src/chat/query-queue.ts`
+  参考：`package/src/core/runtime/lane-scheduler.ts`
 - **工具严格回包 + 兜底发送**：模型应调用 `chat_send`；如果没调用，则用 `sendFinalOutputIfNeeded` 发一次最终 output。  
-  参考：`package/src/agent/tools/builtin/chat.ts`、`package/src/chat/final-output.ts`
+  参考：`package/src/core/tools/builtin/chat.ts`、`package/src/core/egress/final-output.ts`
 - **幂等**：
   - 入站幂等：Telegram 做了持久化去重（`tryClaimChatIngressMessage`），QQ 目前未见同等机制。  
-    参考：`package/src/chat/idempotency.ts`、`package/src/adapters/telegram/bot.ts`
+    参考：`package/src/core/egress/egress-idempotency.ts`、`package/src/adapters/telegram/bot.ts`
   - 出站幂等：`chat_send` 基于 inbound `messageId` 做持久化去重，避免 tool-loop 重复发送。  
-    参考：`package/src/chat/egress-idempotency.ts`、`package/src/agent/tools/builtin/chat.ts`
+    参考：`package/src/core/egress/egress-idempotency.ts`、`package/src/core/tools/builtin/chat.ts`
 - **会话键**：
   - Telegram：`telegram-chat-<chatId>` 或 `telegram-chat-<chatId>-topic-<threadId>`  
   - QQ：`qq-<chatType>-<chatId>`
@@ -208,8 +208,8 @@ type ChatEnvelope = {
 - `chat/egress/`  
   - `dispatcher.ts`（现有可复用）
   - `idempotency.ts`（replyKey 模型）
-- `chat/transcript/`  
-  - `store.ts`（现有 ChatStore）
+- `chat/history/`  
+  - `store.ts`（UIMessage history store，支持 compact）
   - `contacts.ts`（已移除：改为按 chatKey 投递）
 
 ## 6. 行为示例（你提到的 3 个场景）

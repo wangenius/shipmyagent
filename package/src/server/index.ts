@@ -2,12 +2,13 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { logger as server_logger } from "../telemetry/logging/logger.js";
-import { withChatRequestContext } from "../chat/context/request-context.js";
+import { withChatRequestContext } from "../core/runtime/request-context.js";
 import http from "node:http";
 import fs from "fs-extra";
 import path from "path";
 import { getShipPublicDirPath } from "../utils.js";
 import { getShipRuntimeContext } from "./ShipRuntimeContext.js";
+import { pickLastSuccessfulChatSendText } from "../core/egress/user-visible-text.js";
 
 export interface StartOptions {
   port: number;
@@ -202,9 +203,8 @@ export class AgentServer {
           text: String(instructions),
         });
 
-        // API 也是一种 “chat”（有 chatKey + 可落盘历史），但它不是“平台消息回发”场景：
-        // - 允许使用 chat_load_history 等依赖 chatKey 的工具
-        // - 不提供 channel/chatId 的 dispatcher 回发能力（响应通过 HTTP body 返回）
+        // API 也是一种 “chat”（有 chatKey + 可落盘 history），但它不是“平台消息回发”场景：
+        // - 不提供 dispatcher 回发能力（响应通过 HTTP body 返回）
         const result = await withChatRequestContext(
           {
             chatKey,
@@ -219,15 +219,36 @@ export class AgentServer {
             }),
         );
 
-        await runtime.chatRuntime.appendAssistantMessage({
-          channel: "api",
-          chatId,
-          chatKey,
-          userId: "bot",
-          messageId,
-          text: String(result?.output || ""),
-          meta: { success: Boolean((result as any)?.success) },
-        });
+        const userVisible =
+          pickLastSuccessfulChatSendText((result as any)?.toolCalls || []) ||
+          String(result?.output || "");
+        try {
+          const store = runtime.chatRuntime.getHistoryStore(chatKey);
+          const assistantMessage = (result as any)?.assistantMessage;
+          if (assistantMessage && typeof assistantMessage === "object") {
+            await store.append(assistantMessage as any);
+            void runtime.chatRuntime.checkAndExtractMemoryAsync(chatKey);
+          } else if (userVisible && userVisible.trim()) {
+            await store.append(
+              store.createAssistantTextMessage({
+                text: userVisible,
+                metadata: {
+                  chatKey,
+                  channel: "api",
+                  chatId,
+                  userId: "bot",
+                  messageId,
+                  extra: { via: "api_execute", note: "assistant_message_missing" },
+                } as any,
+                kind: "normal",
+                source: "egress",
+              }),
+            );
+            void runtime.chatRuntime.checkAndExtractMemoryAsync(chatKey);
+          }
+        } catch {
+          // ignore
+        }
 
         return c.json(result);
       } catch (error) {
