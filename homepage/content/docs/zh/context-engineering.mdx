@@ -55,7 +55,7 @@ ShipMyAgent 的核心命题是 **Repo is the Agent**：你的代码仓库不仅�
 
 - 读取项目 `Agent.md`（如果存在）
 - 拼上内置默认提示词（行为约束 / 输出规则）
-- 扫描并渲染 Skills 概览（默认 `.claude/skills`）
+- 扫描并渲染 Skills 概览（默认 `.ship/skills`）
 
 ### 2) in-flight messages：DefaultPrompt + history + 用户原文
 
@@ -78,7 +78,7 @@ ShipMyAgent 的核心命题是 **Repo is the Agent**：你的代码仓库不仅�
 仓库上下文主要通过工具进入 Agent：
 
 - `exec_shell`：在 `projectRoot` 下执行 `ls/cat/rg/git/test/build…`，按需读取/搜索仓库信息
-- Skills/MCP：把 SOP 和外部系统能力“工程化地接进来”（`.claude/skills` 与 `.ship/config/mcp.json`）
+- Skills/MCP：把 SOP 和外部系统能力“工程化地接进来”（`.ship/skills` 与 `.ship/config/mcp.json`）
 
 ---
 

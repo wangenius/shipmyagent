@@ -8,7 +8,7 @@
     "sma": "./bin/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-built-in-skills.mjs",
     "dev": "tsc --watch",
     "start": "node bin/start.js",
     "typecheck": "tsc --noEmit"

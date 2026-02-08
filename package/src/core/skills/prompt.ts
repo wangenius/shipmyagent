@@ -1,24 +1,24 @@
 import type { ShipConfig } from "../../utils.js";
-import { getClaudeSkillSearchPaths } from "./paths.js";
-import type { ClaudeSkill } from "./types.js";
+import { getClaudeSkillSearchRoots } from "./paths.js";
+import type { ClaudeSkill } from "../../types/claude-skill.js";
 
 export function renderClaudeSkillsPromptSection(
   projectRoot: string,
   config: ShipConfig,
   skills: ClaudeSkill[],
 ): string {
-  if (skills.length === 0) {
-    return "";
-  }
-  const { raw: rawRoots } = getClaudeSkillSearchPaths(projectRoot, config);
-  const rootsDisplay =
-    rawRoots.length > 0 ? rawRoots.join(", ") : ".claude/skills";
+  const roots = getClaudeSkillSearchRoots(projectRoot, config);
+  const allowExternal = Boolean(config.skills?.allowExternalPaths);
 
   const lines: string[] = [];
   lines.push("Claude Code Skills (compatible)");
-  lines.push(
-    `- Skill roots: ${rootsDisplay} (relative to project root unless absolute)`,
-  );
+  lines.push("- Skill roots (scan order, higher wins on id conflict):");
+
+  for (const r of roots) {
+    const externalNote =
+      r.source === "config" && !allowExternal ? " (disabled: allowExternalPaths=false)" : "";
+    lines.push(`  - [${r.source}] ${r.display}${externalNote}`);
+  }
   lines.push(
     "- Use tools: skills_list (discover) and skills_load (load SKILL.md, then follow it).",
   );

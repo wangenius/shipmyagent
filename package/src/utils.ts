@@ -19,12 +19,14 @@ export interface ShipConfig {
   };
   /**
    * Optional Claude Code-compatible skills configuration.
-   * By default we look for project skills under `.claude/skills/`.
+   * 默认会扫描：
+   * - 项目内：`.ship/skills/`
+   * - 用户目录：`~/.ship/skills/`
    */
   skills?: {
     /**
      * Extra skill root directories to scan. Relative paths are resolved from project root.
-     * Example: [".claude/skills", ".my/skills"]
+     * Example: [".ship/skills", ".my/skills"]
      */
     paths?: string[];
     /**

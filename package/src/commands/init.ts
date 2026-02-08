@@ -13,6 +13,9 @@
 import path from "path";
 import prompts from "prompts";
 import fs from "fs-extra";
+import { execa } from "execa";
+import os from "node:os";
+import { fileURLToPath } from "node:url";
 import {
   getAgentMdPath,
   getShipJsonPath,
@@ -40,6 +43,57 @@ import {
 import { SHIP_JSON_SCHEMA } from "../schemas/ship.schema.js";
 import { MCP_JSON_SCHEMA } from "../schemas/mcp.schema.js";
 import type { AdapterKey, InitOptions } from "../types/init.js";
+
+function getUserShipSkillsDir(): string {
+  return path.join(os.homedir(), ".ship", "skills");
+}
+
+function getBuiltInSkillsDirFromBin(): string {
+  // 关键点（中文）
+  // - 发布包中该文件在 `bin/commands/init.js`
+  // - 内置 skills 会在 build 阶段复制到 `bin/core/skills/built-in`
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const binRoot = path.resolve(__dirname, "..");
+  return path.join(binRoot, "core", "skills", "built-in");
+}
+
+async function installBuiltInSkillsToUserDir(): Promise<void> {
+  const src = getBuiltInSkillsDirFromBin();
+  const dst = getUserShipSkillsDir();
+
+  try {
+    if (!(await fs.pathExists(src))) return;
+    const stat = await fs.stat(src);
+    if (!stat.isDirectory()) return;
+  } catch {
+    return;
+  }
+
+  try {
+    await fs.ensureDir(dst);
+    // 关键点（中文）：覆盖复制，保证升级后内置 skills 可更新到用户目录。
+    await fs.copy(src, dst, { overwrite: true, dereference: true });
+    console.log(`✅ Installed built-in skills to ${dst}`);
+  } catch (err) {
+    console.log(`⚠️  Failed to install built-in skills to ${dst}`);
+    console.log(`   Error: ${String(err)}`);
+  }
+}
+
+async function syncClaudeSkillsToUserShipSkills(): Promise<void> {
+  const src = path.join(os.homedir(), ".claude", "skills");
+  const dst = getUserShipSkillsDir();
+  try {
+    if (!(await fs.pathExists(src))) return;
+    const stat = await fs.stat(src);
+    if (!stat.isDirectory()) return;
+    await fs.ensureDir(dst);
+    await fs.copy(src, dst, { overwrite: true, dereference: true });
+  } catch {
+    // ignore
+  }
+}
 
 export async function initCommand(
   cwd: string = ".",
@@ -123,6 +177,25 @@ export async function initCommand(
       message: "Use QQ sandbox environment?",
       initial: false,
     },
+    {
+      type: "multiselect",
+      name: "skillsToInstall",
+      message: "Install recommended skills (optional)",
+      choices: [
+        {
+          title: "Vercel React/Next.js Best Practices",
+          value: "vercel-labs/agent-skills@vercel-react-best-practices",
+        },
+        {
+          title: "Web Design Guidelines",
+          value: "vercel-labs/agent-skills@web-design-guidelines",
+        },
+        {
+          title: "Agent Browser (browser automation)",
+          value: "vercel-labs/agent-skills@agent-browser",
+        },
+      ],
+    },
   ]);
 
   // Create configuration files
@@ -202,6 +275,8 @@ Help users understand and work with their codebase by exploring, analyzing, and 
       interactivePort: 3001,
     },
     llm: llmConfig,
+    // 关键点（中文）：默认额外支持 `.claude/skills`（兼容社区/工具链习惯），同时仍保留 `.ship/skills` 作为默认 root
+    skills: { paths: [".claude/skills"] },
     ...(Object.keys(adaptersConfig).length > 0 ? { adapters: adaptersConfig } : {}),
   };
 
@@ -219,6 +294,8 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     getShipChatRootDirPath(projectRoot),
     getShipPublicDirPath(projectRoot),
     getShipConfigDirPath(projectRoot),
+    path.join(getShipDirPath(projectRoot), "skills"),
+    path.join(projectRoot, ".claude", "skills"),
     path.join(getShipDirPath(projectRoot), "schema"),
     getShipDebugDirPath(projectRoot),
   ];
@@ -251,6 +328,36 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   await saveJson(mcpSchemaPath, MCP_JSON_SCHEMA);
   await saveJson(mcpJsonPath, { $schema: "../schema/mcp.schema.json", servers: {} });
   console.log(`✅ Created .ship/config/mcp.json (MCP configuration)`);
+
+  // Install built-in skills to user directory (~/.ship/skills)
+  await installBuiltInSkillsToUserDir();
+
+  // Skills installation (optional)
+  const skillsToInstall: string[] = Array.isArray((response as any).skillsToInstall)
+    ? ((response as any).skillsToInstall as any[]).map((x) => String(x)).filter(Boolean)
+    : [];
+
+  if (skillsToInstall.length > 0) {
+    console.log("\n🧩 Installing skills via `npx skills` (global, claude-code) ...");
+    for (const spec of skillsToInstall) {
+      try {
+        // 关键点（中文）
+        // - `-y`（npx）：跳过安装确认
+        // - `-g`：`npx skills` 默认全局安装到 ~/.claude/skills
+        // - `--agent claude-code`：对齐 Claude Code-compatible 目录结构（SKILL.md）
+        await execa(
+          "npx",
+          ["-y", "skills", "add", spec, "--agent", "claude-code", "-g", "-y"],
+          { stdio: "inherit" },
+        );
+      } catch (err) {
+        console.log(`⚠️  Failed to install skill: ${spec}`);
+        console.log(`   Error: ${String(err)}`);
+      }
+    }
+    // 同步到 `~/.ship/skills`，保证 ShipMyAgent 可发现
+    await syncClaudeSkillsToUserShipSkills();
+  }
 
   console.log('\n🎉 Initialization complete!\n');
   console.log(`📦 Current model: ${llmConfig.provider} / ${llmConfig.model}`);

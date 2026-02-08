@@ -1,13 +1,20 @@
 ---
-title: BuildInSkills（已移除）
-description: BuildInSkills 已移除；如需可复用的流程，请使用 Skills（SKILL.md）
+title: Built-in Skills（内置）
+description: 随 ShipMyAgent 发布的内置 Skills（SKILL.md），无需安装即可被发现与加载
 ---
 
-# BuildInSkills（已移除）
+# Built-in Skills（内置）
 
-BuildInSkills（内置可加载技能）已从当前版本移除。
+ShipMyAgent 内置了一些 Skills（SKILL.md），随包发布。
 
-如果你希望复用“流程/规则/工具使用规范”，推荐使用 Skills（SKILL.md）：
+在执行 `sma init` 时，会把这些内置 skills 从安装包的 `bin/` 复制到你的用户目录 `~/.ship/skills`，之后就会像普通 skills 一样被发现与加载。
+
+默认扫描 roots：
+
+- 项目内：`<project>/.ship/skills`
+- 用户目录：`~/.ship/skills`
+
+使用方式与普通 skills 完全一致：
 
 - 发现：`skills_list`
 - 加载：`skills_load`

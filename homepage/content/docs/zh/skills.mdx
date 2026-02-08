@@ -9,10 +9,17 @@ ShipMyAgent 当前支持 **Claude Code-compatible skills**。本页解释：skil
 
 ## 目录结构
 
-默认 skills root 为项目根目录下的 `.claude/skills`：
+默认会扫描 2 类 skills roots：
+
+- 项目内：`<project>/.ship/skills`
+- 用户目录：`~/.ship/skills`
+
+此外，你还可以通过 `ship.json.skills.paths` 增加额外 roots。`sma init` 会默认在 `ship.json` 写入 `skills.paths: [".claude/skills"]`，并创建 `./.claude/skills/` 目录，用于兼容社区常见布局。
+
+项目内 skills 目录结构示例（推荐放在项目根目录下的 `.ship/skills`）：
 
 ```text
-.claude/skills/
+.ship/skills/
   <skill-id>/
     SKILL.md
     (optional) scripts/
@@ -47,9 +54,9 @@ ShipMyAgent 当前支持 **Claude Code-compatible skills**。本页解释：skil
 
 解析规则要点：
 
-- `paths` 支持相对路径（相对项目根目录）、绝对路径、`~` 展开。
+- `paths` 支持相对路径（相对项目根目录）、绝对路径、`~` 展开（用于额外 roots）。
 - 如果某个 root 的 basename 不是 `skills`，且其子目录 `skills/` 存在，则优先扫描 `<root>/skills/`（兼容 `.claude/skills` 这类布局）。
-- 默认 `allowExternalPaths=false`：只扫描项目根目录下的路径（更安全）。
+- 默认 `allowExternalPaths=false`：只扫描“项目内路径 + 用户目录”。如果你在 `paths` 里配置了项目外的绝对路径/`~` 路径，需要把 `allowExternalPaths` 设为 `true` 才会扫描。
 
 ## Agent 如何“使用 skills”
 
@@ -73,3 +80,11 @@ skills 通过两个内置工具提供给模型：
 - skills roots 是哪些
 - 应优先用 `skills_list / skills_load` 来发现与加载 skills
 - 当前发现了哪些 skills（最多列出 40 个）
+
+## CLI：安装与查找（可选）
+
+ShipMyAgent 提供了一个对标 `npx skills` 的包装命令（内部仍是调用 `npx skills`）：
+
+- 查找：`sma skill find react|nextjs|design`
+- 安装：`sma skill add vercel-labs/agent-skills@vercel-react-best-practices`（会同步到 `~/.ship/skills`）
+- 列出当前项目可发现 skills：`sma skill list`

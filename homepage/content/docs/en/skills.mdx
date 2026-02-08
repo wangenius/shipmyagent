@@ -9,10 +9,17 @@ ShipMyAgent supports **Claude Code-compatible skills**. This page explains how s
 
 ## Directory layout
 
-Default skills root is `.claude/skills` under your project root:
+By default ShipMyAgent scans 2 skill root types:
+
+- Project: `<project>/.ship/skills`
+- Home (global): `~/.ship/skills`
+
+You can add extra roots via `ship.json.skills.paths`. By default `sma init` writes `skills.paths: [".claude/skills"]` and creates `./.claude/skills/` to stay compatible with common community layouts.
+
+Project skills layout example (recommended under `.ship/skills`):
 
 ```text
-.claude/skills/
+.ship/skills/
   <skill-id>/
     SKILL.md
     (optional) scripts/
@@ -47,9 +54,9 @@ Configure skill roots in `ship.json`:
 
 Key rules:
 
-- `paths` supports relative paths (resolved from project root), absolute paths, and `~` expansion.
+- `paths` supports relative paths (resolved from project root), absolute paths, and `~` expansion (for extra roots).
 - If a root’s basename is not `skills` and it contains a `skills/` child directory, ShipMyAgent will prefer scanning `<root>/skills/` (compatibility with layouts like `.claude/skills`).
-- By default `allowExternalPaths=false`, so only paths under the project root are scanned.
+- By default `allowExternalPaths=false`, so ShipMyAgent scans **project + home** roots, but will skip any extra configured roots outside the project unless you set `allowExternalPaths=true`.
 
 ## How the Agent uses skills
 
@@ -71,3 +78,11 @@ Typical flow:
 - which skill roots exist
 - to use `skills_list` / `skills_load` to discover and load skills
 - which skills were found (up to 40 listed)
+
+## CLI (optional)
+
+ShipMyAgent provides a thin wrapper around `npx skills`:
+
+- Find: `sma skill find react|nextjs|design`
+- Add: `sma skill add vercel-labs/agent-skills@vercel-react-best-practices` (syncs into `~/.ship/skills`)
+- List discoverable skills for a project: `sma skill list`

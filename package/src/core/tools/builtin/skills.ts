@@ -2,7 +2,7 @@
  * Skills tools (Claude Code-compatible).
  *
  * Supports:
- * - Listing skills discovered from the repo (e.g. `.claude/skills/<skill>/SKILL.md`)
+ * - Listing skills discovered from the repo (e.g. `.ship/skills/<skill>/SKILL.md`)
  * - Loading a skill's SKILL.md so the agent can follow its instructions
  *
  * Discovery logic is shared with the runtime skills subsystem.
@@ -12,10 +12,51 @@ import fs from "fs-extra";
 import path from "path";
 import { z } from "zod";
 import { tool } from "ai";
-import { discoverClaudeSkillsSync } from "../../skills/index.js";
+import {
+  discoverClaudeSkillsSync,
+  getClaudeSkillSearchRoots,
+} from "../../skills/index.js";
 import { toolExecutionContext } from "./execution-context.js";
 import { chatRequestContext } from "../../runtime/request-context.js";
 import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
+import { isSubpath } from "../../skills/utils.js";
+
+export const skills_list = tool({
+  description:
+    "List available Claude Code-compatible skills discovered from skill roots (project, home, and configured paths).",
+  inputSchema: z
+    .object({
+      refresh: z
+        .boolean()
+        .optional()
+        .describe("Refresh the skills index from disk (default: true)"),
+    })
+    .optional(),
+  execute: async (_args?: { refresh?: boolean }) => {
+    const runtime = getShipRuntimeContext();
+    const allowExternal = Boolean(runtime.config.skills?.allowExternalPaths);
+
+    const roots = getClaudeSkillSearchRoots(runtime.rootPath, runtime.config).map(
+      (r) => {
+        const enabled =
+          r.source !== "config" || allowExternal || isSubpath(runtime.rootPath, r.resolved);
+        return { source: r.source, root: r.display, enabled };
+      },
+    );
+
+    const skills = discoverClaudeSkillsSync(runtime.rootPath, runtime.config).map(
+      (s) => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        source: s.source,
+        allowedTools: s.allowedTools,
+      }),
+    );
+
+    return { success: true, roots, skills };
+  },
+});
 
 export const skills_load = tool({
   description:
@@ -97,4 +138,4 @@ export const skills_load = tool({
   },
 });
 
-export const skillsTools = { skills_load };
+export const skillsTools = { skills_list, skills_load };

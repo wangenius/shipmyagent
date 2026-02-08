@@ -4,15 +4,15 @@ import path from "path";
 import type { Dirent, Stats } from "node:fs";
 import type { ShipConfig } from "../../utils.js";
 import { parseFrontMatter } from "./frontmatter.js";
-import { getClaudeSkillSearchPaths } from "./paths.js";
+import { getClaudeSkillSearchRoots } from "./paths.js";
 import { isSubpath } from "./utils.js";
-import type { ClaudeSkill } from "./types.js";
+import type { ClaudeSkill } from "../../types/claude-skill.js";
 
 /**
  * 扫描并发现 Claude Code-compatible skills。
  *
  * 关键点（中文）
- * - skills 的扫描根目录与 projectRoot 强相关（默认 `.claude/skills`）
+ * - skills 的扫描根目录与 projectRoot 强相关（默认 `.ship/skills`）
  * - 这里做成同步函数：启动时扫描一次，产出 prompt section 与 tools 索引
  */
 export function discoverClaudeSkillsSync(
@@ -22,11 +22,21 @@ export function discoverClaudeSkillsSync(
   const root = String(projectRoot || "").trim();
   if (!root) return [];
   const allowExternal = Boolean(config.skills?.allowExternalPaths);
-  const { resolved: roots } = getClaudeSkillSearchPaths(root, config);
-  const out: ClaudeSkill[] = [];
+  const roots = getClaudeSkillSearchRoots(root, config);
 
-  for (const sourceRoot of roots) {
-    if (!allowExternal && !isSubpath(root, sourceRoot)) continue;
+  const outById = new Map<string, ClaudeSkill>();
+
+  for (const r of roots) {
+    const sourceRoot = r.resolved;
+
+    // allowExternalPaths 只影响 config 外部路径；home 默认可扫描
+    if (
+      r.source === "config" &&
+      !allowExternal &&
+      !isSubpath(root, sourceRoot)
+    ) {
+      continue;
+    }
     if (!fs.existsSync(sourceRoot)) continue;
     let stat: Stats;
     try {
@@ -57,6 +67,8 @@ export function discoverClaudeSkillsSync(
       if (!isDirectory) continue;
       const id = entry.name;
       if (!id || id.startsWith(".")) continue;
+      // 去重：同 id 以 roots 优先级顺序为准（先遇到的 wins）
+      if (outById.has(id)) continue;
 
       const directoryPath = path.join(sourceRoot, id);
       const skillMdPath = path.join(directoryPath, "SKILL.md");
@@ -88,11 +100,12 @@ export function discoverClaudeSkillsSync(
       const allowedTools =
         meta?.["allowed-tools"] ?? meta?.allowedTools ?? meta?.allowed_tools;
 
-      out.push({
+      outById.set(id, {
         id,
         name,
         description,
         sourceRoot,
+        source: r.source,
         directoryPath,
         skillMdPath,
         allowedTools,
@@ -100,6 +113,7 @@ export function discoverClaudeSkillsSync(
     }
   }
 
+  const out = Array.from(outById.values());
   out.sort((a, b) => a.name.localeCompare(b.name));
   return out;
 }
