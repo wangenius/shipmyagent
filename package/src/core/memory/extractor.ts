@@ -3,6 +3,7 @@ import type { LanguageModel } from "ai";
 import type { MemoryEntry, MemoryExtractParams, MemoryCompressParams } from "../../types/memory.js";
 import { ChatHistoryStore } from "../history/store.js";
 import { getLogger } from "../../telemetry/index.js";
+import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 
 /**
  * 从历史对话中提取记忆摘要。
@@ -12,13 +13,13 @@ import { getLogger } from "../../telemetry/index.js";
 export async function extractMemoryFromHistory(
   params: MemoryExtractParams & { model: LanguageModel },
 ): Promise<MemoryEntry> {
-  const { chatKey, entryRange, projectRoot, model } = params;
+  const { chatKey, entryRange, model } = params;
   const [startIndex, endIndex] = entryRange;
-  const logger = getLogger(projectRoot, "info");
+  const logger = getLogger(getShipRuntimeContextBase().rootPath, "info");
 
   try {
     // 1. 加载指定范围的 history（UIMessage[]）
-    const historyStore = new ChatHistoryStore({ projectRoot, chatKey });
+    const historyStore = new ChatHistoryStore(chatKey);
     const messages = await historyStore.loadRange(startIndex, endIndex);
 
     const historyText = (() => {
@@ -161,8 +162,8 @@ ${historyText}
 export async function compressMemory(
   params: MemoryCompressParams & { model: LanguageModel },
 ): Promise<string> {
-  const { chatKey, projectRoot, currentContent, targetChars, model } = params;
-  const logger = getLogger(projectRoot, "info");
+  const { chatKey, currentContent, targetChars, model } = params;
+  const logger = getLogger(getShipRuntimeContextBase().rootPath, "info");
 
   try {
     const result = await generateText({

@@ -11,9 +11,9 @@ import { tool } from "ai";
 import { chatRequestContext } from "../../runtime/request-context.js";
 import { getChatDispatcher, type ChatDispatchChannel } from "../../egress/dispatcher.js";
 import { toolExecutionContext } from "./execution-context.js";
-import { getToolRuntimeContext } from "../set/runtime-context.js";
 import { tryClaimChatEgressChatSend, markChatEgressChatSendDelivered, releaseChatEgressChatSendClaim } from "../../egress/egress-idempotency.js";
 import { createHash } from "node:crypto";
+import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
 
 const chatSendInputSchema = z.object({
   text: z.string().describe("Text to send back to the current chat."),
@@ -41,12 +41,12 @@ export const chat_send = tool({
       const next = prev + 1;
       toolCtx.toolCallCounts.set("chat_send", next);
 
-      const { config } = getToolRuntimeContext();
+      const chatEgress = getShipRuntimeContext().config.context?.chatEgress;
       const maxCalls =
-        typeof config.context?.chatEgress?.chatSendMaxCallsPerRun === "number" &&
-        Number.isFinite(config.context.chatEgress.chatSendMaxCallsPerRun) &&
-        config.context.chatEgress.chatSendMaxCallsPerRun > 0
-          ? config.context.chatEgress.chatSendMaxCallsPerRun
+        typeof chatEgress?.chatSendMaxCallsPerRun === "number" &&
+        Number.isFinite(chatEgress.chatSendMaxCallsPerRun) &&
+        chatEgress.chatSendMaxCallsPerRun > 0
+          ? chatEgress.chatSendMaxCallsPerRun
           : 3;
 
       if (next > maxCalls) {
@@ -90,11 +90,11 @@ export const chat_send = tool({
     const text = String(input.text ?? "");
     if (!text.trim()) return { success: true };
 
-    const { projectRoot, config } = getToolRuntimeContext();
+    const chatEgress = getShipRuntimeContext().config.context?.chatEgress;
     const enableIdempotency =
-      config.context?.chatEgress?.chatSendIdempotency === undefined
+      chatEgress?.chatSendIdempotency === undefined
         ? true
-        : Boolean(config.context.chatEgress.chatSendIdempotency);
+        : Boolean(chatEgress.chatSendIdempotency);
 
     // 出站幂等（best-effort）：同一条 inbound messageId + 同一段回复内容最多发送一次。
     let claim:
@@ -104,7 +104,6 @@ export const chat_send = tool({
     if (enableIdempotency && typeof messageId === "string" && messageId.trim()) {
       const messageKey = `${messageId.trim()}:${hashTextForEgressKey(text)}`;
       claim = await tryClaimChatEgressChatSend({
-        projectRoot,
         channel,
         chatId,
         messageId: messageId.trim(),

@@ -6,6 +6,7 @@ import {
   getShipChatMemoryMetaPath,
 } from "../../utils.js";
 import type { MemoryEntry } from "../../types/memory.js";
+import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 
 /**
  * MemoryManager：管理单个 chat 的记忆文件（memory/Primary.md）。
@@ -17,18 +18,18 @@ import type { MemoryEntry } from "../../types/memory.js";
  * - 备份文件
  */
 export class MemoryManager {
-  readonly projectRoot: string;
+  readonly rootPath: string;
   readonly chatKey: string;
   private readonly filePath: string;
 
-  constructor(params: { projectRoot: string; chatKey: string }) {
-    const root = String(params.projectRoot || "").trim();
-    if (!root) throw new Error("MemoryManager requires a non-empty projectRoot");
-    const key = String(params.chatKey || "").trim();
+  constructor(chatKey: string) {
+    const rootPath = String(getShipRuntimeContextBase().rootPath || "").trim();
+    if (!rootPath) throw new Error("MemoryManager requires a non-empty rootPath");
+    const key = String(chatKey || "").trim();
     if (!key) throw new Error("MemoryManager requires a non-empty chatKey");
-    this.projectRoot = root;
+    this.rootPath = rootPath;
     this.chatKey = key;
-    this.filePath = getShipChatMemoryPrimaryPath(this.projectRoot, this.chatKey);
+    this.filePath = getShipChatMemoryPrimaryPath(this.rootPath, this.chatKey);
   }
 
   /**
@@ -91,12 +92,12 @@ export class MemoryManager {
       const content = await this.load();
       if (!content) return "";
 
-      const backupDir = getShipChatMemoryBackupDirPath(this.projectRoot, this.chatKey);
+      const backupDir = getShipChatMemoryBackupDirPath(this.rootPath, this.chatKey);
       await fs.ensureDir(backupDir);
 
       const timestamp = Date.now();
       const backupPath = getShipChatMemoryBackupPath(
-        this.projectRoot,
+        this.rootPath,
         this.chatKey,
         timestamp,
       );
@@ -129,7 +130,7 @@ export class MemoryManager {
     lastExtractedAt?: number;
   }> {
     try {
-      const metaPath = getShipChatMemoryMetaPath(this.projectRoot, this.chatKey);
+      const metaPath = getShipChatMemoryMetaPath(this.rootPath, this.chatKey);
       if (!(await fs.pathExists(metaPath))) return {};
 
       const content = await fs.readFile(metaPath, "utf-8");
@@ -148,7 +149,7 @@ export class MemoryManager {
     lastExtractedAt?: number;
   }): Promise<void> {
     try {
-      const metaPath = getShipChatMemoryMetaPath(this.projectRoot, this.chatKey);
+      const metaPath = getShipChatMemoryMetaPath(this.rootPath, this.chatKey);
       await fs.ensureFile(metaPath);
       await fs.writeFile(metaPath, JSON.stringify(meta, null, 2), "utf-8");
     } catch (error) {

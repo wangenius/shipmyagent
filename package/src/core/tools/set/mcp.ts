@@ -8,14 +8,14 @@
 
 import { z } from "zod";
 import { tool } from "ai";
-import type { McpToolDefinition, McpManager } from "../../mcp/index.js";
+import type { McpToolDefinition } from "../../mcp/index.js";
+import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
 
 export function createMcpAiTool(params: {
   server: string;
   mcpTool: McpToolDefinition;
-  mcpManager: McpManager;
 }) {
-  const { server, mcpTool, mcpManager } = params;
+  const { server, mcpTool } = params;
 
   return tool({
     description: mcpTool.description || `MCP tool: ${mcpTool.name} from ${server}`,
@@ -31,7 +31,11 @@ export function createMcpAiTool(params: {
     needsApproval: async () => false,
     execute: async (args: Record<string, unknown>) => {
       try {
-        const result = await mcpManager.callTool(server, mcpTool.name, args);
+        const result = await getShipRuntimeContext().mcpManager.callTool(
+          server,
+          mcpTool.name,
+          args,
+        );
 
         const output = result.content
           .map((item) => {

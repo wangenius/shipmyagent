@@ -12,8 +12,8 @@ import type {
 } from "./types.js";
 import { HttpTransport } from "./http-transport.js";
 import { resolveEnvVar, resolveEnvVarsInRecord } from "./env.js";
-import { logger } from "../../telemetry/logging/logger.js";
 import { getShipMcpConfigPath } from "../../utils.js";
+import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 
 export interface McpLogger {
   info(message: string): void;
@@ -33,18 +33,14 @@ interface McpClientWrapper {
 
 export class McpManager {
   private clients: Map<string, McpClientWrapper> = new Map();
-  private readonly projectRoot: string;
   private readonly log: McpLogger;
 
-  constructor(params: { projectRoot: string; logger?: McpLogger }) {
-    const root = String(params.projectRoot || "").trim();
-    if (!root) throw new Error("McpManager requires a non-empty projectRoot");
-    this.projectRoot = root;
-    this.log = params.logger ?? logger;
+  constructor() {
+    this.log = getShipRuntimeContextBase().logger;
   }
 
   async initialize(): Promise<void> {
-    const mcpConfigPath = getShipMcpConfigPath(this.projectRoot);
+    const mcpConfigPath = getShipMcpConfigPath(getShipRuntimeContextBase().rootPath);
     if (!(await fs.pathExists(mcpConfigPath))) {
       this.log.info("No MCP configuration found, skipping MCP initialization");
       return;
@@ -174,7 +170,7 @@ export class McpManager {
         transport = new StdioClientTransport({
           command,
           args,
-          cwd: this.projectRoot,
+          cwd: getShipRuntimeContextBase().rootPath,
           env: {
             ...(process.env as Record<string, string>),
             ...env,

@@ -72,12 +72,12 @@ export class FeishuBot extends BaseChatAdapter {
     this.appSecret = appSecret;
     this.domain = domain;
     this.dedupeDir = path.join(
-      getCacheDirPath(this.projectRoot),
+      getCacheDirPath(this.rootPath),
       "feishu",
       "dedupe",
     );
     this.threadInitiatorsFile = path.join(
-      getCacheDirPath(this.projectRoot),
+      getCacheDirPath(this.rootPath),
       "feishu",
       "threadInitiators.json",
     );

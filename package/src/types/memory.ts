@@ -35,7 +35,6 @@ export interface MemoryConfig {
 export interface MemoryExtractParams {
   chatKey: string;
   entryRange: [number, number];  // 记录索引范围而非轮次范围
-  projectRoot: string;
 }
 
 /**
@@ -43,7 +42,6 @@ export interface MemoryExtractParams {
  */
 export interface MemoryCompressParams {
   chatKey: string;
-  projectRoot: string;
   currentContent: string;
   targetChars: number;
 }

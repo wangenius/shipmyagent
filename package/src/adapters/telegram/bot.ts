@@ -58,10 +58,10 @@ export class TelegramBot extends BaseChatAdapter {
       groupAccess === "anyone" ? "anyone" : "initiator_or_admin";
     this.api = new TelegramApiClient({
       botToken,
-      projectRoot: this.projectRoot,
+      projectRoot: this.rootPath,
       logger: this.logger,
     });
-    this.stateStore = new TelegramStateStore(this.projectRoot);
+    this.stateStore = new TelegramStateStore(this.rootPath);
   }
 
   private async drainPendingUpdatesToHistory(params: {
@@ -706,7 +706,7 @@ export class TelegramBot extends BaseChatAdapter {
         try {
           const incoming = await this.saveIncomingAttachments(message);
           for (const att of incoming) {
-            const rel = path.relative(this.projectRoot, att.path);
+            const rel = path.relative(this.rootPath, att.path);
             const desc = att.desc ? ` | ${att.desc}` : "";
             attachmentLines.push(`@attach ${att.type} ${rel}${desc}`);
           }

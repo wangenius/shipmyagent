@@ -17,8 +17,8 @@
 import { z } from "zod";
 import { tool } from "ai";
 import { getChatDispatcher, type ChatDispatchChannel } from "../../egress/dispatcher.js";
-import { getToolRuntimeContext } from "../set/runtime-context.js";
 import type { ShipMessageV1 } from "../../../types/chat-history.js";
+import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
 
 const chatContactSendInputSchema = z.object({
   chatKey: z
@@ -115,8 +115,7 @@ export const chat_contact_send = tool({
     }
 
     // 尽量从 history 的最近 user message 拿到 chatType/messageThreadId/messageId（尤其 QQ 需要）
-    const { chat } = getToolRuntimeContext();
-    const historyStore = chat.get(chatKey);
+    const historyStore = getShipRuntimeContext().chatRuntime.getHistoryStore(chatKey);
     let messages: ShipMessageV1[] = [];
     try {
       messages = await historyStore.loadAll();

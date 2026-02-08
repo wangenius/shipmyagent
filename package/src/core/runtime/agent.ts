@@ -25,12 +25,11 @@ import {
   emitToolSummariesFromStep,
 } from "./tool-step.js";
 import type {
-  AgentConfigurations,
   AgentRunInput,
   AgentResult,
 } from "../../types/agent.js";
 import type { LoadedSkillV1 } from "../../types/loaded-skill.js";
-import { getLogger, type Logger } from "../../telemetry/index.js";
+import type { Logger } from "../../telemetry/index.js";
 import { chatRequestContext } from "./request-context.js";
 import { withToolExecutionContext } from "../tools/builtin/execution-context.js";
 import { createAgentTools } from "../tools/set/agent-tools.js";
@@ -40,6 +39,7 @@ import { ChatHistoryStore } from "../history/store.js";
 import path from "node:path";
 import { discoverClaudeSkillsSync } from "../skills/index.js";
 import type { ShipMessageMetadataV1 } from "../../types/chat-history.js";
+import { getShipRuntimeContext, getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 
 function extractTextFromUiMessage(message: any): string {
   const parts = Array.isArray(message?.parts) ? message.parts : [];
@@ -142,8 +142,6 @@ function buildLoadedSkillsSystemText(params: {
 }
 
 export class Agent {
-  // 配置
-  private configs: AgentConfigurations;
   // 是否初始化
   private initialized: boolean = false;
   // 模型
@@ -159,23 +157,18 @@ export class Agent {
    */
   private boundChatKey: string | null = null;
 
-  constructor(configs: AgentConfigurations) {
-    this.configs = configs;
-  }
+  constructor() {}
 
   getLogger(): Logger {
-    return getLogger(this.configs.projectRoot, "info");
+    return getShipRuntimeContextBase().logger;
   }
 
   async initialize(): Promise<void> {
     try {
-      this.tools = createAgentTools({
-        projectRoot: this.configs.projectRoot,
-        config: this.configs.config,
-      });
+      this.tools = createAgentTools();
 
       this.model = await createModel({
-        config: this.configs.config,
+        config: getShipRuntimeContext().config,
       });
 
       this.initialized = true;
@@ -207,7 +200,7 @@ export class Agent {
       requestId,
       chatKey,
       instructionsPreview: query?.slice(0, 200),
-      projectRoot: this.configs.projectRoot,
+      rootPath: getShipRuntimeContext().rootPath,
     });
     if (this.initialized) {
       return this.runWithToolLoopAgent(query, startTime, chatKey, {
@@ -305,7 +298,7 @@ export class Agent {
       systemExtras.push({
         role: "system",
         content: buildContextSystemPrompt({
-          projectRoot: this.configs.projectRoot,
+          projectRoot: getShipRuntimeContext().rootPath,
           chatKey,
           requestId,
           extraContextLines: runtimeExtraContextLines,
@@ -313,7 +306,7 @@ export class Agent {
       });
 
       const profilePrimary = await readOptionalMd(
-        getShipProfilePrimaryPath(this.configs.projectRoot),
+        getShipProfilePrimaryPath(getShipRuntimeContext().rootPath),
       );
       if (profilePrimary) {
         systemExtras.push({
@@ -323,7 +316,7 @@ export class Agent {
       }
 
       const profileOther = await readOptionalMd(
-        getShipProfileOtherPath(this.configs.projectRoot),
+        getShipProfileOtherPath(getShipRuntimeContext().rootPath),
       );
       if (profileOther) {
         systemExtras.push({
@@ -333,7 +326,7 @@ export class Agent {
       }
 
       const chatMemoryPrimary = await readOptionalMd(
-        getShipChatMemoryPrimaryPath(this.configs.projectRoot, chatKey),
+        getShipChatMemoryPrimaryPath(getShipRuntimeContext().rootPath, chatKey),
       );
       if (chatMemoryPrimary) {
         systemExtras.push({
@@ -348,10 +341,7 @@ export class Agent {
 	      // - 超窗时自动 compact：把更早段压缩为 1 条摘要消息 + 保留最近窗口
 	      this.bindChatKey(chatKey);
 
-		      const historyStore = new ChatHistoryStore({
-		        projectRoot: this.configs.projectRoot,
-		        chatKey: chatKey,
-		      });
+		      const historyStore = new ChatHistoryStore(chatKey);
 
 		      // 关键点（中文）：chat 级 skills（pinnedSkillIds）持久化在 meta.json 中；
 		      // 每次 run 需要自动加载并注入 system（但不写入 history.jsonl）。
@@ -360,7 +350,8 @@ export class Agent {
 		        const meta = await historyStore.loadMeta();
 		        const pinnedSkillIds = Array.isArray(meta.pinnedSkillIds) ? meta.pinnedSkillIds : [];
 		        if (pinnedSkillIds.length > 0) {
-		          const discovered = discoverClaudeSkillsSync(this.configs.projectRoot, this.configs.config);
+			          const runtime = getShipRuntimeContext();
+			          const discovered = discoverClaudeSkillsSync(runtime.rootPath, runtime.config);
 		          const byId = new Map(discovered.map((s) => [s.id, s]));
 		          const loadedIds: string[] = [];
 		          for (const id of pinnedSkillIds) {
@@ -377,7 +368,7 @@ export class Agent {
 		            pinnedSkills.set(skill.id, {
 		              id: skill.id,
 		              name: skill.name,
-		              skillMdPath: path.relative(this.configs.projectRoot, skill.skillMdPath),
+			              skillMdPath: path.relative(runtime.rootPath, skill.skillMdPath),
 		              content,
 		              allowedTools: Array.isArray(skill.allowedTools)
 		                ? skill.allowedTools.map((t) => String(t)).filter(Boolean)
@@ -443,24 +434,24 @@ export class Agent {
 	        .filter((m) => (m as any)?.role === "system")
 	        .map((m) => ({ role: "system", content: String((m as any)?.content ?? "") }));
 
-	      const baseSystemMessages: SystemModelMessage[] = [
-	        ...runtimeSystemMessages,
-	        ...transformPromptsIntoSystemMessages([...this.configs.systems]),
-	      ];
+		      const baseSystemMessages: SystemModelMessage[] = [
+		        ...runtimeSystemMessages,
+		        ...transformPromptsIntoSystemMessages([...getShipRuntimeContext().systems]),
+		      ];
 	      const allToolNames = Object.keys(this.tools);
 
 	      // 先确保本轮 user 已写入 history（best-effort）
 	      await ensureCurrentUserRecorded();
 
 	      // auto compact（按配置/预算）
-	      const baseKeepLastMessages =
-	        typeof (this.configs.config as any)?.context?.history?.keepLastMessages === "number"
-	          ? Math.max(6, Math.min(5000, Math.floor((this.configs.config as any).context.history.keepLastMessages)))
-	          : 30;
-	      const baseMaxInputTokensApprox =
-	        typeof (this.configs.config as any)?.context?.history?.maxInputTokensApprox === "number"
-	          ? Math.max(2000, Math.min(200_000, Math.floor((this.configs.config as any).context.history.maxInputTokensApprox)))
-	          : 12000;
+		      const baseKeepLastMessages =
+		        typeof (getShipRuntimeContext().config as any)?.context?.history?.keepLastMessages === "number"
+		          ? Math.max(6, Math.min(5000, Math.floor((getShipRuntimeContext().config as any).context.history.keepLastMessages)))
+		          : 30;
+		      const baseMaxInputTokensApprox =
+		        typeof (getShipRuntimeContext().config as any)?.context?.history?.maxInputTokensApprox === "number"
+		          ? Math.max(2000, Math.min(200_000, Math.floor((getShipRuntimeContext().config as any).context.history.maxInputTokensApprox)))
+		          : 12000;
 		      // 关键点（中文）：当 provider 报错超窗时，会进入 retry；此时需要更激进的 compact。
 		      const retryFactor = Math.max(1, Math.pow(2, retryAttempts));
 		      const keepLastMessages = Math.max(6, Math.floor(baseKeepLastMessages / retryFactor));
@@ -469,9 +460,9 @@ export class Agent {
 		        Math.floor(baseMaxInputTokensApprox / retryFactor),
 		      );
 		      const archiveOnCompact =
-		        (this.configs.config as any)?.context?.history?.archiveOnCompact === undefined
+		        (getShipRuntimeContext().config as any)?.context?.history?.archiveOnCompact === undefined
 		          ? true
-		          : Boolean((this.configs.config as any).context.history.archiveOnCompact);
+		          : Boolean((getShipRuntimeContext().config as any).context.history.archiveOnCompact);
 
 		      const pinnedSkillsForCompact = pinnedSkills.size
 		        ? buildLoadedSkillsSystemText({ loaded: pinnedSkills, allToolNames })
@@ -641,18 +632,18 @@ export class Agent {
 	        } as any;
 	      }
 
-	      const computeChatSendBudgetGuard = (): {
-	        exceeded: boolean;
-	        maxCalls: number;
-	        calls: number;
-	      } => {
-        const maxCalls =
-          typeof this.configs.config?.context?.chatEgress
-            ?.chatSendMaxCallsPerRun === "number" &&
-          Number.isFinite(this.configs.config.context.chatEgress.chatSendMaxCallsPerRun) &&
-          this.configs.config.context.chatEgress.chatSendMaxCallsPerRun > 0
-            ? this.configs.config.context.chatEgress.chatSendMaxCallsPerRun
-            : 30;
+			      const computeChatSendBudgetGuard = (): {
+			        exceeded: boolean;
+			        maxCalls: number;
+			        calls: number;
+			      } => {
+	        const chatEgress = getShipRuntimeContext().config.context?.chatEgress;
+	        const maxCalls =
+	          typeof chatEgress?.chatSendMaxCallsPerRun === "number" &&
+	          Number.isFinite(chatEgress.chatSendMaxCallsPerRun) &&
+	          chatEgress.chatSendMaxCallsPerRun > 0
+	            ? chatEgress.chatSendMaxCallsPerRun
+	            : 30;
         const execCtx = toolExecutionContext.getStore();
         const calls = execCtx?.toolCallCounts.get("chat_send") ?? 0;
         return { exceeded: calls > maxCalls, maxCalls, calls };

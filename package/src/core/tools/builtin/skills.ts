@@ -13,9 +13,9 @@ import path from "path";
 import { z } from "zod";
 import { tool } from "ai";
 import { discoverClaudeSkillsSync } from "../../skills/index.js";
-import { getToolRuntimeContext } from "../set/runtime-context.js";
 import { toolExecutionContext } from "./execution-context.js";
 import { chatRequestContext } from "../../runtime/request-context.js";
+import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
 
 export const skills_load = tool({
   description:
@@ -28,13 +28,13 @@ export const skills_load = tool({
       .describe("Refresh the skills index from disk (default: true)"),
   }),
   execute: async (args: { name: string; refresh?: boolean }) => {
-    const { projectRoot, config } = getToolRuntimeContext();
     const q = String(args.name || "")
       .trim()
       .toLowerCase();
     if (!q) return { success: false, error: "Missing name" };
 
-    const skills = discoverClaudeSkillsSync(projectRoot, config);
+    const runtime = getShipRuntimeContext();
+    const skills = discoverClaudeSkillsSync(runtime.rootPath, runtime.config);
     const skill =
       skills.find((s) => s.id.toLowerCase() === q) ||
       skills.find((s) => s.name.toLowerCase() === q) ||
@@ -46,8 +46,8 @@ export const skills_load = tool({
 
     try {
       const content = fs.readFileSync(skill.skillMdPath, "utf-8");
-      const relDir = path.relative(projectRoot, skill.directoryPath);
-      const relMd = path.relative(projectRoot, skill.skillMdPath);
+      const relDir = path.relative(runtime.rootPath, skill.directoryPath);
+      const relMd = path.relative(runtime.rootPath, skill.skillMdPath);
 
       // 关键（中文）：不在工具里直接 splice messages。
       // 我们把已加载的 skill 缓存在本次 run 的 execution context 中，
@@ -69,7 +69,7 @@ export const skills_load = tool({
       try {
         const chatKey = String(chatRequestContext.getStore()?.chatKey || "").trim();
         if (chatKey) {
-          const store = getToolRuntimeContext().chat.get(chatKey);
+          const store = runtime.chatRuntime.getHistoryStore(chatKey);
           await store.addPinnedSkillId(skill.id);
         }
       } catch {

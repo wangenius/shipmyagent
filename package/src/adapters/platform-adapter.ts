@@ -25,14 +25,12 @@ export type AdapterSendTextParams = AdapterChatKeyParams & {
  */
 export abstract class PlatformAdapter {
   readonly channel: ChatDispatchChannel;
-  protected readonly chatRuntime: ReturnType<typeof getShipRuntimeContext>["chatRuntime"];
+  protected readonly chatRuntime = getShipRuntimeContext().chatRuntime;
 
   protected constructor(params: {
     channel: ChatDispatchChannel;
   }) {
     this.channel = params.channel;
-    const runtime = getShipRuntimeContext();
-    this.chatRuntime = runtime.chatRuntime;
 
     // Expose adapter send capabilities to the agent via dispatcher + tools.
     registerChatDispatcher(this.channel, {

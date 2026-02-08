@@ -39,7 +39,11 @@ export class AgentServer {
   private setupRoutes(): void {
     // Static file service (frontend pages)
     this.app.get("/", async (c) => {
-      const indexPath = path.join(getShipRuntimeContext().root, "public", "index.html");
+      const indexPath = path.join(
+        getShipRuntimeContext().rootPath,
+        "public",
+        "index.html",
+      );
       if (await fs.pathExists(indexPath)) {
         const content = await fs.readFile(indexPath, "utf-8");
         return c.body(content, 200, {
@@ -51,7 +55,11 @@ export class AgentServer {
     });
 
     this.app.get("/styles.css", async (c) => {
-      const cssPath = path.join(getShipRuntimeContext().root, "public", "styles.css");
+      const cssPath = path.join(
+        getShipRuntimeContext().rootPath,
+        "public",
+        "styles.css",
+      );
       if (await fs.pathExists(cssPath)) {
         const content = await fs.readFile(cssPath, "utf-8");
         return c.body(content, 200, {
@@ -63,7 +71,11 @@ export class AgentServer {
     });
 
     this.app.get("/app.js", async (c) => {
-      const jsPath = path.join(getShipRuntimeContext().root, "public", "app.js");
+      const jsPath = path.join(
+        getShipRuntimeContext().rootPath,
+        "public",
+        "app.js",
+      );
       if (await fs.pathExists(jsPath)) {
         const content = await fs.readFile(jsPath, "utf-8");
         return c.body(content, 200, {
@@ -76,7 +88,7 @@ export class AgentServer {
 
     // Public file service: `.ship/public/*` -> `/ship/public/*`
     this.app.get("/ship/public/*", async (c) => {
-      const root = getShipPublicDirPath(getShipRuntimeContext().root);
+      const root = getShipPublicDirPath(getShipRuntimeContext().rootPath);
       const prefix = "/ship/public/";
       const requestPath = c.req.path;
       const rel = requestPath.startsWith(prefix)

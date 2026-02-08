@@ -92,7 +92,7 @@ export class QQBot extends BaseChatAdapter {
     this.appId = appId;
     this.appSecret = appSecret;
     this.useSandbox = useSandbox;
-    this.qqEventCapture = getQqEventCaptureConfig(this.projectRoot);
+    this.qqEventCapture = getQqEventCaptureConfig(this.rootPath);
   }
 
   protected getChatKey(params: AdapterChatKeyParams): string {

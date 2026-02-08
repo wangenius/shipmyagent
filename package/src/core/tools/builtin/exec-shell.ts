@@ -11,7 +11,7 @@
 import { z } from "zod";
 import { tool } from "ai";
 import { execa } from "execa";
-import { getToolRuntimeContext } from "../set/runtime-context.js";
+import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
 
 export const exec_shell = tool({
   description: `Execute a shell command. This is your ONLY tool for interacting with the filesystem and codebase.
@@ -37,11 +37,9 @@ Chain commands with && for sequential execution or ; for independent execution.`
   execute: async (
     { command, timeout = 30000 }: { command: string; timeout?: number },
   ) => {
-    const { projectRoot } = getToolRuntimeContext();
-
     try {
       const result = await execa(command, {
-        cwd: projectRoot,
+        cwd: getShipRuntimeContext().rootPath,
         timeout,
         reject: false,
         shell: true,

@@ -26,21 +26,19 @@ export type IncomingChatMessage = {
  * - Adapters still run a conservative fallback send if the model forgets the tool.
  */
 export abstract class BaseChatAdapter extends PlatformAdapter {
-  protected readonly projectRoot: string;
+  protected readonly rootPath: string;
   protected readonly logger: Logger;
 
   protected constructor(params: {
     channel: ChatDispatchChannel;
-    projectRoot?: string;
-    logger?: Logger;
   }) {
     super({
       channel: params.channel,
     });
 
     const runtime = getShipRuntimeContext();
-    this.projectRoot = params.projectRoot ?? runtime.root;
-    this.logger = params.logger ?? runtime.logger;
+    this.rootPath = runtime.rootPath;
+    this.logger = runtime.logger;
   }
 
   clearChat(chatKey: string): void {
@@ -86,7 +84,6 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
   protected async enqueueMessage(
     msg: IncomingChatMessage,
   ): Promise<{ chatKey: string; position: number }> {
-    const runtime = getShipRuntimeContext();
     const chatKey = this.getChatKey({
       chatId: msg.chatId,
       chatType: msg.chatType,
@@ -94,7 +91,7 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
       messageId: msg.messageId,
     });
 
-    const { lanePosition } = await runtime.chatRuntime.enqueue({
+    const { lanePosition } = await getShipRuntimeContext().chatRuntime.enqueue({
       channel: this.channel,
       chatId: msg.chatId,
       chatKey,

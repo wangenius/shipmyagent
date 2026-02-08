@@ -25,12 +25,12 @@ import {
  */
 export class TelegramApiClient {
   private readonly botToken: string;
-  private readonly projectRoot: string;
+  private readonly rootPath: string;
   private readonly logger: Logger;
 
   constructor(opts: { botToken: string; projectRoot: string; logger: Logger }) {
     this.botToken = opts.botToken;
-    this.projectRoot = opts.projectRoot;
+    this.rootPath = opts.projectRoot;
     this.logger = opts.logger;
   }
 
@@ -115,7 +115,7 @@ export class TelegramApiClient {
       base.replace(/[^\w.\-()@\u4e00-\u9fff]+/g, "_").slice(0, 160) ||
       `tg-${fileId}`;
 
-    const dir = path.join(getCacheDirPath(this.projectRoot), "telegram");
+    const dir = path.join(getCacheDirPath(this.rootPath), "telegram");
     await fs.ensureDir(dir);
     const uniq = `${Date.now()}-${fileId.slice(0, 8)}`;
     const outPath = path.join(dir, `${uniq}-${safeBase}`);
@@ -250,9 +250,9 @@ export class TelegramApiClient {
 
     const abs = path.isAbsolute(src)
       ? src
-      : path.resolve(this.projectRoot, src);
+      : path.resolve(this.rootPath, src);
     const resolved = path.resolve(abs);
-    const root = path.resolve(this.projectRoot);
+    const root = path.resolve(this.rootPath);
     if (!resolved.startsWith(root + path.sep) && resolved !== root) {
       throw new Error(`Attachment path must be inside project root: ${src}`);
     }

@@ -1,5 +1,4 @@
 import type { Agent } from "./index.js";
-import type { ShipConfig } from "../../utils.js";
 import type { ChatLaneEnqueueResult } from "../../types/chat-scheduler.js";
 import type { ChatDispatchChannel } from "../egress/dispatcher.js";
 import { ChatLaneScheduler } from "./lane-scheduler.js";
@@ -10,6 +9,7 @@ import { createModel } from "../../llm/create-model.js";
 import { getLogger } from "../../telemetry/index.js";
 import { ChatHistoryStore } from "../history/store.js";
 import type { ShipMessageMetadataV1 } from "../../types/chat-history.js";
+import { getShipRuntimeContext, getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 
 /**
  * ChatRuntime：把“平台入站消息 → 落盘审计 → 调度执行 → 回包兜底”收拢到一个地方。
@@ -20,29 +20,16 @@ import type { ShipMessageMetadataV1 } from "../../types/chat-history.js";
  * - 调度器仍然保证：同一 chatKey 串行，不同 chatKey 可并发，并尽量公平
  */
 export class ChatRuntime {
-  private readonly projectRoot: string;
-  private readonly config: ShipConfig;
-  private readonly systems: string[];
-
   private readonly agentsByChatKey: Map<string, Agent> = new Map();
   private readonly historyStoresByChatKey: Map<string, ChatHistoryStore> = new Map();
   private readonly memoryManagers: Map<string, MemoryManager> = new Map();
 
   private readonly scheduler: ChatLaneScheduler;
 
-  constructor(params: {
-    projectRoot: string;
-    config: ShipConfig;
-    systems: string[];
-  }) {
-    const root = String(params.projectRoot || "").trim();
-    if (!root) throw new Error("ChatRuntime requires a non-empty projectRoot");
-    this.projectRoot = root;
-    this.config = params.config;
-    this.systems = Array.isArray(params.systems) ? params.systems : [];
-
+  constructor() {
+    const base = getShipRuntimeContextBase();
     this.scheduler = new ChatLaneScheduler({
-      config: params.config?.context?.chatQueue || {},
+      config: base.config?.context?.chatQueue || {},
       getAgent: (chatKey) => this.getAgent(chatKey),
       getChatRuntime: () => this,
     });
@@ -61,7 +48,7 @@ export class ChatRuntime {
     if (!key) throw new Error("ChatRuntime.getHistoryStore requires a non-empty chatKey");
     const existing = this.historyStoresByChatKey.get(key);
     if (existing) return existing;
-    const created = new ChatHistoryStore({ projectRoot: this.projectRoot, chatKey: key });
+    const created = new ChatHistoryStore(key);
     this.historyStoresByChatKey.set(key, created);
     return created;
   }
@@ -71,11 +58,7 @@ export class ChatRuntime {
     if (!key) throw new Error("ChatRuntime.getAgent requires a non-empty chatKey");
     const existing = this.agentsByChatKey.get(key);
     if (existing) return existing;
-    const created = new AgentImpl({
-      projectRoot: this.projectRoot,
-      config: this.config,
-      systems: this.systems,
-    });
+    const created = new AgentImpl();
     this.agentsByChatKey.set(key, created);
     return created;
   }
@@ -93,7 +76,7 @@ export class ChatRuntime {
     if (!key) throw new Error("ChatRuntime.getMemoryManager requires a non-empty chatKey");
     const existing = this.memoryManagers.get(key);
     if (existing) return existing;
-    const created = new MemoryManager({ projectRoot: this.projectRoot, chatKey: key });
+    const created = new MemoryManager(key);
     this.memoryManagers.set(key, created);
     return created;
   }
@@ -112,7 +95,7 @@ export class ChatRuntime {
     const key = String(chatKey || "").trim();
     if (!key) return;
 
-    const config = this.config?.context?.memory;
+    const config = getShipRuntimeContext().config?.context?.memory;
     const enabled = config?.autoExtractEnabled ?? true;
     if (!enabled) return;
 
@@ -149,7 +132,7 @@ export class ChatRuntime {
     startIndex: number,
     endIndex: number,
   ): Promise<void> {
-    const logger = getLogger(this.projectRoot, "info");
+    const logger = getLogger(getShipRuntimeContext().rootPath, "info");
 
     try {
       await logger.log("info", "Memory extraction started (async)", {
@@ -158,13 +141,12 @@ export class ChatRuntime {
       });
 
       // 1. 获取模型（使用主模型）
-      const model = await createModel({ config: this.config });
+      const model = await createModel({ config: getShipRuntimeContext().config });
 
       // 2. 提取记忆（使用记录索引范围）
       const memoryEntry = await extractMemoryFromHistory({
         chatKey,
         entryRange: [startIndex, endIndex],
-        projectRoot: this.projectRoot,
         model,
       });
 
@@ -203,10 +185,10 @@ export class ChatRuntime {
     chatKey: string,
     model: any,
   ): Promise<void> {
-    const logger = getLogger(this.projectRoot, "info");
+    const logger = getLogger(getShipRuntimeContext().rootPath, "info");
 
     try {
-      const config = this.config?.context?.memory;
+      const config = getShipRuntimeContext().config?.context?.memory;
       const compressEnabled = config?.compressOnOverflow ?? true;
       if (!compressEnabled) return;
 
@@ -239,7 +221,6 @@ export class ChatRuntime {
       const targetChars = Math.floor(maxChars * 0.8); // 压缩到 80%
       const compressed = await compressMemory({
         chatKey,
-        projectRoot: this.projectRoot,
         currentContent,
         targetChars,
         model,

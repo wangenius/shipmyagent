@@ -1,20 +1,4 @@
-import type { ShipConfig } from "../utils.js";
 import type { ShipMessageV1 } from "./chat-history.js";
-
-export interface AgentConfigurations {
-  /**
-   * 工程根目录（projectRoot）。
-   *
-   * 关键点（中文）
-   * - 我们约束“一个进程只服务一个 projectRoot”，但 Agent 仍需要知道落盘路径
-   * - 这里作为配置显式字段，便于在构造时一次性注入
-   */
-  projectRoot: string;
-  // ship 的配置
-  config: ShipConfig;
-  // 多个系统提示词 ： Agent.md | ShipMyAgentPreset | Skills | CurrentContextSummary
-  systems: string[];
-}
 
 export interface AgentResult {
   success: boolean;

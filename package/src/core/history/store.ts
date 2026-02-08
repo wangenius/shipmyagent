@@ -14,6 +14,7 @@ import {
 import type { ShipMessageMetadataV1, ShipMessageV1 } from "../../types/chat-history.js";
 import type { ShipChatMessagesMetaV1 } from "../../types/chat-messages-meta.js";
 import { getLogger } from "../../telemetry/index.js";
+import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 
 /**
  * ChatHistoryStore：基于 UIMessage 的对话历史存储（per chatKey）。
@@ -29,36 +30,36 @@ import { getLogger } from "../../telemetry/index.js";
  * - `.ship/chat/<encodedChatKey>/messages/archive/<archiveId>.json`：compact 归档段
  */
 export class ChatHistoryStore {
-  readonly projectRoot: string;
+  readonly rootPath: string;
   readonly chatKey: string;
 
-  constructor(params: { projectRoot: string; chatKey: string }) {
-    const root = String(params.projectRoot || "").trim();
-    if (!root) throw new Error("ChatHistoryStore requires a non-empty projectRoot");
-    const key = String(params.chatKey || "").trim();
+  constructor(chatKey: string) {
+    const rootPath = String(getShipRuntimeContextBase().rootPath || "").trim();
+    if (!rootPath) throw new Error("ChatHistoryStore requires a non-empty rootPath");
+    const key = String(chatKey || "").trim();
     if (!key) throw new Error("ChatHistoryStore requires a non-empty chatKey");
-    this.projectRoot = root;
+    this.rootPath = rootPath;
     this.chatKey = key;
   }
 
   getChatDirPath(): string {
-    return getShipChatDirPath(this.projectRoot, this.chatKey);
+    return getShipChatDirPath(this.rootPath, this.chatKey);
   }
 
   getMessagesDirPath(): string {
-    return getShipChatMessagesDirPath(this.projectRoot, this.chatKey);
+    return getShipChatMessagesDirPath(this.rootPath, this.chatKey);
   }
 
   getMessagesFilePath(): string {
-    return getShipChatHistoryPath(this.projectRoot, this.chatKey);
+    return getShipChatHistoryPath(this.rootPath, this.chatKey);
   }
 
   getMetaFilePath(): string {
-    return getShipChatHistoryMetaPath(this.projectRoot, this.chatKey);
+    return getShipChatHistoryMetaPath(this.rootPath, this.chatKey);
   }
 
   private getArchiveDirPath(): string {
-    return getShipChatHistoryArchiveDirPath(this.projectRoot, this.chatKey);
+    return getShipChatHistoryArchiveDirPath(this.rootPath, this.chatKey);
   }
 
   private getLockFilePath(): string {
@@ -187,7 +188,7 @@ export class ChatHistoryStore {
     await this.ensureLayout();
     const lockPath = this.getLockFilePath();
     const token = `${process.pid}:${Date.now()}:${generateId()}`;
-    const logger = getLogger(this.projectRoot, "info");
+    const logger = getLogger(this.rootPath, "info");
 
     // 关键点（中文）：这是单进程/单机的 best-effort 文件锁，避免 compact 与 append 互相覆盖导致丢消息。
     const staleMs = 30_000;
@@ -359,7 +360,7 @@ export class ChatHistoryStore {
     maxInputTokensApprox: number;
     archiveOnCompact: boolean;
   }): Promise<{ compacted: boolean; reason?: string }> {
-    const logger = getLogger(this.projectRoot, "info");
+    const logger = getLogger(this.rootPath, "info");
 
     // phase 1：snapshot（短锁）
     let snapshot: ShipMessageV1[] = [];
@@ -455,7 +456,7 @@ export class ChatHistoryStore {
 
       if (params.archiveOnCompact) {
         await fs.writeJson(
-          getShipChatHistoryArchivePath(this.projectRoot, this.chatKey, archiveId),
+          getShipChatHistoryArchivePath(this.rootPath, this.chatKey, archiveId),
           { v: 1, chatKey: this.chatKey, archivedAt: Date.now(), messages: currentOlder },
           { spaces: 2 },
         );
