@@ -5,6 +5,7 @@ import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "../platform-adapter.js";
+import type { AdapterSendActionParams } from "../platform-adapter.js";
 import { isTelegramAdmin } from "./access.js";
 import { TelegramApiClient } from "./api-client.js";
 import {
@@ -207,6 +208,18 @@ export class TelegramBot extends BaseChatAdapter {
     params: AdapterSendTextParams,
   ): Promise<void> {
     await this.sendMessage(params.chatId, params.text, {
+      messageThreadId: params.messageThreadId,
+    });
+  }
+
+  /**
+   * Telegram 支持 chat action（typing 等），用于在执行期间展示“正在处理”状态。
+   */
+  protected async sendActionToPlatform(
+    params: AdapterSendActionParams,
+  ): Promise<void> {
+    if (params.action !== "typing") return;
+    await this.api.sendChatAction(params.chatId, "typing", {
       messageThreadId: params.messageThreadId,
     });
   }

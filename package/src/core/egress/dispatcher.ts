@@ -5,17 +5,15 @@
  * - tool（如 `chat_send`）通过 dispatcher 把消息发回对应平台
  * - dispatcher 本身不关心 chatKey/history，只关心“怎么把一段 text 发出去”
  */
-export type ChatDispatchChannel = "telegram" | "feishu" | "qq";
+export type {
+  ChatDispatchChannel,
+  ChatDispatcher,
+} from "../../types/chat-dispatcher.js";
 
-export interface ChatDispatcher {
-  sendText(params: {
-    chatId: string;
-    text: string;
-    messageThreadId?: number;
-    chatType?: string;
-    messageId?: string;
-  }): Promise<{ success: boolean; error?: string }>;
-}
+import type {
+  ChatDispatchChannel,
+  ChatDispatcher,
+} from "../../types/chat-dispatcher.js";
 
 const dispatchers = new Map<ChatDispatchChannel, ChatDispatcher>();
 

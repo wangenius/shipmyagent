@@ -21,7 +21,8 @@ import type { ChatRuntime } from "./chat-runtime.js";
 	  ChatLaneSchedulerConfig,
 	  ChatLaneSchedulerStats,
 	} from "../../types/chat-scheduler.js";
-import type { ChatDispatchChannel } from "../egress/dispatcher.js";
+import { getChatDispatcher, type ChatDispatchChannel } from "../egress/dispatcher.js";
+import type { ChatDispatchSendActionParams } from "../../types/chat-dispatcher.js";
 
 /**
  * Lane Scheduler 的入队消息类型。
@@ -76,6 +77,58 @@ function clampInt(value: unknown, fallback: number, min: number, max: number): n
 	    correctionMaxMergedMessages,
 	  };
 	}
+
+/**
+ * 在任务执行期间发送 typing 心跳（仅 Telegram）。
+ *
+ * 关键点（中文）
+ * - Telegram typing 状态会在数秒后消失，需要定时刷新
+ * - 心跳失败不应影响主流程（忽略错误）
+ * - 必须在执行结束（成功/失败）时停止，避免泄漏
+ */
+function startTelegramTypingHeartbeat(params: {
+  channel: ChatDispatchChannel;
+  buildActionParams: () => ChatDispatchSendActionParams;
+  intervalMs?: number;
+}): { stop: () => void } | null {
+  if (params.channel !== "telegram") return null;
+  const dispatcher = getChatDispatcher(params.channel);
+  if (!dispatcher?.sendAction) return null;
+
+  const intervalMs =
+    typeof params.intervalMs === "number" && params.intervalMs > 500
+      ? params.intervalMs
+      : 4000;
+
+  let stopped = false;
+  let inFlight = false;
+
+  const sendOnce = async (): Promise<void> => {
+    if (stopped) return;
+    if (inFlight) return;
+    inFlight = true;
+    try {
+      await dispatcher.sendAction!(params.buildActionParams());
+    } catch {
+      // ignore
+    } finally {
+      inFlight = false;
+    }
+  };
+
+  // 先立刻发送一次，避免用户感知延迟。
+  void sendOnce();
+
+  const timer = setInterval(() => void sendOnce(), intervalMs);
+  (timer as any)?.unref?.();
+
+  return {
+    stop: () => {
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
+}
 
   // 说明（中文）：新版本 lane “快速矫正”不再拼接 mergedText 注入 user content。
   // 新消息会先写入 history（UIMessage[]）；Agent 检测到 drained>0 后重载 history，并在下一 step 继续处理。
@@ -259,6 +312,18 @@ export class ChatLaneScheduler {
 	      return { drained: extras.length };
 	    };
 
+    const typing = startTelegramTypingHeartbeat({
+      channel: ctx.channel,
+      buildActionParams: () => ({
+        chatId: ctx.chatId,
+        action: "typing",
+        messageThreadId: ctx.messageThreadId,
+        chatType: ctx.chatType,
+        messageId: ctx.messageId,
+      }),
+    });
+
+    try {
 	    const result = await withChatRequestContext(ctx, () =>
 	      agent.run({
 	        chatKey: first.chatKey,
@@ -317,5 +382,8 @@ export class ChatLaneScheduler {
 	      chatType: ctx.chatType,
 	      messageId: ctx.messageId,
 	    });
+    } finally {
+      typing?.stop();
+    }
 	  }
 	}

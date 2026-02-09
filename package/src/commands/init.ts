@@ -162,7 +162,7 @@ export async function initCommand(
       initial: 0,
     },
     {
-      // 关键交互：Adapters 允许多选，未选择的就不写入 ship.json
+      // 关键交互: Adapters 允许多选，未选择的就不写入 ship.json
       type: "multiselect",
       name: "adapters",
       message: "Select adapters (multi-select)",

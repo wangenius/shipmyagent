@@ -10,6 +10,7 @@ import {
   type TelegramApiResponse,
   type TelegramAttachmentType,
 } from "./shared.js";
+import type { ChatDispatchAction } from "../../types/chat-dispatcher.js";
 
 
 /**
@@ -202,6 +203,29 @@ export class TelegramApiClient {
     } catch (error) {
       this.logger.error(`Failed to send message: ${String(error)}`);
     }
+  }
+
+  /**
+   * 发送 Telegram chat action（例如 typing）。
+   *
+   * 关键点（中文）
+   * - Telegram 的 typing 指示器会在数秒后自动消失，因此需要周期性发送
+   * - 这里仅做一次发送；“心跳/周期”由上层（scheduler）控制
+   */
+  async sendChatAction(
+    chatId: string,
+    action: ChatDispatchAction,
+    opts?: { messageThreadId?: number },
+  ): Promise<void> {
+    const message_thread_id =
+      typeof opts?.messageThreadId === "number"
+        ? opts.messageThreadId
+        : undefined;
+    await this.requestJson("sendChatAction", {
+      chat_id: chatId,
+      action,
+      ...(message_thread_id ? { message_thread_id } : {}),
+    });
   }
 
   private async sendAttachment(
