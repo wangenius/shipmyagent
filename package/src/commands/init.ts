@@ -100,10 +100,12 @@ export async function initCommand(
   options: InitOptions = {},
 ): Promise<void> {
   const projectRoot = path.resolve(cwd);
+  let allowOverwrite = Boolean(options.force);
   const LLM_API_KEY = "${LLM_API_KEY}";
   const LLM_BASE_URL = "${LLM_BASE_URL}";
   const LLM_MODEL = "${LLM_MODEL}";
   const TELEGRAM_BOT_TOKEN = "${TELEGRAM_BOT_TOKEN}";
+  const TELEGRAM_CHAT_ID = "${TELEGRAM_CHAT_ID}";
   const FEISHU_APP_ID = "${FEISHU_APP_ID}";
   const FEISHU_APP_SECRET = "${FEISHU_APP_SECRET}";
   const QQ_APP_ID = "${QQ_APP_ID}";
@@ -111,16 +113,17 @@ export async function initCommand(
 
   console.log(`🚀 Initializing ShipMyAgent project: ${projectRoot}`);
 
-  // Check if Agent.md and ship.json already exist
+  // Check if core initialization files already exist
   const existingAgentMd = fs.existsSync(getAgentMdPath(projectRoot));
   const existingShipJson = fs.existsSync(getShipJsonPath(projectRoot));
 
   if (existingAgentMd || existingShipJson) {
-    if (!options.force) {
+    if (!allowOverwrite) {
       const response = await prompts({
         type: "confirm",
         name: "overwrite",
-        message: "Project already initialized. Overwrite existing configuration?",
+        message:
+          "Project already initialized. Overwrite existing configuration files?",
         initial: false,
       });
 
@@ -128,6 +131,7 @@ export async function initCommand(
         console.log("❌ Initialization cancelled");
         return;
       }
+      allowOverwrite = true;
     }
   }
 
@@ -244,7 +248,8 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     adaptersConfig.telegram = {
       enabled: true,
       botToken: TELEGRAM_BOT_TOKEN,
-      chatId: undefined,
+      // 关键点（中文）：chatId 可选，允许通过环境变量注入（避免把 chatId 写进 ship.json）
+      chatId: TELEGRAM_CHAT_ID,
     };
   }
   if (selectedAdapters.has("feishu")) {
@@ -282,6 +287,95 @@ Help users understand and work with their codebase by exploring, analyzing, and 
 
   await saveJson(shipJsonPath, shipConfig);
   console.log(`✅ Created ship.json`);
+
+  // Create .env and .env.example (optional, but recommended)
+  // 关键点（中文）
+  // - `.env.example`：可提交，用于告诉团队需要哪些环境变量
+  // - `.env`：本地私密配置，不建议提交
+  // - 仅生成“本次 init 选择相关”的变量（减少噪音）
+  const dotEnvExamplePath = path.join(projectRoot, ".env.example");
+  const dotEnvPath = path.join(projectRoot, ".env");
+
+  const envLines: string[] = [
+    "# ShipMyAgent 环境变量",
+    "# - .env.example: 可提交到 git（示例）",
+    "# - .env: 本地私密配置（不要提交）",
+    "",
+    "# LLM（ship.json 默认读取 LLM_API_KEY）",
+    "LLM_API_KEY=",
+  ];
+
+  if (selectedModel === "custom") {
+    envLines.push(
+      "",
+      "# Custom model（OpenAI-compatible）",
+      "LLM_MODEL=",
+      "LLM_BASE_URL=",
+    );
+  }
+
+  if (selectedAdapters.has("telegram")) {
+    envLines.push(
+      "",
+      "# Telegram",
+      "TELEGRAM_BOT_TOKEN=",
+      "# 可选：限制仅在指定 chatId 发送（不填则不限制）",
+      "TELEGRAM_CHAT_ID=",
+    );
+  }
+
+  if (selectedAdapters.has("feishu")) {
+    envLines.push(
+      "",
+      "# Feishu",
+      "FEISHU_APP_ID=",
+      "FEISHU_APP_SECRET=",
+    );
+  }
+
+  if (selectedAdapters.has("qq")) {
+    envLines.push(
+      "",
+      "# QQ",
+      "QQ_APP_ID=",
+      "QQ_APP_SECRET=",
+      `QQ_SANDBOX=${Boolean(response.qqSandbox) ? "true" : "false"}`,
+    );
+  }
+
+  envLines.push("");
+  const envTemplate = envLines.join("\n");
+
+  const AUTO_ENV_MARKER = "# ShipMyAgent 环境变量";
+  const canOverwriteEnvFile = async (filePath: string): Promise<boolean> => {
+    if (options.force) return true;
+    if (!(await fs.pathExists(filePath))) return true;
+    try {
+      const existing = await fs.readFile(filePath, "utf-8");
+      // 关键点（中文）：只有“我们自己生成的 env 文件”才允许在非 --force 下覆盖，避免误伤用户自有 .env
+      return existing.trimStart().startsWith(AUTO_ENV_MARKER);
+    } catch {
+      return false;
+    }
+  };
+
+  const writeTextFile = async (filePath: string, content: string) => {
+    if (!(await canOverwriteEnvFile(filePath))) return false;
+    await fs.writeFile(filePath, content, "utf-8");
+    return true;
+  };
+
+  const wroteEnvExample = await writeTextFile(dotEnvExamplePath, envTemplate);
+  const wroteEnv = await writeTextFile(dotEnvPath, envTemplate);
+
+  if (wroteEnvExample) console.log("✅ Created .env.example");
+  else if (await fs.pathExists(dotEnvExamplePath)) {
+    console.log("⏭️  Skipped existing .env.example (use --force to overwrite)");
+  }
+  if (wroteEnv) console.log("✅ Created .env");
+  else if (await fs.pathExists(dotEnvPath)) {
+    console.log("⏭️  Skipped existing .env (use --force to overwrite)");
+  }
 
   // Create .ship directory structure
   const dirs = [
