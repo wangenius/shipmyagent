@@ -13,6 +13,8 @@ ShipMyAgent 使用两个主要配置文件：
 
 ```
 your-project/
+├── .env.example       # 环境变量模板（推荐提交）
+├── .env               # 本地环境变量（不要提交）
 ├── ship.json          # 主配置（LLM、adapters）
 ├── Agent.md           # Agent 个性和行为
 └── .ship/             # 运行时数据（日志、缓存、任务）

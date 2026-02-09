@@ -13,6 +13,8 @@ ShipMyAgent uses two main configuration files:
 
 ```
 your-project/
+├── .env.example       # Environment variables template (recommended)
+├── .env               # Local environment variables (do not commit)
 ├── ship.json          # Main configuration (LLM, adapters)
 ├── Agent.md           # Agent personality and behavior
 └── .ship/             # Runtime data (logs, cache, tasks)

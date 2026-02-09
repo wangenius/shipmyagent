@@ -35,6 +35,8 @@ shipmyagent init
 ```
 your-project/
 ├── Agent.md           # Agent 系统提示词
+├── .env.example       # 环境变量模板（推荐提交）
+├── .env               # 本地环境变量（不要提交）
 ├── ship.json          # 配置文件
 ├── .claude/           # Claude 兼容目录
 │   └── skills/        # Skills 存放位置
@@ -61,7 +63,7 @@ your-project/
 
 ## 3. 配置 LLM
 
-打开 `ship.json`，你需要填入 API Key。建议使用环境变量，或者直接填入（注意不要将包含 Key 的文件提交到 Git）。
+通过 `.env` 填入 API Key（推荐），或直接写入 `ship.json`（注意不要将密钥提交到 Git）。
 
 ```json
 {

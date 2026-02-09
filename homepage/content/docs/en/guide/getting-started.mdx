@@ -35,6 +35,8 @@ After initialization, it will create in your directory:
 ```
 your-project/
 ├── Agent.md           # Agent system prompt
+├── .env.example       # Environment variables template (recommended)
+├── .env               # Local environment variables (do not commit)
 ├── ship.json          # Configuration file
 ├── .claude/           # Claude compatible directory
 │   └── skills/        # Skills storage
@@ -61,7 +63,7 @@ your-project/
 
 ## 3. Configure LLM
 
-Open `ship.json` and you need to fill in the API Key. It is recommended to use environment variables, or fill it in directly (be careful not to commit the file containing the Key to Git).
+Fill in your API Key via `.env` (recommended) or directly in `ship.json` (be careful not to commit secrets).
 
 ```json
 {
