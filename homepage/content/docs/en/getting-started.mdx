@@ -230,7 +230,6 @@ Output:
 
 🤖 Your agent is now online!
 💬 Chat via Telegram (if configured)
-📋 View tasks: shipmyagent tasks list
 📊 View logs: shipmyagent logs
 ```
 
@@ -310,13 +309,15 @@ This checks:
 
 **Set up automated code reviews**:
 
-Create `.ship/tasks/pr-review.md`:
+Create `.ship/task/pr-review/task.md`:
 
 ```markdown
 ---
-id: pr-review
-name: Pull Request Review
+title: Pull Request Review
 cron: "*/30 * * * *"
+description: Review open PRs and post a summary
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Review open pull requests for:
@@ -330,14 +331,15 @@ Post findings as comments on each PR.
 
 **Create daily summary**:
 
-Create `.ship/tasks/daily-summary.md`:
+Create `.ship/task/daily-summary/task.md`:
 
 ```markdown
 ---
-id: daily-summary
-name: Daily Summary
+title: Daily Summary
 cron: "0 18 * * *"
-notify: telegram
+description: Summarize daily work and share highlights
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Summarize today's work:

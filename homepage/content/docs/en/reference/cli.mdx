@@ -21,7 +21,6 @@ Complete reference for all ShipMyAgent CLI commands.
 | `shipmyagent validate` | Validate configuration |
 | `shipmyagent doctor` | Run health diagnostics |
 | `shipmyagent logs` | View agent logs |
-| `shipmyagent tasks` | Manage scheduled tasks |
 | `shipmyagent test` | Test connections and integrations |
 
 ---
@@ -317,99 +316,15 @@ shipmyagent doctor --output health-report.json
 
 ---
 
-## Task Commands
+## Tasks
 
-### `shipmyagent tasks list`
+Task management is currently driven via built-in **Agent tools** (so tasks can be created/listed/run from chat runs):
 
-List all scheduled tasks.
+- `create_task`
+- `task_list`
+- `run_task`
 
-```bash
-shipmyagent tasks list [options]
-```
-
-**Options**:
-
-| Option | Alias | Description |
-|--------|-------|-------------|
-| `--format <format>` | | Output format (table, json) |
-| `--status <status>` | | Filter by status (active, disabled, failed) |
-
-**Examples**:
-
-```bash
-# List all tasks
-shipmyagent tasks list
-
-# Active tasks only
-shipmyagent tasks list --status active
-
-# JSON format
-shipmyagent tasks list --format json
-```
-
----
-
-### `shipmyagent tasks run`
-
-Run a task manually.
-
-```bash
-shipmyagent tasks run <task-id> [options]
-```
-
-**Options**:
-
-| Option | Alias | Description |
-|--------|-------|-------------|
-| `--dry-run` | | Show what would run without executing |
-| `--notify` | `-n` | Send notifications on completion |
-
-**Examples**:
-
-```bash
-# Run specific task
-shipmyagent tasks run daily-report
-
-# Dry run
-shipmyagent tasks run daily-report --dry-run
-
-# With notification
-shipmyagent tasks run daily-report --notify
-```
-
----
-
-### `shipmyagent tasks enable`
-
-Enable a task.
-
-```bash
-shipmyagent tasks enable <task-id>
-```
-
-**Examples**:
-
-```bash
-shipmyagent tasks enable daily-report
-```
-
----
-
-### `shipmyagent tasks disable`
-
-Disable a task.
-
-```bash
-shipmyagent tasks disable <task-id>
-```
-
-**Examples**:
-
-```bash
-shipmyagent tasks disable daily-report
-```
-
----
+See the “Tasks & Automation” doc for the disk layout and scheduling behavior.
 
 ## Log Commands
 
@@ -627,7 +542,7 @@ shipmyagent import backup.zip --merge
 
 ```bash
 # Chain commands
-shipmyagent tasks list --format json | jq '.[] | select(.status=="active")'
+shipmyagent doctor --format json | jq '.'
 
 # Save diagnostic output
 shipmyagent doctor --format json | tee diagnostic.json

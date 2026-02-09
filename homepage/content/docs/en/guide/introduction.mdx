@@ -35,10 +35,10 @@ This is the Agent's "Body". It defines the Agent's capability boundaries, includ
 
 ## 3. Tasks
 
-Tasks are the automation units of ShipMyAgent. They are stored in the `.ship/tasks/` directory.
-Each task is a Markdown file containing:
+Tasks are the automation units of ShipMyAgent. They are stored under `.ship/task/` (one folder per task).
+Each task definition is a Markdown file (`task.md`) containing:
 
-- **Metadata**: Task ID, Cron schedule expression.
+- **Metadata (frontmatter)**: title, cron schedule expression, status, and a target `chatKey` to notify.
 - **Task Description**: A natural language description telling the Agent what operation to perform periodically.
 
 For example, you can create a task: "Scan TODOs in the codebase every morning at 9 AM and generate a report."

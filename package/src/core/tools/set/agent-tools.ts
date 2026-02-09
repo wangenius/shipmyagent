@@ -16,6 +16,7 @@ import { execShellTools } from "../builtin/exec-shell.js";
 import { createMcpAiTool } from "./mcp.js";
 import { chatTools } from "../builtin/chat.js";
 import { chatContactSendTools } from "../builtin/chat-contact-send.js";
+import { taskSystemTools } from "../builtin/task-system.js";
 import { Tool } from "ai";
 
 import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
@@ -43,6 +44,7 @@ export function createAgentTools(): Record<string, Tool> {
   Object.assign(tools, chatContactSendTools);
   Object.assign(tools, skillsTools);
   Object.assign(tools, execShellTools);
+  Object.assign(tools, taskSystemTools);
 
   const mcpTools = mcpManager.getAllTools();
   for (const { server, tool: mcpTool } of mcpTools) {

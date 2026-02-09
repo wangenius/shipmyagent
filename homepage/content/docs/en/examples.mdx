@@ -131,13 +131,15 @@ Ask before:
 
 ### Tasks
 
-**`.ship/tasks/content-review.md`**:
+**`.ship/task/content-review/task.md`**:
 
 ```markdown
 ---
-id: content-review
-name: Weekly Content Review
+title: Weekly Content Review
 cron: "0 18 * * 5"
+description: Review content quality and broken links
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Review the blog for:
@@ -163,13 +165,15 @@ Report findings in Telegram with:
 - Recommended actions
 ```
 
-**`.ship/tasks/performance-check.md`**:
+**`.ship/task/performance-check/task.md`**:
 
 ```markdown
 ---
-id: performance-check
-name: Performance Check
+title: Performance Check
 cron: "0 9 * * 1"
+description: Run performance checks and report regressions
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Run performance checks:
@@ -338,13 +342,15 @@ You are a maintainer assistant for an open source project.
 
 ### Tasks
 
-**`.ship/tasks/pr-review.md`**:
+**`.ship/task/pr-review/task.md`**:
 
 ```markdown
 ---
-id: pr-review
-name: Automated PR Review
+title: Automated PR Review
 cron: "*/30 * * * *"
+description: Review open PRs and post feedback
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Review open pull requests:
@@ -372,13 +378,15 @@ Post review as comment on PR with:
 - Approval or request changes
 ```
 
-**`.ship/tasks/issue-triage.md`**:
+**`.ship/task/issue-triage/task.md`**:
 
 ```markdown
 ---
-id: issue-triage
-name: Issue Triage
+title: Issue Triage
 cron: "0 */2 * * *"
+description: Triage new issues and propose labels/actions
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Process new issues:
@@ -407,13 +415,15 @@ Process new issues:
    - Point to documentation
 ```
 
-**`.ship/tasks/docs-sync.md`**:
+**`.ship/task/docs-sync/task.md`**:
 
 ```markdown
 ---
-id: docs-sync
-name: Documentation Sync
+title: Documentation Sync
 cron: "0 18 * * 5"
+description: Keep documentation in sync with code changes
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Ensure documentation is current:
@@ -591,13 +601,15 @@ You are part of a fast-moving startup team. Speed and quality are both important
 
 ### Tasks
 
-**`.ship/tasks/pre-deploy-check.md`**:
+**`.ship/task/pre-deploy-check/task.md`**:
 
 ```markdown
 ---
-id: pre-deploy-check
-name: Pre-Deploy Checklist
+title: Pre-Deploy Checklist
 cron: "0 8-18 * * 1-5"
+description: Run a pre-deploy checklist and report readiness
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Before each deployment:
@@ -624,13 +636,15 @@ Report in Slack:
 ❌ Blockers: [list blockers]
 ```
 
-**`.ship/tasks/bug-triage.md`**:
+**`.ship/task/bug-triage/task.md`**:
 
 ```markdown
 ---
-id: bug-triage
-name: Bug Triage
+title: Bug Triage
 cron: "0 10,15 * * 1-5"
+description: Review and prioritize bugs
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Review and prioritize bugs:
@@ -655,13 +669,15 @@ Review and prioritize bugs:
 Post prioritized list to Slack.
 ```
 
-**`.ship/tasks/tech-debt-monitor.md`**:
+**`.ship/task/tech-debt-monitor/task.md`**:
 
 ```markdown
 ---
-id: tech-debt-monitor
-name: Technical Debt Monitor
+title: Technical Debt Monitor
 cron: "0 17 * * 5"
+description: Weekly technical debt review and recommendations
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Weekly technical debt review:
@@ -867,13 +883,15 @@ You assist multiple teams in a large enterprise organization.
 
 ### Tasks
 
-**`.ship/tasks/compliance-check.md`**:
+**`.ship/task/compliance-check/task.md`**:
 
 ```markdown
 ---
-id: compliance-check
-name: Compliance Check
+title: Compliance Check
 cron: "0 6 * * *"
+description: Daily security/privacy/compliance scan
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Daily compliance scan:
@@ -898,13 +916,15 @@ Daily compliance scan:
 Report violations to #eng-critical immediately.
 ```
 
-**`.ship/tasks/dependency-scan.md`**:
+**`.ship/task/dependency-scan/task.md`**:
 
 ```markdown
 ---
-id: dependency-scan
-name: Enterprise Dependency Scan
+title: Enterprise Dependency Scan
 cron: "0 8 * * 1"
+description: Deep dependency analysis and reporting
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Comprehensive dependency analysis:
@@ -930,13 +950,15 @@ Generate report for:
 - Team leads
 ```
 
-**`.ship/tasks/api-contract-check.md`**:
+**`.ship/task/api-contract-check/task.md`**:
 
 ```markdown
 ---
-id: api-contract-check
-name: API Contract Validation
+title: API Contract Validation
 cron: "0 12 * * 1-5"
+description: Validate API contracts across backend/frontend/integration
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Validate API contracts:

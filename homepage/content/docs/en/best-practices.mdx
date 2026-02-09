@@ -700,8 +700,8 @@ cron: "0 9 * * 1"  # Weekly deep dive
 **Problem**:
 ```
 .ship/
-├── tasks/
-│   └── task.md  # ✗ Not tracked
+├── task/
+│   └── pr-review/task.md  # ✗ Not tracked
 ├── cache/       # ✗ Accumulates indefinitely
 ```
 
@@ -718,7 +718,7 @@ cron: "0 9 * * 1"  # Weekly deep dive
 .ship/tmp/
 
 # .gitinclude
-.ship/tasks/
+.ship/task/
 Agent.md
 ship.json.example
 ```

@@ -128,7 +128,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Run Agent Review
-        run: shipmyagent tasks run pr-review
+        run: shipmyagent chat "Run task pr-review"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

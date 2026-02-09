@@ -53,14 +53,15 @@ Automate pull request reviews with consistent, thorough feedback.
 
 #### Step 2: Create Review Task
 
-**`.ship/tasks/pr-review.md`**:
+**`.ship/task/pr-review/task.md`**:
 
 ```markdown
 ---
-id: pr-review
-name: Automated PR Review
+title: Automated PR Review
 cron: "*/30 * * * *"
-notify: ["github", "telegram"]
+description: Review open PRs and post a summary
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Review all open pull requests:
@@ -189,14 +190,15 @@ Keep your repository healthy with automated maintenance tasks.
 
 #### Daily Dependency Check
 
-**`.ship/tasks/dependency-check.md`**:
+**`.ship/task/dependency-check/task.md`**:
 
 ```markdown
 ---
-id: dependency-check
-name: Daily Dependency Scan
+title: Daily Dependency Scan
 cron: "0 9 * * *"
-notify: telegram
+description: Scan dependency updates and vulnerabilities
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Check dependency health:
@@ -237,14 +239,15 @@ Report format:
 
 #### Weekly TODO Cleanup
 
-**`.ship/tasks/todo-cleanup.md`**:
+**`.ship/task/todo-cleanup/task.md`**:
 
 ```markdown
 ---
-id: todo-cleanup
-name: Weekly TODO Cleanup
+title: Weekly TODO Cleanup
 cron: "0 9 * * 1"
-notify: slack
+description: Find TODO/FIXME and prioritize cleanup
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Find and organize TODOs:
@@ -267,13 +270,15 @@ Find and organize TODOs:
 
 #### Monthly Documentation Sync
 
-**`.ship/tasks/doc-sync.md`**:
+**`.ship/task/doc-sync/task.md`**:
 
 ```markdown
 ---
-id: doc-sync
-name: Documentation Sync
+title: Documentation Sync
 cron: "0 18 * * 1"
+description: Keep docs in sync with code changes
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Sync documentation with code:
@@ -300,14 +305,15 @@ Sync documentation with code:
 
 Create a central dashboard task:
 
-**`.ship/tasks/health-check.md`**:
+**`.ship/task/health-check/task.md`**:
 
 ```markdown
 ---
-id: health-check
-name: Repository Health Check
+title: Repository Health Check
 cron: "0 8 * * 1"
-notify: ["slack", "email"]
+description: Generate a comprehensive repository health report
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Comprehensive repository health report:
@@ -410,14 +416,15 @@ You are a frontend engineering specialist.
 
 #### Cross-Team Coordination Task
 
-**`.ship/tasks/cross-team-sync.md`**:
+**`.ship/task/cross-team-sync/task.md`**:
 
 ```markdown
 ---
-id: cross-team-sync
-name: Cross-Team Sync
+title: Cross-Team Sync
 cron: "0 17 * * 5"
-notify: slack
+description: Weekly cross-team coordination summary
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Weekly cross-team coordination:
@@ -447,13 +454,15 @@ Post to #engineering channel.
 
 #### Contributor Onboarding
 
-**`.ship/tasks/onboarding.md`**:
+**`.ship/task/onboarding/task.md`**:
 
 ```markdown
 ---
-id: contributor-onboarding
-name: Contributor Onboarding
+title: Contributor Onboarding
 cron: "0 */4 * * *"
+description: Review new contributions and greet first-time contributors
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Review new contributions:
@@ -965,11 +974,11 @@ Better structured output
 Track task effectiveness:
 
 ```bash
-# View task statistics
-shipmyagent tasks stats
+# List tasks (via Agent tool)
+# - Ask the agent to call: task_list
 
-# History of a task
-shipmyagent tasks history pr-review --last 30
+# Inspect run history on disk
+ls .ship/task/pr-review
 ```
 
 ---

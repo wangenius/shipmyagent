@@ -294,14 +294,14 @@ See [Permission Errors Guide](/docs/troubleshooting/permission-errors).
 ### Tasks not running?
 
 ```bash
-# List tasks
-shipmyagent tasks list
+# Inspect tasks on disk
+ls .ship/task
 
-# Check task logs
-shipmyagent logs --file tasks
+# Check a task definition
+cat .ship/task/<taskId>/task.md
 
-# Run manually
-shipmyagent tasks run <task-id>
+# Inspect recent runs
+ls .ship/task/<taskId>
 ```
 
 ---

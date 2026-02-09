@@ -10,6 +10,8 @@ import { getLogger } from "../../telemetry/index.js";
 import { ChatHistoryStore } from "../history/store.js";
 import type { ShipMessageMetadataV1 } from "../../types/chat-history.js";
 import { getShipRuntimeContext, getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
+import path from "node:path";
+import { parseTaskRunChatKey, getTaskRunDir } from "../task-system/paths.js";
 
 /**
  * ChatRuntime：把“平台入站消息 → 落盘审计 → 调度执行 → 回包兜底”收拢到一个地方。
@@ -48,7 +50,22 @@ export class ChatRuntime {
     if (!key) throw new Error("ChatRuntime.getHistoryStore requires a non-empty chatKey");
     const existing = this.historyStoresByChatKey.get(key);
     if (existing) return existing;
-    const created = new ChatHistoryStore(key);
+
+    // 关键点（中文）：为 task run chatKey 注入“自定义 messagesDir”，把 history.jsonl 直接写入 run 目录。
+    // 这样 runner 不需要复制 .ship/chat/*，并且满足 `./.ship/task/<taskId>/<timestamp>/history.jsonl` 的审计约定。
+    const parsedRun = parseTaskRunChatKey(key);
+    const created = parsedRun
+      ? (() => {
+          const runDir = getTaskRunDir(getShipRuntimeContextBase().rootPath, parsedRun.taskId, parsedRun.timestamp);
+          return new ChatHistoryStore(key, {
+            chatDirPath: runDir,
+            messagesDirPath: runDir,
+            messagesFilePath: path.join(runDir, "history.jsonl"),
+            metaFilePath: path.join(runDir, "meta.json"),
+            archiveDirPath: path.join(runDir, "archive"),
+          });
+        })()
+      : new ChatHistoryStore(key);
     this.historyStoresByChatKey.set(key, created);
     return created;
   }

@@ -5,61 +5,76 @@ description: Schedule and manage automated tasks with ShipMyAgent
 
 # Tasks & Automation
 
-> ⚠️ **Simplified mode (2026-02-03)**: the current `shipmyagent` package temporarily disables **Tasks/Runs/Scheduler**. This page documents the older/planned task system and does not reflect current runtime behavior.
+Automate repetitive work with ShipMyAgent’s **Task System**: define a task as Markdown, schedule it with cron, keep a full on-disk audit trail per run, and notify a target `chatKey` when it finishes.
 
-Automate repetitive work with ShipMyAgent's built-in task scheduler. Schedule recurring maintenance, code reviews, and custom workflows.
+## Directory layout
 
-## Overview
+Tasks live under `.ship/task/` (note: `task`, not `tasks`):
 
-Tasks are defined as Markdown files in the `.ship/tasks/` directory and run on a schedule using cron expressions.
-
+```text
+.ship/task/
+  <task_id>/
+    task.md
+    <timestamp>/
+      history.jsonl
+      input.md
+      output.md
+      result.md
+      error.md        (optional)
+      run.json
+      *.md            (optional, extra audit/process files)
 ```
-.ship/
-└── tasks/
-    ├── daily-report.md
-    ├── code-review.md
-    └── dependency-check.md
-```
 
----
+- `task.md` is the task definition (YAML frontmatter + Markdown body).
+- Each run creates a new `<timestamp>/` folder (sorted by time) with audit artifacts.
 
-## Creating Tasks
+## Task definition: `<task_id>/task.md`
 
-### Basic Task Structure
+`task.md` must start with YAML frontmatter and include these required fields:
+
+- `title`
+- `cron`
+- `description`
+- `chatKey`
+- `status`
+
+If you want a manual-only task, use `cron: "@manual"` (the field still exists, but the scheduler won’t register it).
+
+### Example
 
 ```markdown
 ---
-id: unique-task-id
-name: Human-Readable Name
-cron: "0 9 * * *"
-notify: telegram
+title: Daily Repo Health Check
+cron: "0 9 * * 1-5"
+description: Run checks and post a short summary
+chatKey: telegram-chat-123456789
+status: enabled
+timezone: Asia/Shanghai
 ---
 
-Task prompt goes here. This is what gets sent to the LLM.
+Run the following checks and write the final result to `result.md` in the run directory:
+
+1) Pull latest changes (if appropriate)
+2) Run tests
+3) Summarize failures (if any) and next actions
+
+Constraints:
+- Keep outputs auditable: write key artifacts as Markdown files under the run directory.
 ```
 
-### Frontmatter Fields
+### `status` values
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | Yes | Unique task identifier |
-| `name` | string | Yes | Human-readable task name |
-| `cron` | string | Yes | Cron expression for scheduling |
-| `notify` | string/array | No | Notification channels (telegram, slack, console, email) |
-| `enabled` | boolean | No | Whether task is active (default: true) |
-| `timeout` | number | No | Maximum execution time in seconds (default: 300) |
-| `retryOnFailure` | boolean | No | Auto-retry on failure (default: false) |
-| `maxRetries` | number | No | Maximum retry attempts (default: 3) |
+- `enabled`: scheduled by cron (unless `cron: "@manual"`).
+- `paused`: not scheduled, but can be run manually.
+- `disabled`: not scheduled.
 
----
+## Cron expressions
 
-## Cron Expressions
+ShipMyAgent uses `node-cron` compatible 5-field expressions:
 
-Cron expressions define when tasks run. Format: `minute hour day month weekday`
+`minute hour day-of-month month day-of-week`
 
-### Cron Format
-
-```
+```text
 ┌───────────── minute (0 - 59)
 │ ┌───────────── hour (0 - 23)
 │ │ ┌───────────── day of month (1 - 31)
@@ -69,648 +84,42 @@ Cron expressions define when tasks run. Format: `minute hour day month weekday`
 * * * * *
 ```
 
-### Common Patterns
+Shortcuts:
 
-| Pattern | Description |
-|---------|-------------|
-| `* * * * *` | Every minute |
-| `0 * * * *` | Every hour |
-| `0 0 * * *` | Every day at midnight |
-| `0 9 * * *` | Every day at 9 AM |
-| `0 9,18 * * *` | Every day at 9 AM and 6 PM |
-| `0 9 * * 1` | Every Monday at 9 AM |
-| `0 9 * * 1‑5` | Every weekday at 9 AM |
-| `*/30 * * * *` | Every 30 minutes |
-| `0 */2 * * *` | Every 2 hours |
-| `0 0 1 * *` | First day of every month |
-| `0 0 1 1 *` | January 1st every year |
-| `0 9,12,18 * * *` | 9 AM, 12 PM, 6 PM daily |
+- `@manual` (manual only)
+- `@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`
 
-### Cron Examples
+## Running and managing tasks
 
-**Daily morning check**:
-```markdown
----
-cron: "0 9 * * *"
----
-```
+The Task System is primarily driven via **built-in tools** (so the Agent can create/list/run tasks).
 
-**Every 6 hours**:
-```markdown
----
-cron: "0 */6 * * *"
----
-```
+### Tools
 
-**Weekdays at 8:30 AM**:
-```markdown
----
-cron: "30 8 * * 1-5"
----
-```
+- `task_list`: list tasks (reads `.ship/task/*/task.md`)
+- `create_task`: create `.ship/task/<task_id>/task.md` from inputs
+- `run_task`: run once immediately (creates a new run folder and notifies `chatKey`)
 
-**First Monday of each month**:
-```markdown
----
-cron: "0 9 1-7 * 1"
----
-```
+### Scheduler
 
-**Every Sunday at midnight**:
-```markdown
----
-cron: "0 0 * * 0"
----
-```
+The cron scheduler runs when your runtime is running (for example, when you launch `shipmyagent run` or `shipmyagent start` and keep the process alive). Only tasks with:
 
----
+`status: enabled` and `cron != "@manual"`
 
-## Task Templates
-
-### Code Review Task
-
-```markdown
----
-id: pr-review
-name: Pull Request Review
-cron: "*/30 * * * *"
-notify: telegram
-enabled: true
----
-
-Review all open pull requests:
-
-1. **Code Quality**
-   - Check for bugs or logic errors
-   - Verify coding standards
-   - Assess performance implications
-
-2. **Testing**
-   - Ensure adequate test coverage
-   - Verify tests actually test the code
-   - Check for edge cases
-
-3. **Documentation**
-   - API changes documented?
-   - Examples provided?
-   - Breaking changes noted?
-
-For each PR:
-- Provide a summary
-- List any issues (severity: HIGH/MEDIUM/LOW)
-- Suggest specific improvements
-- Approve or request changes
-
-Post review comments directly to each PR.
-```
-
-### Dependency Check Task
-
-```markdown
----
-id: dependency-check
-name: Dependency Security Scan
-cron: "0 9 * * 1"
-notify: slack
-timeout: 600
----
-
-Check for dependency issues:
-
-1. **Outdated Packages**
-   - List packages with updates available
-   - Identify major version bumps
-   - Highlight deprecated packages
-
-2. **Security Vulnerabilities**
-   - Run `npm audit` or equivalent
-   - Check for known CVEs
-   - Assess severity levels
-
-3. **License Compliance**
-   - Verify all licenses are approved
-   - Flag any GPL or AGPL packages
-   - Check for attribution requirements
-
-Report findings:
-- 🟢 All clear
-- 🟡 Updates available (non-critical)
-- 🟠 Security issues (medium priority)
-- 🔴 Critical vulnerabilities (immediate action)
-```
-
-### Performance Check Task
-
-```markdown
----
-id: performance-check
-name: Performance Health Check
-cron: "0 6 * * *"
-notify: console
----
-
-Monitor application performance:
-
-1. **Build Size**
-   - Check bundle size
-   - Compare to baseline
-   - Identify large dependencies
-
-2. **Load Time**
-   - Test initial page load
-   - Measure Time to Interactive
-   - Check Core Web Vitals
-
-3. **Database**
-   - Check query performance
-   - Identify slow queries
-   - Verify indexing
-
-4. **API Endpoints**
-   - Test critical endpoints
-   - Measure response times
-   - Check error rates
-
-Generate a performance report with:
-- Current metrics
-- Comparison to last week
-- Recommendations for improvement
-```
-
-### Documentation Sync Task
-
-```markdown
----
-id: doc-sync
-name: Documentation Sync
-cron: "0 18 * * 5"
-notify: ["telegram", "email"]
----
-
-Keep documentation in sync with code:
-
-1. **API Documentation**
-   - Check new/modified functions
-   - Verify parameter documentation
-   - Update examples
-
-2. **README Files**
-   - Update setup instructions
-   - Verify examples work
-   - Check for broken links
-
-3. **Changelog**
-   - Review recent commits
-   - Categorize changes (Added/Changed/Fixed/Removed)
-   - Update CHANGELOG.md
-
-Create a PR with documentation updates.
-```
-
-### TODO Cleanup Task
-
-```markdown
----
-id: todo-cleanup
-name: TODO and FIXME Cleanup
-cron: "0 9 * * 1"
-notify: telegram
----
-
-Find and organize TODO comments:
-
-1. **Scan Codebase**
-   - Search for TODO, FIXME, HACK, XXX comments
-   - Categorize by file and severity
-   - Estimate effort required
-
-2. **Prioritize**
-   - Critical: Blocking production
-   - High: Affects user experience
-   - Medium: Code quality issues
-   - Low: Nice to have
-
-3. **Generate Report**
-   - Total TODO count
-   - Top 10 priorities
-   - Suggested sprint allocation
-
-Format:
-## 🔴 Critical (3)
-- [File:Line] Description
-
-## 🟡 High (5)
-- [File:Line] Description
-
-## 🟢 Medium (12)
-- [File:Line] Description
-```
-
-### Daily Standup Task
-
-```markdown
----
-id: daily-standup
-name: Daily Development Summary
-cron: "0 18 * * 1-5"
-notify: slack
----
-
-Generate daily development summary:
-
-**Today's Work**:
-1. Files modified (git diff --stat)
-2. Commits made
-3. Features added
-4. Bugs fixed
-
-**Issues Found**:
-1. Any errors in logs
-2. Test failures
-3. Integration issues
-
-**Tomorrow's Plan**:
-1. Priorities from backlog
-2. Continuation of today's work
-3. Upcoming deadlines
-
-**Blockers**:
-- Anything preventing progress
-- Resources needed
-- Decisions required
-
-Format as a friendly team update.
-```
-
----
-
-## Task Management
-
-### List All Tasks
-
-```bash
-shipmyagent tasks list
-
-# Active tasks only
-shipmyagent tasks list --status active
-
-# JSON format
-shipmyagent tasks list --format json
-```
-
-### Run Task Manually
-
-```bash
-shipmyagent tasks run <task-id>
-
-# Dry run (show what would happen)
-shipmyagent tasks run <task-id> --dry-run
-
-# With notification
-shipmyagent tasks run <task-id> --notify
-```
-
-### Enable/Disable Tasks
-
-```bash
-# Enable
-shipmyagent tasks enable <task-id>
-
-# Disable
-shipmyagent tasks disable <task-id>
-```
-
-### View Task History
-
-```bash
-shipmyagent tasks history <task-id>
-
-# Last 5 runs
-shipmyagent tasks history <task-id> --limit 5
-
-# With logs
-shipmyagent tasks history <task-id> --include-logs
-```
-
----
+are registered.
 
 ## Notifications
 
-Configure where task results are sent.
+After a run completes (success or failure), ShipMyAgent sends a summary message to `chatKey` and includes the run directory path.
 
-### Telegram Notification
+If you use QQ as `chatKey`, ShipMyAgent may need the latest `messageId` from that chat’s history to send a reply. If delivery fails, ask the target chat to send a message first so ShipMyAgent can record the latest metadata.
 
-```markdown
----
-notify: telegram
----
-```
+## Built-in Skill: Task System
 
-Requires Telegram integration configured in `ship.json`.
+ShipMyAgent ships a built-in skill (Claude Code compatible) named **“Task System（定时任务）”** that explains recommended workflows using these tools:
 
-### Slack Notification
+1. `task_list`
+2. `create_task`
+3. `run_task`
 
-```markdown
----
-notify: slack
----
-```
+Use `skills_list` / `skills_load` to find and load it.
 
-Requires Slack webhook configured.
-
-### Multiple Channels
-
-```markdown
----
-notify: ["telegram", "slack", "email"]
----
-```
-
-### Console Only (No Notification)
-
-```markdown
----
-notify: console
----
-```
-
-Or omit the `notify` field entirely.
-
----
-
-## Task Execution Context
-
-Tasks run with access to:
-
-- **Repository files**: Can read any file in the repo
-- **Git history**: Can run git commands
-- **Shell access**: Based on `permissions.exec_shell` config
-- **LLM**: Full access to configured language model
-- **Integrations**: Can use GitHub, Telegram, etc.
-
-### Example: Using Git in Task
-
-```markdown
----
-id: commit-summary
-name: Daily Commit Summary
-cron: "0 18 * * *"
----
-
-Summarize today's commits:
-
-1. Get today's commits: `git log --since="1 day ago" --pretty=format:"%h %s"`
-2. Group by author
-3. Identify main themes
-4. Highlight any breaking changes
-
-Generate a summary with:
-- Total commits
-- Contributors
-- Key changes
-- Any concerns
-```
-
-### Example: File Operations
-
-```markdown
----
-id: log-analysis
-name: Error Log Analysis
-cron: "0 6 * * *"
----
-
-Analyze error logs:
-
-1. Read `.ship/logs/<YYYY-MM-DD>.jsonl`
-2. Count error types
-3. Identify patterns
-4. Find critical errors
-
-Report:
-- Total errors
-- Most common errors
-- Critical issues requiring attention
-- Trending issues
-```
-
----
-
-## Advanced Features
-
-### Conditional Execution
-
-Run tasks based on conditions:
-
-```markdown
----
-id: conditional-task
-name: Conditional Task
-cron: "0 9 * * *"
-condition: "git status --porcelain | grep -q 'M '"
----
-
-This task only runs if there are modified files.
-```
-
-### Task Dependencies
-
-Chain tasks together:
-
-```markdown
----
-id: task-two
-name: Second Task
-cron: "0 10 * * *"
-dependsOn: ["task-one"]
----
-
-This runs after task-one completes successfully.
-```
-
-### Retry Logic
-
-Configure retry behavior:
-
-```markdown
----
-id: flaky-task
-name: Flaky External Task
-cron: "0 */4 * * *"
-retryOnFailure: true
-maxRetries: 3
-retryDelay: 60
----
-
-Retry this task up to 3 times if it fails.
-Wait 60 seconds between retries.
-```
-
-### Task Timeout
-
-Prevent long-running tasks:
-
-```markdown
----
-id: quick-check
-name: Quick Health Check
-cron: "*/15 * * * *"
-timeout: 60
----
-
-Fail if task takes longer than 60 seconds.
-```
-
----
-
-## Best Practices
-
-### 1. Keep Tasks Focused
-
-❌ Bad: Monolithic task that does everything
-
-```markdown
----
-id: do-everything
-name: Do Everything
-cron: "0 9 * * *"
----
-
-Check dependencies, review PRs, run tests, update docs, send reports, make coffee...
-```
-
-✅ Good: Single responsibility
-
-```markdown
----
-id: dependency-check
-name: Dependency Check
-cron: "0 9 * * *"
----
-
-Check for dependency updates and vulnerabilities.
-```
-
-### 2. Use Appropriate Frequency
-
-❌ Bad: Too frequent
-
-```markdown
----
-cron: "*/1 * * * *"
----
-```
-Runs every minute (expensive!)
-
-✅ Good: Reasonable frequency
-
-```markdown
----
-cron: "0 */2 * * *"
----
-```
-Runs every 2 hours
-
-### 3. Set Timeouts
-
-```markdown
----
-timeout: 300
----
-```
-
-Prevent tasks from hanging forever.
-
-### 4. Handle Failures Gracefully
-
-```markdown
----
-retryOnFailure: true
-maxRetries: 2
-notify: ["telegram", "console"]
----
-```
-
-Retry and notify on failure.
-
-### 5. Document Task Purpose
-
-```markdown
----
-id: weekly-cleanup
-name: Weekly Repository Cleanup
-description: Removes old logs, clears cache, checks disk space
-cron: "0 18 * * 5"
----
-
-This task runs every Friday at 6 PM to:
-- Remove logs older than 30 days
-- Clear file cache
-- Check disk space
-- Report if space < 10%
-
-Purpose: Maintain repository health and prevent disk space issues.
-```
-
----
-
-## Troubleshooting
-
-### Task Not Running
-
-```bash
-# Check task status
-shipmyagent tasks list
-
-# Verify cron expression
-shipmyagent validate --tasks
-
-# Check task logs
-shipmyagent logs --file tasks
-
-# Test manually
-shipmyagent tasks run <task-id>
-```
-
-### Task Failing Intermittently
-
-```bash
-# Enable retries
-# Add to task frontmatter:
-retryOnFailure: true
-maxRetries: 3
-
-# Check logs for errors
-shipmyagent logs --level error | grep <task-id>
-```
-
-### Task Taking Too Long
-
-```bash
-# Add timeout
-# Add to task frontmatter:
-timeout: 300  # 5 minutes
-
-# Run with verbose logging
-shipmyagent tasks run <task-id> --verbose
-```
-
-### Cron Expression Issues
-
-Use a cron validator:
-
-```bash
-# Test cron expression
-shipmyagent validate-cron "0 9 * * 1-5"
-
-# Get next run times
-shipmyagent tasks schedule <task-id> --next 5
-```
-
----
-
-## Next Steps
-
-- [Configuration](/docs/configuration) - Set up permissions and integrations
-- [Examples](/docs/examples) - See task examples in real projects
-- [Best Practices](/docs/best-practices) - Learn proven patterns

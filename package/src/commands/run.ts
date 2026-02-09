@@ -19,6 +19,7 @@ import {
 } from "../server/ShipRuntimeContext.js";
 import type { StartOptions } from "../types/start.js";
 import { logger } from "../telemetry/logging/logger.js";
+import { TaskCronScheduler } from "../core/task-system/scheduler.js";
 
 /**
  * `shipmyagent run` command entrypoint.
@@ -158,11 +159,21 @@ export async function runCommand(
 
   // 处理进程信号
   let isShuttingDown = false;
+  let taskScheduler: TaskCronScheduler | null = null;
   const shutdown = async (signal: string) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
 
     logger.info(`Received ${signal} signal, shutting down...`);
+
+    // Stop task scheduler
+    if (taskScheduler) {
+      try {
+        await taskScheduler.stop();
+      } catch {
+        // ignore
+      }
+    }
 
     // Stop Telegram Bot
     if (telegramBot) {
@@ -224,6 +235,14 @@ export async function runCommand(
   // Start QQ Bot
   if (qqBot) {
     await qqBot.start();
+  }
+
+  // Start task scheduler (cron)
+  try {
+    taskScheduler = new TaskCronScheduler();
+    await taskScheduler.start();
+  } catch (e) {
+    logger.error(`Task scheduler failed to start: ${String(e)}`);
   }
 
   logger.info("=== ShipMyAgent Started ===");

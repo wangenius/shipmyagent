@@ -32,33 +32,93 @@ import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 export class ChatHistoryStore {
   readonly rootPath: string;
   readonly chatKey: string;
+  private readonly overrideChatDirPath?: string;
+  private readonly overrideMessagesDirPath?: string;
+  private readonly overrideMessagesFilePath?: string;
+  private readonly overrideMetaFilePath?: string;
+  private readonly overrideArchiveDirPath?: string;
 
-  constructor(chatKey: string) {
+  constructor(
+    chatKey: string,
+    options?: {
+      /**
+       * override: chat directory path (debug/inspection only; messages paths are used for writes)
+       */
+      chatDirPath?: string;
+      /**
+       * override: directory containing history/meta/archive (e.g. a task run directory)
+       */
+      messagesDirPath?: string;
+      /**
+       * override: history.jsonl file path
+       */
+      messagesFilePath?: string;
+      /**
+       * override: meta.json file path
+       */
+      metaFilePath?: string;
+      /**
+       * override: archive directory path
+       */
+      archiveDirPath?: string;
+    },
+  ) {
     const rootPath = String(getShipRuntimeContextBase().rootPath || "").trim();
     if (!rootPath) throw new Error("ChatHistoryStore requires a non-empty rootPath");
     const key = String(chatKey || "").trim();
     if (!key) throw new Error("ChatHistoryStore requires a non-empty chatKey");
     this.rootPath = rootPath;
     this.chatKey = key;
+    this.overrideChatDirPath =
+      options?.chatDirPath && String(options.chatDirPath).trim()
+        ? String(options.chatDirPath).trim()
+        : undefined;
+    this.overrideMessagesDirPath =
+      options?.messagesDirPath && String(options.messagesDirPath).trim()
+        ? String(options.messagesDirPath).trim()
+        : undefined;
+    this.overrideMessagesFilePath =
+      options?.messagesFilePath && String(options.messagesFilePath).trim()
+        ? String(options.messagesFilePath).trim()
+        : undefined;
+    this.overrideMetaFilePath =
+      options?.metaFilePath && String(options.metaFilePath).trim()
+        ? String(options.metaFilePath).trim()
+        : undefined;
+    this.overrideArchiveDirPath =
+      options?.archiveDirPath && String(options.archiveDirPath).trim()
+        ? String(options.archiveDirPath).trim()
+        : undefined;
   }
 
   getChatDirPath(): string {
+    if (this.overrideChatDirPath) return this.overrideChatDirPath;
     return getShipChatDirPath(this.rootPath, this.chatKey);
   }
 
   getMessagesDirPath(): string {
+    if (this.overrideMessagesDirPath) return this.overrideMessagesDirPath;
     return getShipChatMessagesDirPath(this.rootPath, this.chatKey);
   }
 
   getMessagesFilePath(): string {
+    if (this.overrideMessagesFilePath) return this.overrideMessagesFilePath;
+    if (this.overrideMessagesDirPath) {
+      // 关键点（中文）：task run 等自定义 layout 默认也遵循 `history.jsonl` 命名。
+      return path.join(this.overrideMessagesDirPath, "history.jsonl");
+    }
     return getShipChatHistoryPath(this.rootPath, this.chatKey);
   }
 
   getMetaFilePath(): string {
+    if (this.overrideMetaFilePath) return this.overrideMetaFilePath;
+    if (this.overrideMessagesDirPath) return path.join(this.overrideMessagesDirPath, "meta.json");
     return getShipChatHistoryMetaPath(this.rootPath, this.chatKey);
   }
 
-  private getArchiveDirPath(): string {
+  getArchiveDirPath(): string {
+    if (this.overrideArchiveDirPath) return this.overrideArchiveDirPath;
+    if (this.overrideMessagesDirPath) return path.join(this.overrideMessagesDirPath, "archive");
     return getShipChatHistoryArchiveDirPath(this.rootPath, this.chatKey);
   }
 

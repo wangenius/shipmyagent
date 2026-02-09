@@ -226,19 +226,25 @@ shipmyagent restart
 
 ### "Task file not found"
 
-**Problem**: Task defined in `.ship/tasks/` doesn't exist.
+**Problem**: Task definition under `.ship/task/<taskId>/task.md` doesn't exist (or the folder name is wrong).
 
 **Solution**:
 ```bash
-# List existing tasks
-shipmyagent tasks list
+# Check what exists on disk
+ls .ship/task
+```
 
-# Create missing task
-cat > .ship/tasks/my-task.md << 'EOF'
+Prefer creating tasks via the Agent tools (`create_task`, `task_list`). If you want to create it manually:
+
+```bash
+mkdir -p .ship/task/my-task
+cat > .ship/task/my-task/task.md << 'EOF'
 ---
-id: my-task
-name: My Task
+title: My Task
 cron: "0 9 * * *"
+description: Example task
+chatKey: telegram-chat-123456789
+status: paused
 ---
 
 This is my task description.
@@ -251,11 +257,7 @@ EOF
 
 **Solution**:
 
-1. **Use cron validator**:
-   ```bash
-   # Test your cron expression
-   shipmyagent validate-cron "0 9 * * 1-5"
-   ```
+1. **Check the format**: ShipMyAgent uses `node-cron` compatible 5-field expressions.
 
 2. **Common cron patterns**:
    ```markdown

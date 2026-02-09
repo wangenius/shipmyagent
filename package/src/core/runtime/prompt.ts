@@ -80,7 +80,7 @@ export const DEFAULT_SHIP_PROMPTS = `
    - \`.ship/config/mcp.json\`：MCP 配置；启动时读取用于连接外部能力。
    - \`.ship/schema/\`：\`ship.json\` / \`mcp.json\` 的 JSON Schema（供编辑器校验）。
    - \`.ship/data/\`：小型持久化数据（预留）。
-   - \`.ship/task/\`：任务/运行产物目录（预留）。
+   - \`.ship/task/\`：Task 系统目录：定义 \`.ship/task/<taskId>/task.md\`；每次执行产物在 \`.ship/task/<taskId>/<timestamp>/\`（history.jsonl/output.md/result.md 等）。
 4. Agent.md + ship.json 是你的一些配置文件，你不需要读取。
 
 # 最重要

@@ -9,18 +9,19 @@ ShipMyAgent has a built-in lightweight task scheduler that allows you to define 
 
 ## Task Location
 
-All task files are stored in the `.ship/tasks/` directory of the project.
+Tasks are stored under `.ship/task/` (note: `task`, not `tasks`), one folder per task.
 
 ## Creating a Task
 
-Create a new Markdown file, for example `.ship/tasks/daily-report.md`:
+Create a task definition at `.ship/task/daily-report/task.md`:
 
 ```markdown
 ---
-id: daily-report
-name: Daily Progress Report
+title: Daily Progress Report
 cron: "0 18 * * *" # Execute daily at 6 PM
-notify: telegram # Send execution results to Telegram
+description: Summarize recent changes and highlight issues
+chatKey: telegram-chat-123456789
+status: enabled
 ---
 
 Please scan all files modified today (past 24 hours).
@@ -30,17 +31,19 @@ If distinct Bugs or code style issues are found, please highlight them.
 
 ### Frontmatter Properties
 
-- **id**: Unique task identifier.
-- **name**: Task display name.
-- **cron**: Standard Cron expression.
+- **title**: Task display name.
+- **cron**: `node-cron` compatible 5-field expression.
   - `* * * * *` (Minute Hour Day Month Week)
   - Example: `"0 9 * * 1-5"` (Monday to Friday at 9 AM)
-- **notify**: Channel to notify after task completion (currently supports `telegram` or `console`).
+- **description**: One-line purpose for lists and audits.
+- **chatKey**: Where the result is delivered after each run (for example `telegram-chat-...`).
+- **status**: `enabled | paused | disabled`.
+  - Use `cron: "@manual"` for manual-only tasks.
 
 ### Task Content
 
 The Markdown body part is the Prompt passed to the Agent.
-When Cron triggers, the system will create a new conversation thread, send the Prompt here to the Agent, and send the Agent's response to you via the channel specified in `notify`.
+When Cron triggers, the system will create a new run with a clean history, send the Prompt here to the Agent, write audit artifacts to the run folder, and send a summary message to `chatKey`.
 
 ## Common Use Cases
 

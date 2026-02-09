@@ -35,7 +35,6 @@ import { withToolExecutionContext } from "../tools/builtin/execution-context.js"
 import { createAgentTools } from "../tools/set/agent-tools.js";
 import { openai } from "@ai-sdk/openai";
 import { toolExecutionContext } from "../tools/builtin/execution-context.js";
-import { ChatHistoryStore } from "../history/store.js";
 import path from "node:path";
 import { discoverClaudeSkillsSync } from "../skills/index.js";
 import type { ShipMessageMetadataV1 } from "../../types/chat-history.js";
@@ -341,7 +340,8 @@ export class Agent {
 	      // - 超窗时自动 compact：把更早段压缩为 1 条摘要消息 + 保留最近窗口
 	      this.bindChatKey(chatKey);
 
-		      const historyStore = new ChatHistoryStore(chatKey);
+		      // 关键点（中文）：historyStore 统一从 ChatRuntime 获取，便于为特殊 chatKey（如 task-run）注入自定义落盘路径。
+		      const historyStore = getShipRuntimeContext().chatRuntime.getHistoryStore(chatKey);
 
 		      // 关键点（中文）：chat 级 skills（pinnedSkillIds）持久化在 meta.json 中；
 		      // 每次 run 需要自动加载并注入 system（但不写入 history.jsonl）。

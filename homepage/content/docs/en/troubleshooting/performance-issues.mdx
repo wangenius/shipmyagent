@@ -429,11 +429,12 @@ du -sh .ship/cache/*
 
 **Diagnosis**:
 ```bash
-# Check task execution time
-shipmyagent tasks list --timing
+# Inspect recent runs on disk
+ls .ship/task/<taskId>
 
-# View task logs
-shipmyagent logs --file tasks | grep "execution time"
+# Check run metadata + result artifacts
+cat .ship/task/<taskId>/<timestamp>/run.json
+cat .ship/task/<taskId>/<timestamp>/result.md
 ```
 
 **Solutions**:
