@@ -1,10 +1,9 @@
 import type { FC } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  IconCode,
-  IconBriefcase,
   IconTools,
   IconBuildingStore,
+  IconCloud,
 } from "@tabler/icons-react";
 import {
   Card,
@@ -14,18 +13,6 @@ import {
 } from "@/components/ui/card";
 
 const resources = [
-  {
-    titleKey: "resources:examples.title",
-    descriptionKey: "resources:examples.description",
-    icon: IconCode,
-    path: "/examples",
-  },
-  {
-    titleKey: "resources:useCases.title",
-    descriptionKey: "resources:useCases.description",
-    icon: IconBriefcase,
-    path: "/use-cases",
-  },
   {
     titleKey: "resources:skills.title",
     descriptionKey: "resources:skills.description",
@@ -37,6 +24,12 @@ const resources = [
     descriptionKey: "resources:marketplace.description",
     icon: IconBuildingStore,
     path: "/marketplace",
+  },
+  {
+    titleKey: "resources:hosting.title",
+    descriptionKey: "resources:hosting.description",
+    icon: IconCloud,
+    path: "/hosting",
   },
 ];
 

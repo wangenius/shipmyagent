@@ -17,10 +17,9 @@ export default [
   // Resources with child routes
   route("resources", "routes/resources.tsx", [
     index("routes/resources._index.tsx"),
-    route("examples", "routes/resources.examples.tsx"),
-    route("use-cases", "routes/resources.use-cases.tsx"),
     route("skills", "routes/resources.skills.tsx"),
     route("marketplace", "routes/resources.marketplace.tsx"),
+    route("hosting", "routes/resources.hosting.tsx"),
   ]),
   route(
     "zh/resources",
@@ -28,17 +27,14 @@ export default [
     { id: "routes/zh/resources" },
     [
       index("routes/resources._index.tsx", { id: "routes/zh/resources._index" }),
-      route("examples", "routes/resources.examples.tsx", {
-        id: "routes/zh/resources.examples",
-      }),
-      route("use-cases", "routes/resources.use-cases.tsx", {
-        id: "routes/zh/resources.use-cases",
-      }),
       route("skills", "routes/resources.skills.tsx", {
         id: "routes/zh/resources.skills",
       }),
       route("marketplace", "routes/resources.marketplace.tsx", {
         id: "routes/zh/resources.marketplace",
+      }),
+      route("hosting", "routes/resources.hosting.tsx", {
+        id: "routes/zh/resources.hosting",
       }),
     ],
   ),

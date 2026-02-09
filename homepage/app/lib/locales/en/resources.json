@@ -17,6 +17,37 @@
     "title": "Agent Marketplace",
     "description": "Discover and share community agents"
   },
+  "hosting": {
+    "title": "Hosting",
+    "description": "Managed hosting for your agents"
+  },
+  "hostingPage": {
+    "subtitle": "Cloud hosting and operational support for your ShipMyAgent agents",
+    "badge": "Coming soon",
+    "features": {
+      "deploy": {
+        "title": "Deploy",
+        "description": "Get your agent running with a streamlined deployment experience"
+      },
+      "updates": {
+        "title": "Updates",
+        "description": "Receive safe updates and versioned rollouts with clear change visibility"
+      },
+      "observability": {
+        "title": "Observability",
+        "description": "Monitor runs, logs, and failures to keep agents healthy"
+      },
+      "security": {
+        "title": "Security",
+        "description": "Run with isolation and sensible security defaults"
+      }
+    },
+    "cta": {
+      "title": "Want early access?",
+      "description": "Tell us your hosting needs and we will notify you when managed hosting is available.",
+      "button": "Join Discussions"
+    }
+  },
   "examplesPage": {
     "subtitle": "Explore example projects and starters built with ShipMyAgent",
     "viewCode": "View Code",
@@ -108,100 +139,45 @@
     }
   },
   "skillsPage": {
-    "subtitle": "Core capabilities and features of ShipMyAgent",
-    "callout": {
-      "title": "Want to extend capabilities?",
-      "description": "Build custom skills and integrations for your specific needs",
-      "button": "Read the Docs"
+    "subtitle": "Useful directories and resources",
+    "sections": {
+      "skills": "Skills",
+      "mcp": "MCP"
     },
-    "categories": {
-      "core": {
-        "title": "Core Capabilities",
-        "description": "Essential features that power every Agent",
-        "skills": {
-          "repoContext": {
-            "name": "Repo-Native Context",
-            "description": "Your entire codebase serves as the Agent's memory and knowledge base"
-          },
-          "conversational": {
-            "name": "Conversational Interface",
-            "description": "Natural interaction through Telegram, Feishu, or QQ"
-          },
-          "execution": {
-            "name": "Autonomous Execution",
-            "description": "Execute tasks with configurable permissions and oversight"
-          },
-          "audit": {
-            "name": "Full Auditability",
-            "description": "Every action is logged, traceable, and replayable"
-          }
-        }
+    "links": {
+      "skillsSh": {
+        "title": "skills.sh",
+        "description": "Agent skills directory and ecosystem for installation and discovery"
       },
-      "security": {
-        "title": "Security & Control",
-        "description": "Enterprise-grade security features",
-        "skills": {
-          "permissionEngine": {
-            "name": "Permission Engine",
-            "description": "Granular control over what the Agent can read, write, and execute"
-          },
-          "humanLoop": {
-            "name": "Human-in-the-Loop",
-            "description": "All sensitive operations require explicit approval"
-          },
-          "approvalWorkflow": {
-            "name": "Approval Workflow",
-            "description": "Review, modify, or reject proposed actions before execution"
-          },
-          "minimumPrivilege": {
-            "name": "Minimum Privilege",
-            "description": "Default-deny policy with explicit permission grants"
-          }
-        }
+      "skillsmp": {
+        "title": "skillsmp.com",
+        "description": "A skills marketplace focused on SKILL.md-based workflows"
       },
-      "automation": {
-        "title": "Automation & Scheduling",
-        "description": "Powerful automation capabilities",
-        "skills": {
-          "cron": {
-            "name": "Cron Tasks",
-            "description": "Schedule recurring tasks with standard cron syntax"
-          },
-          "eventDriven": {
-            "name": "Event-Driven",
-            "description": "Trigger actions based on webhooks and events"
-          },
-          "taskManagement": {
-            "name": "Task Management",
-            "description": "Define, monitor, and manage automated tasks"
-          },
-          "notifications": {
-            "name": "Notification System",
-            "description": "Get alerts through your preferred communication channel"
-          }
-        }
+      "smitherySkills": {
+        "title": "smithery.ai/skills",
+        "description": "Browse skills on Smithery"
+      }
+    },
+    "mcpLinks": {
+      "shipmyagentMcpDocs": {
+        "title": "ShipMyAgent MCP Docs",
+        "description": "How to use MCP with ShipMyAgent"
       },
-      "integration": {
-        "title": "Integrations",
-        "description": "Connect with your favorite tools",
-        "skills": {
-          "telegram": {
-            "name": "Telegram Bot",
-            "description": "Full-featured Telegram integration with command support"
-          },
-          "webhook": {
-            "name": "Webhook API",
-            "description": "RESTful API for programmatic access and integrations"
-          },
-          "git": {
-            "name": "Git Operations",
-            "description": "Create PRs, review code, and manage repositories"
-          },
-          "shell": {
-            "name": "Shell Commands",
-            "description": "Execute shell commands with approval workflow"
-          }
-        }
+      "smithery": {
+        "title": "Smithery",
+        "description": "A marketplace to discover MCP servers"
+      },
+      "mcpMarket": {
+        "title": "MCP Market",
+        "description": "A marketplace for MCP servers and integrations"
+      },
+      "mcpServers": {
+        "title": "MCP Servers",
+        "description": "Official server examples and references"
+      },
+      "mcpSo": {
+        "title": "mcp.so",
+        "description": "A community MCP marketplace and directory"
       }
     }
   },

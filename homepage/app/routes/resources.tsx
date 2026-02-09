@@ -7,7 +7,8 @@ import { product } from "@/lib/product";
 export function meta() {
   const baseUrl = product.homepage || "https://shipmyagent.com";
   const title = `${product.productName} — Resources`;
-  const description = "Documentation, tutorials, and examples for ShipMyAgent";
+  const description =
+    "Skills, marketplace, and hosting resources for ShipMyAgent";
 
   return [
     { charSet: "utf-8" },

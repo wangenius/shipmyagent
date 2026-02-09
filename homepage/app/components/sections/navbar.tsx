@@ -6,12 +6,9 @@ import {
   IconX,
   IconBrandGithub,
   IconBrandX,
-  IconLanguage,
-  IconCode,
-  IconBriefcase,
   IconTools,
   IconBuildingStore,
-  IconArrowRight,
+  IconCloud,
   IconHelp,
   IconMap2,
   IconMessageCircle,
@@ -118,38 +115,6 @@ export function Navbar() {
             <PopoverContent align="start" className="w-80 p-2">
               <div className="grid gap-1">
                 <Link
-                  to={`${resourcesPath}/examples`}
-                  className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
-                >
-                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
-                    <IconCode className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium leading-none mb-1">
-                      {t("nav.examples")}
-                    </div>
-                    <div className="text-xs text-muted-foreground line-clamp-1">
-                      {t("nav.examplesDesc")}
-                    </div>
-                  </div>
-                </Link>
-                <Link
-                  to={`${resourcesPath}/use-cases`}
-                  className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
-                >
-                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
-                    <IconBriefcase className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium leading-none mb-1">
-                      {t("nav.useCases")}
-                    </div>
-                    <div className="text-xs text-muted-foreground line-clamp-1">
-                      {t("nav.useCasesDesc")}
-                    </div>
-                  </div>
-                </Link>
-                <Link
                   to={`${resourcesPath}/skills`}
                   className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
                 >
@@ -158,10 +123,10 @@ export function Navbar() {
                   </div>
                   <div>
                     <div className="text-sm font-medium leading-none mb-1">
-                      {t("nav.skills")}
+                      {t("nav.skillsAndMcp")}
                     </div>
                     <div className="text-xs text-muted-foreground line-clamp-1">
-                      {t("nav.skillsDesc")}
+                      {t("nav.skillsAndMcpDesc")}
                     </div>
                   </div>
                 </Link>
@@ -181,17 +146,19 @@ export function Navbar() {
                     </div>
                   </div>
                 </Link>
-                <div className="my-1 border-t border-border/50" />
                 <Link
-                  to={resourcesPath}
+                  to={`${resourcesPath}/hosting`}
                   className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
                 >
                   <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
-                    <IconArrowRight className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                    <IconCloud className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                   </div>
                   <div>
-                    <div className="text-sm font-medium leading-none text-muted-foreground group-hover:text-foreground transition-colors">
-                      {t("nav.viewAllResources")}
+                    <div className="text-sm font-medium leading-none mb-1">
+                      {t("nav.hosting")}
+                    </div>
+                    <div className="text-xs text-muted-foreground line-clamp-1">
+                      {t("nav.hostingDesc")}
                     </div>
                   </div>
                 </Link>
@@ -245,7 +212,7 @@ export function Navbar() {
                   </div>
                 </Link>
                 <a
-                  href="https://github.com/wangenius/shipmyagent/discussions"
+                  href="https://t.me/+iozIHyXr-BJhNjE1"
                   target="_blank"
                   rel="noreferrer"
                   className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
@@ -368,25 +335,11 @@ export function Navbar() {
               <p className="text-sm font-medium mb-2">{t("nav.resources")}</p>
               <div className="pl-4 space-y-2">
                 <Link
-                  to={`${resourcesPath}/examples`}
-                  className="block text-sm text-muted-foreground hover:underline"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {t("nav.examples")}
-                </Link>
-                <Link
-                  to={`${resourcesPath}/use-cases`}
-                  className="block text-sm text-muted-foreground hover:underline"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {t("nav.useCases")}
-                </Link>
-                <Link
                   to={`${resourcesPath}/skills`}
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  {t("nav.skills")}
+                  {t("nav.skillsAndMcp")}
                 </Link>
                 <Link
                   to={`${resourcesPath}/marketplace`}
@@ -396,11 +349,11 @@ export function Navbar() {
                   {t("nav.agentMarketplace")}
                 </Link>
                 <Link
-                  to={resourcesPath}
+                  to={`${resourcesPath}/hosting`}
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  {t("nav.viewAll")}
+                  {t("nav.hosting")}
                 </Link>
               </div>
             </div>
@@ -424,7 +377,7 @@ export function Navbar() {
                   {t("nav.roadmap")}
                 </Link>
                 <Link
-                  to="https://github.com/wangenius/shipmyagent/discussions"
+                  to="https://t.me/+iozIHyXr-BJhNjE1"
                   target="_blank"
                   className="block text-sm text-muted-foreground hover:underline"
                   onClick={() => setMobileMenuOpen(false)}
