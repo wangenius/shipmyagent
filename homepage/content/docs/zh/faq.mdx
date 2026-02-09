@@ -121,55 +121,6 @@ TELEGRAM_BOT_TOKEN=123456:...
 }
 ```
 
-### 我应该使用什么权限？
-
-**个人项目**：
-```json
-{
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": ["**"],
-      "requiresApproval": false
-    }
-  }
-}
-```
-
-**生产环境**：
-```json
-{
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": ["src/**", "docs/**"],
-      "requiresApproval": true
-    }
-  }
-}
-```
-
-### 如何限制对特定文件的访问？
-
-使用 glob 模式：
-
-```json
-{
-  "permissions": {
-    "write_repo": {
-      "paths": [
-        "src/**",
-        "tests/**"
-      ],
-      "exclude": [
-        "secrets/**",
-        "*.key"
-      ]
-    }
-  }
-}
-```
-
 ---
 
 ## 集成问题
@@ -194,28 +145,6 @@ TELEGRAM_BOT_TOKEN=123456:...
       "botToken": "${TELEGRAM_BOT_TOKEN}",
       "chatId": "12345678"
     }
-  }
-}
-```
-
-### 支持 Discord 吗？
-
-还不支持。Discord 集成正在开发中。关注[路线图](/docs/roadmap)获取更新。
-
-### 我可以集成 GitHub 吗？
-
-可以！GitHub 集成已可用。请参阅 [GitHub 集成指南](/docs/integrations/github)。
-
-### 如何接收通知？
-
-配置通知渠道：
-
-```json
-{
-  "notifications": {
-    "channels": ["telegram", "webhook"],
-    "onError": true,
-    "onTaskComplete": true
   }
 }
 ```
@@ -277,10 +206,6 @@ shipmyagent doctor
 
 ### 遇到权限错误？
 
-检查您的 `ship.json` 权限：
-```bash
-cat ship.json | jq '.permissions'
-```
 
 参阅[权限错误指南](/docs/troubleshooting/permission-errors)。
 
@@ -319,7 +244,6 @@ shipmyagent tasks run <task-id>
 ### 在哪里可以获得帮助？
 
 - 📖 [文档](/docs)
-- 💬 [Discord](https://discord.gg/shipmyagent)
 - 🐙 [GitHub Discussions](https://github.com/wangenius/shipmyagent/discussions)
 - ✉️ [Telegram](https://t.me/shipmyagent)
 
@@ -339,7 +263,7 @@ shipmyagent tasks run <task-id>
 
 1. **搜索文档**：使用顶部的搜索栏
 2. **检查现有问题**：[GitHub Issues](https://github.com/wangenius/shipmyagent/issues)
-3. **询问社区**：[Discord](https://discord.gg/shipmyagent)
+3. **询问社区**：[GitHub Discussions](https://github.com/wangenius/shipmyagent/discussions)
 4. **创建新问题**：[GitHub](https://github.com/wangenius/shipmyagent/issues/new)
 
 ---

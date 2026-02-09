@@ -82,8 +82,6 @@ description: 有效和安全地使用 ShipMyAgent 的指南
 - 低：请求失败时没有错误处理
 
 建议：添加 loading/error 状态的 useState
-```
-```
 
 ### 更好提示的技巧
 
@@ -536,46 +534,7 @@ shipmyagent report --month > monthly-report.txt
 
 常见错误及如何避免它们。
 
-### ❌ 反模式 1：过度宽松的配置
-
-**问题**：
-```json
-{
-  "permissions": {
-    "write_repo": {
-      "paths": ["**"],
-      "requiresApproval": false
-    },
-    "exec_shell": {
-      "allow": ["*"]
-    }
-  }
-}
-```
-
-**为什么不好**：
-- Agent 可以无需审查就修改任何文件
-- 可以执行任何命令
-- 意外损坏的高风险
-
-**✅ 更好的方法**：
-```json
-{
-  "permissions": {
-    "write_repo": {
-      "paths": ["src/**", "tests/**"],
-      "exclude": ["*.config.js", ".env"],
-      "requiresApproval": true
-    },
-    "exec_shell": {
-      "allow": ["npm test", "npm run lint"],
-      "requiresApproval": true
-    }
-  }
-}
-```
-
-### ❌ 反模式 2：模糊的提示
+### ❌ 反模式 1：模糊的提示
 
 **问题**：
 ```markdown
@@ -607,7 +566,7 @@ shipmyagent report --month > monthly-report.txt
 - 提供可测试的建议
 ```
 
-### ❌ 反模式 3：忽略错误
+### ❌ 反模式 2：忽略错误
 
 **问题**：
 ```bash
@@ -639,7 +598,7 @@ shipmyagent logs --level error --tail 100
 }
 ```
 
-### ❌ 反模式 4：任务过载
+### ❌ 反模式 3：任务过载
 
 **问题**：
 ```markdown
@@ -675,7 +634,7 @@ cron: "0 9 * * 1"  # 每周深入分析
 ---
 ```
 
-### ❌ 反模式 5：一刀切
+### ❌ 反模式 4：一刀切
 
 **问题**：
 ```markdown
@@ -695,7 +654,7 @@ cron: "0 9 * * 1"  # 每周深入分析
 # Agent.tests.md - 专门用于测试
 ```
 
-### ❌ 反模式 6：没有版本控制
+### ❌ 反模式 5：没有版本控制
 
 **问题**：
 ```
@@ -721,35 +680,6 @@ cron: "0 9 * * 1"  # 每周深入分析
 .ship/tasks/
 Agent.md
 ship.json.example
-```
-
-### ❌ 反模式 7：盲目信任
-
-**问题**：
-```json
-{
-  "permissions": {
-    "requiresApproval": false  # 盲目信任
-  }
-}
-```
-
-**为什么不好**：
-- 没有人工监督
-- 错误自动传播
-- 安全漏洞
-- 失去控制
-
-**✅ 更好的方法**：
-```json
-{
-  "permissions": {
-    "write_repo": {
-      "requiresApproval": true,  # 人在循环中
-      "approvalChannels": ["telegram", "slack"]
-    }
-  }
-}
 ```
 
 ---

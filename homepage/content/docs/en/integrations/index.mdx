@@ -5,7 +5,7 @@ description: Connect ShipMyAgent with external services and tools
 
 # Integrations
 
-Extend ShipMyAgent by integrating with external services like GitHub, Slack, Discord, and custom webhooks.
+Extend ShipMyAgent by integrating with external services like GitHub, Slack, and custom webhooks.
 
 ## Overview
 
@@ -20,7 +20,6 @@ Integrations allow ShipMyAgent to:
 - [Telegram](/docs/integrations/telegram) - Chat and notifications
 - [GitHub](#github) - PR automation and issue management
 - [Slack](#slack) - Team notifications
-- [Discord](#discord) - Community engagement
 - [Webhook](#webhook) - Custom integrations
 
 ---
@@ -212,63 +211,6 @@ notify: ["slack", "telegram"]
 ---
 
 Results sent to both Slack and Telegram.
-```
-
----
-
-## Discord
-
-Engage with your community on Discord.
-
-### Setup
-
-#### 1. Create Discord Application
-
-1. Go to https://discord.com/developers/applications
-2. Create "New Application"
-3. Go to "Bot" section → Create Bot
-4. Copy the **Token**
-
-#### 2. Enable Privileged Intents
-
-- Message Content Intent
-- Server Members Intent
-
-#### 3. Invite Bot to Server
-
-1. Go to "OAuth2" → "URL Generator"
-2. Select scopes: `bot`
-3. Select bot permissions:
-   - Send Messages
-   - Read Message History
-   - Add Reactions
-4. Copy the URL and open in browser
-5. Add bot to your server
-
-#### 4. Configure in ship.json
-
-```json
-{
-  "integrations": {
-    "discord": {
-      "enabled": true,
-      "token": "${DISCORD_BOT_TOKEN}",
-      "guildId": "${DISCORD_GUILD_ID}",
-      "channelIds": {
-        "notifications": "123456789",
-        "commands": "987654321"
-      }
-    }
-  }
-}
-```
-
-### Discord Commands
-
-```
-!agent <message> - Send message to agent
-!status - Check agent status
-!help - Show help
 ```
 
 ---

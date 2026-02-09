@@ -111,21 +111,40 @@ shipmyagent init
 
 交互式设置将询问：
 
-1. **Agent 名称**：给您的 agent 起个名字（例如"my-assistant"）
-2. **LLM 模型**：选择模型（推荐 Claude 3.5 Sonnet 用于编码）
-3. **Adapters（可多选）**：可选启用 Telegram / 飞书 / QQ；仅会把你选择的 adapters 写入 `ship.json`。
+1. **Agent 名称**：给您的 agent 起个名字（默认为当前目录名，例如"my-assistant"）
+2. **LLM 模型**：选择模型，支持 Claude Sonnet 4（推荐）、Claude Haiku、Claude 3.5 Sonnet、GPT-4、GPT-4o、DeepSeek Chat 等
+3. **Adapters（可多选）**：可选启用 Telegram / 飞书 / QQ；**仅选中的 adapters 会写入 `ship.json`**
+4. **QQ 沙箱环境**（仅选择 QQ 时）：是否使用沙箱环境进行测试
+5. **Skills 安装**（可选）：可选安装推荐的技能插件，如 Vercel 最佳实践、Web 设计指南、浏览器自动化等
 
 这将创建：
 
 ```
 your-project/
-├── Agent.md           # Agent 的系统提示
+├── Agent.md           # Agent 系统提示词
 ├── ship.json          # 配置文件
+├── .claude/           # Claude 兼容目录
+│   └── skills/        # Skills 存放位置
 └── .ship/             # Agent 数据目录
-    ├── tasks/         # 定时任务
+    ├── task/          # 定时任务
     ├── logs/          # 操作日志
-    └── cache/         # 缓存数据
+    ├── .cache/        # 缓存数据
+    ├── profile/       # 用户画像记忆
+    │   ├── Primary.md
+    │   └── other.md
+    ├── data/          # 数据存储
+    ├── chat/          # 聊天记录
+    ├── public/        # 公共资源
+    ├── config/        # 配置文件
+    │   └── mcp.json   # MCP 配置
+    ├── skills/        # 项目级技能
+    ├── schema/        # JSON Schema (IDE 智能提示)
+    │   ├── ship.schema.json
+    │   └── mcp.schema.json
+    └── .debug/        # 调试信息
 ```
+
+> **提示**：Profile 记忆系统会保存用户偏好，MCP 配置支持 Model Context Protocol，Schema 文件提供 IDE 自动补全。
 
 ### 步骤 2：配置 API Key
 
@@ -297,7 +316,6 @@ shipmyagent doctor
 
 2. **[创建任务](/docs/tasks)** - 自动化您的工作流程
    - 安排定期维护
-   - 设置代码审查自动化
    - 配置通知
 
 3. **[集成](/docs/integrations)** - 连接您的工具
@@ -306,26 +324,6 @@ shipmyagent doctor
    - 使用 webhook
 
 ### 快速成功
-
-**设置自动化代码审查**：
-
-创建 `.ship/tasks/pr-review.md`：
-
-```markdown
----
-id: pr-review
-name: Pull Request 审查
-cron: "*/30 * * * *"
----
-
-审查开放的拉取请求：
-- 代码质量问题
-- 测试覆盖率
-- 安全漏洞
-- 性能问题
-
-将发现作为评论发布到每个 PR。
-```
 
 **创建每日摘要**：
 

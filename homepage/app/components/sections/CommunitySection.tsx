@@ -4,7 +4,6 @@ import {
   IconHelp,
   IconMap2,
   IconMessageCircle,
-  IconBrandDiscord,
 } from "@tabler/icons-react";
 import {
   Card,
@@ -33,13 +32,6 @@ const communityLinks = [
     href: "https://github.com/wangenius/shipmyagent/discussions",
     external: true,
   },
-  {
-    titleKey: "community:discord.title",
-    descriptionKey: "community:discord.description",
-    icon: IconBrandDiscord,
-    href: "https://discord.gg/shipmyagent",
-    external: true,
-  },
 ];
 
 export const CommunitySection: FC = () => {
@@ -59,7 +51,7 @@ export const CommunitySection: FC = () => {
             </p>
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-6 mt-12 md:grid-cols-2 lg:grid-cols-2 max-w-4xl mx-auto">
+        <div className="grid grid-cols-1 gap-6 mt-12 md:grid-cols-3 lg:grid-cols-3 max-w-4xl mx-auto">
           {communityLinks.map((item, i) => (
             <a
               key={i}

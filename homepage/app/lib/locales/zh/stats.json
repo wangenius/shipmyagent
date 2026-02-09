@@ -21,6 +21,6 @@
   "anywhere": {
     "value": "全端",
     "label": "任何地方",
-    "description": "支持 Telegram、飞书、Discord"
+    "description": "支持 Telegram、飞书、QQ"
   }
 }

@@ -57,7 +57,6 @@ The central coordinator that manages all agent operations.
 **Responsibilities**:
 - Parse and execute user commands
 - Coordinate LLM and tool interactions
-- Manage permission checks
 - Handle task scheduling
 - Route notifications
 - Manage conversation context and long-term memory
@@ -65,7 +64,6 @@ The central coordinator that manages all agent operations.
 **Key Design Decisions**:
   - **Chat Isolation**: Each chat/thread (by `chatKey`) manages context independently
 - **Plugin-based**: Tools and LLM providers are pluggable
-- **Permission-first**: All operations checked against permissions
 - **Intelligent Context Management**: Automatic compression and memory extraction
 
 ### 2. LLM Provider Abstraction
@@ -115,21 +113,6 @@ interface Tool {
 }
 ```
 
-### 4. Permission System
-
-Granular access control for security.
-
-**Permission Layers**:
-1. **File System**: Read/write paths, glob patterns
-2. **Shell**: Command whitelist/blacklist
-3. **Network**: API endpoint restrictions
-4. **Human Approval**: Required confirmations
-
-**Design Principles**:
-- **Least Privilege**: Default deny, explicit allow
-- **Audit Trail**: All operations logged
-- **Revocable**: Easy to revoke permissions
-
 ---
 
 ## Data Flow
@@ -148,21 +131,14 @@ User Request
              │
              ▼
 ┌─────────────────────────────────┐
-│ 2. Permission Check             │
-│    - Validate operation          │
-│    - Check approval required     │
-└────────────┬────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────┐
-│ 3. Tool Execution              │
+│ 2. Tool Execution              │
 │    - Run tools (file, shell, etc)│
 │    - Gather context              │
 └────────────┬────────────────────┘
              │
              ▼
 ┌─────────────────────────────────┐
-│ 4. LLM Processing              │
+│ 3. LLM Processing              │
 │    - Construct prompt            │
 │    - Call LLM API                │
 │    - Parse response              │
@@ -170,7 +146,7 @@ User Request
              │
              ▼
 ┌─────────────────────────────────┐
-│ 5. Result Processing            │
+│ 4. Result Processing            │
 │    - Format output               │
 │    - Send notifications          │
 │    - Log operations              │
@@ -258,27 +234,7 @@ The current runtime uses a minimal, predictable context strategy:
 
 ### Mitigation Strategies
 
-#### 1. Permission Validation
-
-```typescript
-// Every operation checked
-async function executeTool(tool: Tool, params: any) {
-  // Check permission
-  if (!permissions.canExecute(tool, params)) {
-    throw new PermissionDeniedError(tool.name);
-  }
-
-  // High-risk operations require approval
-  if (permissions.requiresApproval(tool, params)) {
-    const approved = await requestApproval(tool, params);
-    if (!approved) throw new OperationDeniedError();
-  }
-
-  return await tool.execute(params, context);
-}
-```
-
-#### 2. Prompt Sanitization
+#### 1. Prompt Sanitization
 
 ```typescript
 // Validate user input before sending to LLM
@@ -291,7 +247,7 @@ function sanitizePrompt(userInput: string): string {
 }
 ```
 
-#### 3. Sandbox Execution
+#### 2. Sandbox Execution
 
 ```typescript
 // Shell commands executed in controlled environment
@@ -311,7 +267,7 @@ async function execShell(command: string) {
 }
 ```
 
-#### 4. Audit Logging
+#### 3. Audit Logging
 
 ```typescript
 // All sensitive operations logged

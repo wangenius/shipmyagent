@@ -1,0 +1,341 @@
+---
+title: .ship Directory
+description: ShipMyAgent runtime directory structure and file format reference
+---
+
+# `.ship/` Directory
+
+`.ship/` is the **local runtime working directory** created by ShipMyAgent in your project root: used to persist chat history, logs, idempotency cache, MCP configuration, and persistent memory (profile/chat memory), etc.
+
+Important notes:
+
+- `.ship/` **should generally NOT be committed to Git** (it may contain chat content, contacts, tool call traces, and other sensitive information).
+- You generally **don't need to manually edit** the files inside; if you need to troubleshoot issues or migrate data, this page can help you understand their structure.
+
+## Directory Overview
+
+Different integrations/features generate different subdirectories; here's a typical structure (some directories/files may not exist):
+
+```text
+.ship/
+  .cache/                        # Cache/idempotency/deduplication (safe to delete)
+  profile/                       # Global persistent memory (affects character)
+    Primary.md
+    other.md
+  data/                          # Runtime data (on-demand; may be empty)
+  chat/
+    <encodedChatKey>/
+      messages/                  # Conversation history (UIMessage JSONL, single source of truth)
+        history.jsonl
+        meta.json                # (optional, compact metadata + pinned skills)
+        archive/                 # (optional, compact archived segments)
+      memory/                    # Chat-level persistent memory (default logic for different chats)
+        Primary.md
+        backup/                  # (optional, backup before compression)
+        .meta.json               # (optional, memory metadata)
+  logs/
+    <YYYY-MM-DD>.jsonl
+  config/
+    mcp.json
+  schema/                        # Schema for config files (editor autocomplete/validation)
+    mcp.schema.json
+    ship.schema.json
+  public/                        # Publicly exposed content directory (accessible via URL)
+  skills/                        # Project-level skills (highest priority)
+  task/                          # (reserved for task system)
+  .debug/                        # (optional, debug/capture output)
+```
+
+Notes:
+
+- `<encodedChatKey>` / `<encodedMessageId>` use `encodeURIComponent(...)` to ensure filenames are safe.
+- `jsonl` stands for **JSON Lines**: one JSON object per line, convenient for continuous appending and streaming processing.
+
+## Directory/File Descriptions
+
+### `.ship/chat/<chatKey>/messages/`: Conversation History
+
+**Purpose**: Archives conversation history (`UIMessage[]`) by `chatKey`, used for UI display and model input (same data, single source of truth).
+
+**Path rules**:
+
+- `.ship/chat/<encodedChatKey>/messages/history.jsonl`
+- `.ship/chat/<encodedChatKey>/messages/meta.json` (optional; contains compact metadata and `pinnedSkillIds`)
+- `.ship/chat/<encodedChatKey>/messages/archive/*.json` (optional, archives original segments collapsed during compact)
+
+Single line example from `history.jsonl` (fields vary slightly by platform/scenario):
+
+```json
+{"id":"u:telegram-chat-123:456","role":"user","parts":[{"type":"text","text":"..."}],"metadata":{"v":1,"ts":1730000000000,"channel":"telegram","chatId":"123","chatKey":"telegram-chat-123","userId":"123","messageId":"456","chatType":"private","username":"alice"}}
+```
+
+**Compact mechanism**:
+
+- **Trigger conditions**:
+  - History messages exceed `keepLastMessages` (default 30)
+  - Estimated tokens exceed `maxInputTokensApprox` (default 12000)
+
+- **Process**:
+  1. Two-phase locking: snapshot first, then generate summary (reduces lock hold time)
+  2. Generate summary message (kind: "summary")
+  3. Optionally backup collapsed messages to `archive/`
+  4. Update `meta.json`
+
+**meta.json example**:
+
+```json
+{
+  "v": 1,
+  "chatKey": "telegram-chat-123",
+  "updatedAt": 1770557540206,
+  "pinnedSkillIds": [],
+  "lastArchiveId": "compact-1770557540197-On1wNXqOXK3oJRz9",
+  "keepLastMessages": 30,
+  "maxInputTokensApprox": 12000
+}
+```
+
+**archive/ directory** (optional):
+
+- Format: `compact-<timestamp>-<randomId>.json`
+- Content: Original message segments collapsed by compact
+
+```json
+{
+  "v": 1,
+  "chatKey": "telegram-chat-123",
+  "archivedAt": 1770557540197,
+  "messages": [/* original message array */]
+}
+```
+
+### `.ship/profile/`: Global Persistent Memory
+
+**Purpose**: Stores cross-chat "long-term memory/character preferences/learning summaries", etc. The runtime provides these contents to the model as system context (suitable for rules, preferences, long-term goals, summary memory).
+
+- `.ship/profile/Primary.md`: Most core persistent memory
+- `.ship/profile/other.md`: Other memory (optional)
+
+**Characteristics**:
+
+- Injected into all chats' system prompts by default
+- Not scattered like chat memory
+
+### `.ship/chat/<chatKey>/memory/`: Chat-Level Persistent Memory
+
+**Purpose**: Stores default persistent memory/long-term constraints for a specific chat (e.g., customer/project-specific background, communication style, taboos). The runtime provides `Primary.md` to the model as system context.
+
+- `.ship/chat/<encodedChatKey>/memory/Primary.md`
+- `.ship/chat/<encodedChatKey>/memory/backup/Primary-<timestamp>.md` (optional, backup before compression)
+- `.ship/chat/<encodedChatKey>/memory/.meta.json` (optional, memory metadata like last update time)
+
+**Example structure** (from real project):
+
+```markdown
+# Chat Memory / Primary
+**Last Updated**: February 9, 2025 17:45
+**Total Rounds**: 50
+---
+## Summary Records
+### [Rounds 1-3] February 9, 2025
+- **Confirmed Facts**
+  - Account ownership: Xiaohongshu account @wangenius holder
+  - Core need: Personal account data diagnosis and optimization advice
+- **User Preference Constraints**
+  - Platform restriction: Xiaohongshu ecosystem only
+  - Data delivery flexibility: Accepts screenshots or links
+```
+
+### `.ship/logs/`: Runtime Logs (JSONL)
+
+**Purpose**: Unified log persistence for system/adapter/tool execution, files split by date.
+
+**Path rule**:
+
+- `.ship/logs/<YYYY-MM-DD>.jsonl`
+
+Single line example:
+
+```json
+{"id":"ml83ggn36bblfu","timestamp":"2026-02-04T13:59:35.487Z","type":"debug","message":"Sending heartbeat","level":"debug"}
+```
+
+### `.ship/.cache/`: Idempotency and Adapter Cache (Safe to Delete)
+
+**Purpose**: Local idempotency deduplication and adapter state caching, **mainly to avoid duplicate message receiving/sending**, and record platform offsets, etc.
+
+**Common subdirectories**:
+
+- **Ingress idempotency (inbound deduplication)**
+  - `.ship/.cache/ingress/<channel>/<encodedChatKey>/<encodedMessageId>.json`
+  - Cross-process deduplication via atomic file creation (flag: "wx")
+  - Example: `.cache/ingress/telegram/telegram-chat-123/890.json`
+  - Content:
+    ```json
+    {
+      "v": 1,
+      "channel": "telegram",
+      "chatKey": "telegram-chat-123",
+      "messageId": "890",
+      "claimedAt": 1730000000000,
+      "meta": {
+        "chatId": "123",
+        "actorId": "123",
+        "updateHint": "telegram.message"
+      }
+    }
+    ```
+
+- **Egress idempotency (outbound deduplication, chat_send)**
+  - `.ship/.cache/egress/chat_send/<channel>/<encodedChatId>/<encodedMessageKey>.json`
+  - Dimensions: "same inbound messageId + reply content"
+  - Content:
+    ```json
+    {
+      "v": 1,
+      "channel": "telegram",
+      "chatId": "123",
+      "messageId": "890",
+      "messageKey": "hash-of-reply",
+      "status": "delivered",
+      "claimedAt": 1730000000000,
+      "deliveredAt": 1730000000123
+    }
+    ```
+
+- **Adapter-specific cache**
+  - E.g., Telegram may have `.ship/.cache/telegram/lastUpdateId.json`, etc.
+
+### `.ship/data/`: Runtime Data (On-Demand)
+
+**Purpose**: Stores some runtime data generated on-demand. In most cases, you don't need to care about this directory.
+
+### `.ship/config/mcp.json`: MCP Configuration (Optional)
+
+**Purpose**: Configure MCP servers (Model Context Protocol), allowing the agent to connect to external tools/data sources (enabled per your `mcp.json` configuration).
+
+- `.ship/config/mcp.json`
+- `.ship/schema/mcp.schema.json` (for editor validation)
+
+Default `mcp.json` structure:
+
+```json
+{ "$schema": "../schema/mcp.schema.json", "servers": {} }
+```
+
+### `.ship/schema/`: Config File JSON Schema (Editor Hints)
+
+**Purpose**: Provide `$schema` reference for `ship.json` to get IDE autocomplete and validation.
+
+- `.ship/schema/ship.schema.json`
+- `.ship/schema/mcp.schema.json`
+
+### `.ship/public/`: Public/Static Files (On-Demand)
+
+**Purpose**: Store runtime-generated or downloaded files (e.g., attachments, static resources readable by web/tools).
+
+**Access method**:
+
+- The running agent server exposes `.ship/public/` at `GET /ship/public/<path>`.
+  - Example: `.ship/public/report.pdf` → `http://<host>:<port>/ship/public/report.pdf`
+
+**Common use cases**:
+- Screenshots (e.g., `screenshot.png`)
+- Generated reports (e.g., `report.pdf`)
+- Downloaded files
+
+### `.ship/skills/`: Project-Level Skills (Highest Priority)
+
+**Purpose**: Store project-specific skill plugins. When scanning for skills, this directory has the highest priority.
+
+**Scan priority** (according to `skills/paths.ts`):
+1. **Project path** (highest): `.ship/skills/`
+2. **User directory** (second): `~/.ship/skills/`
+3. **Config path** (requires allowExternalPaths): Custom paths
+
+### `.ship/task/`: Reserved Directory
+
+**Purpose**: Reserved for the task system in the current version (e.g., may store tasks/run records in the future). Remains empty when not in use.
+
+**Designed structure** (not widely used yet):
+
+```text
+.ship/task/
+├── <taskId>/
+│   ├── task.md                 # Task definition
+│   └── <timestamp>/            # Task run directory
+│       ├── history.jsonl       # History for this run
+│       └── meta.json
+```
+
+- taskId format: `^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`
+- chatKey format: `task-run:<taskId>:<timestamp>`
+
+### `.ship/.debug/`: Debug Output (Optional)
+
+**Purpose**: Some adapters write debug files when debugging/packet capture is enabled (e.g., QQ event capture directory may be at `.ship/.debug/qq-events`).
+
+## Cleanup and Migration Recommendations
+
+### Safe to Delete
+
+- `.ship/.cache/` - Will be regenerated automatically; platform adapters may re-fetch some messages
+- `.ship/logs/` - Historical logs (idempotency deduplication state/logs will be lost, but doesn't affect re-running)
+- `.ship/schema/` - Can be regenerated (via initialization)
+- `.ship/.debug/` - Debug files
+
+### Delete with Caution
+
+- `.ship/chat/` - Will lose conversation history
+- `.ship/profile/` - Will lose global persistent memory
+- `.ship/chat/*/memory/` - Will lose chat-level memory
+
+### Migration Recommendations
+
+- **To migrate project** to a new machine: Copy `.ship/chat/`, `.ship/profile/`, `.ship/config/` as needed
+- **Don't copy** `.ship/.cache/` (avoid cross-environment offset/idempotency state confusion)
+
+## Technical Details
+
+### Lock Mechanism
+
+- `.history.lock` file (located in messages/ directory)
+- Atomic creation (flag: "wx") for cross-process mutual exclusion
+- Prevents message loss from concurrent compact and append operations
+- Stale timeout: 30 seconds
+
+### File Encoding Rules
+
+- chatKey and messageId use `encodeURIComponent()` encoding
+- Purpose: Ensure filenames are safe
+- Example: `telegram-chat--1003761993516-topic-20` → used directly (no encoding needed)
+
+### Git Recommendations
+
+Add to `.gitignore`:
+
+```bash
+# Sensitive runtime data
+.ship/chat/
+.ship/profile/
+.ship/.cache/
+.ship/logs/
+.ship/.debug/
+
+# Keep configuration and schema
+!.ship/config/
+!.ship/schema/
+!.ship/skills/
+```
+
+Or use a more selective approach:
+
+```bash
+# .gitignore - exclude everything by default
+.ship/*
+
+# .gitinclude - track specific directories
+!.ship/config/
+!.ship/schema/
+!.ship/skills/
+```

@@ -21,6 +21,6 @@
   "anywhere": {
     "value": "Omni",
     "label": "Anywhere",
-    "description": "Telegram, Discord, Slack supported"
+    "description": "Telegram, Feishu, QQ supported"
   }
 }

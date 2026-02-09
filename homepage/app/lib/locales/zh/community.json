@@ -13,10 +13,6 @@
     "title": "讨论",
     "description": "参与 GitHub 上的讨论"
   },
-  "discord": {
-    "title": "Discord",
-    "description": "与社区聊天"
-  },
   "faqPage": {
     "subtitle": "关于 ShipMyAgent 的常见问题",
     "all": "全部",
@@ -44,11 +40,6 @@
         "answer": "为保证安全与简洁，v1 主要支持本地运行。v2 会加入远程部署支持，并提供更完善的安全能力以适配团队与企业场景。",
         "category": "deployment"
       },
-      "security-guarantee": {
-        "question": "安全如何保障？",
-        "answer": "ShipMyAgent 默认遵循最小权限原则。所有敏感操作都需要审批，所有行为都可审计，同时你始终掌控权限。权限模型确保 Agent 只能执行你明确允许的操作。",
-        "category": "security"
-      },
       "comparison-copilot": {
         "question": "这和 GitHub Copilot 有什么不同？",
         "answer": "GitHub Copilot 面向个人开发者，主要提供代码补全能力。ShipMyAgent 面向团队与企业，提供可执行的 AI 团队成员，具备安全控制、可审计性以及人类在回路的审批工作流。",
@@ -73,11 +64,6 @@
         "question": "收费模式是什么？",
         "answer": "ShipMyAgent 是开源（MIT License）且免费使用。你只需承担你选择的大模型 API 成本（Claude、GPT-4 等）。未来将提供带更多功能与支持的企业版本。",
         "category": "general"
-      },
-      "approval-workflow": {
-        "question": "审批工作流如何运作？",
-        "answer": "当 Agent 想执行敏感操作时，会向你配置的渠道（Telegram、Discord 等）发送审批请求。你可以审阅拟执行的操作，必要时修改，然后批准或拒绝。Agent 只会执行已批准的操作。",
-        "category": "security"
       }
     },
     "callout": {
@@ -106,10 +92,6 @@
             "name": "Agent 宪章",
             "desc": "行为规则与指南"
           },
-          "permission": {
-            "name": "权限引擎",
-            "desc": "精细化访问控制"
-          },
           "telegram": {
             "name": "Telegram 集成",
             "desc": "聊天界面"
@@ -128,10 +110,6 @@
         "title": "团队协作",
         "description": "面向团队工作流与多 Agent 场景的增强集成。",
         "features": {
-          "discord": {
-            "name": "Discord 集成",
-            "desc": "团队协作"
-          },
           "slack": {
             "name": "Slack 集成",
             "desc": "企业聊天"

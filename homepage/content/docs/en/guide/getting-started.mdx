@@ -24,15 +24,40 @@ shipmyagent init
 
 The interactive guide will ask for the following information:
 
-- **Agent Name**: Give your Agent a name.
-- **LLM Model**: Select the model you want to use (Recommended `Claude 3.5 Sonnet` for the best coding experience).
-- **Adapters (Multi-select)**: Optionally enable Telegram / Feishu / QQ. Unselected adapters won't be written to `ship.json`.
+- **Agent Name**: Give your Agent a name (defaults to current directory name).
+- **LLM Model**: Select the model you want to use. Supports Claude Sonnet 4, Claude Haiku, Claude 3.5 Sonnet, GPT-4, GPT-4o, DeepSeek Chat, etc. Recommended `Claude Sonnet 4` for the best experience.
+- **Adapters (Multi-select)**: Optionally enable Telegram / Feishu / QQ. **Only selected adapters will be written to `ship.json`**.
+- **QQ Sandbox** (only when QQ is selected): Whether to use sandbox environment for testing.
+- **Skills Installation** (Optional): Optionally install recommended skill plugins, such as Vercel Best Practices, Web Design Guidelines, Browser Automation, etc.
 
 After initialization, it will create in your directory:
 
-- `Agent.md`: System prompt template.
-- `ship.json`: Configuration file.
-- `.ship/`: Hidden directory for storing tasks, logs, and cache.
+```
+your-project/
+├── Agent.md           # Agent system prompt
+├── ship.json          # Configuration file
+├── .claude/           # Claude compatible directory
+│   └── skills/        # Skills storage
+└── .ship/             # Agent data directory
+    ├── task/          # Scheduled tasks
+    ├── logs/          # Operation logs
+    ├── .cache/        # Cache data
+    ├── profile/       # User profile memory
+    │   ├── Primary.md
+    │   └── other.md
+    ├── data/          # Data storage
+    ├── chat/          # Chat records
+    ├── public/        # Public resources
+    ├── config/        # Configuration files
+    │   └── mcp.json   # MCP configuration
+    ├── skills/        # Project-level skills
+    ├── schema/        # JSON Schema (IDE auto-completion)
+    │   ├── ship.schema.json
+    │   └── mcp.schema.json
+    └── .debug/        # Debug information
+```
+
+> **Tip**: The Profile memory system saves user preferences, MCP configuration supports Model Context Protocol, and Schema files provide IDE auto-completion.
 
 ## 3. Configure LLM
 

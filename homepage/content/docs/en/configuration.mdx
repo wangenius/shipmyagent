@@ -13,7 +13,7 @@ ShipMyAgent uses two main configuration files:
 
 ```
 your-project/
-├── ship.json          # Main configuration (LLM, permissions, adapters)
+├── ship.json          # Main configuration (LLM, adapters)
 ├── Agent.md           # Agent personality and behavior
 └── .ship/             # Runtime data (logs, cache, tasks)
 ```
@@ -62,60 +62,6 @@ Supported `type` values:
 - `stdio`: local command (`command` + `args`)
 - `sse`: `url`
 - `http`: `url` (optional `headers`)
-
-### Complete Example
-
-```json
-{
-  "$schema": "./.ship/schema/ship.schema.json",
-  "name": "my-agent",
-  "version": "1.0.0",
-  "start": {
-    "port": 3000,
-    "host": "0.0.0.0",
-    "interactiveWeb": false,
-    "interactivePort": 3001
-  },
-  "llm": {
-    "provider": "anthropic",
-    "model": "claude-3-5-sonnet-20241022",
-    "baseUrl": "https://api.anthropic.com/v1",
-    "apiKey": "${ANTHROPIC_API_KEY}",
-    "temperature": 0.5,
-    "maxTokens": 4096,
-    "timeout": 30000,
-    "streaming": true
-  },
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": ["src/**", "tests/**", "docs/**"],
-      "exclude": ["*.config.js", ".env"],
-      "requiresApproval": true
-    },
-    "exec_shell": {
-      "allow": ["ls *", "cat *", "find *", "rg *", "grep *", "git *", "npm *"],
-      "requiresApproval": false
-    }
-  },
-  "adapters": {
-    "telegram": {
-      "enabled": true,
-      "botToken": "${TELEGRAM_BOT_TOKEN}",
-      "chatId": "${TELEGRAM_CHAT_ID}"
-    },
-    "github": {
-      "enabled": true,
-      "token": "${GITHUB_TOKEN}",
-      "repository": "owner/repo"
-    }
-  },
-  "cache": {
-    "enabled": true,
-    "ttl": 3600
-  }
-}
-```
 
 ### Configuration Sections
 
@@ -270,53 +216,6 @@ Controls outbound chat delivery safety (tool-strict):
     "chatEgress": {
       "chatSendMaxCallsPerRun": 30,
       "chatSendIdempotency": true
-    }
-  }
-}
-```
-
-#### permissions (object, required)
-
-Control what the agent can do.
-
-**read_repo** (boolean)
-
-Allow reading repository files.
-
-```json
-{
-  "permissions": {
-    "read_repo": true
-  }
-}
-```
-
-**write_repo** (object or boolean)
-
-Control file writing permissions.
-
-```json
-{
-  "permissions": {
-    "write_repo": {
-      "paths": ["src/**", "tests/**"],  // Glob patterns
-      "exclude": ["*.key", "secrets/**"],  // Exclude patterns
-      "requiresApproval": true  // Ask before writing
-    }
-  }
-}
-```
-
-**exec_shell** (object)
-
-Control shell command execution.
-
-```json
-{
-  "permissions": {
-    "exec_shell": {
-      "allow": ["ls *", "cat *", "find *", "rg *", "grep *", "git *", "npm *"],  // Command patterns
-      "requiresApproval": false  // Auto-allow safe commands
     }
   }
 }

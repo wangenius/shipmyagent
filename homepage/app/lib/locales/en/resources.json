@@ -125,7 +125,7 @@
           },
           "conversational": {
             "name": "Conversational Interface",
-            "description": "Natural interaction through Telegram, Discord, or Feishu"
+            "description": "Natural interaction through Telegram, Feishu, or QQ"
           },
           "execution": {
             "name": "Autonomous Execution",

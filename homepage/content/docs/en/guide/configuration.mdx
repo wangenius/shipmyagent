@@ -13,56 +13,123 @@ description: Deep dive into ship.json and Agent.md configuration
 
 ```json
 {
+  "$schema": "./.ship/schema/ship.schema.json",
   "name": "my-agent",
   "version": "1.0.0",
+  "start": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "interactiveWeb": false,
+    "interactivePort": 3001
+  },
   "llm": {
-    "provider": "anthropic",
-    "model": "claude-3-5-sonnet-20241022",
-    "baseUrl": "https://api.anthropic.com/v1",
-    "apiKey": "${ANTHROPIC_API_KEY}", // Supports environment variables
-    "temperature": 0.5,
-    "maxTokens": 4096
+    "provider": "custom",
+    "model": "${LLM_MODEL}",
+    "baseUrl": "${LLM_BASE_URL}",
+    "apiKey": "${LLM_API_KEY}",
+    "temperature": 0.7
   },
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": ["src/**", "docs/**"], // Restrict write paths
-      "requiresApproval": true // Whether approval is required before writing
-    },
-    "exec_shell": {
-      "allow": ["npm test", "npm run lint"], // Whitelist of allowed commands
-      "requiresApproval": true
-    }
-  },
-  "integrations": {
+  "adapters": {
     "telegram": {
       "enabled": true,
       "botToken": "${TELEGRAM_BOT_TOKEN}",
-      "chatId": "${TELEGRAM_CHAT_ID}" // Only allow interaction from specific users/groups
+      "chatId": "${TELEGRAM_CHAT_ID}",
+      "followupWindowMs": 600000,
+      "groupAccess": "initiator_or_admin"
+    },
+    "feishu": {
+      "enabled": true,
+      "appId": "${FEISHU_APP_ID}",
+      "appSecret": "${FEISHU_APP_SECRET}",
+      "domain": "https://open.feishu.cn",
+      "adminUserIds": ["ou_xxx", "ou_yyy"]
+    },
+    "qq": {
+      "enabled": false,
+      "appId": "${QQ_APP_ID}",
+      "appSecret": "${QQ_APP_SECRET}",
+      "sandbox": false
     }
+  },
+  "skills": {
+    "paths": [".claude/skills"]
   }
 }
 ```
 
 ### Field Explanation
 
+#### `$schema` (Schema Reference)
+
+- **$schema**: Points to the JSON Schema file path for IDE auto-completion and configuration validation.
+
+#### `name` and `version`
+
+- **name**: Agent project name to identify your Agent application.
+- **version**: Agent version number, semantic versioning is recommended.
+
+#### `start` (Startup Configuration)
+
+Controls the Agent service startup parameters:
+
+- **port**: Port number for the Agent service to listen on (default `3000`).
+- **host**: Host address to bind the service, `0.0.0.0` means allow external access.
+- **interactiveWeb**: Whether to enable interactive web interface (default `false`).
+- **interactivePort**: Port for the interactive web interface (default `3001`).
+
 #### `llm` (Language Model)
 
-- **provider**: `anthropic`, `openai`, `deepseek`, `custom`.
-- **model**: Specific model name.
-- **apiKey**: Recommended to use `${ENV_VAR}` to reference environment variables to avoid leakage.
+- **provider**: LLM provider, options: `anthropic`, `openai`, `deepseek`, `custom`.
+- **model**: Specific model name, supports environment variable `${LLM_MODEL}`.
+- **baseUrl**: API base URL, supports environment variable `${LLM_BASE_URL}`.
+- **apiKey**: API key, **strongly recommended** to use `${ENV_VAR}` to reference environment variables to avoid leakage.
+- **temperature**: Temperature parameter, controls generation randomness (between 0-1, default `0.7`).
 
-#### `permissions`
+#### `adapters` (Adapters)
 
-ShipMyAgent follows the "Least Privilege Principle".
+Configure integration adapters for various platforms to deploy your Agent on different chat platforms:
 
-- **read_repo**: Whether to allow reading repository files.
-- **write_repo**:
-  - **paths**: Array of Glob patterns, restricting the Agent to modify only specific directories.
-  - **requiresApproval**: Strongly recommended to set to `true`. If set to `false`, the Agent can modify files autonomously (use with caution).
-- **exec_shell**:
-  - **allow**: List or patterns of allowed commands.
-  - **requiresApproval**: Whether confirmation is required before execution.
+**telegram** (Telegram Bot)
+- **enabled**: Whether to enable the adapter
+- **botToken**: Bot Token, supports environment variables
+- **chatId**: (Optional) Specify allowed chat ID
+- **followupWindowMs**: (Optional) Followup window duration, default 10 minutes
+- **groupAccess**: (Optional) Group chat access control, `"initiator_or_admin"` or `"anyone"`
+
+**feishu** (Feishu/Lark Bot)
+- **enabled**: Whether to enable the adapter
+- **appId**: Feishu application ID
+- **appSecret**: Feishu application secret
+- **domain**: (Optional) API domain, default `https://open.feishu.cn`, use `https://open.larksuite.com` for international version
+- **adminUserIds**: (Optional) Admin user ID whitelist
+
+**qq** (QQ Official Bot)
+- **enabled**: Whether to enable the adapter
+- **appId**: QQ application ID
+- **appSecret**: QQ application secret
+- **sandbox**: (Optional) Whether to use sandbox environment, default `false`
+
+> For detailed configuration and integration guides, please refer to [Integration Guide](/en/docs/guide/integrations).
+
+#### `skills` (Skills)
+
+Configure available skill plugins for the Agent:
+
+- **paths**: Array of search paths for skill files, supports relative and absolute paths.
+  - Recommended to use `.claude/skills` or `.ship/skills` directory to store skill files.
+  - Supports mixing built-in skills and custom skills.
+
+> For detailed skill development guide, please refer to [Skill System](/en/docs/guide/skills).
+
+#### `context` (Context)
+
+Controls how much "conversation history" is injected at each execution and Chat scheduling strategy.
+
+- **context.history**: Each `chatKey` maintains a continuously growing `UIMessage[]` as the unique history (stored in `.ship/chat/<encodedChatKey>/messages/history.jsonl`), and automatically compacts when exceeding context window.
+  - **keepLastMessages**: Number of recent messages to keep after compact (default `30`)
+  - **maxInputTokensApprox**: Input budget (approximate token count, used to trigger compact early, default `12000`)
+  - **archiveOnCompact**: Whether to archive collapsed original segments during compact (default `true`)
+- **context.chatQueue**: Scheduler divided by `chatKey` lanes (serial for same chatKey, concurrent for different chatKeys; supports "fast correction merge").
 
 ## Agent.md
 

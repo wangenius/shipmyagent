@@ -47,25 +47,6 @@ my-blog/
     "maxTokens": 2048,
     "apiKey": "${ANTHROPIC_API_KEY}"
   },
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": [
-        "content/**",
-        "src/**",
-        "*.md"
-      ],
-      "requiresApproval": false
-    },
-    "exec_shell": {
-      "allow": [
-        "npm run build",
-        "npm run lint",
-        "npm run test"
-      ],
-      "requiresApproval": false
-    }
-  },
   "integrations": {
     "telegram": {
       "enabled": true,
@@ -239,26 +220,6 @@ open-source-project/
     "temperature": 0.3,
     "apiKey": "${ANTHROPIC_API_KEY}"
   },
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": [
-        "src/**",
-        "tests/**",
-        "docs/**",
-        "*.md"
-      ],
-      "requiresApproval": true
-    },
-    "exec_shell": {
-      "allow": [
-        "npm test",
-        "npm run lint",
-        "npm run format:check"
-      ],
-      "requiresApproval": false
-    }
-  },
   "integrations": {
     "github": {
       "enabled": true,
@@ -332,40 +293,6 @@ open-source-project/
 ```
 
 ### 任务
-
-**`.ship/tasks/pr-review.md`**:
-
-```markdown
----
-id: pr-review
-name: 自动化 PR 审查
-cron: "*/30 * * * *"
----
-
-审查开放的拉取请求：
-
-对于每个 PR：
-1. **代码质量**
-   - 检查错误或问题
-   - 验证测试覆盖率
-   - 确保风格一致
-
-2. **文档**
-   - API 文档已更新？
-   - 提供了示例？
-   - 记录了破坏性更改？
-
-3. **测试**
-   - 所有测试通过？
-   - 包含新测试？
-   - 覆盖边缘情况？
-
-在 PR 上发布评论，包括：
-- 整体评估
-- 具体问题（如果有）
-- 改进建议
-- 批准或请求更改
-```
 
 **`.ship/tasks/issue-triage.md`**:
 
@@ -453,26 +380,6 @@ cron: "0 */2 * * *"
     "temperature": 0.4,
     "maxTokens": 4096,
     "apiKey": "${ANTHROPIC_API_KEY}"
-  },
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": [
-        "backend/src/**",
-        "frontend/src/**",
-        "shared/**"
-      ],
-      "requiresApproval": true
-    },
-    "exec_shell": {
-      "allow": [
-        "npm run test",
-        "npm run lint",
-        "npm run build",
-        "docker-compose *"
-      ],
-      "requiresApproval": true
-    }
   },
   "integrations": {
     "github": {
@@ -608,17 +515,6 @@ cron: "0 8-18 * * 1-5"
         "apiKey": "${OPENAI_API_KEY}"
       }
     ]
-  },
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": {
-        "teams/backend": ["packages/backend-core/**", "apps/*/api/**"],
-        "teams/frontend": ["packages/frontend-shared/**", "apps/web/**"],
-        "teams/platform": ["tools/**", "packages/*/infra/**"]
-      },
-      "requiresApproval": true
-    }
   },
   "governance": {
     "complianceChecks": true,

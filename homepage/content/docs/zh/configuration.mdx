@@ -13,7 +13,7 @@ ShipMyAgent 使用两个主要配置文件：
 
 ```
 your-project/
-├── ship.json          # 主配置（LLM、权限、adapters）
+├── ship.json          # 主配置（LLM、adapters）
 ├── Agent.md           # Agent 个性和行为
 └── .ship/             # 运行时数据（日志、缓存、任务）
 ```
@@ -62,60 +62,6 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 - `stdio`: 本地命令（`command` + `args`）
 - `sse`: `url`
 - `http`: `url`（可选 `headers`）
-
-### 完整示例
-
-```json
-{
-  "$schema": "./.ship/schema/ship.schema.json",
-  "name": "my-agent",
-  "version": "1.0.0",
-  "start": {
-    "port": 3000,
-    "host": "0.0.0.0",
-    "interactiveWeb": false,
-    "interactivePort": 3001
-  },
-  "llm": {
-    "provider": "anthropic",
-    "model": "claude-3-5-sonnet-20241022",
-    "baseUrl": "https://api.anthropic.com/v1",
-    "apiKey": "${ANTHROPIC_API_KEY}",
-    "temperature": 0.5,
-    "maxTokens": 4096,
-    "timeout": 30000,
-    "streaming": true
-  },
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": ["src/**", "tests/**", "docs/**"],
-      "exclude": ["*.config.js", ".env"],
-      "requiresApproval": true
-    },
-    "exec_shell": {
-      "allow": ["ls *", "cat *", "find *", "rg *", "grep *", "git *", "npm *"],
-      "requiresApproval": false
-    }
-  },
-  "adapters": {
-    "telegram": {
-      "enabled": true,
-      "botToken": "${TELEGRAM_BOT_TOKEN}",
-      "chatId": "${TELEGRAM_CHAT_ID}"
-    },
-    "github": {
-      "enabled": true,
-      "token": "${GITHUB_TOKEN}",
-      "repository": "owner/repo"
-    }
-  },
-  "cache": {
-    "enabled": true,
-    "ttl": 3600
-  }
-}
-```
 
 ### 配置部分
 
@@ -276,53 +222,6 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 }
 ```
 
-#### permissions (object, 必需)
-
-控制 agent 可以做什么。
-
-**read_repo** (boolean)
-
-允许读取仓库文件。
-
-```json
-{
-  "permissions": {
-    "read_repo": true
-  }
-}
-```
-
-**write_repo** (object or boolean)
-
-控制文件写入权限。
-
-```json
-{
-  "permissions": {
-    "write_repo": {
-      "paths": ["src/**", "tests/**"],  // Glob 模式
-      "exclude": ["*.key", "secrets/**"],  // 排除模式
-      "requiresApproval": true  // 写入前询问
-    }
-  }
-}
-```
-
-**exec_shell** (object)
-
-控制 shell 命令执行。
-
-```json
-{
-  "permissions": {
-    "exec_shell": {
-      "allow": ["ls *", "cat *", "find *", "rg *", "grep *", "git *", "npm *"],  // 命令模式
-      "requiresApproval": false  // 自动允许安全命令
-    }
-  }
-}
-```
-
 #### adapters (object)
 
 消息平台适配器（Telegram / 飞书 / QQ ...）。  
@@ -359,20 +258,6 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
       "repository": "owner/repo",
       "autoMerge": false,
       "requiredReviews": 1
-    }
-  }
-}
-```
-
-**Slack**:
-
-```json
-{
-  "adapters": {
-    "slack": {
-      "enabled": true,
-      "webhook": "${SLACK_WEBHOOK_URL}",
-      "channel": "#engineering"
     }
   }
 }

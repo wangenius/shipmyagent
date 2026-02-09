@@ -6,10 +6,6 @@
       "name": "Telegram",
       "description": "强大的机器人集成，支持命令和交互式菜单。"
     },
-    "discord": {
-      "name": "Discord",
-      "description": "在你的团队频道中直接与 Agent 协作。"
-    },
     "feishu": {
       "name": "飞书 / Lark",
       "description": "无缝集成到你的企业工作流程中。"

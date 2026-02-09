@@ -13,66 +13,123 @@ description: 深入了解 ship.json 和 Agent.md 配置
 
 ```json
 {
+  "$schema": "./.ship/schema/ship.schema.json",
   "name": "my-agent",
   "version": "1.0.0",
+  "start": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "interactiveWeb": false,
+    "interactivePort": 3001
+  },
   "llm": {
-    "provider": "anthropic",
-    "model": "claude-3-5-sonnet-20241022",
-    "baseUrl": "https://api.anthropic.com/v1",
-    "apiKey": "${ANTHROPIC_API_KEY}", // 支持环境变量
-    "temperature": 0.5,
-    "maxTokens": 4096
+    "provider": "custom",
+    "model": "${LLM_MODEL}",
+    "baseUrl": "${LLM_BASE_URL}",
+    "apiKey": "${LLM_API_KEY}",
+    "temperature": 0.7
   },
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": ["src/**", "docs/**"], // 限制写入路径
-      "requiresApproval": true // 写入前是否需要审批
-    },
-    "exec_shell": {
-      "allow": ["npm test", "npm run lint"], // 允许执行的命令白名单
-      "requiresApproval": true
-    }
-  },
-  "integrations": {
+  "adapters": {
     "telegram": {
       "enabled": true,
       "botToken": "${TELEGRAM_BOT_TOKEN}",
-      "chatId": "${TELEGRAM_CHAT_ID}" // 仅允许特定用户/群组交互
+      "chatId": "${TELEGRAM_CHAT_ID}",
+      "followupWindowMs": 600000,
+      "groupAccess": "initiator_or_admin"
+    },
+    "feishu": {
+      "enabled": true,
+      "appId": "${FEISHU_APP_ID}",
+      "appSecret": "${FEISHU_APP_SECRET}",
+      "domain": "https://open.feishu.cn",
+      "adminUserIds": ["ou_xxx", "ou_yyy"]
+    },
+    "qq": {
+      "enabled": false,
+      "appId": "${QQ_APP_ID}",
+      "appSecret": "${QQ_APP_SECRET}",
+      "sandbox": false
     }
+  },
+  "skills": {
+    "paths": [".claude/skills"]
   }
 }
 ```
 
 ### 字段说明
 
+#### `$schema` (Schema 引用)
+
+- **$schema**: 指向 JSON Schema 文件路径，用于提供 IDE 智能提示和配置验证。
+
+#### `name` 和 `version`
+
+- **name**: Agent 项目名称，用于标识你的 Agent 应用。
+- **version**: Agent 版本号，推荐使用语义化版本。
+
+#### `start` (启动配置)
+
+控制 Agent 服务的启动参数：
+
+- **port**: Agent 服务监听的端口号（默认 `3000`）。
+- **host**: 服务绑定的主机地址，`0.0.0.0` 表示允许外部访问。
+- **interactiveWeb**: 是否启用交互式 Web 界面（默认 `false`）。
+- **interactivePort**: 交互式 Web 界面的端口（默认 `3001`）。
+
 #### `llm` (语言模型)
 
-- **provider**: `anthropic`, `openai`, `deepseek`, `custom`.
-- **model**: 具体模型名称。
-- **apiKey**: 建议使用 `${ENV_VAR}` 引用环境变量，避免泄露。
+- **provider**: LLM 提供商，可选值：`anthropic`、`openai`、`deepseek`、`custom`。
+- **model**: 具体模型名称，支持环境变量 `${LLM_MODEL}`。
+- **baseUrl**: API 基础地址，支持环境变量 `${LLM_BASE_URL}`。
+- **apiKey**: API 密钥，**强烈建议**使用 `${ENV_VAR}` 引用环境变量，避免泄露。
+- **temperature**: 温度参数，控制生成的随机性（0-1 之间，默认 `0.7`）。
+
+#### `adapters` (适配器)
+
+配置各种平台的集成适配器，支持将 Agent 部署到不同的聊天平台：
+
+**telegram** (Telegram 机器人)
+- **enabled**: 是否启用适配器
+- **botToken**: Bot Token，支持环境变量
+- **chatId**: (可选) 指定允许的聊天 ID
+- **followupWindowMs**: (可选) 跟进窗口时长，默认 10 分钟
+- **groupAccess**: (可选) 群聊访问控制，`"initiator_or_admin"` 或 `"anyone"`
+
+**feishu** (飞书/Lark 机器人)
+- **enabled**: 是否启用适配器
+- **appId**: 飞书应用 ID
+- **appSecret**: 飞书应用密钥
+- **domain**: (可选) API 域名，默认 `https://open.feishu.cn`，国际版使用 `https://open.larksuite.com`
+- **adminUserIds**: (可选) 管理员用户 ID 白名单
+
+**qq** (QQ 官方机器人)
+- **enabled**: 是否启用适配器
+- **appId**: QQ 应用 ID
+- **appSecret**: QQ 应用密钥
+- **sandbox**: (可选) 是否使用沙箱环境，默认 `false`
+
+> 详细配置说明和接入指南请参考 [集成指南](/zh/docs/guide/integrations)。
+
+#### `skills` (技能)
+
+配置 Agent 可用的技能插件：
+
+- **paths**: 技能文件的搜索路径数组，支持相对路径和绝对路径。
+  - 推荐使用 `.claude/skills` 或 `.ship/skills` 目录存放技能文件。
+  - 支持内置技能和自定义技能的混合使用。
+
+> 详细技能开发指南请参考 [技能系统](/zh/docs/guide/skills)。
 
 #### `context` (上下文)
 
-控制每次执行时注入多少“对话历史”和 Chat 的调度策略。
+控制每次执行时注入多少"对话历史"和 Chat 的调度策略。
 
 - **context.history**：每个 `chatKey` 维护一份持续增长的 `UIMessage[]` 作为唯一 history（落盘在 `.ship/chat/<encodedChatKey>/messages/history.jsonl`），并在超出上下文窗口时自动 compact。
   - **keepLastMessages**: compact 后保留的最近消息条数（默认 `30`）
   - **maxInputTokensApprox**: 输入预算（近似 token 数，用于提前触发 compact，默认 `12000`）
   - **archiveOnCompact**: compact 时是否归档被折叠的原始段（默认 `true`）
-- **context.chatQueue**：按 `chatKey` 分 lane 的调度器（同 chatKey 串行、不同 chatKey 可并发；支持“快速纠正合并”）。
-
-#### `permissions` (权限)
-
-ShipMyAgent 遵循"最小权限原则"。
-
-- **read_repo**: 是否允许读取仓库文件。
-- **write_repo**:
-  - **paths**: Glob 模式数组，限制 Agent 只能修改特定目录。
-  - **requiresApproval**: 强烈建议设为 `true`。设为 `false` 则 Agent 可自主修改文件（慎用）。
-- **exec_shell**:
-  - **allow**: 允许执行的命令列表或模式。
-  - **requiresApproval**: 执行前是否需确认。
+- **context.chatQueue**：按 `chatKey` 分 lane 的调度器（同 chatKey 串行、不同 chatKey 可并发；支持"快速纠正合并"）。
 
 ## Agent.md
 

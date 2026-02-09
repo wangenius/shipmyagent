@@ -125,7 +125,7 @@
           },
           "conversational": {
             "name": "对话式界面",
-            "description": "通过 Telegram、Discord 或飞书进行自然交互"
+            "description": "通过 Telegram、飞书或 QQ 进行自然交互"
           },
           "execution": {
             "name": "自主执行",
