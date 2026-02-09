@@ -101,8 +101,9 @@ function buildLoadedSkillsSystemText(params: {
 
   const skills = Array.from(loaded.values());
   const lines: string[] = [];
-  lines.push("已加载 Skills（请严格遵循以下 SOP/约束）：");
-  lines.push(`- count: ${skills.length}`);
+  lines.push("# ACTIVE SKILLS — MANDATORY EXECUTION");
+  lines.push("");
+  lines.push(`You have ${skills.length} active skill(s). These are NOT suggestions — they are binding SOPs you MUST follow.`);
   lines.push("");
 
   const unionAllowedTools = new Set<string>();
@@ -110,26 +111,33 @@ function buildLoadedSkillsSystemText(params: {
 
   for (const s of skills) {
     lines.push(`## Skill: ${s.name}`);
-    lines.push(`- id: ${s.id}`);
-    lines.push(`- path: ${s.skillMdPath}`);
+    lines.push(`**ID:** ${s.id}`);
+    lines.push(`**Path:** ${s.skillMdPath}`);
+
     if (Array.isArray(s.allowedTools) && s.allowedTools.length > 0) {
       hasAnyAllowedTools = true;
       for (const t of s.allowedTools) unionAllowedTools.add(String(t));
-      lines.push(`- allowedTools: ${s.allowedTools.join(", ")}`);
+      lines.push(`**Tool Restriction:** You can ONLY use these tools: ${s.allowedTools.join(", ")} (plus chat_send for output)`);
     } else {
-      lines.push(`- allowedTools: (not specified)`);
+      lines.push(`**Tool Restriction:** None (all tools available)`);
     }
     lines.push("");
-    lines.push("SKILL.md 内容：");
+    lines.push("### Instructions (MUST FOLLOW):");
     lines.push(s.content);
     lines.push("");
+    lines.push("---");
+    lines.push("");
   }
+
+  lines.push("## Execution Priority");
+  lines.push("1. Active skills take HIGHEST priority — their instructions override general guidelines");
+  lines.push("2. If multiple skills are active, follow all their constraints");
+  lines.push("3. Tool restrictions are ENFORCED — attempting to use forbidden tools will fail");
 
   const activeTools = hasAnyAllowedTools
     ? Array.from(
         new Set([
-          // 关键点（中文）：无论 skills 如何声明，chat_send 需要保底存在，否则无法对用户输出。
-          "chat_send",
+          "chat_send", // Essential: allow output even when tools are restricted
           ...Array.from(unionAllowedTools),
         ]),
       )

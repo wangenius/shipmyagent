@@ -111,21 +111,40 @@ shipmyagent init
 
 The interactive setup will ask:
 
-1. **Agent Name**: Give your agent a name (e.g., "my-assistant")
-2. **LLM Model**: Pick a model (Claude 3.5 Sonnet recommended for coding)
-3. **Adapters (Multi-select)**: Optionally enable Telegram / Feishu / QQ. Only selected adapters are written to `ship.json`.
+1. **Agent Name**: Give your agent a name (defaults to current directory name, e.g., "my-assistant")
+2. **LLM Model**: Pick a model. Supports Claude Sonnet 4 (recommended), Claude Haiku, Claude 3.5 Sonnet, GPT-4, GPT-4o, DeepSeek Chat, etc.
+3. **Adapters (Multi-select)**: Optionally enable Telegram / Feishu / QQ. **Only selected adapters are written to `ship.json`**
+4. **QQ Sandbox** (only when QQ is selected): Whether to use sandbox environment for testing
+5. **Skills Installation** (Optional): Optionally install recommended skill plugins, such as Vercel Best Practices, Web Design Guidelines, Browser Automation, etc.
 
 This creates:
 
 ```
 your-project/
-├── Agent.md           # Agent's system prompt
+├── Agent.md           # Agent system prompt
 ├── ship.json          # Configuration file
+├── .claude/           # Claude compatible directory
+│   └── skills/        # Skills storage
 └── .ship/             # Agent data directory
-    ├── tasks/         # Scheduled tasks
+    ├── task/          # Scheduled tasks
     ├── logs/          # Operation logs
-    └── cache/         # Cached data
+    ├── .cache/        # Cache data
+    ├── profile/       # User profile memory
+    │   ├── Primary.md
+    │   └── other.md
+    ├── data/          # Data storage
+    ├── chat/          # Chat records
+    ├── public/        # Public resources
+    ├── config/        # Configuration files
+    │   └── mcp.json   # MCP configuration
+    ├── skills/        # Project-level skills
+    ├── schema/        # JSON Schema (IDE auto-completion)
+    │   ├── ship.schema.json
+    │   └── mcp.schema.json
+    └── .debug/        # Debug information
 ```
+
+> **Tip**: The Profile memory system saves user preferences, MCP configuration supports Model Context Protocol, and Schema files provide IDE auto-completion.
 
 ### Step 2: Configure Your API Key
 
@@ -297,7 +316,6 @@ This checks:
 
 2. **[Creating Tasks](/docs/tasks)** - Automate your workflow
    - Schedule recurring maintenance
-   - Set up code review automation
    - Configure notifications
 
 3. **[Integrations](/docs/integrations)** - Connect your tools
@@ -306,28 +324,6 @@ This checks:
    - Use webhooks
 
 ### Quick Wins
-
-**Set up automated code reviews**:
-
-Create `.ship/task/pr-review/task.md`:
-
-```markdown
----
-title: Pull Request Review
-cron: "*/30 * * * *"
-description: Review open PRs and post a summary
-chatKey: telegram-chat-123456789
-status: enabled
----
-
-Review open pull requests for:
-- Code quality issues
-- Test coverage
-- Security vulnerabilities
-- Performance concerns
-
-Post findings as comments on each PR.
-```
 
 **Create daily summary**:
 

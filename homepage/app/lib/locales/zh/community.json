@@ -13,10 +13,6 @@
     "title": "讨论",
     "description": "参与 GitHub 上的讨论"
   },
-  "discord": {
-    "title": "Discord",
-    "description": "与社区聊天"
-  },
   "faqPage": {
     "subtitle": "关于 ShipMyAgent 的常见问题",
     "all": "全部",
@@ -76,7 +72,7 @@
       },
       "approval-workflow": {
         "question": "审批工作流如何运作？",
-        "answer": "当 Agent 想执行敏感操作时，会向你配置的渠道（Telegram、Discord 等）发送审批请求。你可以审阅拟执行的操作，必要时修改，然后批准或拒绝。Agent 只会执行已批准的操作。",
+        "answer": "当 Agent 想执行敏感操作时，会向你配置的渠道（Telegram、飞书、QQ 等）发送审批请求。你可以审阅拟执行的操作，必要时修改，然后批准或拒绝。Agent 只会执行已批准的操作。",
         "category": "security"
       }
     },
@@ -128,10 +124,6 @@
         "title": "团队协作",
         "description": "面向团队工作流与多 Agent 场景的增强集成。",
         "features": {
-          "discord": {
-            "name": "Discord 集成",
-            "desc": "团队协作"
-          },
           "slack": {
             "name": "Slack 集成",
             "desc": "企业聊天"

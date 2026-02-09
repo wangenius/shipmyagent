@@ -52,25 +52,6 @@ my-blog/
     "maxTokens": 2048,
     "apiKey": "${ANTHROPIC_API_KEY}"
   },
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": [
-        "content/**",
-        "src/**",
-        "*.md"
-      ],
-      "requiresApproval": false
-    },
-    "exec_shell": {
-      "allow": [
-        "npm run build",
-        "npm run lint",
-        "npm run test"
-      ],
-      "requiresApproval": false
-    }
-  },
   "integrations": {
     "telegram": {
       "enabled": true,
@@ -248,26 +229,6 @@ open-source-project/
     "temperature": 0.3,
     "apiKey": "${ANTHROPIC_API_KEY}"
   },
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": [
-        "src/**",
-        "tests/**",
-        "docs/**",
-        "*.md"
-      ],
-      "requiresApproval": true
-    },
-    "exec_shell": {
-      "allow": [
-        "npm test",
-        "npm run lint",
-        "npm run format:check"
-      ],
-      "requiresApproval": false
-    }
-  },
   "integrations": {
     "github": {
       "enabled": true,
@@ -341,42 +302,6 @@ You are a maintainer assistant for an open source project.
 ```
 
 ### Tasks
-
-**`.ship/task/pr-review/task.md`**:
-
-```markdown
----
-title: Automated PR Review
-cron: "*/30 * * * *"
-description: Review open PRs and post feedback
-chatKey: telegram-chat-123456789
-status: enabled
----
-
-Review open pull requests:
-
-For each PR:
-1. **Code Quality**
-   - Check for bugs or issues
-   - Verify test coverage
-   - Ensure style consistency
-
-2. **Documentation**
-   - API docs updated?
-   - Examples provided?
-   - Breaking changes noted?
-
-3. **Tests**
-   - All tests passing?
-   - New tests included?
-   - Edge cases covered?
-
-Post review as comment on PR with:
-- Overall assessment
-- Specific issues (if any)
-- Suggestions for improvement
-- Approval or request changes
-```
 
 **`.ship/task/issue-triage/task.md`**:
 
@@ -513,26 +438,6 @@ startup-mvp/
     "temperature": 0.4,
     "maxTokens": 4096,
     "apiKey": "${ANTHROPIC_API_KEY}"
-  },
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": [
-        "backend/src/**",
-        "frontend/src/**",
-        "shared/**"
-      ],
-      "requiresApproval": true
-    },
-    "exec_shell": {
-      "allow": [
-        "npm run test",
-        "npm run lint",
-        "npm run build",
-        "docker-compose *"
-      ],
-      "requiresApproval": true
-    }
   },
   "integrations": {
     "github": {
@@ -775,26 +680,6 @@ monorepo/
         "apiKey": "${OPENAI_API_KEY}"
       }
     ]
-  },
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": {
-        "teams/backend": ["packages/backend-core/**", "apps/*/api/**"],
-        "teams/frontend": ["packages/frontend-shared/**", "apps/web/**"],
-        "teams/platform": ["tools/**", "packages/*/infra/**"]
-      },
-      "requiresApproval": true,
-      "approvers": {
-        "teams/backend": ["@backend-lead"],
-        "teams/frontend": ["@frontend-lead"],
-        "teams/platform": ["@platform-lead"]
-      }
-    },
-    "exec_shell": {
-      "allow": ["npm run test:*", "npm run build:*"],
-      "requiresApproval": true
-    }
   },
   "integrations": {
     "github": {

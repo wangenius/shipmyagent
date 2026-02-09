@@ -42,13 +42,3 @@ Each task definition is a Markdown file (`task.md`) containing:
 - **Task Description**: A natural language description telling the Agent what operation to perform periodically.
 
 For example, you can create a task: "Scan TODOs in the codebase every morning at 9 AM and generate a report."
-
-## 4. Permissions System
-
-For security reasons, ShipMyAgent is designed with a strict permission system.
-
-- **Read**: Allowed to read project files by default.
-- **Write**: Writing to files usually requires human approval (configurable in `ship.json`).
-- **Exec**: Executing Shell commands is prohibited by default, or requires strict approval.
-
-When the Agent attempts to perform a sensitive operation, the system will pause and request your approval (CLI interaction or Telegram message).

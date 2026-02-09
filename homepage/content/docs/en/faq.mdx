@@ -121,55 +121,6 @@ TELEGRAM_BOT_TOKEN=123456:...
 }
 ```
 
-### What permissions should I use?
-
-**For personal projects**:
-```json
-{
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": ["**"],
-      "requiresApproval": false
-    }
-  }
-}
-```
-
-**For production**:
-```json
-{
-  "permissions": {
-    "read_repo": true,
-    "write_repo": {
-      "paths": ["src/**", "docs/**"],
-      "requiresApproval": true
-    }
-  }
-}
-```
-
-### How do I restrict access to specific files?
-
-Use glob patterns:
-
-```json
-{
-  "permissions": {
-    "write_repo": {
-      "paths": [
-        "src/**",
-        "tests/**"
-      ],
-      "exclude": [
-        "secrets/**",
-        "*.key"
-      ]
-    }
-  }
-}
-```
-
 ---
 
 ## Integration Questions
@@ -194,28 +145,6 @@ No. Telegram is optional. You can use ShipMyAgent entirely via CLI without any i
       "botToken": "${TELEGRAM_BOT_TOKEN}",
       "chatId": "12345678"
     }
-  }
-}
-```
-
-### Is Discord supported?
-
-Not yet. Discord integration is in development. Follow the [roadmap](/docs/roadmap) for updates.
-
-### Can I integrate with GitHub?
-
-Yes! GitHub integration is available. See [GitHub Integration Guide](/docs/integrations/github).
-
-### How do I receive notifications?
-
-Configure notification channels:
-
-```json
-{
-  "notifications": {
-    "channels": ["telegram", "webhook"],
-    "onError": true,
-    "onTaskComplete": true
   }
 }
 ```
@@ -275,13 +204,6 @@ Run diagnostics:
 shipmyagent doctor
 ```
 
-### Getting permission errors?
-
-Check your `ship.json` permissions:
-```bash
-cat ship.json | jq '.permissions'
-```
-
 See [Permission Errors Guide](/docs/troubleshooting/permission-errors).
 
 ### LLM not responding?
@@ -319,7 +241,6 @@ Contributions are welcome! See [Contributing Guide](/docs/community/contributing
 ### Where can I get help?
 
 - 📖 [Documentation](/docs)
-- 💬 [Discord](https://discord.gg/shipmyagent)
 - 🐙 [GitHub Discussions](https://github.com/wangenius/shipmyagent/discussions)
 - ✉️ [Telegram](https://t.me/shipmyagent)
 
@@ -339,7 +260,7 @@ See [Security Checklist](/docs/best-practices/security-checklist).
 
 1. **Search the docs**: Use the search bar at the top
 2. **Check existing issues**: [GitHub Issues](https://github.com/wangenius/shipmyagent/issues)
-3. **Ask the community**: [Discord](https://discord.gg/shipmyagent)
+3. **Ask the community**: [GitHub Discussions](https://github.com/wangenius/shipmyagent/discussions)
 4. **Create a new issue**: [GitHub](https://github.com/wangenius/shipmyagent/issues/new)
 
 ---

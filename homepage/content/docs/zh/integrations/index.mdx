@@ -5,7 +5,7 @@ description: 将 ShipMyAgent 与外部服务和工具连接
 
 # 集成
 
-通过集成 GitHub、Slack、Discord 和自定义 webhook 等外部服务来扩展 ShipMyAgent。
+通过集成 GitHub、Slack 和自定义 webhook 等外部服务来扩展 ShipMyAgent。
 
 ## 概述
 
@@ -23,7 +23,6 @@ description: 将 ShipMyAgent 与外部服务和工具连接
 - [QQ 机器人](/docs/integrations/qq) - 群聊/私聊对话与通知
 - [GitHub](#github) - PR 自动化和 issue 管理
 - [Slack](#slack) - 团队通知
-- [Discord](#discord) - 社区参与
 - [Webhook](#webhook) - 自定义集成
 
 ---
@@ -416,55 +415,6 @@ jobs:
       "channel": "#engineering",
       "username": "ShipMyAgent",
       "icon": ":robot_face:"
-    }
-  }
-}
-```
-
----
-
-## Discord
-
-在 Discord 上与您的社区互动。
-
-### 设置
-
-#### 1. 创建 Discord 应用程序
-
-1. 转到 https://discord.com/developers/applications
-2. 创建"新应用程序"
-3. 转到"Bot"部分 → 创建 Bot
-4. 复制 **Token**
-
-#### 2. 启用特权意图
-
-- 消息内容意图
-- 服务器成员意图
-
-#### 3. 邀请 Bot 到服务器
-
-1. 转到"OAuth2" → "URL 生成器"
-2. 选择范围：`bot`
-3. 选择 bot 权限：
-   - 发送消息
-   - 读取消息历史
-   - 添加反应
-4. 复制 URL 并在浏览器中打开
-5. 将 bot 添加到您的服务器
-
-#### 4. 在 ship.json 中配置
-
-```json
-{
-  "integrations": {
-    "discord": {
-      "enabled": true,
-      "token": "${DISCORD_BOT_TOKEN}",
-      "guildId": "${DISCORD_GUILD_ID}",
-      "channelIds": {
-        "notifications": "123456789",
-        "commands": "987654321"
-      }
     }
   }
 }

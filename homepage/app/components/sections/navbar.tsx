@@ -15,7 +15,6 @@ import {
   IconHelp,
   IconMap2,
   IconMessageCircle,
-  IconBrandDiscord,
   IconUsers,
   IconChevronDown,
 } from "@tabler/icons-react";
@@ -263,24 +262,6 @@ export function Navbar() {
                     </div>
                   </div>
                 </a>
-                <a
-                  href="https://discord.gg/shipmyagent"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="group flex items-center gap-3 rounded-md p-2 hover:bg-muted transition-colors"
-                >
-                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted group-hover:bg-background border border-border/50 group-hover:border-border transition-colors">
-                    <IconBrandDiscord className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium leading-none mb-1">
-                      {t("nav.discord")}
-                    </div>
-                    <div className="text-xs text-muted-foreground line-clamp-1">
-                      {t("nav.discordDesc")}
-                    </div>
-                  </div>
-                </a>
                 <div className="my-1 border-t border-border/50" />
                 <Link
                   to={communityPath}
@@ -449,14 +430,6 @@ export function Navbar() {
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {t("nav.discussions")}
-                </Link>
-                <Link
-                  to="https://discord.gg/shipmyagent"
-                  target="_blank"
-                  className="block text-sm text-muted-foreground hover:underline"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {t("nav.discord")}
                 </Link>
                 <Link
                   to={communityPath}

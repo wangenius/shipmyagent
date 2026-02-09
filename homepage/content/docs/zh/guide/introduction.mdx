@@ -30,8 +30,8 @@ ShipMyAgent 使用两个主要文件来定义 Agent 的行为：
 这是 Agent 的"身体"。它定义了 Agent 的能力边界，包括：
 
 - **LLM 配置**：使用什么模型（Claude, GPT, DeepSeek）。
-- **权限控制**：Agent 可以读取哪些文件，是否允许写入，是否允许执行 Shell 命令。
 - **集成**：是否启用 Telegram Bot 等外部接口。
+- **skills**: 配置skills的读取路径，支持多个。
 
 ## 3. 任务 (Tasks)
 
@@ -42,13 +42,3 @@ ShipMyAgent 使用两个主要文件来定义 Agent 的行为：
 - **任务描述**：告诉 Agent 定时执行什么操作的自然语言描述。
 
 例如，你可以创建一个任务："每天早上 9 点扫描代码库中的 TODO 并生成报告"。
-
-## 4. 权限系统 (Permissions)
-
-为了安全起见，ShipMyAgent 设计了严格的权限系统。
-
-- **Read**: 默认允许读取项目文件。
-- **Write**: 写入文件通常需要人工审批（可在 `ship.json` 中配置）。
-- **Exec**: 执行 Shell 命令默认禁止，或需严格审批。
-
-当 Agent 尝试执行敏感操作时，系统会暂停并请求你的批准（CLI 交互或 Telegram 消息）。

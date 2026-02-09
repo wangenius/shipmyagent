@@ -82,8 +82,6 @@ Issues:
 - LOW: No error handling for failed requests
 
 Suggestion: Add useState for loading/error states
-```
-```
 
 ### Tips for Better Prompts
 
@@ -536,46 +534,7 @@ shipmyagent report --month > monthly-report.txt
 
 Common mistakes and how to avoid them.
 
-### ❌ Anti-Pattern 1: Over-Permissive Configuration
-
-**Problem**:
-```json
-{
-  "permissions": {
-    "write_repo": {
-      "paths": ["**"],
-      "requiresApproval": false
-    },
-    "exec_shell": {
-      "allow": ["*"]
-    }
-  }
-}
-```
-
-**Why It's Bad**:
-- Agent can modify any file without review
-- Can execute any command
-- High risk of accidental damage
-
-**✅ Better Approach**:
-```json
-{
-  "permissions": {
-    "write_repo": {
-      "paths": ["src/**", "tests/**"],
-      "exclude": ["*.config.js", ".env"],
-      "requiresApproval": true
-    },
-    "exec_shell": {
-      "allow": ["npm test", "npm run lint"],
-      "requiresApproval": true
-    }
-  }
-}
-```
-
-### ❌ Anti-Pattern 2: Vague Prompts
+### ❌ Anti-Pattern 1: Vague Prompts
 
 **Problem**:
 ```markdown
@@ -607,7 +566,7 @@ You are a senior React engineer specializing in performance optimization.
 - Provide testable recommendations
 ```
 
-### ❌ Anti-Pattern 3: Ignoring Errors
+### ❌ Anti-Pattern 2: Ignoring Errors
 
 **Problem**:
 ```bash
@@ -639,7 +598,7 @@ shipmyagent logs --level error --tail 100
 }
 ```
 
-### ❌ Anti-Pattern 4: Task Overload
+### ❌ Anti-Pattern 3: Task Overload
 
 **Problem**:
 ```markdown
@@ -675,7 +634,7 @@ cron: "0 9 * * 1"  # Weekly deep dive
 ---
 ```
 
-### ❌ Anti-Pattern 5: One-Size-Fits-All
+### ❌ Anti-Pattern 4: One-Size-Fits-All
 
 **Problem**:
 ```markdown
@@ -695,7 +654,7 @@ cron: "0 9 * * 1"  # Weekly deep dive
 # Agent.tests.md - Specialized for testing
 ```
 
-### ❌ Anti-Pattern 6: No Version Control
+### ❌ Anti-Pattern 5: No Version Control
 
 **Problem**:
 ```
@@ -721,35 +680,6 @@ cron: "0 9 * * 1"  # Weekly deep dive
 .ship/task/
 Agent.md
 ship.json.example
-```
-
-### ❌ Anti-Pattern 7: Trusting Blindly
-
-**Problem**:
-```json
-{
-  "permissions": {
-    "requiresApproval": false  # Blind trust
-  }
-}
-```
-
-**Why It's Bad**:
-- No human oversight
-- Errors propagate automatically
-- Security vulnerabilities
-- Loss of control
-
-**✅ Better Approach**:
-```json
-{
-  "permissions": {
-    "write_repo": {
-      "requiresApproval": true,  // Human in the loop
-      "approvalChannels": ["telegram", "slack"]
-    }
-  }
-}
 ```
 
 ---

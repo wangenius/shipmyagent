@@ -6,10 +6,6 @@
       "name": "Telegram",
       "description": "Powerful bot integration with command support and interactive menus."
     },
-    "discord": {
-      "name": "Discord",
-      "description": "Collaborate with your Agent directly in your team channels."
-    },
     "feishu": {
       "name": "Feishu / Lark",
       "description": "Seamlessly integrate into your enterprise workflow."

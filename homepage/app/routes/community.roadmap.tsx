@@ -41,7 +41,6 @@ const roadmap = [
     status: "planned",
     icon: IconBuildingFactory,
     features: [
-      { id: "discord", status: "pending" },
       { id: "slack", status: "pending" },
       { id: "snapshot", status: "pending" },
       { id: "githubApp", status: "pending" },

@@ -13,10 +13,6 @@
     "title": "Discussions",
     "description": "Join the conversation on GitHub"
   },
-  "discord": {
-    "title": "Discord",
-    "description": "Chat with the community"
-  },
   "faqPage": {
     "subtitle": "Frequently asked questions about ShipMyAgent",
     "all": "All",
@@ -76,7 +72,7 @@
       },
       "approval-workflow": {
         "question": "How does the approval workflow work?",
-        "answer": "When the Agent wants to perform a sensitive action, it sends an approval request to your configured channel (Telegram, Discord, etc.). You can review the proposed action, modify it if needed, and then approve or reject it. The Agent only executes approved actions.",
+        "answer": "When the Agent wants to perform a sensitive action, it sends an approval request to your configured channel (Telegram, Feishu, QQ, etc.). You can review the proposed action, modify it if needed, and then approve or reject it. The Agent only executes approved actions.",
         "category": "security"
       }
     },
@@ -128,10 +124,6 @@
         "title": "Team Collaboration",
         "description": "Enhanced integrations for team workflows and multi-agent scenarios.",
         "features": {
-          "discord": {
-            "name": "Discord Integration",
-            "desc": "Team collaboration"
-          },
           "slack": {
             "name": "Slack Integration",
             "desc": "Enterprise chat"

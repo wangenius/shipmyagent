@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import {
   IconBrandTelegram,
-  IconBrandDiscord,
   IconBrandQq,
   IconMessageDots,
   IconMessageReport,
@@ -34,14 +33,6 @@ export const PlatformsSection: FC = () => {
       icon: IconBrandTelegram,
       color: "text-blue-500",
       bg: "bg-blue-500/10",
-    },
-    {
-      id: "discord",
-      name: t("platforms:defaultPlatforms.discord.name"),
-      description: t("platforms:defaultPlatforms.discord.description"),
-      icon: IconBrandDiscord,
-      color: "text-indigo-500",
-      bg: "bg-indigo-500/10",
     },
     {
       id: "feishu",
@@ -79,7 +70,7 @@ export const PlatformsSection: FC = () => {
         </div>
 
         {/* Main Platforms Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-20">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-20">
           {platforms.map((platform) => (
             <Card
               key={platform.id}

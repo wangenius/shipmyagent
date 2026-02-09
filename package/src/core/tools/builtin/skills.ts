@@ -23,7 +23,7 @@ import { isSubpath } from "../../skills/utils.js";
 
 export const skills_list = tool({
   description:
-    "List available Claude Code-compatible skills discovered from skill roots (project, home, and configured paths).",
+    "Discover available skills. Use this to find skills that match your current task. Skills provide specialized workflows and constraints for specific domains (e.g., testing, deployment, code review). Call this proactively when starting a new type of task.",
   inputSchema: z
     .object({
       refresh: z
@@ -60,7 +60,7 @@ export const skills_list = tool({
 
 export const skills_load = tool({
   description:
-    "Load a Claude Code-compatible skill's SKILL.md by name or id, so you can follow its instructions.",
+    "Load and activate a skill by name or id. Once loaded, you MUST strictly follow the skill's instructions as mandatory SOPs. The skill persists for this conversation and affects all subsequent messages. Use this when you identify a task that matches a skill's description.",
   inputSchema: z.object({
     name: z.string().describe("Skill name or directory id"),
     refresh: z
