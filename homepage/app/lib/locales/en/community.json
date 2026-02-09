@@ -40,11 +40,6 @@
         "answer": "v1 primarily supports local runs for security and simplicity. v2 will add support for remote deployment with enhanced security features for team and enterprise use cases.",
         "category": "deployment"
       },
-      "security-guarantee": {
-        "question": "How is security ensured?",
-        "answer": "ShipMyAgent adopts a minimum privilege principle by default. All sensitive operations require approval, all actions are auditable, and you maintain full control over permissions. The permission model ensures the Agent can only do what you explicitly allow.",
-        "category": "security"
-      },
       "comparison-copilot": {
         "question": "How is this different from GitHub Copilot?",
         "answer": "GitHub Copilot is for individual developers with code completion features. ShipMyAgent is designed for teams and enterprises, providing an executable AI team member with security controls, auditability, and human-in-the-loop approval workflows.",
@@ -69,11 +64,6 @@
         "question": "What's the pricing model?",
         "answer": "ShipMyAgent is open source (MIT license) and free to use. You only pay for the LLM API costs (Claude, GPT-4, etc.) that you choose to use. Enterprise editions with additional features and support will be available in the future.",
         "category": "general"
-      },
-      "approval-workflow": {
-        "question": "How does the approval workflow work?",
-        "answer": "When the Agent wants to perform a sensitive action, it sends an approval request to your configured channel (Telegram, Feishu, QQ, etc.). You can review the proposed action, modify it if needed, and then approve or reject it. The Agent only executes approved actions.",
-        "category": "security"
       }
     },
     "callout": {
@@ -101,10 +91,6 @@
           "constitution": {
             "name": "Agent Constitution",
             "desc": "Behavior rules & guidelines"
-          },
-          "permission": {
-            "name": "Permission Engine",
-            "desc": "Granular access control"
           },
           "telegram": {
             "name": "Telegram Integration",

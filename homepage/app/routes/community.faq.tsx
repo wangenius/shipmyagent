@@ -17,13 +17,11 @@ const faqs = [
   { id: "modify-code", category: "security" },
   { id: "llm-models", category: "technical" },
   { id: "remote-deployment", category: "deployment" },
-  { id: "security-guarantee", category: "security" },
   { id: "comparison-copilot", category: "general" },
   { id: "memory", category: "features" },
   { id: "multi-agent", category: "features" },
   { id: "custom-integrations", category: "integration" },
   { id: "pricing", category: "general" },
-  { id: "approval-workflow", category: "security" },
 ] as const;
 
 const categories = [...new Set(faqs.map((faq) => faq.category))];

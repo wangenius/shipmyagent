@@ -30,7 +30,6 @@ const roadmap = [
     features: [
       { id: "coreRuntime", status: "completed" },
       { id: "constitution", status: "completed" },
-      { id: "permission", status: "completed" },
       { id: "telegram", status: "completed" },
       { id: "tasks", status: "completed" },
       { id: "docs", status: "in-progress" },
