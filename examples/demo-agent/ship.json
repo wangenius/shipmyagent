@@ -3,10 +3,10 @@
   "name": "demo-agent",
   "version": "1.0.0",
   "start": {
-    "port": 4000,
+    "port": 3000,
     "host": "0.0.0.0",
     "interactiveWeb": false,
-    "interactivePort": 4001
+    "interactivePort": 3001
   },
   "llm": {
     "provider": "custom",
@@ -14,6 +14,11 @@
     "baseUrl": "${LLM_BASE_URL}",
     "apiKey": "${LLM_API_KEY}",
     "temperature": 0.7
+  },
+  "skills": {
+    "paths": [
+      ".claude/skills"
+    ]
   },
   "adapters": {
     "telegram": {
