@@ -12,9 +12,9 @@ import { randomBytes } from "crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import { z } from "zod";
 import { tool } from "ai";
-import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
-import { chatRequestContext } from "../../runtime/request-context.js";
-import { llmRequestContext } from "../../../telemetry/index.js";
+import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
+import { chatRequestContext } from "../runtime/request-context.js";
+import { llmRequestContext } from "../../telemetry/index.js";
 
 const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
 const DEFAULT_MAX_OUTPUT_LINES = 200;
@@ -61,7 +61,10 @@ type ExecSession = {
 const execSessions = new Map<number, ExecSession>();
 
 function clampYieldTimeMs(value: number | undefined, fallback: number): number {
-  const n = typeof value === "number" && Number.isFinite(value) ? Math.floor(value) : fallback;
+  const n =
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.floor(value)
+      : fallback;
   return Math.min(MAX_YIELD_TIME_MS, Math.max(MIN_YIELD_TIME_MS, n));
 }
 
@@ -90,21 +93,29 @@ function normalizeOutputChunk(raw: string): string {
  */
 function resolveOutputLimits(maxOutputTokens?: number): OutputLimits {
   const cfg = getShipRuntimeContext().config.permissions?.exec_command;
-  const maxCharsRaw = cfg && typeof cfg === "object" ? (cfg as any).maxOutputChars : undefined;
-  const maxLinesRaw = cfg && typeof cfg === "object" ? (cfg as any).maxOutputLines : undefined;
+  const maxCharsRaw =
+    cfg && typeof cfg === "object" ? (cfg as any).maxOutputChars : undefined;
+  const maxLinesRaw =
+    cfg && typeof cfg === "object" ? (cfg as any).maxOutputLines : undefined;
 
   const maxChars =
-    typeof maxCharsRaw === "number" && Number.isFinite(maxCharsRaw) && maxCharsRaw >= 500
+    typeof maxCharsRaw === "number" &&
+    Number.isFinite(maxCharsRaw) &&
+    maxCharsRaw >= 500
       ? Math.floor(maxCharsRaw)
       : DEFAULT_MAX_OUTPUT_CHARS;
 
   const maxLines =
-    typeof maxLinesRaw === "number" && Number.isFinite(maxLinesRaw) && maxLinesRaw >= 20
+    typeof maxLinesRaw === "number" &&
+    Number.isFinite(maxLinesRaw) &&
+    maxLinesRaw >= 20
       ? Math.floor(maxLinesRaw)
       : DEFAULT_MAX_OUTPUT_LINES;
 
   const byTokens =
-    typeof maxOutputTokens === "number" && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
+    typeof maxOutputTokens === "number" &&
+    Number.isFinite(maxOutputTokens) &&
+    maxOutputTokens > 0
       ? Math.max(200, Math.floor(maxOutputTokens * APPROX_CHARS_PER_TOKEN))
       : null;
 
@@ -117,17 +128,27 @@ function resolveOutputLimits(maxOutputTokens?: number): OutputLimits {
 function resolveExecWorkdir(projectRoot: string, workdir?: string): string {
   const trimmed = String(workdir ?? "").trim();
   if (!trimmed) return projectRoot;
-  return path.isAbsolute(trimmed) ? trimmed : path.resolve(projectRoot, trimmed);
+  return path.isAbsolute(trimmed)
+    ? trimmed
+    : path.resolve(projectRoot, trimmed);
 }
 
-function setEnvString(env: NodeJS.ProcessEnv, key: string, value: unknown): void {
+function setEnvString(
+  env: NodeJS.ProcessEnv,
+  key: string,
+  value: unknown,
+): void {
   if (typeof value !== "string") return;
   const trimmed = value.trim();
   if (!trimmed) return;
   env[key] = trimmed;
 }
 
-function setEnvNumber(env: NodeJS.ProcessEnv, key: string, value: unknown): void {
+function setEnvNumber(
+  env: NodeJS.ProcessEnv,
+  key: string,
+  value: unknown,
+): void {
   if (typeof value !== "number" || !Number.isFinite(value)) return;
   env[key] = String(Math.trunc(value));
 }
@@ -181,12 +202,16 @@ function appendSessionOutput(session: ExecSession, raw: string): void {
 
 function scheduleSessionCleanup(session: ExecSession): void {
   if (session.cleanupTimer) clearTimeout(session.cleanupTimer);
-  session.cleanupTimer = setTimeout(() => {
-    const current = execSessions.get(session.id);
-    if (!current) return;
-    if (current.exited) execSessions.delete(session.id);
-  }, 10 * 60 * 1000);
-  if (typeof session.cleanupTimer.unref === "function") session.cleanupTimer.unref();
+  session.cleanupTimer = setTimeout(
+    () => {
+      const current = execSessions.get(session.id);
+      if (!current) return;
+      if (current.exited) execSessions.delete(session.id);
+    },
+    10 * 60 * 1000,
+  );
+  if (typeof session.cleanupTimer.unref === "function")
+    session.cleanupTimer.unref();
 }
 
 function ensureSessionCapacity(): void {
@@ -220,7 +245,9 @@ function createExecSession(input: {
   const sessionId = nextSessionId;
   nextSessionId += 1;
 
-  const shellPath = String(input.shellPath ?? process.env.SHELL ?? "/bin/zsh").trim() || "/bin/zsh";
+  const shellPath =
+    String(input.shellPath ?? process.env.SHELL ?? "/bin/zsh").trim() ||
+    "/bin/zsh";
   const loginFlag = input.login === false ? "-c" : "-lc";
 
   const child = spawn(shellPath, [loginFlag, input.command], {
@@ -277,7 +304,10 @@ function createExecSession(input: {
   return session;
 }
 
-function splitOutputPage(text: string, limits: OutputLimits): {
+function splitOutputPage(
+  text: string,
+  limits: OutputLimits,
+): {
   head: string;
   tail: string;
 } {
@@ -299,7 +329,10 @@ function splitOutputPage(text: string, limits: OutputLimits): {
   };
 }
 
-function consumeSessionOutputPage(session: ExecSession, limits: OutputLimits): {
+function consumeSessionOutputPage(
+  session: ExecSession,
+  limits: OutputLimits,
+): {
   output: string;
   hasMoreOutput: boolean;
   originalChars: number;
@@ -335,7 +368,10 @@ function consumeSessionOutputPage(session: ExecSession, limits: OutputLimits): {
   };
 }
 
-async function waitForSessionSignal(session: ExecSession, timeoutMs: number): Promise<boolean> {
+async function waitForSessionSignal(
+  session: ExecSession,
+  timeoutMs: number,
+): Promise<boolean> {
   if (timeoutMs <= 0) return false;
 
   return await new Promise<boolean>((resolve) => {
@@ -366,14 +402,20 @@ async function waitForSessionSignal(session: ExecSession, timeoutMs: number): Pr
  * 关键点（中文）
  * - 若已经有输出，会再短等 30ms 抓取“紧随其后的块”，减少碎片化。
  */
-async function collectOutputUntilDeadline(session: ExecSession, yieldTimeMs: number): Promise<void> {
+async function collectOutputUntilDeadline(
+  session: ExecSession,
+  yieldTimeMs: number,
+): Promise<void> {
   const deadline = Date.now() + yieldTimeMs;
 
   while (Date.now() < deadline) {
     if (session.pendingOutput.length > 0) {
       const remaining = deadline - Date.now();
       if (remaining <= 0) return;
-      const gotMore = await waitForSessionSignal(session, Math.min(30, remaining));
+      const gotMore = await waitForSessionSignal(
+        session,
+        Math.min(30, remaining),
+      );
       if (!gotMore) return;
       continue;
     }
@@ -395,10 +437,14 @@ function getSessionOrThrow(sessionId: number): ExecSession {
   return session;
 }
 
-async function writeSessionStdin(session: ExecSession, chars: string): Promise<void> {
+async function writeSessionStdin(
+  session: ExecSession,
+  chars: string,
+): Promise<void> {
   if (!chars) return;
   if (session.exited) throw new Error(`Session ${session.id} already exited`);
-  if (!session.child.stdin.writable) throw new Error(`Session ${session.id} stdin is closed`);
+  if (!session.child.stdin.writable)
+    throw new Error(`Session ${session.id} stdin is closed`);
 
   await new Promise<void>((resolve, reject) => {
     session.child.stdin.write(chars, (err) => {
@@ -420,7 +466,10 @@ async function writeSessionStdin(session: ExecSession, chars: string): Promise<v
  * - 适合长驻命令在业务完成后主动释放资源
  * - 关闭后该 session_id 不可再用
  */
-function closeExecSession(session: ExecSession, force: boolean): {
+function closeExecSession(
+  session: ExecSession,
+  force: boolean,
+): {
   sessionId: number;
   wasRunning: boolean;
   pendingOutputChars: number;
@@ -463,8 +512,12 @@ function closeExecSession(session: ExecSession, force: boolean): {
   };
 }
 
-function finalizeSessionIfDrainComplete(session: ExecSession, hasMoreOutput: boolean): number | null {
-  const keepAlive = !session.exited || hasMoreOutput || session.pendingOutput.length > 0;
+function finalizeSessionIfDrainComplete(
+  session: ExecSession,
+  hasMoreOutput: boolean,
+): number | null {
+  const keepAlive =
+    !session.exited || hasMoreOutput || session.pendingOutput.length > 0;
   if (keepAlive) return session.id;
 
   if (session.cleanupTimer) {
@@ -492,7 +545,9 @@ function formatSessionResponse(input: {
 
   const notes: string[] = [];
   if (page.hasMoreOutput) {
-    notes.push("More output is available; call write_stdin with empty chars to read next chunk.");
+    notes.push(
+      "More output is available; call write_stdin with empty chars to read next chunk.",
+    );
   }
   if (page.droppedChars > 0) {
     notes.push(
@@ -523,7 +578,9 @@ export const exec_command = tool({
     workdir: z
       .string()
       .optional()
-      .describe("Optional working directory. Relative path is resolved from project root."),
+      .describe(
+        "Optional working directory. Relative path is resolved from project root.",
+      ),
     shell: z
       .string()
       .optional()
@@ -575,7 +632,10 @@ export const exec_command = tool({
         clampYieldTimeMs(yield_time_ms, DEFAULT_EXEC_COMMAND_YIELD_MS),
       );
 
-      const page = consumeSessionOutputPage(session, resolveOutputLimits(max_output_tokens));
+      const page = consumeSessionOutputPage(
+        session,
+        resolveOutputLimits(max_output_tokens),
+      );
       return formatSessionResponse({ session, page, startedAt });
     } catch (error) {
       return {
@@ -591,7 +651,11 @@ export const write_stdin = tool({
     "Write chars to an existing exec session and return next output chunk. Use empty chars to poll.",
   inputSchema: z.object({
     session_id: z.number().describe("Identifier returned by exec_command."),
-    chars: z.string().optional().default("").describe("Bytes to write to stdin; empty means poll only."),
+    chars: z
+      .string()
+      .optional()
+      .default("")
+      .describe("Bytes to write to stdin; empty means poll only."),
     yield_time_ms: z
       .number()
       .optional()
@@ -632,7 +696,10 @@ export const write_stdin = tool({
 
       await collectOutputUntilDeadline(session, effectiveYield);
 
-      const page = consumeSessionOutputPage(session, resolveOutputLimits(max_output_tokens));
+      const page = consumeSessionOutputPage(
+        session,
+        resolveOutputLimits(max_output_tokens),
+      );
       return formatSessionResponse({ session, page, startedAt });
     } catch (error) {
       return {
@@ -652,7 +719,9 @@ export const close_session = tool({
       .boolean()
       .optional()
       .default(false)
-      .describe("Whether to force-kill session process (SIGKILL). Default false uses SIGTERM."),
+      .describe(
+        "Whether to force-kill session process (SIGKILL). Default false uses SIGTERM.",
+      ),
   }),
   execute: async ({
     session_id,
