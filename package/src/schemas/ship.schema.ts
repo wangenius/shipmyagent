@@ -105,7 +105,7 @@ export const SHIP_JSON_SCHEMA: Record<string, unknown> = {
             },
           ],
         },
-        exec_shell: {
+        exec_command: {
           anyOf: [
             { type: "boolean" },
             {
@@ -115,6 +115,8 @@ export const SHIP_JSON_SCHEMA: Record<string, unknown> = {
                 deny: { type: "array", items: { type: "string" } },
                 allow: { type: "array", items: { type: "string" } },
                 requiresApproval: { type: "boolean" },
+                maxOutputChars: { type: "integer", minimum: 500, maximum: 200000 },
+                maxOutputLines: { type: "integer", minimum: 20, maximum: 5000 },
               },
               required: ["requiresApproval"],
             },

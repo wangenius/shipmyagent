@@ -187,13 +187,27 @@ export interface ShipConfig {
           paths?: string[];
           requiresApproval: boolean;
         };
-    exec_shell?:
+    exec_command?:
       | boolean
       | {
           deny?: string[];
           allow?: string[];
           requiresApproval: boolean;
           denyRequiresApproval?: boolean;
+          /**
+           * `exec_command` / `write_stdin` 返回给模型的输出最大字符数。
+           *
+           * 说明（中文）
+           * - 工具结果会进入下一轮 LLM messages。
+           * - 过大时可能触发 provider 参数校验失败。
+           * 默认值：12000。
+           */
+          maxOutputChars?: number;
+          /**
+           * `exec_command` / `write_stdin` 返回给模型的输出最大行数。
+           * 默认值：200。
+           */
+          maxOutputLines?: number;
         };
     open_pr?: boolean;
     merge?: boolean;
@@ -320,10 +334,12 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
     write_repo: {
       requiresApproval: false,
     },
-    exec_shell: {
+    exec_command: {
       deny: ["rm"],
       requiresApproval: false,
       denyRequiresApproval: true,
+      maxOutputChars: 12000,
+      maxOutputLines: 200,
     },
   },
   adapters: {

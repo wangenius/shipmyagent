@@ -5,7 +5,8 @@ allowed-tools:
   - task_list
   - create_task
   - run_task
-  - exec_shell
+  - exec_command
+  - write_stdin
   - skills_list
   - skills_load
   - chat_contact_send
@@ -72,5 +73,5 @@ Task 存放在项目目录：
 任务正文建议写清楚：
 
 - 目标与输出格式（希望产出哪些文件、摘要结构）
-- 必须遵守的工具约束（如只允许 read_repo/write_repo/exec_shell）
+- 必须遵守的工具约束（如只允许 read_repo/write_repo/exec_command/write_stdin）
 - 若需要复用 SOP：先调用 `skills_list` / `skills_load` 加载对应 skill，再按其流程执行

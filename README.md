@@ -28,7 +28,7 @@ ShipMyAgent 是一个 Agent Runtime，它将你的本地或远程代码仓库启
 
 - **Repo is the Agent** - 你的代码仓库就是 Agent 的上下文和记忆
 - **可对话** - 通过 Telegram / Discord / 飞书与 Agent 交互
-- **可执行** - 通过工具（如 `exec_shell`）直接操作仓库与环境
+- **可执行** - 通过工具（如 `exec_command` + `write_stdin` + `close_session`）直接操作仓库与环境
 - **完全可审计** - 日志与对话记录落盘（`.ship/logs` / `.ship/chat/.../conversations`）
 - **全权限（临时）** - 当前版本默认不做权限/审批拦截
 
@@ -126,6 +126,13 @@ You are the maintainer agent of this repository.
     "provider": "anthropic",
     "model": "claude-sonnet-4-5"
   },
+  "permissions": {
+    "exec_command": {
+      "requiresApproval": false,
+      "maxOutputChars": 12000,
+      "maxOutputLines": 200
+    }
+  },
   "adapters": {
     "telegram": {
       "enabled": true,
@@ -137,6 +144,8 @@ You are the maintainer agent of this repository.
   }
 }
 ```
+
+`permissions.exec_command.maxOutputChars` 与 `permissions.exec_command.maxOutputLines` 用于限制工具输出回灌到 LLM 的体积（默认分别为 `12000` 和 `200`），可显著降低第三方 OpenAI-compatible 网关出现 `Parameter error` 的概率。
 
 > 注：启动时会自动加载项目根目录的 `.env`，并把 `ship.json` 里的 `${VAR_NAME}` 形式占位符替换为对应环境变量。
 
@@ -205,7 +214,7 @@ Telegram Bot = Your Project UI
 ┌─────▼────────────────────┐
 │ Agent Runtime (Node.js)   │
 │ - ToolLoopAgent (ai-sdk)  │
-│ - Tools (exec_shell/chat_send/...) │
+│ - Tools (exec_command/write_stdin/close_session/chat_send/...) │
 │ - Approval Flow           │
 └─────┬────────────────────┘
       │

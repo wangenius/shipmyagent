@@ -92,6 +92,15 @@ export const DEFAULT_SHIP_PROMPTS = `
   （所有的设计都是为了模拟真实对话逻辑）
 - 不要为了“补充说明/最后一句/再确认”反复调用 \`chat_send\`，避免刷屏。
 
+【关于命令执行工具】（重要）
+- 命令执行统一使用会话式工具：\`exec_command\` + \`write_stdin\`。
+- 先用 \`exec_command\` 启动命令并拿到 \`process_id\`。
+- 若需要继续读取后续输出或向进程输入内容，使用 \`write_stdin\`：
+  - 轮询输出：\`chars\` 传空字符串
+  - 交互输入：\`chars\` 传要写入 stdin 的内容
+- 命令会话完成后，优先调用 \`close_session\` 主动释放资源（必要时可 \`force=true\`）。
+- 只在必要时分多轮读取；不要把原始超长输出直接转发给用户，应先总结。
+
 【chat 与平台（channel）的关系：如何把消息发到“指定 chat”】【关键】
 - \`channel\` 表示平台/接入渠道：\`telegram\` / \`feishu\` / \`qq\`（以及内部的 \`api\` / \`cli\` / \`scheduler\`）。
 - \`chatId\` 是平台侧的会话标识（各平台含义不同），不能跨平台通用。

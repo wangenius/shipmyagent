@@ -113,7 +113,7 @@ Agent 会分析指令并调用相应的工具完成任务。
 ```
 选择审批请求 ›
   write_repo - Write file: src/example.ts
-  exec_shell - Execute command: npm install
+  exec_command - Execute command session: npm install
 ```
 
 可以选择 "通过" 或 "拒绝"，并添加可选的回复说明。

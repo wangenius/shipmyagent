@@ -26,9 +26,11 @@ You can run tools in ./scripts/:
 const SHIP_JSON_CONTENT = `{
   "name": "developer-agent",
   "permissions": {
-    "read": ["src/**"],
-    "exec": ["npm test"],
-    "review": "required"
+    "exec_command": {
+      "requiresApproval": false,
+      "maxOutputChars": 12000,
+      "maxOutputLines": 200
+    }
   }
 }`;
 

@@ -9,7 +9,7 @@ description: 用 npx skills 查找/安装 Vercel Labs skills，并在 ShipMyAgen
 
 ## 1) 查找你需要的 skill
 
-使用 `exec_shell` 执行：
+使用 `exec_command` 执行（必要时用 `write_stdin` 轮询后续输出）：
 
 - `npx skills find react`
 - `npx skills find nextjs`
@@ -17,7 +17,7 @@ description: 用 npx skills 查找/安装 Vercel Labs skills，并在 ShipMyAgen
 
 ## 2) 安装推荐的核心 skills（全局）
 
-使用 `exec_shell` 依次执行（推荐用 `sma skill add` 安装并同步到 `~/.ship/skills`）：
+使用 `exec_command` 依次执行（推荐用 `sma skill add` 安装并同步到 `~/.ship/skills`）：
 
 - `sma skill add vercel-labs/agent-skills@vercel-react-best-practices`
 - `sma skill add vercel-labs/agent-skills@web-design-guidelines`

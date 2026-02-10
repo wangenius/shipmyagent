@@ -57,18 +57,35 @@ export async function emitToolSummariesFromStep(
     if (tr?.type !== "tool-result") continue;
     const toolName = (tr as any).toolName;
 
-    if (toolName === "exec_shell") {
-      const command = String(((tr as any).input as any)?.command || "").trim();
-      const exitCode = ((tr as any).output as any)?.exitCode;
-      const stdout = String(((tr as any).output as any)?.stdout || "").trim();
-      const stderr = String(((tr as any).output as any)?.stderr || "").trim();
-      const snippet = (stdout || stderr).slice(0, 500);
+    if (toolName === "exec_command" || toolName === "write_stdin" || toolName === "close_session") {
+      const output = ((tr as any).output as any) || {};
+      const command =
+        toolName === "exec_command"
+          ? String(((tr as any).input as any)?.cmd || "").trim()
+          : "";
+      const sessionId =
+        output?.process_id ??
+        output?.session_id ??
+        ((tr as any).input as any)?.session_id;
+      const exitCode = output?.exit_code;
+      const pageOutput = String(output?.output || "").trim();
+      const note = String(output?.note || "").trim();
+      const snippet = (pageOutput || note).slice(0, 500);
+
+      const title =
+        toolName === "exec_command"
+          ? `已启动命令会话：${command}${sessionId ? `（session_id=${sessionId}）` : ""}`
+          : toolName === "write_stdin"
+            ? `已轮询命令会话：${sessionId ? `session_id=${sessionId}` : "(unknown)"}`
+            : `已关闭命令会话：${sessionId ? `session_id=${sessionId}` : "(unknown)"}`;
+
       await emitStep(
         "step_finish",
-        `已执行：${command}${typeof exitCode === "number" ? `（exitCode=${exitCode}）` : ""}${snippet ? `\n摘要：${snippet}${(stdout || stderr).length > 500 ? "…" : ""}` : ""}`,
+        `${title}${typeof exitCode === "number" ? `（exitCode=${exitCode}）` : ""}${snippet ? `\n摘要：${snippet}${(pageOutput || note).length > 500 ? "…" : ""}` : ""}`,
         {
-          toolName: "exec_shell",
-          command,
+          toolName,
+          ...(command ? { command } : {}),
+          ...(sessionId ? { sessionId } : {}),
           exitCode: typeof exitCode === "number" ? exitCode : undefined,
           requestId: meta.requestId,
           chatKey: meta.chatKey,
