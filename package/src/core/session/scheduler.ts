@@ -7,9 +7,9 @@
  * - 快速矫正通过“drain lane”实现，不在 scheduler 内拼接文本。
  */
 
-import { withSessionRequestContext, type SessionRequestContext } from "./session-context.js";
-import type { Agent } from "./index.js";
-import type { SessionRuntime } from "./session.js";
+import { withSessionRequestContext, type SessionRequestContext } from "./request-context.js";
+import type { SessionAgent } from "../../types/session-agent.js";
+import type { SessionManager } from "./manager.js";
 import type { AgentResult } from "../../types/agent.js";
 import type {
   SchedulerConfig,
@@ -66,8 +66,8 @@ function normalizeConfig(input?: Partial<SchedulerConfig>): SchedulerConfig {
 
 export class Scheduler {
   private readonly config: SchedulerConfig;
-  private readonly getAgent: (sessionId: string) => Agent;
-  private readonly getSessionRuntime: () => SessionRuntime;
+  private readonly getAgent: (sessionId: string) => SessionAgent;
+  private readonly getSessionManager: () => SessionManager;
   private readonly deliverResult?: (params: {
     context: SessionRequestContext;
     result: AgentResult;
@@ -81,8 +81,8 @@ export class Scheduler {
 
   constructor(params: {
     config?: Partial<SchedulerConfig>;
-    getAgent: (sessionId: string) => Agent;
-    getSessionRuntime: () => SessionRuntime;
+    getAgent: (sessionId: string) => SessionAgent;
+    getSessionManager: () => SessionManager;
     deliverResult?: (params: {
       context: SessionRequestContext;
       result: AgentResult;
@@ -90,7 +90,7 @@ export class Scheduler {
   }) {
     this.config = normalizeConfig(params.config);
     this.getAgent = params.getAgent;
-    this.getSessionRuntime = params.getSessionRuntime;
+    this.getSessionManager = params.getSessionManager;
     this.deliverResult = params.deliverResult;
   }
 
@@ -196,7 +196,7 @@ export class Scheduler {
     lane: Lane,
     first: QueuedSessionMessage,
   ): Promise<void> {
-    const agent: Agent = this.getAgent(first.sessionId);
+    const agent: SessionAgent = this.getAgent(first.sessionId);
     if (!agent.isInitialized()) {
       await agent.initialize();
     }
@@ -251,13 +251,13 @@ export class Scheduler {
     );
 
     try {
-      const runtime = this.getSessionRuntime();
+      const runtime = this.getSessionManager();
       const store = runtime.getHistoryStore(first.sessionId);
       const assistantMessage = (result as any)?.assistantMessage;
 
       if (assistantMessage && typeof assistantMessage === "object") {
         await store.append(assistantMessage as any);
-        void runtime.checkAndExtractMemoryAsync(first.sessionId);
+        void runtime.afterSessionHistoryUpdatedAsync(first.sessionId);
       } else {
         const userVisible = String((result as any)?.output || "");
         if (userVisible.trim()) {
@@ -282,7 +282,7 @@ export class Scheduler {
               source: "egress",
             }),
           );
-          void runtime.checkAndExtractMemoryAsync(first.sessionId);
+          void runtime.afterSessionHistoryUpdatedAsync(first.sessionId);
         }
       }
     } catch {

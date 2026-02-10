@@ -20,12 +20,6 @@ export interface AgentRunInput {
    */
   sessionId: string;
   query: string;
-  onStep?: (event: {
-    type: string;
-    text: string;
-    data?: Record<string, unknown>;
-  }) => Promise<void>;
-
   /**
    * lane 快速矫正：在 step 前尝试 drain 当前 session 的后续消息。
    */

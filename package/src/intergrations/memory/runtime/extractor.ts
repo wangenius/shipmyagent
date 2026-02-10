@@ -1,9 +1,9 @@
 import { generateText } from "ai";
 import type { LanguageModel } from "ai";
-import type { MemoryEntry, MemoryExtractParams, MemoryCompressParams } from "../../types/memory.js";
-import { SessionHistoryStore } from "../history/store.js";
-import { getLogger } from "../../telemetry/index.js";
-import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
+import type { MemoryEntry, MemoryExtractParams, MemoryCompressParams } from "../../../types/memory.js";
+import { SessionHistoryStore } from "../../../core/session/history-store.js";
+import { getLogger } from "../../../telemetry/index.js";
+import { getShipRuntimeContextBase } from "../../../server/ShipRuntimeContext.js";
 
 /**
  * 从历史对话中提取记忆摘要。

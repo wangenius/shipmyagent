@@ -1,9 +1,9 @@
-import { discoverClaudeSkillsSync } from "../intergrations/skills/runtime/discovery.js";
-import { renderClaudeSkillsPromptSection } from "../intergrations/skills/runtime/prompt.js";
-import { DEFAULT_SHIP_PROMPTS } from "../core/runtime/prompt.js";
+import { DEFAULT_SHIP_PROMPTS } from "../core/prompts/system.js";
 import { logger as defaultLogger, type Logger } from "../telemetry/index.js";
 import { McpManager } from "../intergrations/mcp/runtime/manager.js";
-import { SessionRuntime } from "../core/runtime/session.js";
+import { SessionManager } from "../core/session/manager.js";
+import { runSessionMemoryMaintenance } from "../intergrations/memory/runtime/service.js";
+import { registerIntegrationSystemPromptProviders } from "../intergrations/system-prompt-providers.js";
 import {
   getAgentMdPath,
   getCacheDirPath,
@@ -33,7 +33,7 @@ import path from "path";
  *
  * 初始化时序（关键节点）
  * - 启动入口先 `setShipRuntimeContextBase(...)`
- * - 初始化 MCP/SessionRuntime 后再 `setShipRuntimeContext(...)`
+ * - 初始化 MCP/SessionManager 后再 `setShipRuntimeContext(...)`
  * - 业务模块只调用 `getShipRuntimeContext()`（未 ready 会抛错）
  */
 export type ShipRuntimeContextBase = {
@@ -53,7 +53,7 @@ export type ShipRuntimeContextBase = {
 
 export type ShipRuntimeContext = ShipRuntimeContextBase & {
   mcpManager: McpManager;
-  sessionRuntime: SessionRuntime;
+  sessionManager: SessionManager;
 };
 
 let base: ShipRuntimeContextBase | null = null;
@@ -84,7 +84,7 @@ export function getShipRuntimeContext(): ShipRuntimeContext {
     );
   }
   throw new Error(
-    "Ship runtime context is not ready yet. Ensure MCP/SessionRuntime are initialized before access.",
+    "Ship runtime context is not ready yet. Ensure MCP/SessionManager are initialized before access.",
   );
 }
 
@@ -118,13 +118,6 @@ export async function initShipRuntimeContext(cwd: string): Promise<void> {
     systems: [],
   });
 
-  const skills = discoverClaudeSkillsSync(rootPath, config);
-  const skillsSection = renderClaudeSkillsPromptSection(
-    rootPath,
-    config,
-    skills,
-  );
-
   // Agent.md（用户可编辑的 system prompt）在启动时读取并缓存。
   let agentProfiles = `# Agent Role
 You are a helpful project assistant.`;
@@ -135,9 +128,7 @@ You are a helpful project assistant.`;
     // ignore
   }
 
-  const systems = [agentProfiles, DEFAULT_SHIP_PROMPTS, skillsSection].filter(
-    Boolean,
-  );
+  const systems = [agentProfiles, DEFAULT_SHIP_PROMPTS].filter(Boolean);
 
   // 关键点（中文）：systems 在启动时确认后写回 base context，供后续模块读取。
   setShipRuntimeContextBase({
@@ -148,10 +139,19 @@ You are a helpful project assistant.`;
     systems,
   });
 
+  registerIntegrationSystemPromptProviders();
+
   const mcpManager = new McpManager();
   await mcpManager.initialize();
 
-  const sessionRuntime = new SessionRuntime();
+  let sessionManager: SessionManager;
+  sessionManager = new SessionManager({
+    runMemoryMaintenance: async (sessionId) =>
+      runSessionMemoryMaintenance({
+        sessionId,
+        getHistoryStore: (id) => sessionManager.getHistoryStore(id),
+      }),
+  });
 
   setShipRuntimeContext({
     cwd: resolvedCwd,
@@ -160,7 +160,7 @@ You are a helpful project assistant.`;
     config,
     systems,
     mcpManager,
-    sessionRuntime,
+    sessionManager,
   });
 }
 

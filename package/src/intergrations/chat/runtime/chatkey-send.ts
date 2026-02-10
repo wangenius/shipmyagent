@@ -105,7 +105,7 @@ export async function sendTextByChatKey(params: {
   }
 
   // 关键点（中文）：尽量从 history 的最近 user message 拿到 chatType/messageThreadId/messageId（尤其 QQ 需要）。
-  const historyStore = getShipRuntimeContext().sessionRuntime.getHistoryStore(chatKey);
+  const historyStore = getShipRuntimeContext().sessionManager.getHistoryStore(chatKey);
   let messages: ShipSessionMessageV1[] = [];
   try {
     messages = await historyStore.loadAll();

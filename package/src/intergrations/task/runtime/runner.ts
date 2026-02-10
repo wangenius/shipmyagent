@@ -10,7 +10,7 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import { withSessionRequestContext } from "../../../core/runtime/session-context.js";
+import { withSessionRequestContext } from "../../../core/session/request-context.js";
 import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
 import type { ShipTaskRunMetaV1, ShipTaskRunTriggerV1 } from "../../../types/task.js";
 import { pickLastSuccessfulChatSendText } from "../../chat/runtime/user-visible-text.js";
@@ -94,7 +94,7 @@ export async function runTaskNow(params: {
   let errorText = "";
 
   try {
-    const agent = runtime.sessionRuntime.getAgent(runSessionId);
+    const agent = runtime.sessionManager.getAgent(runSessionId);
 
     // 关键点（中文）：以 scheduler channel 运行，但使用 task-run chatKey 让 history 落盘到 runDir。
     const result = await withSessionRequestContext(
@@ -116,7 +116,7 @@ export async function runTaskNow(params: {
 
     // 落盘 assistant UIMessage（包含 tool parts），以便 history.jsonl 可审计。
     try {
-      const store = runtime.sessionRuntime.getHistoryStore(runSessionId);
+      const store = runtime.sessionManager.getHistoryStore(runSessionId);
       const assistantMessage = (result as any)?.assistantMessage;
       if (assistantMessage && typeof assistantMessage === "object") {
         await store.append(assistantMessage as any);

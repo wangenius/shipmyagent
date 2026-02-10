@@ -13,7 +13,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import { z } from "zod";
 import { tool } from "ai";
 import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
-import { sessionRequestContext } from "../runtime/session-context.js";
+import { sessionRequestContext } from "../session/request-context.js";
 import { llmRequestContext } from "../../telemetry/index.js";
 
 const DEFAULT_MAX_OUTPUT_CHARS = 12_000;

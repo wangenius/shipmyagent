@@ -1,26 +1,17 @@
 /**
- * Session skills state registry（内核态）。
+ * Session skills state store（integration 内部状态）。
  *
  * 关键点（中文）
- * - core 只负责“当前 sessionId 的技能状态容器”，不负责扫描/发现/挂载实现。
- * - 所有发现与加载策略由 `intergrations/skills/*` 提供；core 只存快照给 runtime 使用。
+ * - 这是 skills integration 的运行时状态容器
+ * - core 不负责也不感知 skill/memory 业务状态
  */
 
-import type { ClaudeSkill } from "../../types/claude-skill.js";
-import type { LoadedSkillV1 } from "../../types/loaded-skill.js";
-
-type SessionSkillStateInternal = {
-  allSkillsById: Map<string, ClaudeSkill>;
-  loadedSkillsById: Map<string, LoadedSkillV1>;
-  updatedAt: number;
-};
-
-export type SessionSkillStateSnapshot = {
-  sessionId: string;
-  allSkills: ClaudeSkill[];
-  loadedSkills: LoadedSkillV1[];
-  updatedAt: number;
-};
+import type { ClaudeSkill } from "../../../types/claude-skill.js";
+import type { LoadedSkillV1 } from "../../../types/loaded-skill.js";
+import type {
+  SessionSkillStateInternal,
+  SessionSkillStateSnapshot,
+} from "./types.js";
 
 const sessionSkillStateStore = new Map<string, SessionSkillStateInternal>();
 

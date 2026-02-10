@@ -30,7 +30,7 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
   }
 
   clearChat(chatKey: string): void {
-    getShipRuntimeContext().sessionRuntime.clearAgent(chatKey);
+    getShipRuntimeContext().sessionManager.clearAgent(chatKey);
     this.logger.info(`Cleared chat: ${chatKey}`);
   }
 
@@ -43,7 +43,7 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     meta?: Record<string, unknown>;
   }): Promise<void> {
     const meta = (params.meta || {}) as any;
-    await this.sessionRuntime.appendUserMessage({
+    await this.sessionManager.appendUserMessage({
       channel: this.channel,
       targetId: params.chatId,
       sessionId: params.chatKey,
@@ -71,7 +71,7 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
       messageId: msg.messageId,
     });
 
-    const { lanePosition } = await getShipRuntimeContext().sessionRuntime.enqueue({
+    const { lanePosition } = await getShipRuntimeContext().sessionManager.enqueue({
       channel: this.channel,
       targetId: msg.chatId,
       sessionId: chatKey,

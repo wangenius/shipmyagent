@@ -7,7 +7,6 @@ import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "./platform-adapter.js";
-import type { Agent } from "../../../core/runtime/index.js";
 
 /**
  * Feishu (Lark) chat adapter.

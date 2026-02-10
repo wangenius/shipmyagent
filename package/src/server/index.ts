@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { logger as server_logger } from "../telemetry/index.js";
-import { withSessionRequestContext } from "../core/runtime/session-context.js";
+import { withSessionRequestContext } from "../core/session/request-context.js";
 import http from "node:http";
 import fs from "fs-extra";
 import path from "path";
@@ -210,7 +210,7 @@ export class AgentServer {
         const runtime = getShipRuntimeContext();
         const messageId =
           typeof body?.messageId === "string" ? body.messageId : undefined;
-        await runtime.sessionRuntime.appendUserMessage({
+        await runtime.sessionManager.appendUserMessage({
           channel: "api",
           targetId: chatId,
           sessionId,
@@ -229,7 +229,7 @@ export class AgentServer {
             messageId,
           },
           () =>
-            runtime.sessionRuntime.getAgent(sessionId).run({
+            runtime.sessionManager.getAgent(sessionId).run({
               sessionId,
               query: instructions,
             }),
@@ -239,11 +239,11 @@ export class AgentServer {
           pickLastSuccessfulChatSendText((result as any)?.toolCalls || []) ||
           String(result?.output || "");
         try {
-          const store = runtime.sessionRuntime.getHistoryStore(sessionId);
+          const store = runtime.sessionManager.getHistoryStore(sessionId);
           const assistantMessage = (result as any)?.assistantMessage;
           if (assistantMessage && typeof assistantMessage === "object") {
             await store.append(assistantMessage as any);
-            void runtime.sessionRuntime.checkAndExtractMemoryAsync(sessionId);
+            void runtime.sessionManager.afterSessionHistoryUpdatedAsync(sessionId);
           } else if (userVisible && userVisible.trim()) {
             await store.append(
               store.createAssistantTextMessage({
@@ -260,7 +260,7 @@ export class AgentServer {
                 source: "egress",
               }),
             );
-            void runtime.sessionRuntime.checkAndExtractMemoryAsync(sessionId);
+            void runtime.sessionManager.afterSessionHistoryUpdatedAsync(sessionId);
           }
         } catch {
           // ignore

@@ -4,9 +4,9 @@ import {
   getShipSessionMemoryBackupDirPath,
   getShipSessionMemoryBackupPath,
   getShipSessionMemoryMetaPath,
-} from "../../utils.js";
-import type { MemoryEntry } from "../../types/memory.js";
-import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
+} from "../../../utils.js";
+import type { MemoryEntry } from "../../../types/memory.js";
+import { getShipRuntimeContextBase } from "../../../server/ShipRuntimeContext.js";
 
 /**
  * MemoryManager：管理单个 session 的记忆文件（memory/Primary.md）。

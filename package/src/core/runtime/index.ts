@@ -1,7 +1,4 @@
-export type {
-  AgentRunInput,
-  AgentResult,
-  ConversationMessage,
-} from "../../types/agent.js";
-
-export { Agent } from "./agent.js";
+/**
+ * runtime 模块：只负责执行器实现。
+ */
+export { createSessionAgent } from "./agent.js";

@@ -7,7 +7,7 @@
  */
 
 import { sendTextByChatKey } from "./runtime/chatkey-send.js";
-import { sessionRequestContext } from "../../core/runtime/session-context.js";
+import { sessionRequestContext } from "../../core/session/request-context.js";
 import { llmRequestContext } from "../../telemetry/index.js";
 import type {
   ChatContextSnapshot,
