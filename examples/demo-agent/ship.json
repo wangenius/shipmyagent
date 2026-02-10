@@ -15,6 +15,13 @@
     "apiKey": "${LLM_API_KEY}",
     "temperature": 0.7
   },
+  "acp": {
+    "enabled": true,
+    "adapter": "codex",
+    "command": "codex-acp",
+    "args": [],
+    "requestTimeoutMs": 600000
+  },
   "skills": {
     "paths": [
       ".claude/skills"
@@ -23,7 +30,8 @@
   "adapters": {
     "telegram": {
       "enabled": true,
-      "botToken": "${TELEGRAM_BOT_TOKEN}"
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
     },
     "feishu": {
       "enabled": true,
@@ -32,7 +40,7 @@
       "domain": "https://open.feishu.cn"
     },
     "qq": {
-      "enabled": true,
+      "enabled": false,
       "appId": "${QQ_APP_ID}",
       "appSecret": "${QQ_APP_SECRET}",
       "sandbox": true
