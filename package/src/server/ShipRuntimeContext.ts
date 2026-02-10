@@ -1,9 +1,8 @@
-import { discoverClaudeSkillsSync } from "../core/skills/discovery.js";
-import { renderClaudeSkillsPromptSection } from "../core/skills/prompt.js";
+import { discoverClaudeSkillsSync } from "../intergrations/skills/runtime/discovery.js";
+import { renderClaudeSkillsPromptSection } from "../intergrations/skills/runtime/prompt.js";
 import { DEFAULT_SHIP_PROMPTS } from "../core/runtime/prompt.js";
-import type { Logger } from "../telemetry/index.js";
-import { logger as defaultLogger } from "../telemetry/logging/logger.js";
-import { McpManager } from "../core/mcp/manager.js";
+import { logger as defaultLogger, type Logger } from "../telemetry/index.js";
+import { McpManager } from "../intergrations/mcp/runtime/manager.js";
 import { ChatRuntime } from "../core/runtime/chat-runtime.js";
 import {
   getAgentMdPath,

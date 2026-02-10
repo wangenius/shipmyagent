@@ -6,7 +6,7 @@
  * - 每次执行产生一个 run 目录（timestamp），并落盘 history.jsonl / output.md / result.md 等审计文件
  *
  * 注意
- * - 这里仅放“类型与枚举”，不放实现逻辑（实现位于 core/task-system/*）
+ * - 这里仅放“类型与枚举”，不放实现逻辑（实现位于 intergrations/task/runtime/*）
  */
 
 export type ShipTaskStatus = "enabled" | "paused" | "disabled";

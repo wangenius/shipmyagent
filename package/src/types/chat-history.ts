@@ -1,5 +1,5 @@
 import type { UIMessage } from "ai";
-import type { ChatDispatchChannel } from "../core/egress/dispatcher.js";
+import type { ChatDispatchChannel } from "./chat-dispatcher.js";
 
 /**
  * 对话历史：以 UIMessage[] 作为“唯一事实源”（用于 UI 展示 + 模型 messages 输入）。

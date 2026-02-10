@@ -51,11 +51,11 @@ function getUserShipSkillsDir(): string {
 function getBuiltInSkillsDirFromBin(): string {
   // 关键点（中文）
   // - 发布包中该文件在 `bin/commands/init.js`
-  // - 内置 skills 会在 build 阶段复制到 `bin/core/skills/built-in`
+  // - 内置 skills 会在 build 阶段复制到 `bin/intergrations/skills/built-in`
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
   const binRoot = path.resolve(__dirname, "..");
-  return path.join(binRoot, "core", "skills", "built-in");
+  return path.join(binRoot, "intergrations", "skills", "built-in");
 }
 
 async function installBuiltInSkillsToUserDir(): Promise<void> {

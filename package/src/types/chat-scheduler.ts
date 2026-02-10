@@ -1,4 +1,4 @@
-import type { ChatDispatchChannel } from "../core/egress/dispatcher.js";
+import type { ChatDispatchChannel } from "./chat-dispatcher.js";
 
 /**
  * Chat 调度器配置（Lane Scheduler）。

@@ -1,4 +1,7 @@
-export type { ClaudeSkill } from "../../types/claude-skill.js";
-export { getClaudeSkillSearchRoots, getClaudeSkillSearchPaths } from "./paths.js";
-export { discoverClaudeSkillsSync } from "./discovery.js";
-export { renderClaudeSkillsPromptSection } from "./prompt.js";
+export type { ChatSkillStateSnapshot } from "./state.js";
+export {
+  clearChatSkillState,
+  getChatSkillState,
+  setChatAvailableSkills,
+  setChatLoadedSkills,
+} from "./state.js";

@@ -26,6 +26,45 @@ description: ShipMyAgent 命令行界面完整参考
 
 ---
 
+
+## Bash-first 模块命令
+
+从本版本开始，`chat / skill / task` 统一按模块命令注册，适合在 agent 的 shell 工具中直接执行。
+
+### `sma chat`
+
+```bash
+sma chat send --text "已完成" [--chat-key <chatKey>]
+sma chat context
+```
+
+说明：
+- `--chat-key` 可省略，CLI 会优先读取 `SMA_CTX_CHAT_KEY`
+- 典型场景：Agent 通过 `exec_command` 执行 `sma chat send` 回发消息
+
+### `sma skill`
+
+```bash
+sma skill list [path]
+sma skill find <query>
+sma skill add <spec>
+sma skill load <name> [--chat-key <chatKey>]
+sma skill unload <name> [--chat-key <chatKey>]
+sma skill pinned [--chat-key <chatKey>]
+```
+
+### `sma task`
+
+```bash
+sma task list [--status enabled|paused|disabled]
+sma task create --title "..." --description "..." [--chat-key <chatKey>]
+sma task run <taskId>
+sma task enable <taskId>
+sma task disable <taskId>
+```
+
+---
+
 ## 核心命令
 
 ### `shipmyagent init`

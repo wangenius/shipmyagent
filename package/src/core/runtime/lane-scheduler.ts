@@ -11,8 +11,8 @@
  */
 
 import { withChatRequestContext } from "./request-context.js";
-import { sendFinalOutputIfNeeded } from "../egress/final-output.js";
-import { pickLastSuccessfulChatSendText } from "../egress/user-visible-text.js";
+import { sendFinalOutputIfNeeded } from "../../intergrations/chat/runtime/final-output.js";
+import { pickLastSuccessfulChatSendText } from "../../intergrations/chat/runtime/user-visible-text.js";
 
 import type { Agent } from "./index.js";
 import type { ChatRuntime } from "./chat-runtime.js";
@@ -21,7 +21,7 @@ import type { ChatRuntime } from "./chat-runtime.js";
 	  ChatLaneSchedulerConfig,
 	  ChatLaneSchedulerStats,
 	} from "../../types/chat-scheduler.js";
-import { getChatDispatcher, type ChatDispatchChannel } from "../egress/dispatcher.js";
+import { getChatSender, type ChatDispatchChannel } from "../../intergrations/chat/runtime/chat-send-registry.js";
 import type { ChatDispatchSendActionParams } from "../../types/chat-dispatcher.js";
 
 /**
@@ -92,7 +92,7 @@ function startTelegramTypingHeartbeat(params: {
   intervalMs?: number;
 }): { stop: () => void } | null {
   if (params.channel !== "telegram") return null;
-  const dispatcher = getChatDispatcher(params.channel);
+  const dispatcher = getChatSender(params.channel);
   if (!dispatcher?.sendAction) return null;
 
   const intervalMs =

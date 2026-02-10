@@ -10,16 +10,11 @@
  * - Runtime subsystems should NOT depend on tool implementations
  */
 
+import { Tool } from "ai";
 import { loadProjectDotenv } from "../../../utils.js";
-import { skillsTools } from "../builtin/skills.js";
+import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
 import { execShellTools } from "../builtin/exec-shell.js";
 import { createMcpAiTool } from "./mcp.js";
-import { chatTools } from "../builtin/chat.js";
-import { chatContactSendTools } from "../builtin/chat-contact-send.js";
-import { taskSystemTools } from "../builtin/task-system.js";
-import { Tool } from "ai";
-
-import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
 
 export interface AgentToolsLogger {
   info(message: string): void;
@@ -36,15 +31,12 @@ export function createAgentTools(): Record<string, Tool> {
   // 注意：不要在模块顶层读取 runtime context，否则像 `sma -v` 这种只打印版本号的场景也会因为未初始化而崩溃
   const runtime = getShipRuntimeContext();
   loadProjectDotenv(runtime.rootPath);
-  const { logger, chatRuntime, mcpManager } = runtime;
+  const { logger, mcpManager } = runtime;
 
   const tools: Record<string, Tool> = {};
 
-  Object.assign(tools, chatTools);
-  Object.assign(tools, chatContactSendTools);
-  Object.assign(tools, skillsTools);
+  // Bash-first：只保留命令会话原语
   Object.assign(tools, execShellTools);
-  Object.assign(tools, taskSystemTools);
 
   const mcpTools = mcpManager.getAllTools();
   for (const { server, tool: mcpTool } of mcpTools) {

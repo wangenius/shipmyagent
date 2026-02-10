@@ -10,16 +10,17 @@
 
 import { AgentServer } from "../server/index.js";
 import { createInteractiveServer } from "../server/interactive.js";
-import { createTelegramBot } from "../adapters/telegram.js";
-import { createFeishuBot } from "../adapters/feishu.js";
-import { createQQBot } from "../adapters/qq.js";
+import { createTelegramBot } from "../intergrations/chat/adapters/telegram.js";
+import { createFeishuBot } from "../intergrations/chat/adapters/feishu.js";
+import { createQQBot } from "../intergrations/chat/adapters/qq.js";
 import {
   getShipRuntimeContext,
   initShipRuntimeContext,
 } from "../server/ShipRuntimeContext.js";
 import type { StartOptions } from "../types/start.js";
-import { logger } from "../telemetry/logging/logger.js";
-import { TaskCronScheduler } from "../core/task-system/scheduler.js";
+import { logger } from "../telemetry/index.js";
+import { CronTriggerEngine } from "../core/intergration/cron-trigger.js";
+import { registerTaskCronJobs } from "../intergrations/task/scheduler.js";
 
 /**
  * `shipmyagent run` command entrypoint.
@@ -78,6 +79,9 @@ export async function runCommand(
     parseBoolean(options.interactiveWeb) ??
     shipConfig.start?.interactiveWeb ??
     false;
+
+  process.env.SMA_SERVER_PORT = String(port);
+  process.env.SMA_SERVER_HOST = host;
 
   // Create and start server
   const server = new AgentServer();
@@ -159,17 +163,17 @@ export async function runCommand(
 
   // 处理进程信号
   let isShuttingDown = false;
-  let taskScheduler: TaskCronScheduler | null = null;
+  let cronTriggerEngine: CronTriggerEngine | null = null;
   const shutdown = async (signal: string) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
 
     logger.info(`Received ${signal} signal, shutting down...`);
 
-    // Stop task scheduler
-    if (taskScheduler) {
+    // Stop cron trigger engine
+    if (cronTriggerEngine) {
       try {
-        await taskScheduler.stop();
+        await cronTriggerEngine.stop();
       } catch {
         // ignore
       }
@@ -237,12 +241,18 @@ export async function runCommand(
     await qqBot.start();
   }
 
-  // Start task scheduler (cron)
+  // Start task cron jobs via core cron engine
   try {
-    taskScheduler = new TaskCronScheduler();
-    await taskScheduler.start();
+    cronTriggerEngine = new CronTriggerEngine();
+    const registerResult = await registerTaskCronJobs({
+      engine: cronTriggerEngine,
+    });
+    await cronTriggerEngine.start();
+    logger.info(
+      `Task cron trigger started (tasks=${registerResult.tasksFound}, jobs=${registerResult.jobsScheduled})`,
+    );
   } catch (e) {
-    logger.error(`Task scheduler failed to start: ${String(e)}`);
+    logger.error(`Task cron trigger failed to start: ${String(e)}`);
   }
 
   logger.info("=== ShipMyAgent Started ===");

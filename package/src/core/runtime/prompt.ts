@@ -35,8 +35,8 @@ export function buildContextSystemPrompt(input: {
     "User-facing output rules:",
     "- Reply in natural language.",
     "- Do NOT paste raw tool outputs or JSON logs; summarize them.",
-    "- Deliver user-visible replies via the `chat_send` tool.",
-    "- IMPORTANT: For a single user message, call `chat_send` at most once (no follow-up messages unless the user explicitly asks).",
+    "- Deliver user-visible replies by running `sma chat send --text \"...\"` via shell tools.",
+    "- IMPORTANT: For a single user message, prefer a single `sma chat send` command unless user asks for follow-ups.",
   ].join("\n");
 
   return [runtimeContextLines.join("\n"), "", outputRules].join("\n");
@@ -85,12 +85,12 @@ export const DEFAULT_SHIP_PROMPTS = `
 
 # 最重要
 【关于消息】
-- 这是 tool-strict 聊天集成：用户可见内容必须通过 \`chat_send\` 发送。
-- 对所有的用户消息，通过 \`chat_send\`回复， 基于场景决定何时回复：
-    - 默认一般一条用户消息回复一次，把完整回复放进同一次 \`chat_send\` 里。
+- 这是 Bash-first 聊天集成：用户可见内容必须通过执行 \`sma chat send --text "..."\` 发送。
+- 对所有用户消息，优先通过 \`sma chat send\` 回复，基于场景决定何时发送：
+    - 默认一条用户消息发一次，把完整回复放进同一次 \`sma chat send\`。
     - 对某些skills或者任务你需要执行时，可以先发送一条回复等等。
   （所有的设计都是为了模拟真实对话逻辑）
-- 不要为了“补充说明/最后一句/再确认”反复调用 \`chat_send\`，避免刷屏。
+- 不要为了“补充说明/最后一句/再确认”反复执行多次 \`sma chat send\`，避免刷屏。
 
 【关于命令执行工具】（重要）
 - 命令执行统一使用会话式工具：\`exec_command\` + \`write_stdin\`。
@@ -107,10 +107,10 @@ export const DEFAULT_SHIP_PROMPTS = `
 - \`chatKey\` 是 ShipMyAgent 内部的“唯一定位符”（跨会话投递的唯一 key）：
   - 系统会用 \`channel + chatId (+ 线程信息)\` 生成 chatKey（例如 \`telegram-chat-<id>\`、\`telegram-chat-<id>-topic-<thread>\`、\`feishu-chat-<id>\`、\`qq-<chatType>-<id>\`）。
   - 每个 chatKey 对应一个落盘目录：\`.ship/chat/<encodedChatKey>/...\`，并用于调度（同 chatKey 串行、不同 chatKey 可并发）。
-- 给“当前对话”回复：用 \`chat_send\`（无需指定 chatKey；会根据运行时上下文自动路由到当前平台/当前 chat）。
-- 给“另一个 chat”发消息：用 \`chat_contact_send\`（必须指定目标 \`chatKey\`）：
-  - 输入：\`{ chatKey, text }\`
-  - 路由方式：工具会解析 chatKey，并从该 chatKey 的 history 补齐必要的 thread/message 元信息（例如 QQ 的 messageId）再投递。
+- 给“当前对话”回复：执行 \`sma chat send --text "..."\`（可不传 \`--chat-key\`，优先读取 \`SMA_CTX_CHAT_KEY\`）。
+- 给“另一个 chat”发消息：执行 \`sma chat send --chat-key <chatKey> --text "..."\`：
+  - 参数：\`--chat-key\` + \`--text\`
+  - 路由方式：服务会解析 chatKey，并从该 chatKey 的 history 补齐必要元信息（如 QQ 的 messageId）后投递。
 
 # 很重要
 【关于上下文（history）】（关键）
@@ -140,7 +140,7 @@ Telegram 附件发送（仅当你在 Telegram 对话中回复时）
 User-facing output rules:
 - Reply in natural language.
 - Do NOT paste raw tool outputs or JSON logs; summarize them.
-- Deliver user-visible replies via the \`chat_send\` tool.
+- Deliver user-visible replies by running \`sma chat send --text "..."\` via shell tools.
 
 # 一些补充：
 

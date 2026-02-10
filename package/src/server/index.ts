@@ -1,14 +1,15 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { logger as server_logger } from "../telemetry/logging/logger.js";
+import { logger as server_logger } from "../telemetry/index.js";
 import { withChatRequestContext } from "../core/runtime/request-context.js";
 import http from "node:http";
 import fs from "fs-extra";
 import path from "path";
 import { getShipPublicDirPath } from "../utils.js";
 import { getShipRuntimeContext } from "./ShipRuntimeContext.js";
-import { pickLastSuccessfulChatSendText } from "../core/egress/user-visible-text.js";
+import { pickLastSuccessfulChatSendText } from "../intergrations/chat/runtime/user-visible-text.js";
+import { registerAllModulesForServer } from "../core/intergration/registry.js";
 
 export interface StartOptions {
   port: number;
@@ -150,6 +151,9 @@ export class AgentServer {
       });
     });
 
+    // 统一注册模块路由（chat / skill / task / future）
+    registerAllModulesForServer(this.app);
+
     // Execute instruction
     this.app.post("/api/execute", async (c) => {
       let bodyText;
@@ -280,10 +284,10 @@ export class AgentServer {
           const method = req.method || "GET";
 
           // Collect body
-          const bodyBuffer = await new Promise<Buffer>((resolve, reject) => {
-            let chunks: Buffer[] = [];
+          const bodyBuffer = await new Promise<Buffer>((resolveBody, reject) => {
+            const chunks: Buffer[] = [];
             req.on("data", (chunk) => chunks.push(chunk));
-            req.on("end", () => resolve(Buffer.concat(chunks)));
+            req.on("end", () => resolveBody(Buffer.concat(chunks)));
             req.on("error", reject);
           });
 
@@ -303,7 +307,7 @@ export class AgentServer {
           }
           const body = await response.text();
           res.end(body);
-        } catch (error) {
+        } catch {
           res.statusCode = 500;
           res.end("Internal Server Error");
         }
@@ -316,6 +320,9 @@ export class AgentServer {
         server_logger.info("  GET  /health - Health check");
         server_logger.info("  GET  /api/status - Agent status");
         server_logger.info("  POST /api/execute - Execute instruction");
+        server_logger.info("  POST /api/chat/send - Chat service");
+        server_logger.info("  POST /api/skill/load - Skill service");
+        server_logger.info("  POST /api/task/create - Task service");
         resolve();
       });
     });

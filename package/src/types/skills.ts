@@ -2,7 +2,7 @@
  * Skills types (Claude Code compatible).
  *
  * 说明（中文，关键点）
- * - ShipMyAgent 支持从多个 roots 扫描 skills：项目内、用户目录、内置（随包发布）。
+ * - ShipMyAgent 支持从多个 roots 扫描 skills：项目内、用户目录、配置外部路径。
  * - 该文件放在 `types/` 下，供 core/runtime/tools/cli 复用，避免在 core 内散落类型定义。
  */
 

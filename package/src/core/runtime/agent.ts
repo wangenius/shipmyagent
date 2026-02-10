@@ -18,7 +18,7 @@ import {
   buildContextSystemPrompt,
   transformPromptsIntoSystemMessages,
 } from "./prompt.js";
-import { createModel } from "../../llm/create-model.js";
+import { createModel } from "../llm/create-model.js";
 import fs from "fs-extra";
 import {
   extractUserFacingTextFromStep,
@@ -36,7 +36,8 @@ import { createAgentTools } from "../tools/set/agent-tools.js";
 import { openai } from "@ai-sdk/openai";
 import { toolExecutionContext } from "../tools/builtin/execution-context.js";
 import path from "node:path";
-import { discoverClaudeSkillsSync } from "../skills/index.js";
+import { discoverClaudeSkillsSync } from "../../intergrations/skills/runtime/index.js";
+import { setChatAvailableSkills, setChatLoadedSkills } from "../skills/index.js";
 import type { ShipMessageMetadataV1 } from "../../types/chat-history.js";
 import { getShipRuntimeContext, getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 
@@ -117,7 +118,7 @@ function buildLoadedSkillsSystemText(params: {
     if (Array.isArray(s.allowedTools) && s.allowedTools.length > 0) {
       hasAnyAllowedTools = true;
       for (const t of s.allowedTools) unionAllowedTools.add(String(t));
-      lines.push(`**Tool Restriction:** You can ONLY use these tools: ${s.allowedTools.join(", ")} (plus chat_send for output)`);
+      lines.push(`**Tool Restriction:** You can ONLY use these tools: ${s.allowedTools.join(", ")} (plus exec_command/write_stdin/close_session for command workflow)`);
     } else {
       lines.push(`**Tool Restriction:** None (all tools available)`);
     }
@@ -137,7 +138,9 @@ function buildLoadedSkillsSystemText(params: {
   const activeTools = hasAnyAllowedTools
     ? Array.from(
         new Set([
-          "chat_send", // Essential: allow output even when tools are restricted
+          "exec_command",
+          "write_stdin",
+          "close_session",
           ...Array.from(unionAllowedTools),
         ]),
       )
@@ -354,13 +357,15 @@ export class Agent {
 		      // 关键点（中文）：chat 级 skills（pinnedSkillIds）持久化在 meta.json 中；
 		      // 每次 run 需要自动加载并注入 system（但不写入 history.jsonl）。
 		      const pinnedSkills: Map<string, LoadedSkillV1> = new Map();
+		      const runtime = getShipRuntimeContext();
+		      const discoveredSkills = discoverClaudeSkillsSync(runtime.rootPath, runtime.config);
+		      setChatAvailableSkills(chatKey, discoveredSkills);
+
 		      try {
 		        const meta = await historyStore.loadMeta();
 		        const pinnedSkillIds = Array.isArray(meta.pinnedSkillIds) ? meta.pinnedSkillIds : [];
 		        if (pinnedSkillIds.length > 0) {
-			          const runtime = getShipRuntimeContext();
-			          const discovered = discoverClaudeSkillsSync(runtime.rootPath, runtime.config);
-		          const byId = new Map(discovered.map((s) => [s.id, s]));
+		          const byId = new Map(discoveredSkills.map((s) => [s.id, s]));
 		          const loadedIds: string[] = [];
 		          for (const id of pinnedSkillIds) {
 		            const skill = byId.get(String(id || "").trim());
@@ -376,7 +381,7 @@ export class Agent {
 		            pinnedSkills.set(skill.id, {
 		              id: skill.id,
 		              name: skill.name,
-			              skillMdPath: path.relative(runtime.rootPath, skill.skillMdPath),
+		              skillMdPath: path.relative(runtime.rootPath, skill.skillMdPath),
 		              content,
 		              allowedTools: Array.isArray(skill.allowedTools)
 		                ? skill.allowedTools.map((t) => String(t)).filter(Boolean)
@@ -395,6 +400,9 @@ export class Agent {
 		        }
 		      } catch {
 		        // ignore
+		      } finally {
+		        // 关键点（中文）：core 只维护“当前 chatKey 的 skills 状态”；挂载策略由 integrations 决定。
+		        setChatLoadedSkills(chatKey, pinnedSkills);
 		      }
 
 		      // best-effort：若上层未提前写入 user UIMessage，这里补写一条，保证 run 可用。
@@ -548,6 +556,7 @@ export class Agent {
 		            if (removeSet.has(id)) pinnedSkills.delete(id);
 		          }
 		          await historyStore.setPinnedSkillIds(Array.from(pinnedSkills.keys()));
+		          setChatLoadedSkills(chatKey, pinnedSkills);
 		        } catch {
 		          // ignore
 		        }
@@ -640,26 +649,8 @@ export class Agent {
 	        } as any;
 	      }
 
-			      const computeChatSendBudgetGuard = (): {
-			        exceeded: boolean;
-			        maxCalls: number;
-			        calls: number;
-			      } => {
-	        const chatEgress = getShipRuntimeContext().config.context?.chatEgress;
-	        const maxCalls =
-	          typeof chatEgress?.chatSendMaxCallsPerRun === "number" &&
-	          Number.isFinite(chatEgress.chatSendMaxCallsPerRun) &&
-	          chatEgress.chatSendMaxCallsPerRun > 0
-	            ? chatEgress.chatSendMaxCallsPerRun
-	            : 30;
-        const execCtx = toolExecutionContext.getStore();
-        const calls = execCtx?.toolCallCounts.get("chat_send") ?? 0;
-        return { exceeded: calls > maxCalls, maxCalls, calls };
-      };
-
 		      const result = await withToolExecutionContext(
 		        {
-		          toolCallCounts: new Map(),
 		          loadedSkills: new Map(pinnedSkills),
 		        },
 		        async () =>
@@ -679,33 +670,19 @@ export class Agent {
 		                // 1) 在每个 step 前先检查 lane 是否有新消息；若有则重载 history。
 		                await reloadModelMessages("before_step");
 
-		                // 2) system prompt：按需叠加 skills / 预算 guard / 其它预备注入。
+		                // 2) system prompt：按需叠加 skills / 其它预备注入。
 		                const systemAdditions: SystemModelMessage[] = [];
 	                let activeTools: string[] | undefined;
-		                let toolChoice: "none" | undefined;
 
-		                if (execCtx?.loadedSkills?.size) {
-		                  const built = buildLoadedSkillsSystemText({
-		                    loaded: execCtx.loadedSkills as any,
-		                    allToolNames,
-		                  });
-		                  if (built) {
-		                    systemAdditions.push({ role: "system", content: built.systemText });
+	                if (execCtx?.loadedSkills?.size) {
+	                  const built = buildLoadedSkillsSystemText({
+	                    loaded: execCtx.loadedSkills as any,
+	                    allToolNames,
+	                  });
+	                  if (built) {
+	                    systemAdditions.push({ role: "system", content: built.systemText });
 	                    if (built.activeTools) activeTools = built.activeTools;
 	                  }
-	                }
-
-                const budget = computeChatSendBudgetGuard();
-                if (budget.exceeded) {
-                  systemAdditions.push({
-                    role: "system",
-                    content:
-                      `系统约束（重要）：你已经多次调用 chat_send（calls=${budget.calls}，max=${budget.maxCalls}）。现在禁止继续调用 chat_send；请停止工具调用并结束本次回复。`,
-                  });
-                  // 关键点（中文）：预算超限时，强制禁止继续工具调用，避免无意义循环消耗。
-                  toolChoice = "none";
-                  // 同时尽可能把 activeTools 缩到空集（防 provider 忽略 toolChoice 时仍能兜底）。
-	                  activeTools = [];
 	                }
 
 		                const nextSystem =
@@ -728,7 +705,6 @@ export class Agent {
 		                return {
 		                  system: nextSystem,
 		                  ...(Array.isArray(outMessages) ? { messages: outMessages } : {}),
-		                  ...(typeof toolChoice === "string" ? { toolChoice } : {}),
 		                  ...(Array.isArray(activeTools) ? { activeTools } : {}),
 		                };
 		              },

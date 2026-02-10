@@ -1,17 +1,17 @@
 import type { Agent } from "./index.js";
 import type { ChatLaneEnqueueResult } from "../../types/chat-scheduler.js";
-import type { ChatDispatchChannel } from "../egress/dispatcher.js";
+import type { ChatDispatchChannel } from "../../types/chat-dispatcher.js";
 import { ChatLaneScheduler } from "./lane-scheduler.js";
 import { Agent as AgentImpl } from "./index.js";
 import { MemoryManager } from "../memory/memory-manager.js";
 import { extractMemoryFromHistory, compressMemory } from "../memory/extractor.js";
-import { createModel } from "../../llm/create-model.js";
+import { createModel } from "../llm/create-model.js";
 import { getLogger } from "../../telemetry/index.js";
 import { ChatHistoryStore } from "../history/store.js";
 import type { ShipMessageMetadataV1 } from "../../types/chat-history.js";
 import { getShipRuntimeContext, getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 import path from "node:path";
-import { parseTaskRunChatKey, getTaskRunDir } from "../task-system/paths.js";
+import { parseTaskRunChatKey, getTaskRunDir } from "../../intergrations/task/runtime/paths.js";
 
 /**
  * ChatRuntime：把“平台入站消息 → 落盘审计 → 调度执行 → 回包兜底”收拢到一个地方。

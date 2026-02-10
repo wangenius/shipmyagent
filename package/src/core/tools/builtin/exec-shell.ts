@@ -13,6 +13,8 @@ import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import { z } from "zod";
 import { tool } from "ai";
 import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
+import { chatRequestContext } from "../../runtime/request-context.js";
+import { llmRequestContext } from "../../../telemetry/index.js";
 
 const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
 const DEFAULT_MAX_OUTPUT_LINES = 200;
@@ -118,6 +120,39 @@ function resolveExecWorkdir(projectRoot: string, workdir?: string): string {
   return path.isAbsolute(trimmed) ? trimmed : path.resolve(projectRoot, trimmed);
 }
 
+function setEnvString(env: NodeJS.ProcessEnv, key: string, value: unknown): void {
+  if (typeof value !== "string") return;
+  const trimmed = value.trim();
+  if (!trimmed) return;
+  env[key] = trimmed;
+}
+
+function setEnvNumber(env: NodeJS.ProcessEnv, key: string, value: unknown): void {
+  if (typeof value !== "number" || !Number.isFinite(value)) return;
+  env[key] = String(Math.trunc(value));
+}
+
+function buildExecContextEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  const chatCtx = chatRequestContext.getStore();
+  const llmCtx = llmRequestContext.getStore();
+
+  setEnvString(env, "SMA_CTX_CHAT_KEY", chatCtx?.chatKey);
+  setEnvString(env, "SMA_CTX_CHANNEL", chatCtx?.channel);
+  setEnvString(env, "SMA_CTX_CHAT_ID", chatCtx?.chatId);
+  setEnvString(env, "SMA_CTX_CHAT_TYPE", chatCtx?.chatType);
+  setEnvString(env, "SMA_CTX_USER_ID", chatCtx?.userId);
+  setEnvString(env, "SMA_CTX_MESSAGE_ID", chatCtx?.messageId);
+  setEnvNumber(env, "SMA_CTX_MESSAGE_THREAD_ID", chatCtx?.messageThreadId);
+  setEnvString(env, "SMA_CTX_REQUEST_ID", llmCtx?.requestId);
+
+  // 关键点（中文）：把当前 server 地址透传给子进程，便于 `sma chat/skill/task` 自动命中本地服务。
+  setEnvString(env, "SMA_CTX_SERVER_HOST", process.env.SMA_SERVER_HOST);
+  setEnvString(env, "SMA_CTX_SERVER_PORT", process.env.SMA_SERVER_PORT);
+
+  return env;
+}
+
 function touchSession(session: ExecSession): void {
   session.lastActiveAt = Date.now();
 }
@@ -191,6 +226,7 @@ function createExecSession(input: {
   const child = spawn(shellPath, [loginFlag, input.command], {
     cwd: input.cwd,
     stdio: "pipe",
+    env: buildExecContextEnv(),
   });
 
   child.stdout.setEncoding("utf8");

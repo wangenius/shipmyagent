@@ -7,11 +7,7 @@ import { startCommand } from "./commands/start.js";
 import { stopCommand } from "./commands/stop.js";
 import { restartCommand } from "./commands/restart.js";
 import { aliasCommand } from "./commands/alias.js";
-import {
-  skillAddCommand,
-  skillFindCommand,
-  skillListCommand,
-} from "./commands/skill.js";
+import { registerAllModulesForCli, getModuleRootCommandNames } from "./core/intergration/registry.js";
 import { readFileSync } from "fs";
 import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
@@ -21,9 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // 动态读取版本号
-const packageJson = JSON.parse(
-  readFileSync(join(__dirname, "../package.json"), "utf-8")
-);
+const packageJson = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf-8"));
 
 const program = new Command();
 
@@ -45,9 +39,7 @@ const parseBoolean = (value: string | undefined): boolean => {
 
 program
   .name(basename(process.argv[1] || "shipmyagent"))
-  .description(
-    "把一个代码仓库，启动为一个拥有自主意识和执行能力的 Agent",
-  )
+  .description("把一个代码仓库，启动为一个拥有自主意识和执行能力的 Agent")
   .version(packageJson.version, "-v, --version");
 
 // Avoid -h (reserved for host), use --help only.
@@ -133,42 +125,26 @@ const alias = program
   .helpOption("--help", "display help for command")
   .action(aliasCommand);
 
-const skill = program
-  .command("skill")
-  .description("Skills 管理（对标 `npx skills`，并提供本地 `list`）")
-  .helpOption("--help", "display help for command");
-
-skill
-  .command("find <query>")
-  .description("查找 skills（等价于：npx skills find <query>）")
-  .helpOption("--help", "display help for command")
-  .action(skillFindCommand);
-
-skill
-  .command("add <spec>")
-  .description(
-    "安装 skills（等价于：npx skills add <spec> --agent claude-code -y -g）",
-  )
-  .option("-g, --global", "全局安装（由 npx skills 写入 ~/.claude/skills，并同步到 ~/.ship/skills）", true)
-  .option("-y, --yes", "跳过安装确认（传递给 npx）", true)
-  .option("--agent <agent>", "指定 agent（默认：claude-code）", "claude-code")
-  .helpOption("--help", "display help for command")
-  .action((spec: string, options: { global?: boolean; yes?: boolean; agent?: string }) =>
-    skillAddCommand(spec, options),
-  );
-
-skill
-  .command("list [path]")
-  .description("列出当前项目可发现的 skills（project/home/built-in）")
-  .helpOption("--help", "display help for command")
-  .action(skillListCommand);
+// 模块命令统一注册（chat / skill / task / future modules）
+registerAllModulesForCli(program);
 
 // Default: `shipmyagent` / `shipmyagent .` / `shipmyagent [run-options]` => `shipmyagent run [path]`
 const firstArg = process.argv[2];
+const staticRootCommands = [
+  init.name(),
+  run.name(),
+  start.name(),
+  stop.name(),
+  restart.name(),
+  alias.name(),
+  "help",
+];
+const moduleRootCommands = getModuleRootCommandNames();
+const knownRootCommands = new Set([...staticRootCommands, ...moduleRootCommands]);
+
 if (
   !firstArg ||
-  (![init.name(), run.name(), start.name(), stop.name(), restart.name(), alias.name(), skill.name(), "help"].includes(firstArg) &&
-    !["--help", "-v", "--version"].includes(firstArg))
+  (!knownRootCommands.has(firstArg) && !["--help", "-v", "--version"].includes(firstArg))
 ) {
   process.argv.splice(2, 0, "run");
 }

@@ -6,16 +6,15 @@
  * - Telemetry is an infrastructure concern used by runtime, server, adapters, etc.
  *
  * This module is a stable entrypoint for:
- * - Unified logger (`Logger` / `createLogger`)
+ * - Unified logger (`Logger` / `logger`)
  * - LLM request tracing (`withLlmRequestContext` / `createLlmLoggingFetch`)
  */
 
-import { Logger } from "./logging/index.js";
-import { logger } from "./logging/logger.js";
+import { Logger, logger } from "./logger.js";
 
-export type { LogEntry } from "./logging/logger.js";
-export { Logger } from "./logging/index.js";
-export { logger } from "./logging/logger.js";
+export type { LogEntry } from "./logger.js";
+export { Logger } from "./logger.js";
+export { logger } from "./logger.js";
 
 /**
  * 获取统一 logger。
@@ -29,9 +28,9 @@ export function getLogger(_projectRoot?: string, _logLevel?: string): Logger {
   return logger;
 }
 
-export type { LlmRequestContext } from "./llm-logging/context.js";
+export type { LlmRequestContext } from "./context.js";
 export {
   llmRequestContext,
   withLlmRequestContext,
-} from "./llm-logging/context.js";
-export { createLlmLoggingFetch } from "./llm-logging/fetch.js";
+} from "./context.js";
+export { createLlmLoggingFetch } from "./fetch.js";
