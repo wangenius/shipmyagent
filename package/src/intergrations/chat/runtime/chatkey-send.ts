@@ -10,7 +10,7 @@
  */
 
 import { getChatSender, type ChatDispatchChannel } from "./chat-send-registry.js";
-import type { ShipMessageV1 } from "../../../types/chat-history.js";
+import type { ShipSessionMessageV1 } from "../../../types/session-history.js";
 import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
 
 type DispatchableChannel = "telegram" | "feishu" | "qq";
@@ -47,7 +47,7 @@ export function parseChatKeyForDispatch(chatKey: string): {
   return null;
 }
 
-function pickLatestUserMetaFromMessages(messages: ShipMessageV1[]): {
+function pickLatestUserMetaFromMessages(messages: ShipSessionMessageV1[]): {
   chatType?: string;
   messageThreadId?: number;
   messageId?: string;
@@ -57,11 +57,18 @@ function pickLatestUserMetaFromMessages(messages: ShipMessageV1[]): {
     if (!m || typeof m !== "object") continue;
     if (m.role !== "user") continue;
     const md = (m as any).metadata || {};
-    const chatType = typeof md.chatType === "string" ? md.chatType.trim() : undefined;
+    const chatType =
+      typeof md.targetType === "string"
+        ? md.targetType.trim()
+        : typeof md.chatType === "string"
+          ? md.chatType.trim()
+          : undefined;
     const messageThreadId =
-      typeof md.messageThreadId === "number" && Number.isFinite(md.messageThreadId)
-        ? md.messageThreadId
-        : undefined;
+      typeof md.threadId === "number" && Number.isFinite(md.threadId)
+        ? md.threadId
+        : typeof md.messageThreadId === "number" && Number.isFinite(md.messageThreadId)
+          ? md.messageThreadId
+          : undefined;
     const messageId = typeof md.messageId === "string" ? md.messageId.trim() : undefined;
     if (chatType || messageThreadId || messageId) {
       return {
@@ -98,8 +105,8 @@ export async function sendTextByChatKey(params: {
   }
 
   // 关键点（中文）：尽量从 history 的最近 user message 拿到 chatType/messageThreadId/messageId（尤其 QQ 需要）。
-  const historyStore = getShipRuntimeContext().chatRuntime.getHistoryStore(chatKey);
-  let messages: ShipMessageV1[] = [];
+  const historyStore = getShipRuntimeContext().sessionRuntime.getHistoryStore(chatKey);
+  let messages: ShipSessionMessageV1[] = [];
   try {
     messages = await historyStore.loadAll();
   } catch {

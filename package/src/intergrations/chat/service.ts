@@ -2,12 +2,12 @@
  * Chat command services.
  *
  * 关键点（中文）
- * - 统一处理 chat 上下文快照（参数 / 环境变量 / request context）
- * - 统一处理 chatKey 解析优先级，避免 CLI/Server 出现行为分叉
+ * - 对外仍是 chatKey 语义（integration 边界）
+ * - 内部从 core 的 session context 做映射读取
  */
 
 import { sendTextByChatKey } from "./runtime/chatkey-send.js";
-import { chatRequestContext } from "../../core/runtime/request-context.js";
+import { sessionRequestContext } from "../../core/runtime/session-context.js";
 import { llmRequestContext } from "../../telemetry/index.js";
 import type {
   ChatContextSnapshot,
@@ -30,7 +30,7 @@ function readEnvNumber(name: string): number | undefined {
 export function resolveChatContextSnapshot(input?: {
   chatKey?: string;
 }): ChatContextSnapshot {
-  const requestCtx = chatRequestContext.getStore();
+  const requestCtx = sessionRequestContext.getStore();
   const llmCtx = llmRequestContext.getStore();
 
   const explicitChatKey = String(input?.chatKey || "").trim();
@@ -38,29 +38,34 @@ export function resolveChatContextSnapshot(input?: {
   const snapshot: ChatContextSnapshot = {
     chatKey:
       explicitChatKey ||
-      (typeof requestCtx?.chatKey === "string" && requestCtx.chatKey.trim()
-        ? requestCtx.chatKey.trim()
-        : readEnvString("SMA_CTX_CHAT_KEY")),
+      (typeof requestCtx?.sessionId === "string" && requestCtx.sessionId.trim()
+        ? requestCtx.sessionId.trim()
+        : readEnvString("SMA_CTX_SESSION_ID") ||
+          readEnvString("SMA_CTX_CHAT_KEY")),
     channel:
       (typeof requestCtx?.channel === "string" && requestCtx.channel.trim()
         ? requestCtx.channel.trim()
         : readEnvString("SMA_CTX_CHANNEL")) || undefined,
     chatId:
-      (typeof requestCtx?.chatId === "string" && requestCtx.chatId.trim()
-        ? requestCtx.chatId.trim()
-        : readEnvString("SMA_CTX_CHAT_ID")) || undefined,
+      (typeof requestCtx?.targetId === "string" && requestCtx.targetId.trim()
+        ? requestCtx.targetId.trim()
+        : readEnvString("SMA_CTX_TARGET_ID") ||
+          readEnvString("SMA_CTX_CHAT_ID")) || undefined,
     messageThreadId:
-      typeof requestCtx?.messageThreadId === "number"
-        ? requestCtx.messageThreadId
-        : readEnvNumber("SMA_CTX_MESSAGE_THREAD_ID"),
+      typeof requestCtx?.threadId === "number"
+        ? requestCtx.threadId
+        : readEnvNumber("SMA_CTX_THREAD_ID") ||
+          readEnvNumber("SMA_CTX_MESSAGE_THREAD_ID"),
     chatType:
-      (typeof requestCtx?.chatType === "string" && requestCtx.chatType.trim()
-        ? requestCtx.chatType.trim()
-        : readEnvString("SMA_CTX_CHAT_TYPE")) || undefined,
+      (typeof requestCtx?.targetType === "string" && requestCtx.targetType.trim()
+        ? requestCtx.targetType.trim()
+        : readEnvString("SMA_CTX_TARGET_TYPE") ||
+          readEnvString("SMA_CTX_CHAT_TYPE")) || undefined,
     userId:
-      (typeof requestCtx?.userId === "string" && requestCtx.userId.trim()
-        ? requestCtx.userId.trim()
-        : readEnvString("SMA_CTX_USER_ID")) || undefined,
+      (typeof requestCtx?.actorId === "string" && requestCtx.actorId.trim()
+        ? requestCtx.actorId.trim()
+        : readEnvString("SMA_CTX_ACTOR_ID") ||
+          readEnvString("SMA_CTX_USER_ID")) || undefined,
     messageId:
       (typeof requestCtx?.messageId === "string" && requestCtx.messageId.trim()
         ? requestCtx.messageId.trim()

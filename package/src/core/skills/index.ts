@@ -1,7 +1,7 @@
-export type { ChatSkillStateSnapshot } from "./state.js";
+export type { SessionSkillStateSnapshot } from "./state.js";
 export {
-  clearChatSkillState,
-  getChatSkillState,
-  setChatAvailableSkills,
-  setChatLoadedSkills,
+  clearSessionSkillState,
+  getSessionSkillState,
+  setSessionAvailableSkills,
+  setSessionLoadedSkills,
 } from "./state.js";

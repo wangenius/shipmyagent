@@ -13,7 +13,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import { z } from "zod";
 import { tool } from "ai";
 import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
-import { chatRequestContext } from "../runtime/request-context.js";
+import { sessionRequestContext } from "../runtime/session-context.js";
 import { llmRequestContext } from "../../telemetry/index.js";
 
 const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
@@ -155,19 +155,19 @@ function setEnvNumber(
 
 function buildExecContextEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
-  const chatCtx = chatRequestContext.getStore();
+  const sessionCtx = sessionRequestContext.getStore();
   const llmCtx = llmRequestContext.getStore();
 
-  setEnvString(env, "SMA_CTX_CHAT_KEY", chatCtx?.chatKey);
-  setEnvString(env, "SMA_CTX_CHANNEL", chatCtx?.channel);
-  setEnvString(env, "SMA_CTX_CHAT_ID", chatCtx?.chatId);
-  setEnvString(env, "SMA_CTX_CHAT_TYPE", chatCtx?.chatType);
-  setEnvString(env, "SMA_CTX_USER_ID", chatCtx?.userId);
-  setEnvString(env, "SMA_CTX_MESSAGE_ID", chatCtx?.messageId);
-  setEnvNumber(env, "SMA_CTX_MESSAGE_THREAD_ID", chatCtx?.messageThreadId);
+  setEnvString(env, "SMA_CTX_SESSION_ID", sessionCtx?.sessionId);
+  setEnvString(env, "SMA_CTX_CHANNEL", sessionCtx?.channel);
+  setEnvString(env, "SMA_CTX_TARGET_ID", sessionCtx?.targetId);
+  setEnvString(env, "SMA_CTX_TARGET_TYPE", sessionCtx?.targetType);
+  setEnvString(env, "SMA_CTX_ACTOR_ID", sessionCtx?.actorId);
+  setEnvString(env, "SMA_CTX_MESSAGE_ID", sessionCtx?.messageId);
+  setEnvNumber(env, "SMA_CTX_THREAD_ID", sessionCtx?.threadId);
   setEnvString(env, "SMA_CTX_REQUEST_ID", llmCtx?.requestId);
 
-  // 关键点（中文）：把当前 server 地址透传给子进程，便于 `sma chat/skill/task` 自动命中本地服务。
+  // 关键点（中文）：把当前 server 地址透传给子进程，便于 `sma message/skill/task` 自动命中本地服务。
   setEnvString(env, "SMA_CTX_SERVER_HOST", process.env.SMA_SERVER_HOST);
   setEnvString(env, "SMA_CTX_SERVER_PORT", process.env.SMA_SERVER_PORT);
 

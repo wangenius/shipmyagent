@@ -8,8 +8,8 @@
 
 import { z } from "zod";
 import { tool } from "ai";
-import type { McpToolDefinition } from "../../../intergrations/mcp/runtime/index.js";
-import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
+import type { McpToolDefinition } from "../../intergrations/mcp/runtime/index.js";
+import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
 
 export function createMcpAiTool(params: {
   server: string;
@@ -38,7 +38,7 @@ export function createMcpAiTool(params: {
         );
 
         const output = result.content
-          .map((item) => {
+          .map((item: any) => {
             if (item.type === "text") return item.text || "";
             if (item.type === "image") return `[Image: ${item.mimeType || "unknown"}]`;
             if (item.type === "resource") return `[Resource: ${item.mimeType || "unknown"}]`;

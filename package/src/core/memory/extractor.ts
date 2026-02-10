@@ -1,7 +1,7 @@
 import { generateText } from "ai";
 import type { LanguageModel } from "ai";
 import type { MemoryEntry, MemoryExtractParams, MemoryCompressParams } from "../../types/memory.js";
-import { ChatHistoryStore } from "../history/store.js";
+import { SessionHistoryStore } from "../history/store.js";
 import { getLogger } from "../../telemetry/index.js";
 import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 
@@ -13,13 +13,13 @@ import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 export async function extractMemoryFromHistory(
   params: MemoryExtractParams & { model: LanguageModel },
 ): Promise<MemoryEntry> {
-  const { chatKey, entryRange, model } = params;
+  const { sessionId, entryRange, model } = params;
   const [startIndex, endIndex] = entryRange;
   const logger = getLogger(getShipRuntimeContextBase().rootPath, "info");
 
   try {
     // 1. 加载指定范围的 history（UIMessage[]）
-    const historyStore = new ChatHistoryStore(chatKey);
+    const historyStore = new SessionHistoryStore(sessionId);
     const messages = await historyStore.loadRange(startIndex, endIndex);
 
     const historyText = (() => {
@@ -125,7 +125,7 @@ ${historyText}
       summary = result.text.trim();
       keyFacts = [];
       await logger.log("warn", "Failed to parse memory extraction JSON, using raw text", {
-        chatKey,
+        sessionId,
         entryRange,
         error: String(parseError),
       });
@@ -139,7 +139,7 @@ ${historyText}
     };
   } catch (error) {
     await logger.log("error", "Failed to extract memory from history", {
-      chatKey,
+      sessionId,
       entryRange,
       error: String(error),
     });
@@ -162,7 +162,7 @@ ${historyText}
 export async function compressMemory(
   params: MemoryCompressParams & { model: LanguageModel },
 ): Promise<string> {
-  const { chatKey, currentContent, targetChars, model } = params;
+  const { sessionId, currentContent, targetChars, model } = params;
   const logger = getLogger(getShipRuntimeContextBase().rootPath, "info");
 
   try {
@@ -209,7 +209,7 @@ ${currentContent}
     const compressed = result.text.trim();
 
     await logger.log("info", "Memory compressed successfully", {
-      chatKey,
+      sessionId,
       originalChars: currentContent.length,
       compressedChars: compressed.length,
       targetChars,
@@ -218,7 +218,7 @@ ${currentContent}
     return compressed;
   } catch (error) {
     await logger.log("error", "Failed to compress memory", {
-      chatKey,
+      sessionId,
       error: String(error),
     });
 

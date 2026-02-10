@@ -10,11 +10,11 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import { withChatRequestContext } from "../../../core/runtime/request-context.js";
+import { withSessionRequestContext } from "../../../core/runtime/session-context.js";
 import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
 import type { ShipTaskRunMetaV1, ShipTaskRunTriggerV1 } from "../../../types/task.js";
 import { pickLastSuccessfulChatSendText } from "../../chat/runtime/user-visible-text.js";
-import { createTaskRunChatKey, formatTaskRunTimestamp, getTaskRunDir } from "./paths.js";
+import { createTaskRunSessionId, formatTaskRunTimestamp, getTaskRunDir } from "./paths.js";
 import { ensureRunDir, readTask } from "./store.js";
 import { sendTextByChatKey } from "../../chat/runtime/chatkey-send.js";
 
@@ -86,7 +86,7 @@ export async function runTaskNow(params: {
     "utf-8",
   );
 
-  const runChatKey = createTaskRunChatKey(task.taskId, timestamp);
+  const runSessionId = createTaskRunSessionId(task.taskId, timestamp);
 
   let ok = false;
   let status: "success" | "failure" | "skipped" = "failure";
@@ -94,20 +94,20 @@ export async function runTaskNow(params: {
   let errorText = "";
 
   try {
-    const agent = runtime.chatRuntime.getAgent(runChatKey);
+    const agent = runtime.sessionRuntime.getAgent(runSessionId);
 
     // 关键点（中文）：以 scheduler channel 运行，但使用 task-run chatKey 让 history 落盘到 runDir。
-    const result = await withChatRequestContext(
+    const result = await withSessionRequestContext(
       {
         channel: "scheduler",
-        chatId: task.taskId,
-        chatKey: runChatKey,
-        userId: "scheduler",
-        username: "scheduler",
+        targetId: task.taskId,
+        sessionId: runSessionId,
+        actorId: "scheduler",
+        actorName: "scheduler",
       },
       () =>
         agent.run({
-          chatKey: runChatKey,
+          sessionId: runSessionId,
           query: task.body,
         }),
     );
@@ -116,7 +116,7 @@ export async function runTaskNow(params: {
 
     // 落盘 assistant UIMessage（包含 tool parts），以便 history.jsonl 可审计。
     try {
-      const store = runtime.chatRuntime.getHistoryStore(runChatKey);
+      const store = runtime.sessionRuntime.getHistoryStore(runSessionId);
       const assistantMessage = (result as any)?.assistantMessage;
       if (assistantMessage && typeof assistantMessage === "object") {
         await store.append(assistantMessage as any);
@@ -128,11 +128,11 @@ export async function runTaskNow(params: {
           await store.append(
             store.createAssistantTextMessage({
               text: userVisible,
-              metadata: {
-                chatKey: runChatKey,
+                metadata: {
+                chatKey: runSessionId,
                 channel: "scheduler",
-                chatId: task.taskId,
-                userId: "bot",
+                targetId: task.taskId,
+                actorId: "bot",
                 extra: { via: "task_runner", note: "assistant_message_missing" },
               } as any,
               kind: "normal",
@@ -278,4 +278,3 @@ export async function runTaskNow(params: {
     ...(notifyError ? { notifyError } : {}),
   };
 }
-

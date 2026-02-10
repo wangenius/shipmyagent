@@ -2,7 +2,7 @@
  * Module registry entrypoint.
  *
  * 关键点（中文）
- * - 所有模块（chat/skill/task）统一在这里声明
+ * - 所有模块（message/skill/task）统一在这里声明
  * - CLI / Server 主入口只调用 registerAll，避免散落硬编码
  */
 

@@ -34,7 +34,7 @@ export type AdapterSendActionParams = AdapterChatKeyParams & {
  */
 export abstract class PlatformAdapter {
   readonly channel: ChatDispatchChannel;
-  protected readonly chatRuntime = getShipRuntimeContext().chatRuntime;
+  protected readonly sessionRuntime = getShipRuntimeContext().sessionRuntime;
 
   protected constructor(params: {
     channel: ChatDispatchChannel;

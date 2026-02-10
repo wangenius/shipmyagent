@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 export type LlmRequestContext = {
-  chatKey?: string;
+  sessionId?: string;
   requestId?: string;
 };
 

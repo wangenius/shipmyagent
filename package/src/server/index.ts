@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { logger as server_logger } from "../telemetry/index.js";
-import { withChatRequestContext } from "../core/runtime/request-context.js";
+import { withSessionRequestContext } from "../core/runtime/session-context.js";
 import http from "node:http";
 import fs from "fs-extra";
 import path from "path";
@@ -206,31 +206,31 @@ export class AgentServer {
       }
 
       try {
-        const chatKey = `api:chat:${chatId}`;
+        const sessionId = `api:chat:${chatId}`;
         const runtime = getShipRuntimeContext();
         const messageId =
           typeof body?.messageId === "string" ? body.messageId : undefined;
-        await runtime.chatRuntime.appendUserMessage({
+        await runtime.sessionRuntime.appendUserMessage({
           channel: "api",
-          chatId,
-          chatKey,
-          userId: actorId,
+          targetId: chatId,
+          sessionId,
+          actorId: actorId,
           messageId,
           text: String(instructions),
         });
 
         // API 也是一种 “chat”（有 chatKey + 可落盘 history），但它不是“平台消息回发”场景：
         // - 不提供 dispatcher 回发能力（响应通过 HTTP body 返回）
-        const result = await withChatRequestContext(
+        const result = await withSessionRequestContext(
           {
-            chatKey,
-            chatId,
-            userId: actorId,
+            sessionId,
+            targetId: chatId,
+            actorId: actorId,
             messageId,
           },
           () =>
-            runtime.chatRuntime.getAgent(chatKey).run({
-              chatKey,
+            runtime.sessionRuntime.getAgent(sessionId).run({
+              sessionId,
               query: instructions,
             }),
         );
@@ -239,20 +239,20 @@ export class AgentServer {
           pickLastSuccessfulChatSendText((result as any)?.toolCalls || []) ||
           String(result?.output || "");
         try {
-          const store = runtime.chatRuntime.getHistoryStore(chatKey);
+          const store = runtime.sessionRuntime.getHistoryStore(sessionId);
           const assistantMessage = (result as any)?.assistantMessage;
           if (assistantMessage && typeof assistantMessage === "object") {
             await store.append(assistantMessage as any);
-            void runtime.chatRuntime.checkAndExtractMemoryAsync(chatKey);
+            void runtime.sessionRuntime.checkAndExtractMemoryAsync(sessionId);
           } else if (userVisible && userVisible.trim()) {
             await store.append(
               store.createAssistantTextMessage({
                 text: userVisible,
                 metadata: {
-                  chatKey,
+                  sessionId,
                   channel: "api",
-                  chatId,
-                  userId: "bot",
+                  targetId: chatId,
+                  actorId: "bot",
                   messageId,
                   extra: { via: "api_execute", note: "assistant_message_missing" },
                 } as any,
@@ -260,7 +260,7 @@ export class AgentServer {
                 source: "egress",
               }),
             );
-            void runtime.chatRuntime.checkAndExtractMemoryAsync(chatKey);
+            void runtime.sessionRuntime.checkAndExtractMemoryAsync(sessionId);
           }
         } catch {
           // ignore

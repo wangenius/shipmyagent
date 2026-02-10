@@ -10,7 +10,7 @@ import {
 import { withLlmRequestContext } from "../../telemetry/index.js";
 import {
   generateId,
-  getShipChatMemoryPrimaryPath,
+  getShipSessionMemoryPrimaryPath,
   getShipProfileOtherPath,
   getShipProfilePrimaryPath,
 } from "../../utils.js";
@@ -27,7 +27,7 @@ import {
 import type { AgentRunInput, AgentResult } from "../../types/agent.js";
 import type { LoadedSkillV1 } from "../../types/loaded-skill.js";
 import type { Logger } from "../../telemetry/index.js";
-import { chatRequestContext } from "./request-context.js";
+import { sessionRequestContext } from "./session-context.js";
 import { withToolExecutionContext } from "../tools/execution-context.js";
 import { createAgentTools } from "../tools/agent-tools.js";
 import { openai } from "@ai-sdk/openai";
@@ -35,10 +35,10 @@ import { toolExecutionContext } from "../tools/execution-context.js";
 import path from "node:path";
 import { discoverClaudeSkillsSync } from "../../intergrations/skills/runtime/index.js";
 import {
-  setChatAvailableSkills,
-  setChatLoadedSkills,
+  setSessionAvailableSkills,
+  setSessionLoadedSkills,
 } from "../skills/index.js";
-import type { ShipMessageMetadataV1 } from "../../types/chat-history.js";
+import type { ShipSessionMetadataV1 } from "../../types/session-history.js";
 import {
   getShipRuntimeContext,
   getShipRuntimeContextBase,
@@ -176,13 +176,13 @@ export class Agent {
 
   private tools: Record<string, Tool> = {};
   /**
-   * chatKey 绑定检查。
+   * sessionId 绑定检查。
    *
    * 关键点（中文）
-   * - 运行时策略是"一个 chatKey 一个 Agent 实例"（由 ChatRuntime 保证）
-   * - 本实例一旦首次 run 绑定到某个 chatKey，后续必须一致，避免上下文串线
+   * - 运行时策略是"一个 sessionId 一个 Agent 实例"（由 SessionRuntime 保证）
+   * - 本实例一旦首次 run 绑定到某个 sessionId，后续必须一致，避免上下文串线
    */
-  private boundChatKey: string | null = null;
+  private boundSessionId: string | null = null;
 
   constructor() {}
 
@@ -208,29 +208,29 @@ export class Agent {
   }
 
   async run(input: AgentRunInput): Promise<AgentResult> {
-    const { query, chatKey, onStep, drainLaneMerged } = input;
+    const { query, sessionId, onStep, drainLaneMerged } = input;
     const startTime = Date.now();
     const requestId = generateId();
     const logger = this.getLogger();
 
-    const chatCtx = chatRequestContext.getStore();
+    const sessionCtx = sessionRequestContext.getStore();
     const extraContextLines: string[] = [];
-    if (chatCtx?.channel)
-      extraContextLines.push(`- Channel: ${chatCtx.channel}`);
-    if (chatCtx?.chatId) extraContextLines.push(`- ChatId: ${chatCtx.chatId}`);
-    if (chatCtx?.userId) extraContextLines.push(`- UserId: ${chatCtx.userId}`);
-    if (chatCtx?.username)
-      extraContextLines.push(`- Username: ${chatCtx.username}`);
+    if (sessionCtx?.channel)
+      extraContextLines.push(`- Channel: ${sessionCtx.channel}`);
+    if (sessionCtx?.targetId) extraContextLines.push(`- TargetId: ${sessionCtx.targetId}`);
+    if (sessionCtx?.actorId) extraContextLines.push(`- UserId: ${sessionCtx.actorId}`);
+    if (sessionCtx?.actorName)
+      extraContextLines.push(`- Username: ${sessionCtx.actorName}`);
 
-    await logger.log("debug", `ChatKey: ${chatKey}`);
+    await logger.log("debug", `SessionId: ${sessionId}`);
     await logger.log("info", "Agent request started", {
       requestId,
-      chatKey,
+      sessionId,
       instructionsPreview: query?.slice(0, 200),
       rootPath: getShipRuntimeContext().rootPath,
     });
     if (this.initialized) {
-      return this.runWithToolLoopAgent(query, startTime, chatKey, {
+      return this.runWithToolLoopAgent(query, startTime, sessionId, {
         onStep,
         requestId,
         drainLaneMerged,
@@ -245,23 +245,23 @@ export class Agent {
     };
   }
 
-  private bindChatKey(chatKey: string): string {
-    const key = String(chatKey || "").trim();
-    if (!key) throw new Error("Agent.run requires a non-empty chatKey");
-    if (this.boundChatKey && this.boundChatKey !== key) {
-      // 关键点（中文）：一个 Agent 实例只允许服务一个 chatKey，避免上下文串线。
+  private bindSessionId(sessionId: string): string {
+    const key = String(sessionId || "").trim();
+    if (!key) throw new Error("Agent.run requires a non-empty sessionId");
+    if (this.boundSessionId && this.boundSessionId !== key) {
+      // 关键点（中文）：一个 Agent 实例只允许服务一个 sessionId，避免上下文串线。
       throw new Error(
-        `Agent is already bound to chatKey=${this.boundChatKey}, got chatKey=${key}`,
+        `Agent is already bound to sessionId=${this.boundSessionId}, got sessionId=${key}`,
       );
     }
-    this.boundChatKey = key;
+    this.boundSessionId = key;
     return key;
   }
 
   private async runWithToolLoopAgent(
     userText: string,
     startTime: number,
-    chatKey: string,
+    sessionId: string,
     opts?: {
       retryAttempts?: number;
       onStep?: AgentRunInput["onStep"];
@@ -309,24 +309,24 @@ export class Agent {
         }
       };
 
-      // 运行时 system prompt（每次请求都注入，包含 chatKey/requestId/来源等）。
+      // 运行时 system prompt（每次请求都注入，包含 sessionId/requestId/来源等）。
       // 关键点：这段信息是“强时效/强关联本次请求”的上下文，不应该缓存到启动 prompts 里。
       const runtimeExtraContextLines: string[] = [];
-      const chatCtx = chatRequestContext.getStore();
-      if (chatCtx?.channel)
-        runtimeExtraContextLines.push(`- Channel: ${chatCtx.channel}`);
-      if (chatCtx?.chatId)
-        runtimeExtraContextLines.push(`- ChatId: ${chatCtx.chatId}`);
-      if (chatCtx?.userId)
-        runtimeExtraContextLines.push(`- UserId: ${chatCtx.userId}`);
-      if (chatCtx?.username)
-        runtimeExtraContextLines.push(`- Username: ${chatCtx.username}`);
+      const sessionCtx = sessionRequestContext.getStore();
+      if (sessionCtx?.channel)
+        runtimeExtraContextLines.push(`- Channel: ${sessionCtx.channel}`);
+      if (sessionCtx?.targetId)
+        runtimeExtraContextLines.push(`- TargetId: ${sessionCtx.targetId}`);
+      if (sessionCtx?.actorId)
+        runtimeExtraContextLines.push(`- UserId: ${sessionCtx.actorId}`);
+      if (sessionCtx?.actorName)
+        runtimeExtraContextLines.push(`- Username: ${sessionCtx.actorName}`);
 
       systemExtras.push({
         role: "system",
         content: buildContextSystemPrompt({
           projectRoot: getShipRuntimeContext().rootPath,
-          chatKey,
+          sessionId,
           requestId,
           extraContextLines: runtimeExtraContextLines,
         }),
@@ -352,27 +352,27 @@ export class Agent {
         });
       }
 
-      const chatMemoryPrimary = await readOptionalMd(
-        getShipChatMemoryPrimaryPath(getShipRuntimeContext().rootPath, chatKey),
+      const sessionMemoryPrimary = await readOptionalMd(
+        getShipSessionMemoryPrimaryPath(getShipRuntimeContext().rootPath, sessionId),
       );
-      if (chatMemoryPrimary) {
+      if (sessionMemoryPrimary) {
         systemExtras.push({
           role: "system",
-          content: ["# Chat Memory / Primary", chatMemoryPrimary].join("\n\n"),
+          content: ["#", sessionMemoryPrimary].join("\n\n"),
         });
       }
 
       // 工作上下文来源（中文，关键点）
-      // - 每个 chatKey 维护一份持续增长的 UIMessage[]（落盘在 `.ship/chat/<chatKey>/messages/history.jsonl`）
+      // - 每个 sessionId 维护一份持续增长的 UIMessage[]（落盘在 `.ship/session/<sessionId>/messages/history.jsonl`）
       // - 每次 run 直接把 UIMessage[] 转换成 ModelMessage[] 作为 `generateText.messages`
       // - 超窗时自动 compact：把更早段压缩为 1 条摘要消息 + 保留最近窗口
-      this.bindChatKey(chatKey);
+      this.bindSessionId(sessionId);
 
-      // 关键点（中文）：historyStore 统一从 ChatRuntime 获取，便于为特殊 chatKey（如 task-run）注入自定义落盘路径。
+      // 关键点（中文）：historyStore 统一从 SessionRuntime 获取，便于为特殊 sessionId（如 task-run）注入自定义落盘路径。
       const historyStore =
-        getShipRuntimeContext().chatRuntime.getHistoryStore(chatKey);
+        getShipRuntimeContext().sessionRuntime.getHistoryStore(sessionId);
 
-      // 关键点（中文）：chat 级 skills（pinnedSkillIds）持久化在 meta.json 中；
+      // 关键点（中文）：session 级 skills（pinnedSkillIds）持久化在 meta.json 中；
       // 每次 run 需要自动加载并注入 system（但不写入 history.jsonl）。
       const pinnedSkills: Map<string, LoadedSkillV1> = new Map();
       const runtime = getShipRuntimeContext();
@@ -380,7 +380,7 @@ export class Agent {
         runtime.rootPath,
         runtime.config,
       );
-      setChatAvailableSkills(chatKey, discoveredSkills);
+      setSessionAvailableSkills(sessionId, discoveredSkills);
 
       try {
         const meta = await historyStore.loadMeta();
@@ -426,8 +426,8 @@ export class Agent {
       } catch {
         // ignore
       } finally {
-        // 关键点（中文）：core 只维护“当前 chatKey 的 skills 状态”；挂载策略由 integrations 决定。
-        setChatLoadedSkills(chatKey, pinnedSkills);
+        // 关键点（中文）：core 只维护“当前 sessionId 的 skills 状态”；挂载策略由 integrations 决定。
+        setSessionLoadedSkills(sessionId, pinnedSkills);
       }
 
       // best-effort：若上层未提前写入 user UIMessage，这里补写一条，保证 run 可用。
@@ -450,23 +450,23 @@ export class Agent {
           })();
           if (lastText && lastText === String(userText || "").trim()) return;
 
-          const ctx = chatRequestContext.getStore();
+          const ctx = sessionRequestContext.getStore();
           const channel = (ctx?.channel as any) || "api";
-          const chatId = String(ctx?.chatId || chatKey);
+          const targetId = String(ctx?.targetId || sessionId);
           const msg = historyStore.createUserTextMessage({
             text: userText,
             metadata: {
-              chatKey,
+              sessionId,
               channel,
-              chatId,
-              userId: ctx?.userId,
-              username: ctx?.username,
+              targetId,
+              actorId: ctx?.actorId,
+              actorName: ctx?.actorName,
               messageId: ctx?.messageId,
-              messageThreadId:
-                typeof ctx?.messageThreadId === "number"
-                  ? ctx.messageThreadId
+              threadId:
+                typeof ctx?.threadId === "number"
+                  ? ctx.threadId
                   : undefined,
-              chatType: ctx?.chatType,
+              targetType: ctx?.targetType,
               requestId,
               extra: { note: "injected_by_agent_run" },
             } as any,
@@ -597,7 +597,7 @@ export class Agent {
               {
                 role: "system",
                 content:
-                  "你是技能管理助手。当前 chat 有一些被 pin 的 skills，会在每次对话中自动注入。\n" +
+                  "你是技能管理助手。当前 session 有一些被 pin 的 skills，会在每次对话中自动注入。\n" +
                   "现在发生了 history compact（上下文过长），为了节省 token，你需要判断哪些 pinned skills 可以安全移除。\n" +
                   "规则（中文，关键）：\n" +
                   "- 只有当你确信后续对话不需要该 skill 时才移除\n" +
@@ -630,7 +630,7 @@ export class Agent {
             if (removeSet.has(id)) pinnedSkills.delete(id);
           }
           await historyStore.setPinnedSkillIds(Array.from(pinnedSkills.keys()));
-          setChatLoadedSkills(chatKey, pinnedSkills);
+          setSessionLoadedSkills(sessionId, pinnedSkills);
         } catch {
           // ignore
         }
@@ -660,7 +660,7 @@ export class Agent {
       }
 
       await logger.log("debug", "Context selected", {
-        chatKey,
+        sessionId,
         historySource: "history_jsonl",
         modelMessages: baseModelMessages.length,
         keepLastMessages,
@@ -698,7 +698,7 @@ export class Agent {
             "debug",
             "Lane merged messages detected; reloaded history for next step",
             {
-              chatKey,
+              sessionId,
               requestId,
               trigger,
               drained,
@@ -708,7 +708,7 @@ export class Agent {
             try {
               await emitStep("lane_merge", `drained=${drained}`, {
                 requestId,
-                chatKey,
+                sessionId,
                 drained,
               });
             } catch {
@@ -747,7 +747,7 @@ export class Agent {
           loadedSkills: new Map(pinnedSkills),
         },
         async () =>
-          withLlmRequestContext({ chatKey, requestId }, () => {
+          withLlmRequestContext({ sessionId, requestId }, () => {
             return streamText({
               model: this.model,
               system: baseSystemMessages,
@@ -828,7 +828,7 @@ export class Agent {
                     lastEmittedAssistant = userTextFromStep;
                     await emitStep("assistant", userTextFromStep, {
                       requestId,
-                      chatKey,
+                      sessionId,
                     });
                   }
                 } catch {
@@ -838,7 +838,7 @@ export class Agent {
                 try {
                   await emitToolSummariesFromStep(step, emitStep, {
                     requestId,
-                    chatKey,
+                    sessionId,
                   });
                 } catch {
                   // ignore
@@ -846,7 +846,7 @@ export class Agent {
                 try {
                   // 关键点：为调度器提供"step 完成"的可靠信号。
                   // onStepFinish 内部可能 emit 多个事件（assistant/tool summaries），调度器需要一个去抖触发点。
-                  await emitStep("step_finish", "", { requestId, chatKey });
+                  await emitStep("step_finish", "", { requestId, sessionId });
                 } catch {
                   // ignore
                 }
@@ -858,23 +858,23 @@ export class Agent {
       // 关键点（中文）：用 ai-sdk v6 的 UIMessage 流来生成最终 assistant UIMessage（包含 tool parts），避免手工拼装。
       let finalAssistantUiMessage: any = null;
       try {
-        const ctx = chatRequestContext.getStore();
+        const ctx = sessionRequestContext.getStore();
         const channel = (ctx?.channel as any) || "api";
-        const chatId = String(ctx?.chatId || chatKey);
-        const md: ShipMessageMetadataV1 = {
+        const targetId = String(ctx?.targetId || sessionId);
+        const md: ShipSessionMetadataV1 = {
           v: 1,
           ts: Date.now(),
-          chatKey,
+          sessionId,
           channel,
-          chatId,
-          userId: "bot",
-          username: ctx?.username,
+          targetId,
+          actorId: "bot",
+          actorName: ctx?.actorName,
           messageId: ctx?.messageId,
-          messageThreadId:
-            typeof ctx?.messageThreadId === "number"
-              ? ctx.messageThreadId
+          threadId:
+            typeof ctx?.threadId === "number"
+              ? ctx.threadId
               : undefined,
-          chatType: ctx?.chatType,
+          targetType: ctx?.targetType,
           requestId,
           source: "egress",
           kind: "normal",
@@ -884,7 +884,7 @@ export class Agent {
         const uiStream = (result as any).toUIMessageStream({
           sendReasoning: false,
           sendSources: false,
-          generateMessageId: () => `a:${chatKey}:${generateId()}`,
+          generateMessageId: () => `a:${sessionId}:${generateId()}`,
           // 关键点（中文）：metadata 通过 ai-sdk 的 UIMessage 生成管线注入，避免我们手工改写最终 message。
           messageMetadata: () => md,
           onFinish: (e: any) => {
@@ -936,9 +936,9 @@ export class Agent {
         duration,
         toolCallsTotal: toolCalls.length,
       });
-      await emitStep("done", "done", { requestId, chatKey });
+      await emitStep("done", "done", { requestId, sessionId });
 
-      // 关键点（中文）：对话历史由 ChatRuntime 管理并写入 history（history.jsonl）
+      // 关键点（中文）：对话历史由 SessionRuntime 管理并写入 history（history.jsonl）
 
       let assistantText = finalAssistantUiMessage
         ? extractTextFromUiMessage(finalAssistantUiMessage)
@@ -975,7 +975,7 @@ export class Agent {
           "warn",
           "Context length exceeded, retry with history compaction",
           {
-            chatKey,
+            sessionId,
             error: errorMsg,
             retryAttempts,
           },
@@ -985,7 +985,7 @@ export class Agent {
           "上下文过长，已触发 history 压缩后继续。",
           {
             requestId,
-            chatKey,
+            sessionId,
             retryAttempts,
           },
         );
@@ -999,7 +999,7 @@ export class Agent {
           };
         }
 
-        return this.runWithToolLoopAgent(userText, startTime, chatKey, {
+        return this.runWithToolLoopAgent(userText, startTime, sessionId, {
           retryAttempts: retryAttempts + 1,
           onStep,
           requestId,

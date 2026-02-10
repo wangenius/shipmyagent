@@ -33,7 +33,7 @@ export interface MemoryConfig {
  * 记忆提取参数
  */
 export interface MemoryExtractParams {
-  chatKey: string;
+  sessionId: string;
   entryRange: [number, number];  // 记录索引范围而非轮次范围
 }
 
@@ -41,7 +41,7 @@ export interface MemoryExtractParams {
  * 记忆压缩参数
  */
 export interface MemoryCompressParams {
-  chatKey: string;
+  sessionId: string;
   currentContent: string;
   targetChars: number;
 }

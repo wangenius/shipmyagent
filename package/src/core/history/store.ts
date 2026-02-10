@@ -4,20 +4,20 @@ import path from "node:path";
 import { convertToModelMessages, generateText, type LanguageModel, type SystemModelMessage } from "ai";
 import {
   generateId,
-  getShipChatDirPath,
-  getShipChatHistoryArchiveDirPath,
-  getShipChatHistoryArchivePath,
-  getShipChatHistoryMetaPath,
-  getShipChatHistoryPath,
-  getShipChatMessagesDirPath,
+  getShipSessionDirPath,
+  getShipSessionHistoryArchiveDirPath,
+  getShipSessionHistoryArchivePath,
+  getShipSessionHistoryMetaPath,
+  getShipSessionHistoryPath,
+  getShipSessionMessagesDirPath,
 } from "../../utils.js";
-import type { ShipMessageMetadataV1, ShipMessageV1 } from "../../types/chat-history.js";
-import type { ShipChatMessagesMetaV1 } from "../../types/chat-messages-meta.js";
+import type { ShipSessionMetadataV1, ShipSessionMessageV1 } from "../../types/session-history.js";
+import type { ShipSessionMessagesMetaV1 } from "../../types/session-messages-meta.js";
 import { getLogger } from "../../telemetry/index.js";
 import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 
 /**
- * ChatHistoryStore：基于 UIMessage 的对话历史存储（per chatKey）。
+ * SessionHistoryStore：基于 UIMessage 的对话历史存储（per sessionId）。
  *
  * 设计目标（中文）
  * - 单一事实源：UI 展示 + 模型 messages 使用同一份 UIMessage[] 数据
@@ -25,26 +25,26 @@ import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
  * - 可审计：compact 前的原始段写入 archive（可选，但推荐默认开启）
  *
  * 落盘结构
- * - `.ship/chat/<encodedChatKey>/messages/history.jsonl`：每行一个 UIMessage（append + compact 时 rewrite）
- * - `.ship/chat/<encodedChatKey>/messages/meta.json`：compact 元数据
- * - `.ship/chat/<encodedChatKey>/messages/archive/<archiveId>.json`：compact 归档段
+ * - `.ship/session/<encodedSessionId>/messages/history.jsonl`：每行一个 UIMessage（append + compact 时 rewrite）
+ * - `.ship/session/<encodedSessionId>/messages/meta.json`：compact 元数据
+ * - `.ship/session/<encodedSessionId>/messages/archive/<archiveId>.json`：compact 归档段
  */
-export class ChatHistoryStore {
+export class SessionHistoryStore {
   readonly rootPath: string;
-  readonly chatKey: string;
-  private readonly overrideChatDirPath?: string;
+  readonly sessionId: string;
+  private readonly overrideSessionDirPath?: string;
   private readonly overrideMessagesDirPath?: string;
   private readonly overrideMessagesFilePath?: string;
   private readonly overrideMetaFilePath?: string;
   private readonly overrideArchiveDirPath?: string;
 
   constructor(
-    chatKey: string,
+    sessionId: string,
     options?: {
       /**
-       * override: chat directory path (debug/inspection only; messages paths are used for writes)
+       * override: session directory path (debug/inspection only; messages paths are used for writes)
        */
-      chatDirPath?: string;
+      sessionDirPath?: string;
       /**
        * override: directory containing history/meta/archive (e.g. a task run directory)
        */
@@ -64,14 +64,14 @@ export class ChatHistoryStore {
     },
   ) {
     const rootPath = String(getShipRuntimeContextBase().rootPath || "").trim();
-    if (!rootPath) throw new Error("ChatHistoryStore requires a non-empty rootPath");
-    const key = String(chatKey || "").trim();
-    if (!key) throw new Error("ChatHistoryStore requires a non-empty chatKey");
+    if (!rootPath) throw new Error("SessionHistoryStore requires a non-empty rootPath");
+    const key = String(sessionId || "").trim();
+    if (!key) throw new Error("SessionHistoryStore requires a non-empty sessionId");
     this.rootPath = rootPath;
-    this.chatKey = key;
-    this.overrideChatDirPath =
-      options?.chatDirPath && String(options.chatDirPath).trim()
-        ? String(options.chatDirPath).trim()
+    this.sessionId = key;
+    this.overrideSessionDirPath =
+      options?.sessionDirPath && String(options.sessionDirPath).trim()
+        ? String(options.sessionDirPath).trim()
         : undefined;
     this.overrideMessagesDirPath =
       options?.messagesDirPath && String(options.messagesDirPath).trim()
@@ -91,14 +91,14 @@ export class ChatHistoryStore {
         : undefined;
   }
 
-  getChatDirPath(): string {
-    if (this.overrideChatDirPath) return this.overrideChatDirPath;
-    return getShipChatDirPath(this.rootPath, this.chatKey);
+  getSessionDirPath(): string {
+    if (this.overrideSessionDirPath) return this.overrideSessionDirPath;
+    return getShipSessionDirPath(this.rootPath, this.sessionId);
   }
 
   getMessagesDirPath(): string {
     if (this.overrideMessagesDirPath) return this.overrideMessagesDirPath;
-    return getShipChatMessagesDirPath(this.rootPath, this.chatKey);
+    return getShipSessionMessagesDirPath(this.rootPath, this.sessionId);
   }
 
   getMessagesFilePath(): string {
@@ -107,19 +107,19 @@ export class ChatHistoryStore {
       // 关键点（中文）：task run 等自定义 layout 默认也遵循 `history.jsonl` 命名。
       return path.join(this.overrideMessagesDirPath, "history.jsonl");
     }
-    return getShipChatHistoryPath(this.rootPath, this.chatKey);
+    return getShipSessionHistoryPath(this.rootPath, this.sessionId);
   }
 
   getMetaFilePath(): string {
     if (this.overrideMetaFilePath) return this.overrideMetaFilePath;
     if (this.overrideMessagesDirPath) return path.join(this.overrideMessagesDirPath, "meta.json");
-    return getShipChatHistoryMetaPath(this.rootPath, this.chatKey);
+    return getShipSessionHistoryMetaPath(this.rootPath, this.sessionId);
   }
 
   getArchiveDirPath(): string {
     if (this.overrideArchiveDirPath) return this.overrideArchiveDirPath;
     if (this.overrideMessagesDirPath) return path.join(this.overrideMessagesDirPath, "archive");
-    return getShipChatHistoryArchiveDirPath(this.rootPath, this.chatKey);
+    return getShipSessionHistoryArchiveDirPath(this.rootPath, this.sessionId);
   }
 
   private getLockFilePath(): string {
@@ -144,14 +144,14 @@ export class ChatHistoryStore {
     return Array.from(new Set(out)).slice(0, 2000);
   }
 
-  private async readMetaUnsafe(): Promise<ShipChatMessagesMetaV1> {
+  private async readMetaUnsafe(): Promise<ShipSessionMessagesMetaV1> {
     const file = this.getMetaFilePath();
     try {
       const raw = (await fs.readJson(file)) as any;
       if (!raw || typeof raw !== "object") throw new Error("invalid_meta");
       return {
         v: 1,
-        chatKey: this.chatKey,
+        sessionId: this.sessionId,
         updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : 0,
         pinnedSkillIds: this.normalizePinnedSkillIds(raw.pinnedSkillIds),
         ...(typeof raw.lastArchiveId === "string" && raw.lastArchiveId.trim()
@@ -167,7 +167,7 @@ export class ChatHistoryStore {
     } catch {
       return {
         v: 1,
-        chatKey: this.chatKey,
+        sessionId: this.sessionId,
         updatedAt: 0,
         pinnedSkillIds: [],
       };
@@ -175,17 +175,17 @@ export class ChatHistoryStore {
   }
 
   /**
-   * 读取 chatKey 的 messages meta（不存在则返回默认值）。
+   * 读取 sessionId 的 messages meta（不存在则返回默认值）。
    */
-  async loadMeta(): Promise<ShipChatMessagesMetaV1> {
+  async loadMeta(): Promise<ShipSessionMessagesMetaV1> {
     await this.ensureLayout();
     return await this.readMetaUnsafe();
   }
 
-  private async writeMetaUnsafe(next: ShipChatMessagesMetaV1): Promise<void> {
-    const normalized: ShipChatMessagesMetaV1 = {
+  private async writeMetaUnsafe(next: ShipSessionMessagesMetaV1): Promise<void> {
+    const normalized: ShipSessionMessagesMetaV1 = {
       v: 1,
-      chatKey: this.chatKey,
+      sessionId: this.sessionId,
       updatedAt: typeof next.updatedAt === "number" ? next.updatedAt : Date.now(),
       pinnedSkillIds: this.normalizePinnedSkillIds(next.pinnedSkillIds),
       ...(typeof next.lastArchiveId === "string" && next.lastArchiveId.trim()
@@ -204,14 +204,14 @@ export class ChatHistoryStore {
   /**
    * 合并更新 meta（用于 pin skills / compact 写入等）。
    */
-  async updateMeta(patch: Partial<ShipChatMessagesMetaV1>): Promise<ShipChatMessagesMetaV1> {
+  async updateMeta(patch: Partial<ShipSessionMessagesMetaV1>): Promise<ShipSessionMessagesMetaV1> {
     return await this.withWriteLock(async () => {
       const prev = await this.readMetaUnsafe();
-      const next: ShipChatMessagesMetaV1 = {
+      const next: ShipSessionMessagesMetaV1 = {
         ...prev,
         ...(patch as any),
         v: 1,
-        chatKey: this.chatKey,
+        sessionId: this.sessionId,
         updatedAt: Date.now(),
         pinnedSkillIds: this.normalizePinnedSkillIds((patch as any)?.pinnedSkillIds ?? prev.pinnedSkillIds),
       };
@@ -267,7 +267,7 @@ export class ChatHistoryStore {
           if (age > staleMs) {
             await fs.remove(lockPath);
             await logger.log("warn", "Removed stale history lock", {
-              chatKey: this.chatKey,
+              sessionId: this.sessionId,
               lockPath,
               ageMs: age,
             });
@@ -297,18 +297,18 @@ export class ChatHistoryStore {
     }
   }
 
-  async append(message: ShipMessageV1): Promise<void> {
+  async append(message: ShipSessionMessageV1): Promise<void> {
     await this.withWriteLock(async () => {
       await fs.appendFile(this.getMessagesFilePath(), JSON.stringify(message) + "\n", "utf8");
     });
   }
 
-  async loadAll(): Promise<ShipMessageV1[]> {
+  async loadAll(): Promise<ShipSessionMessageV1[]> {
     await this.ensureLayout();
     const file = this.getMessagesFilePath();
     const raw = await fs.readFile(file, "utf8");
     const lines = raw.split("\n").filter(Boolean);
-    const out: ShipMessageV1[] = [];
+    const out: ShipSessionMessageV1[] = [];
     for (const line of lines) {
       try {
         const obj = JSON.parse(line);
@@ -316,7 +316,7 @@ export class ChatHistoryStore {
         const role = String((obj as any).role || "");
         if (role !== "user" && role !== "assistant") continue;
         if (!Array.isArray((obj as any).parts)) continue;
-        out.push(obj as ShipMessageV1);
+        out.push(obj as ShipSessionMessageV1);
       } catch {
         // ignore invalid lines
       }
@@ -329,7 +329,7 @@ export class ChatHistoryStore {
     return msgs.length;
   }
 
-  async loadRange(startIndex: number, endIndex: number): Promise<ShipMessageV1[]> {
+  async loadRange(startIndex: number, endIndex: number): Promise<ShipSessionMessageV1[]> {
     const msgs = await this.loadAll();
     const start = Math.max(0, Math.floor(startIndex));
     const end = Math.max(start, Math.floor(endIndex));
@@ -338,10 +338,10 @@ export class ChatHistoryStore {
 
   createUserTextMessage(params: {
     text: string;
-    metadata: Omit<ShipMessageMetadataV1, "v" | "ts"> & Partial<Pick<ShipMessageMetadataV1, "ts">>;
+    metadata: Omit<ShipSessionMetadataV1, "v" | "ts"> & Partial<Pick<ShipSessionMetadataV1, "ts">>;
     id?: string;
-  }): ShipMessageV1 {
-    const md: ShipMessageMetadataV1 = {
+  }): ShipSessionMessageV1 {
+    const md: ShipSessionMetadataV1 = {
       v: 1,
       ts: typeof params.metadata.ts === "number" ? params.metadata.ts : Date.now(),
       ...(params.metadata as any),
@@ -350,7 +350,7 @@ export class ChatHistoryStore {
     };
     const id =
       params.id ||
-      (md.messageId ? `u:${this.chatKey}:${String(md.messageId)}` : `u:${this.chatKey}:${generateId()}`);
+      (md.messageId ? `u:${this.sessionId}:${String(md.messageId)}` : `u:${this.sessionId}:${generateId()}`);
     return {
       id,
       role: "user",
@@ -361,13 +361,13 @@ export class ChatHistoryStore {
 
   createAssistantTextMessage(params: {
     text: string;
-    metadata: Omit<ShipMessageMetadataV1, "v" | "ts"> & Partial<Pick<ShipMessageMetadataV1, "ts">>;
+    metadata: Omit<ShipSessionMetadataV1, "v" | "ts"> & Partial<Pick<ShipSessionMetadataV1, "ts">>;
     id?: string;
     kind?: "normal" | "summary";
     source?: "egress" | "compact";
-    sourceRange?: ShipMessageMetadataV1["sourceRange"];
-  }): ShipMessageV1 {
-    const md: ShipMessageMetadataV1 = {
+    sourceRange?: ShipSessionMetadataV1["sourceRange"];
+  }): ShipSessionMessageV1 {
+    const md: ShipSessionMetadataV1 = {
       v: 1,
       ts: typeof params.metadata.ts === "number" ? params.metadata.ts : Date.now(),
       ...(params.metadata as any),
@@ -375,7 +375,7 @@ export class ChatHistoryStore {
       kind: params.kind || "normal",
       ...(params.sourceRange ? { sourceRange: params.sourceRange } : {}),
     };
-    const id = params.id || `a:${this.chatKey}:${generateId()}`;
+    const id = params.id || `a:${this.sessionId}:${generateId()}`;
     return {
       id,
       role: "assistant",
@@ -390,7 +390,7 @@ export class ChatHistoryStore {
     return Math.ceil(t.length / 3);
   }
 
-  private extractPlainTextFromMessages(messages: ShipMessageV1[]): string {
+  private extractPlainTextFromMessages(messages: ShipSessionMessageV1[]): string {
     const lines: string[] = [];
     for (const m of messages) {
       if (!m || typeof m !== "object") continue;
@@ -423,7 +423,7 @@ export class ChatHistoryStore {
     const logger = getLogger(this.rootPath, "info");
 
     // phase 1：snapshot（短锁）
-    let snapshot: ShipMessageV1[] = [];
+    let snapshot: ShipSessionMessageV1[] = [];
     let snapshotTailId = "";
     await this.withWriteLock(async () => {
       snapshot = await this.loadAll();
@@ -479,7 +479,7 @@ export class ChatHistoryStore {
       summary = String(r.text || "").trim();
     } catch (e) {
       await logger.log("warn", "History compact summary failed, fallback to lossy truncation", {
-        chatKey: this.chatKey,
+        sessionId: this.sessionId,
         error: String(e),
       });
       summary = "（系统自动压缩：摘要生成失败，已丢弃更早历史，仅保留最近对话。）";
@@ -490,9 +490,9 @@ export class ChatHistoryStore {
     const summaryMsg = this.createAssistantTextMessage({
       text: summary,
       metadata: {
-        chatKey: this.chatKey,
+        sessionId: this.sessionId,
         channel: (kept[kept.length - 1]?.metadata as any)?.channel || "api",
-        chatId: (kept[kept.length - 1]?.metadata as any)?.chatId || this.chatKey,
+        targetId: (kept[kept.length - 1]?.metadata as any)?.targetId || this.sessionId,
       } as any,
       kind: "summary",
       source: "compact",
@@ -516,8 +516,8 @@ export class ChatHistoryStore {
 
       if (params.archiveOnCompact) {
         await fs.writeJson(
-          getShipChatHistoryArchivePath(this.rootPath, this.chatKey, archiveId),
-          { v: 1, chatKey: this.chatKey, archivedAt: Date.now(), messages: currentOlder },
+          getShipSessionHistoryArchivePath(this.rootPath, this.sessionId, archiveId),
+          { v: 1, sessionId: this.sessionId, archivedAt: Date.now(), messages: currentOlder },
           { spaces: 2 },
         );
       }

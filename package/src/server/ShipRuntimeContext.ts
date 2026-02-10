@@ -3,12 +3,12 @@ import { renderClaudeSkillsPromptSection } from "../intergrations/skills/runtime
 import { DEFAULT_SHIP_PROMPTS } from "../core/runtime/prompt.js";
 import { logger as defaultLogger, type Logger } from "../telemetry/index.js";
 import { McpManager } from "../intergrations/mcp/runtime/manager.js";
-import { ChatRuntime } from "../core/runtime/chat-runtime.js";
+import { SessionRuntime } from "../core/runtime/session.js";
 import {
   getAgentMdPath,
   getCacheDirPath,
   getLogsDirPath,
-  getShipChatRootDirPath,
+  getShipSessionRootDirPath,
   getShipConfigDirPath,
   getShipDataDirPath,
   getShipDebugDirPath,
@@ -33,7 +33,7 @@ import path from "path";
  *
  * 初始化时序（关键节点）
  * - 启动入口先 `setShipRuntimeContextBase(...)`
- * - 初始化 MCP/ChatRuntime 后再 `setShipRuntimeContext(...)`
+ * - 初始化 MCP/SessionRuntime 后再 `setShipRuntimeContext(...)`
  * - 业务模块只调用 `getShipRuntimeContext()`（未 ready 会抛错）
  */
 export type ShipRuntimeContextBase = {
@@ -53,7 +53,7 @@ export type ShipRuntimeContextBase = {
 
 export type ShipRuntimeContext = ShipRuntimeContextBase & {
   mcpManager: McpManager;
-  chatRuntime: ChatRuntime;
+  sessionRuntime: SessionRuntime;
 };
 
 let base: ShipRuntimeContextBase | null = null;
@@ -84,7 +84,7 @@ export function getShipRuntimeContext(): ShipRuntimeContext {
     );
   }
   throw new Error(
-    "Ship runtime context is not ready yet. Ensure MCP/ChatRuntime are initialized before access.",
+    "Ship runtime context is not ready yet. Ensure MCP/SessionRuntime are initialized before access.",
   );
 }
 
@@ -151,7 +151,7 @@ You are a helpful project assistant.`;
   const mcpManager = new McpManager();
   await mcpManager.initialize();
 
-  const chatRuntime = new ChatRuntime();
+  const sessionRuntime = new SessionRuntime();
 
   setShipRuntimeContext({
     cwd: resolvedCwd,
@@ -160,7 +160,7 @@ You are a helpful project assistant.`;
     config,
     systems,
     mcpManager,
-    chatRuntime,
+    sessionRuntime,
   });
 }
 
@@ -189,7 +189,7 @@ function ensureShipDirectories(projectRoot: string): void {
   fs.ensureDirSync(getCacheDirPath(projectRoot));
   fs.ensureDirSync(getShipProfileDirPath(projectRoot));
   fs.ensureDirSync(getShipDataDirPath(projectRoot));
-  fs.ensureDirSync(getShipChatRootDirPath(projectRoot));
+  fs.ensureDirSync(getShipSessionRootDirPath(projectRoot));
   fs.ensureDirSync(getShipPublicDirPath(projectRoot));
   fs.ensureDirSync(getShipConfigDirPath(projectRoot));
   fs.ensureDirSync(path.join(getShipDirPath(projectRoot), "schema"));

@@ -1,15 +1,15 @@
 import fs from "fs-extra";
 import {
-  getShipChatMemoryPrimaryPath,
-  getShipChatMemoryBackupDirPath,
-  getShipChatMemoryBackupPath,
-  getShipChatMemoryMetaPath,
+  getShipSessionMemoryPrimaryPath,
+  getShipSessionMemoryBackupDirPath,
+  getShipSessionMemoryBackupPath,
+  getShipSessionMemoryMetaPath,
 } from "../../utils.js";
 import type { MemoryEntry } from "../../types/memory.js";
 import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 
 /**
- * MemoryManager：管理单个 chat 的记忆文件（memory/Primary.md）。
+ * MemoryManager：管理单个 session 的记忆文件（memory/Primary.md）。
  *
  * 职责
  * - 读取和解析 Primary.md
@@ -19,17 +19,17 @@ import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
  */
 export class MemoryManager {
   readonly rootPath: string;
-  readonly chatKey: string;
+  readonly sessionId: string;
   private readonly filePath: string;
 
-  constructor(chatKey: string) {
+  constructor(sessionId: string) {
     const rootPath = String(getShipRuntimeContextBase().rootPath || "").trim();
     if (!rootPath) throw new Error("MemoryManager requires a non-empty rootPath");
-    const key = String(chatKey || "").trim();
-    if (!key) throw new Error("MemoryManager requires a non-empty chatKey");
+    const key = String(sessionId || "").trim();
+    if (!key) throw new Error("MemoryManager requires a non-empty sessionId");
     this.rootPath = rootPath;
-    this.chatKey = key;
-    this.filePath = getShipChatMemoryPrimaryPath(this.rootPath, this.chatKey);
+    this.sessionId = key;
+    this.filePath = getShipSessionMemoryPrimaryPath(this.rootPath, this.sessionId);
   }
 
   /**
@@ -92,13 +92,13 @@ export class MemoryManager {
       const content = await this.load();
       if (!content) return "";
 
-      const backupDir = getShipChatMemoryBackupDirPath(this.rootPath, this.chatKey);
+      const backupDir = getShipSessionMemoryBackupDirPath(this.rootPath, this.sessionId);
       await fs.ensureDir(backupDir);
 
       const timestamp = Date.now();
-      const backupPath = getShipChatMemoryBackupPath(
+      const backupPath = getShipSessionMemoryBackupPath(
         this.rootPath,
-        this.chatKey,
+        this.sessionId,
         timestamp,
       );
 
@@ -130,7 +130,7 @@ export class MemoryManager {
     lastExtractedAt?: number;
   }> {
     try {
-      const metaPath = getShipChatMemoryMetaPath(this.rootPath, this.chatKey);
+      const metaPath = getShipSessionMemoryMetaPath(this.rootPath, this.sessionId);
       if (!(await fs.pathExists(metaPath))) return {};
 
       const content = await fs.readFile(metaPath, "utf-8");
@@ -149,7 +149,7 @@ export class MemoryManager {
     lastExtractedAt?: number;
   }): Promise<void> {
     try {
-      const metaPath = getShipChatMemoryMetaPath(this.rootPath, this.chatKey);
+      const metaPath = getShipSessionMemoryMetaPath(this.rootPath, this.sessionId);
       await fs.ensureFile(metaPath);
       await fs.writeFile(metaPath, JSON.stringify(meta, null, 2), "utf-8");
     } catch (error) {
@@ -195,7 +195,7 @@ export class MemoryManager {
     const lines: string[] = [];
     const date = new Date(firstEntry.timestamp).toLocaleString("zh-CN");
 
-    lines.push("# Chat Memory / Primary");
+    lines.push("# Session Memory / Primary");
     lines.push("");
     lines.push(`**最后更新**: ${date}`);
     lines.push(`**总轮次**: ${firstEntry.roundRange[1]}`);
