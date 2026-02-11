@@ -1,6 +1,6 @@
 import type { ChatDispatchChannel } from "../runtime/chat-send-registry.js";
 import { registerChatSender } from "../runtime/chat-send-registry.js";
-import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
+import { getIntegrationSessionManager } from "../../runtime/dependencies.js";
 import type {
   ChatDispatchAction,
   ChatDispatchSendActionParams,
@@ -34,7 +34,7 @@ export type AdapterSendActionParams = AdapterChatKeyParams & {
  */
 export abstract class PlatformAdapter {
   readonly channel: ChatDispatchChannel;
-  protected readonly sessionManager = getShipRuntimeContext().sessionManager;
+  protected readonly sessionManager = getIntegrationSessionManager();
 
   protected constructor(params: {
     channel: ChatDispatchChannel;

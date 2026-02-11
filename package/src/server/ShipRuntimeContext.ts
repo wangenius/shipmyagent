@@ -2,8 +2,18 @@ import { DEFAULT_SHIP_PROMPTS } from "../core/prompts/system.js";
 import { logger as defaultLogger, type Logger } from "../telemetry/index.js";
 import { McpManager } from "../intergrations/mcp/runtime/manager.js";
 import { SessionManager } from "../core/session/manager.js";
+import {
+  sessionRequestContext,
+  withSessionRequestContext,
+} from "../core/session/request-context.js";
+import { createModel } from "../core/llm/create-model.js";
 import { runSessionMemoryMaintenance } from "../intergrations/memory/runtime/service.js";
-import { registerIntegrationSystemPromptProviders } from "../intergrations/system-prompt-providers.js";
+import { pickLastSuccessfulChatSendText } from "../intergrations/chat/runtime/user-visible-text.js";
+import { sendTextByChatKey } from "../intergrations/chat/runtime/chatkey-send.js";
+import { registerIntegrationSystemPromptProviders } from "./system-prompt-providers.js";
+import {
+  setIntegrationRuntimeDependencies,
+} from "../intergrations/runtime/dependencies.js";
 import {
   getAgentMdPath,
   getCacheDirPath,
@@ -59,14 +69,51 @@ export type ShipRuntimeContext = ShipRuntimeContextBase & {
 let base: ShipRuntimeContextBase | null = null;
 let ready: ShipRuntimeContext | null = null;
 
+const integrationChatRuntimeBridge = {
+  pickLastSuccessfulChatSendText,
+  sendTextByChatKey,
+};
+
+const integrationRequestContextBridge = {
+  getCurrentSessionRequestContext: () => sessionRequestContext.getStore(),
+  withSessionRequestContext,
+};
+
+const integrationModelFactory = {
+  createModel,
+};
+
 export function setShipRuntimeContextBase(next: ShipRuntimeContextBase): void {
   base = next;
   ready = null;
+
+  setIntegrationRuntimeDependencies({
+    cwd: next.cwd,
+    rootPath: next.rootPath,
+    logger: next.logger,
+    config: next.config,
+    systems: next.systems,
+    chatRuntimeBridge: integrationChatRuntimeBridge,
+    requestContextBridge: integrationRequestContextBridge,
+    modelFactory: integrationModelFactory,
+  });
 }
 
 export function setShipRuntimeContext(next: ShipRuntimeContext): void {
   base = next;
   ready = next;
+
+  setIntegrationRuntimeDependencies({
+    cwd: next.cwd,
+    rootPath: next.rootPath,
+    logger: next.logger,
+    config: next.config,
+    systems: next.systems,
+    sessionManager: next.sessionManager,
+    chatRuntimeBridge: integrationChatRuntimeBridge,
+    requestContextBridge: integrationRequestContextBridge,
+    modelFactory: integrationModelFactory,
+  });
 }
 
 export function getShipRuntimeContextBase(): ShipRuntimeContextBase {

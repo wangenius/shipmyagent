@@ -11,7 +11,9 @@
     "build": "tsc && node scripts/copy-built-in-skills.mjs",
     "dev": "tsc --watch",
     "start": "node bin/start.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint:boundaries": "node scripts/lint-import-boundaries.mjs",
+    "lint": "npm run lint:boundaries"
   },
   "keywords": [
     "agent",

@@ -3,11 +3,11 @@
  *
  * 关键点（中文）
  * - task 语义（status/cron/@manual/timezone/串行保护）放在 integration。
- * - core 只提供 CronTriggerEngine，不感知 task。
+ * - cron 调度执行器由 server 注入，integration 不依赖具体实现。
  */
 
-import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
-import { CronTriggerEngine } from "../../core/intergration/cron-trigger.js";
+import { getIntegrationRuntimeDependencies } from "../runtime/dependencies.js";
+import type { IntegrationCronEngine } from "../../types/integration-runtime-ports.js";
 import { listTasks, readTask } from "./runtime/store.js";
 import { runTaskNow } from "./runtime/runner.js";
 
@@ -24,9 +24,9 @@ function normalizeCronExpression(raw: string): string | null {
 }
 
 export async function registerTaskCronJobs(params: {
-  engine: CronTriggerEngine;
+  engine: IntegrationCronEngine;
 }): Promise<{ tasksFound: number; jobsScheduled: number }> {
-  const runtime = getShipRuntimeContext();
+  const runtime = getIntegrationRuntimeDependencies();
   const logger = runtime.logger;
   const tasks = await listTasks(runtime.rootPath);
 

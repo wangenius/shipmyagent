@@ -13,7 +13,10 @@ import {
   setSessionAvailableSkills,
   setSessionLoadedSkills,
 } from "./store.js";
-import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
+import {
+  getIntegrationRuntimeDependencies,
+  getIntegrationSessionManager,
+} from "../../runtime/dependencies.js";
 
 function normalizeAllowedTools(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
@@ -46,8 +49,8 @@ function toLoadedSkill(params: {
 async function buildSkillsProviderOutput(
   ctx: SystemPromptProviderContext,
 ): Promise<SystemPromptProviderOutput> {
-  const runtime = getShipRuntimeContext();
-  const historyStore = runtime.sessionManager.getHistoryStore(ctx.sessionId);
+  const runtime = getIntegrationRuntimeDependencies();
+  const historyStore = getIntegrationSessionManager().getHistoryStore(ctx.sessionId);
   const discoveredSkills = discoverClaudeSkillsSync(runtime.rootPath, runtime.config);
   setSessionAvailableSkills(ctx.sessionId, discoveredSkills);
 

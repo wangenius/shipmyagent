@@ -3,11 +3,11 @@
  *
  * 关键点（中文）
  * - 对外仍是 chatKey 语义（integration 边界）
- * - 内部从 core 的 session context 做映射读取
+ * - 内部通过注入的 request context bridge 做映射读取
  */
 
 import { sendTextByChatKey } from "./runtime/chatkey-send.js";
-import { sessionRequestContext } from "../../core/session/request-context.js";
+import { getIntegrationRequestContextBridge } from "../runtime/dependencies.js";
 import { llmRequestContext } from "../../telemetry/index.js";
 import type {
   ChatContextSnapshot,
@@ -30,7 +30,8 @@ function readEnvNumber(name: string): number | undefined {
 export function resolveChatContextSnapshot(input?: {
   chatKey?: string;
 }): ChatContextSnapshot {
-  const requestCtx = sessionRequestContext.getStore();
+  const requestCtx =
+    getIntegrationRequestContextBridge().getCurrentSessionRequestContext();
   const llmCtx = llmRequestContext.getStore();
 
   const explicitChatKey = String(input?.chatKey || "").trim();

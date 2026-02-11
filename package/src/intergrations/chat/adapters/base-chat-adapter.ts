@@ -1,7 +1,10 @@
 import { PlatformAdapter } from "./platform-adapter.js";
 import type { ChatDispatchChannel } from "../runtime/chat-send-registry.js";
 import type { Logger } from "../../../telemetry/index.js";
-import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
+import {
+  getIntegrationRuntimeDependencies,
+  getIntegrationSessionManager,
+} from "../../runtime/dependencies.js";
 
 export type IncomingChatMessage = {
   chatId: string;
@@ -24,13 +27,13 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
       channel: params.channel,
     });
 
-    const runtime = getShipRuntimeContext();
+    const runtime = getIntegrationRuntimeDependencies();
     this.rootPath = runtime.rootPath;
     this.logger = runtime.logger;
   }
 
   clearChat(chatKey: string): void {
-    getShipRuntimeContext().sessionManager.clearAgent(chatKey);
+    getIntegrationSessionManager().clearAgent(chatKey);
     this.logger.info(`Cleared chat: ${chatKey}`);
   }
 
@@ -71,7 +74,7 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
       messageId: msg.messageId,
     });
 
-    const { lanePosition } = await getShipRuntimeContext().sessionManager.enqueue({
+    const { lanePosition } = await getIntegrationSessionManager().enqueue({
       channel: this.channel,
       targetId: msg.chatId,
       sessionId: chatKey,

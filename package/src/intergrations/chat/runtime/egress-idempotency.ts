@@ -22,7 +22,7 @@ import path from "path";
 import fs from "fs-extra";
 import { getCacheDirPath } from "../../../utils.js";
 import type { ChatDispatchChannel } from "./chat-send-registry.js";
-import { getShipRuntimeContextBase } from "../../../server/ShipRuntimeContext.js";
+import { getIntegrationRuntimeDependencies } from "../../runtime/dependencies.js";
 
 export async function tryClaimChatEgressChatSend(params: {
   channel: ChatDispatchChannel;
@@ -37,7 +37,7 @@ export async function tryClaimChatEgressChatSend(params: {
   | { claimed: true; markerFile?: string }
   | { claimed: false; reason: string }
 > {
-  const projectRoot = String(getShipRuntimeContextBase().rootPath || "").trim();
+  const projectRoot = String(getIntegrationRuntimeDependencies().rootPath || "").trim();
   const channel = params.channel;
   const chatId = String(params.chatId || "").trim();
   const messageId = String(params.messageId || "").trim();

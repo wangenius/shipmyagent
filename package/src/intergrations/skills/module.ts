@@ -9,7 +9,7 @@
 
 import path from "node:path";
 import type { Command } from "commander";
-import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
+import { getIntegrationRuntimeDependencies } from "../runtime/dependencies.js";
 import { skillAddCommand, skillFindCommand, skillListCommand } from "./command.js";
 import {
   listPinnedSkills,
@@ -17,9 +17,9 @@ import {
   loadSkill,
   unloadSkill,
 } from "./service.js";
-import { resolveChatKey } from "../chat/service.js";
-import { callDaemonJsonApi } from "../../core/intergration/shared/daemon-client.js";
-import { printResult } from "../../core/intergration/cli-output.js";
+import { resolveChatKey } from "../shared/chat-key.js";
+import { callDaemonJsonApi } from "../shared/daemon-client.js";
+import { printResult } from "../shared/cli-output.js";
 import type {
   SkillListResponse,
   SkillLoadResponse,
@@ -89,24 +89,15 @@ async function callSkillLoad(params: {
     return;
   }
 
-  // 兜底（中文）：server 不可达时，CLI 仍可直接本地落盘。
-  const local = await loadSkill({
-    projectRoot,
-    request: {
-      name: params.name,
-      chatKey,
-    },
-  });
-
   printResult({
     asJson: params.options.json,
-    success: Boolean(local.success),
-    title: local.success ? "skill loaded" : "skill load failed",
+    success: false,
+    title: "skill load failed",
     payload: {
       chatKey,
-      ...(local.skill ? { skill: local.skill } : {}),
-      ...(local.error ? { error: local.error } : {}),
-      ...(remote.error ? { note: `server unavailable, fallback local: ${remote.error}` } : {}),
+      error:
+        remote.error ||
+        "Skill load requires an active Agent server runtime. Start via `sma start` or `sma run` first.",
     },
   });
 }
@@ -157,24 +148,15 @@ async function callSkillUnload(params: {
     return;
   }
 
-  const local = await unloadSkill({
-    projectRoot,
-    request: {
-      name: params.name,
-      chatKey,
-    },
-  });
-
   printResult({
     asJson: params.options.json,
-    success: Boolean(local.success),
-    title: local.success ? "skill unloaded" : "skill unload failed",
+    success: false,
+    title: "skill unload failed",
     payload: {
       chatKey,
-      ...(local.removedSkillId ? { removedSkillId: local.removedSkillId } : {}),
-      ...(Array.isArray(local.pinnedSkillIds) ? { pinnedSkillIds: local.pinnedSkillIds } : {}),
-      ...(local.error ? { error: local.error } : {}),
-      ...(remote.error ? { note: `server unavailable, fallback local: ${remote.error}` } : {}),
+      error:
+        remote.error ||
+        "Skill unload requires an active Agent server runtime. Start via `sma start` or `sma run` first.",
     },
   });
 }
@@ -217,16 +199,15 @@ async function callSkillPinned(options: SkillRemoteCliOptions): Promise<void> {
     return;
   }
 
-  const local = await listPinnedSkills({ projectRoot, chatKey });
   printResult({
     asJson: options.json,
-    success: Boolean(local.success),
-    title: local.success ? "skill pinned listed" : "skill pinned failed",
+    success: false,
+    title: "skill pinned failed",
     payload: {
       chatKey,
-      ...(Array.isArray(local.pinnedSkillIds) ? { pinnedSkillIds: local.pinnedSkillIds } : {}),
-      ...(local.error ? { error: local.error } : {}),
-      ...(remote.error ? { note: `server unavailable, fallback local: ${remote.error}` } : {}),
+      error:
+        remote.error ||
+        "Skill pinned query requires an active Agent server runtime. Start via `sma start` or `sma run` first.",
     },
   });
 }
@@ -295,7 +276,7 @@ function setupCli(registry: Parameters<SmaModule["registerCli"]>[0]): void {
 
 function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void {
   registry.get("/api/skill/list", (c) => {
-    const runtime = getShipRuntimeContext();
+    const runtime = getIntegrationRuntimeDependencies();
     const result = listSkills(runtime.rootPath);
     return c.json(result);
   });
@@ -313,7 +294,7 @@ function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void
     if (!name) return c.json({ success: false, error: "Missing name" }, 400);
     if (!chatKey) return c.json({ success: false, error: "Missing chatKey" }, 400);
 
-    const runtime = getShipRuntimeContext();
+    const runtime = getIntegrationRuntimeDependencies();
     const result = await loadSkill({
       projectRoot: runtime.rootPath,
       request: { name, chatKey },
@@ -335,7 +316,7 @@ function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void
     if (!name) return c.json({ success: false, error: "Missing name" }, 400);
     if (!chatKey) return c.json({ success: false, error: "Missing chatKey" }, 400);
 
-    const runtime = getShipRuntimeContext();
+    const runtime = getIntegrationRuntimeDependencies();
     const result = await unloadSkill({
       projectRoot: runtime.rootPath,
       request: { name, chatKey },
@@ -348,7 +329,7 @@ function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void
     const chatKey = String(c.req.query("chatKey") || "").trim();
     if (!chatKey) return c.json({ success: false, error: "Missing chatKey" }, 400);
 
-    const runtime = getShipRuntimeContext();
+    const runtime = getIntegrationRuntimeDependencies();
     const result = await listPinnedSkills({
       projectRoot: runtime.rootPath,
       chatKey,

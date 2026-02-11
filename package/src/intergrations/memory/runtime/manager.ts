@@ -6,7 +6,7 @@ import {
   getShipSessionMemoryMetaPath,
 } from "../../../utils.js";
 import type { MemoryEntry } from "../../../types/memory.js";
-import { getShipRuntimeContextBase } from "../../../server/ShipRuntimeContext.js";
+import { getIntegrationRuntimeDependencies } from "../../runtime/dependencies.js";
 
 /**
  * MemoryManager：管理单个 session 的记忆文件（memory/Primary.md）。
@@ -23,7 +23,7 @@ export class MemoryManager {
   private readonly filePath: string;
 
   constructor(sessionId: string) {
-    const rootPath = String(getShipRuntimeContextBase().rootPath || "").trim();
+    const rootPath = String(getIntegrationRuntimeDependencies().rootPath || "").trim();
     if (!rootPath) throw new Error("MemoryManager requires a non-empty rootPath");
     const key = String(sessionId || "").trim();
     if (!key) throw new Error("MemoryManager requires a non-empty sessionId");

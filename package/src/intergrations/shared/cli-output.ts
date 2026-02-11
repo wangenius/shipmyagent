@@ -1,9 +1,9 @@
 /**
- * CLI output helpers.
+ * Integration CLI 输出工具。
  *
  * 关键点（中文）
  * - 统一支持 JSON / 文本输出
- * - 让 AI 与人类用户都能稳定解析结果
+ * - 保持 shell 调用与 AI 调用都可稳定解析
  */
 
 export function printResult(params: {
@@ -29,3 +29,4 @@ export function printResult(params: {
     console.log(`- ${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`);
   }
 }
+

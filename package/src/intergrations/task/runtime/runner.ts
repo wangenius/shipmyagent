@@ -10,13 +10,15 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import { withSessionRequestContext } from "../../../core/session/request-context.js";
-import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
+import {
+  getIntegrationChatRuntimeBridge,
+  getIntegrationRequestContextBridge,
+  getIntegrationRuntimeDependencies,
+  getIntegrationSessionManager,
+} from "../../runtime/dependencies.js";
 import type { ShipTaskRunMetaV1, ShipTaskRunTriggerV1 } from "../../../types/task.js";
-import { pickLastSuccessfulChatSendText } from "../../chat/runtime/user-visible-text.js";
 import { createTaskRunSessionId, formatTaskRunTimestamp, getTaskRunDir } from "./paths.js";
 import { ensureRunDir, readTask } from "./store.js";
-import { sendTextByChatKey } from "../../chat/runtime/chatkey-send.js";
 
 function toMdLink(relPath: string): string {
   const p = String(relPath || "").trim();
@@ -44,7 +46,7 @@ export async function runTaskNow(params: {
   notified: boolean;
   notifyError?: string;
 }> {
-  const runtime = getShipRuntimeContext();
+  const runtime = getIntegrationRuntimeDependencies();
   const root = String(params.projectRoot || runtime.rootPath || "").trim();
   if (!root) throw new Error("projectRoot is required");
 
@@ -94,10 +96,10 @@ export async function runTaskNow(params: {
   let errorText = "";
 
   try {
-    const agent = runtime.sessionManager.getAgent(runSessionId);
+    const agent = getIntegrationSessionManager().getAgent(runSessionId);
 
     // 关键点（中文）：以 scheduler channel 运行，但使用 task-run chatKey 让 history 落盘到 runDir。
-    const result = await withSessionRequestContext(
+    const result = await getIntegrationRequestContextBridge().withSessionRequestContext(
       {
         channel: "scheduler",
         targetId: task.taskId,
@@ -116,14 +118,15 @@ export async function runTaskNow(params: {
 
     // 落盘 assistant UIMessage（包含 tool parts），以便 history.jsonl 可审计。
     try {
-      const store = runtime.sessionManager.getHistoryStore(runSessionId);
+      const store = getIntegrationSessionManager().getHistoryStore(runSessionId);
       const assistantMessage = (result as any)?.assistantMessage;
       if (assistantMessage && typeof assistantMessage === "object") {
         await store.append(assistantMessage as any);
       } else {
         const userVisible =
-          pickLastSuccessfulChatSendText((result as any)?.toolCalls || []) ||
-          String((result as any)?.output || "");
+          getIntegrationChatRuntimeBridge().pickLastSuccessfulChatSendText(
+            (result as any)?.toolCalls || [],
+          ) || String((result as any)?.output || "");
         if (userVisible && userVisible.trim()) {
           await store.append(
             store.createAssistantTextMessage({
@@ -252,7 +255,7 @@ export async function runTaskNow(params: {
       textLines.push("");
       textLines.push(`error: ${summarizeText(errorText, 500)}`);
     }
-    const send = await sendTextByChatKey({
+    const send = await getIntegrationChatRuntimeBridge().sendTextByChatKey({
       chatKey: task.frontmatter.chatKey,
       text: textLines.join("\n"),
     });

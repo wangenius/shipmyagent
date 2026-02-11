@@ -7,7 +7,7 @@ import http from "node:http";
 import fs from "fs-extra";
 import path from "path";
 import { getShipPublicDirPath } from "../utils.js";
-import { getShipRuntimeContext } from "./ShipRuntimeContext.js";
+import { getShipRuntimeContext } from "../server/ShipRuntimeContext.js";
 import { pickLastSuccessfulChatSendText } from "../intergrations/chat/runtime/user-visible-text.js";
 import { registerAllModulesForServer } from "../core/intergration/registry.js";
 

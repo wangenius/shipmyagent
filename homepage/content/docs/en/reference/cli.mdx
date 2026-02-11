@@ -40,6 +40,7 @@ sma chat context
 Notes:
 - `--chat-key` is optional if `SMA_CTX_CHAT_KEY` is injected
 - Typical flow: the agent calls `sma chat send` via `exec_command`
+- `sma chat` calls local daemon API; start runtime first via `sma start` or `sma run`
 
 ### `sma skill`
 
@@ -52,6 +53,9 @@ sma skill unload <name> [--chat-key <chatKey>]
 sma skill pinned [--chat-key <chatKey>]
 ```
 
+Notes:
+- `sma skill` is daemon-only and requires an active local runtime (`sma start` or `sma run`)
+
 ### `sma task`
 
 ```bash
@@ -61,6 +65,9 @@ sma task run <taskId>
 sma task enable <taskId>
 sma task disable <taskId>
 ```
+
+Notes:
+- `sma task` is daemon-only and requires an active local runtime (`sma start` or `sma run`)
 
 ---
 

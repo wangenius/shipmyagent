@@ -14,8 +14,8 @@ import {
   resolveChatKey,
   sendChatTextByChatKey,
 } from "./service.js";
-import { callDaemonJsonApi } from "../../core/intergration/shared/daemon-client.js";
-import { printResult } from "../../core/intergration/cli-output.js";
+import { callDaemonJsonApi } from "../shared/daemon-client.js";
+import { printResult } from "../shared/cli-output.js";
 import type { ChatSendResponse, SmaModule } from "../../types/module-command.js";
 
 function parsePortOption(value: string): number {

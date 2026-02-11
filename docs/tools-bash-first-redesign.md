@@ -129,8 +129,8 @@
 - `POST /api/task/create`
 - `POST /api/task/run`
 
-CLI 命令（`sma chat/skill/task`）优先调用本地 daemon API；
-若 daemon 未运行，除 chat 发送外，文件类命令可本地直执。
+CLI 命令（`sma chat/skill/task`）统一调用本地 daemon API；
+若 daemon 未运行，命令直接失败并提示先启动 `sma start` 或 `sma run`。
 
 ### 4.4 模块化封装（chat/task/skills）
 

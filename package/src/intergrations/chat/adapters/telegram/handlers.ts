@@ -1,5 +1,5 @@
 import type { TelegramUpdate, TelegramUser } from "./shared.js";
-import { getShipRuntimeContext } from "../../../../server/ShipRuntimeContext.js";
+import { getIntegrationRuntimeDependencies } from "../../../runtime/dependencies.js";
 
 /**
  * Telegram command/callback handlers.
@@ -29,7 +29,7 @@ export async function handleTelegramCommand(
   },
 ): Promise<void> {
   const username = params.from?.username || "Unknown";
-  getShipRuntimeContext().logger.info(
+  getIntegrationRuntimeDependencies().logger.info(
     `Received command: ${params.command} (${username})`,
   );
 

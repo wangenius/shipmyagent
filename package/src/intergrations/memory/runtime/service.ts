@@ -1,7 +1,9 @@
-import { createModel } from "../../../core/llm/create-model.js";
-import type { SessionHistoryStore } from "../../../core/session/history-store.js";
+import type { IntegrationSessionHistoryStore } from "../../../types/integration-runtime-ports.js";
 import { getLogger } from "../../../telemetry/index.js";
-import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
+import {
+  getIntegrationModelFactory,
+  getIntegrationRuntimeDependencies,
+} from "../../runtime/dependencies.js";
 import { MemoryManager } from "./manager.js";
 import { compressMemory, extractMemoryFromHistory } from "./extractor.js";
 
@@ -28,12 +30,12 @@ function getMemoryManager(sessionId: string): MemoryManager {
  */
 export async function runSessionMemoryMaintenance(params: {
   sessionId: string;
-  getHistoryStore: (sessionId: string) => SessionHistoryStore;
+  getHistoryStore: (sessionId: string) => IntegrationSessionHistoryStore;
 }): Promise<void> {
   const sessionId = String(params.sessionId || "").trim();
   if (!sessionId) return;
 
-  const runtime = getShipRuntimeContext();
+  const runtime = getIntegrationRuntimeDependencies();
   const config = runtime.config?.context?.memory;
   const enabled = config?.autoExtractEnabled ?? true;
   if (!enabled) return;
@@ -67,7 +69,7 @@ async function extractAndSaveMemory(params: {
   endIndex: number;
 }): Promise<void> {
   const { sessionId, startIndex, endIndex } = params;
-  const runtime = getShipRuntimeContext();
+  const runtime = getIntegrationRuntimeDependencies();
   const logger = getLogger(runtime.rootPath, "info");
 
   try {
@@ -76,7 +78,9 @@ async function extractAndSaveMemory(params: {
       entryRange: [startIndex, endIndex],
     });
 
-    const model = await createModel({ config: runtime.config });
+    const model = await getIntegrationModelFactory().createModel({
+      config: runtime.config,
+    });
 
     const memoryEntry = await extractMemoryFromHistory({
       sessionId,
@@ -112,7 +116,7 @@ async function checkAndCompressMemory(
   sessionId: string,
   model: any,
 ): Promise<void> {
-  const runtime = getShipRuntimeContext();
+  const runtime = getIntegrationRuntimeDependencies();
   const logger = getLogger(runtime.rootPath, "info");
 
   try {

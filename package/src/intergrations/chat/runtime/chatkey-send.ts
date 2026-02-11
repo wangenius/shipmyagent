@@ -11,7 +11,7 @@
 
 import { getChatSender, type ChatDispatchChannel } from "./chat-send-registry.js";
 import type { ShipSessionMessageV1 } from "../../../types/session-history.js";
-import { getShipRuntimeContext } from "../../../server/ShipRuntimeContext.js";
+import { getIntegrationSessionManager } from "../../runtime/dependencies.js";
 
 type DispatchableChannel = "telegram" | "feishu" | "qq";
 
@@ -105,7 +105,7 @@ export async function sendTextByChatKey(params: {
   }
 
   // 关键点（中文）：尽量从 history 的最近 user message 拿到 chatType/messageThreadId/messageId（尤其 QQ 需要）。
-  const historyStore = getShipRuntimeContext().sessionManager.getHistoryStore(chatKey);
+  const historyStore = getIntegrationSessionManager().getHistoryStore(chatKey);
   let messages: ShipSessionMessageV1[] = [];
   try {
     messages = await historyStore.loadAll();
@@ -146,4 +146,3 @@ export async function sendTextByChatKey(params: {
     ...(typeof messageId === "string" && messageId ? { messageId } : {}),
   }) as any;
 }
-

@@ -1,20 +1,18 @@
 /**
- * Daemon API client helpers.
+ * Integration Daemon API 客户端。
  *
  * 关键点（中文）
- * - CLI 子命令优先通过本地 Agent Server API 执行业务动作
- * - 地址解析优先级：CLI 覆盖参数 > 环境变量 > ship.json.start > 默认值
- * - 这里不强依赖 daemon pid 文件，前台 `sma run` 场景同样可访问 HTTP API
+ * - integration CLI 统一通过 daemon API 与运行时通信
+ * - 地址解析优先级：CLI 参数 > 环境变量 > ship.json.start > 默认值
  */
 
 import fs from "fs-extra";
-import { getShipJsonPath, loadShipConfig } from "../../../utils.js";
-
-export type DaemonEndpoint = {
-  host: string;
-  port: number;
-  baseUrl: string;
-};
+import {
+  type DaemonEndpoint,
+  type DaemonJsonApiCallParams,
+  type DaemonJsonApiCallResult,
+} from "../../types/daemon-api.js";
+import { getShipJsonPath, loadShipConfig } from "../../utils.js";
 
 function parsePortLike(input: unknown): number | undefined {
   if (input === undefined || input === null || input === "") return undefined;
@@ -69,14 +67,9 @@ export function resolveDaemonEndpoint(params: {
   };
 }
 
-export async function callDaemonJsonApi<T>(params: {
-  projectRoot: string;
-  path: string;
-  method?: "GET" | "POST" | "PUT" | "DELETE";
-  body?: unknown;
-  host?: string;
-  port?: number;
-}): Promise<{ success: boolean; status?: number; data?: T; error?: string }> {
+export async function callDaemonJsonApi<T>(
+  params: DaemonJsonApiCallParams,
+): Promise<DaemonJsonApiCallResult<T>> {
   const endpoint = resolveDaemonEndpoint({
     projectRoot: params.projectRoot,
     host: params.host,
@@ -127,3 +120,4 @@ export async function callDaemonJsonApi<T>(params: {
     };
   }
 }
+

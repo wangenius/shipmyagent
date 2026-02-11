@@ -9,7 +9,7 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import { getShipRuntimeContextBase } from "../../../server/ShipRuntimeContext.js";
+import { getIntegrationRuntimeDependencies } from "../../runtime/dependencies.js";
 import type { ShipTaskDefinitionV1, ShipTaskFrontmatterV1 } from "../../../types/task.js";
 import { parseTaskMarkdown, buildTaskMarkdown } from "./model.js";
 import { getTaskDir, getTaskMdPath, getTaskRootDir, getTaskRunDir, normalizeTaskId } from "./paths.js";
@@ -34,7 +34,7 @@ function isDirectoryNameTimestamp(name: string): boolean {
 }
 
 export async function listTasks(projectRoot?: string): Promise<TaskListItem[]> {
-  const root = String(projectRoot || getShipRuntimeContextBase().rootPath || "").trim();
+  const root = String(projectRoot || getIntegrationRuntimeDependencies().rootPath || "").trim();
   if (!root) return [];
 
   const dir = getTaskRootDir(root);
@@ -103,7 +103,7 @@ export async function listTasks(projectRoot?: string): Promise<TaskListItem[]> {
 }
 
 export async function readTask(params: { taskId: string; projectRoot?: string }): Promise<ShipTaskDefinitionV1> {
-  const root = String(params.projectRoot || getShipRuntimeContextBase().rootPath || "").trim();
+  const root = String(params.projectRoot || getIntegrationRuntimeDependencies().rootPath || "").trim();
   if (!root) throw new Error("projectRoot is required");
   const taskId = normalizeTaskId(params.taskId);
 
@@ -126,7 +126,7 @@ export async function writeTask(params: {
   projectRoot?: string;
   overwrite?: boolean;
 }): Promise<{ taskId: string; taskMdPath: string }> {
-  const root = String(params.projectRoot || getShipRuntimeContextBase().rootPath || "").trim();
+  const root = String(params.projectRoot || getIntegrationRuntimeDependencies().rootPath || "").trim();
   if (!root) throw new Error("projectRoot is required");
   const taskId = normalizeTaskId(params.taskId);
 
@@ -153,7 +153,7 @@ export async function ensureRunDir(params: {
   timestamp: string;
   projectRoot?: string;
 }): Promise<{ runDir: string; runDirRel: string }> {
-  const root = String(params.projectRoot || getShipRuntimeContextBase().rootPath || "").trim();
+  const root = String(params.projectRoot || getIntegrationRuntimeDependencies().rootPath || "").trim();
   if (!root) throw new Error("projectRoot is required");
   const taskId = normalizeTaskId(params.taskId);
   const runDir = getTaskRunDir(root, taskId, params.timestamp);

@@ -13,7 +13,7 @@ import type {
 import { HttpTransport } from "./http-transport.js";
 import { resolveEnvVar, resolveEnvVarsInRecord } from "./env.js";
 import { getShipMcpConfigPath } from "../../../utils.js";
-import { getShipRuntimeContextBase } from "../../../server/ShipRuntimeContext.js";
+import { getIntegrationRuntimeDependencies } from "../../runtime/dependencies.js";
 
 export interface McpLogger {
   info(message: string): void;
@@ -36,11 +36,11 @@ export class McpManager {
   private readonly log: McpLogger;
 
   constructor() {
-    this.log = getShipRuntimeContextBase().logger;
+    this.log = getIntegrationRuntimeDependencies().logger;
   }
 
   async initialize(): Promise<void> {
-    const mcpConfigPath = getShipMcpConfigPath(getShipRuntimeContextBase().rootPath);
+    const mcpConfigPath = getShipMcpConfigPath(getIntegrationRuntimeDependencies().rootPath);
     if (!(await fs.pathExists(mcpConfigPath))) {
       this.log.info("No MCP configuration found, skipping MCP initialization");
       return;
@@ -170,7 +170,7 @@ export class McpManager {
         transport = new StdioClientTransport({
           command,
           args,
-          cwd: getShipRuntimeContextBase().rootPath,
+          cwd: getIntegrationRuntimeDependencies().rootPath,
           env: {
             ...(process.env as Record<string, string>),
             ...env,

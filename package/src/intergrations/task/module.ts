@@ -9,16 +9,16 @@
 
 import path from "node:path";
 import type { Command } from "commander";
-import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
+import { getIntegrationRuntimeDependencies } from "../runtime/dependencies.js";
 import {
   createTaskDefinition,
   listTaskDefinitions,
   runTaskDefinition,
   setTaskStatus,
 } from "./service.js";
-import { callDaemonJsonApi } from "../../core/intergration/shared/daemon-client.js";
-import { printResult } from "../../core/intergration/cli-output.js";
-import { resolveChatKey } from "../chat/service.js";
+import { callDaemonJsonApi } from "../shared/daemon-client.js";
+import { printResult } from "../shared/cli-output.js";
+import { resolveChatKey } from "../shared/chat-key.js";
 import type {
   SmaModule,
   TaskCreateRequest,
@@ -87,18 +87,14 @@ async function runTaskListCommand(options: TaskListCliOptions): Promise<void> {
     return;
   }
 
-  const local = await listTaskDefinitions({
-    projectRoot,
-    status: options.status,
-  });
-
   printResult({
     asJson: options.json,
-    success: true,
-    title: "task listed",
+    success: false,
+    title: "task list failed",
     payload: {
-      tasks: local.tasks,
-      ...(remote.error ? { note: `server unavailable, fallback local: ${remote.error}` } : {}),
+      error:
+        remote.error ||
+        "Task list requires an active Agent server runtime. Start via `sma start` or `sma run` first.",
     },
   });
 }
@@ -143,20 +139,14 @@ async function runTaskCreateCommand(options: TaskCreateCliOptions): Promise<void
     return;
   }
 
-  const local = await createTaskDefinition({
-    projectRoot,
-    request,
-  });
-
   printResult({
     asJson: options.json,
-    success: Boolean(local.success),
-    title: local.success ? "task created" : "task create failed",
+    success: false,
+    title: "task create failed",
     payload: {
-      ...(local.taskId ? { taskId: local.taskId } : {}),
-      ...(local.taskMdPath ? { taskMdPath: local.taskMdPath } : {}),
-      ...(local.error ? { error: local.error } : {}),
-      ...(remote.error ? { note: `server unavailable, fallback local: ${remote.error}` } : {}),
+      error:
+        remote.error ||
+        "Task create requires an active Agent server runtime. Start via `sma start` or `sma run` first.",
     },
   });
 }
@@ -245,23 +235,14 @@ async function runTaskSetStatusCommand(params: {
     return;
   }
 
-  const local = await setTaskStatus({
-    projectRoot,
-    request: {
-      taskId: params.taskId,
-      status: params.status,
-    },
-  });
-
   printResult({
     asJson: params.options.json,
-    success: Boolean(local.success),
-    title: local.success ? "task status updated" : "task status update failed",
+    success: false,
+    title: "task status update failed",
     payload: {
-      ...(local.taskId ? { taskId: local.taskId } : {}),
-      ...(local.status ? { status: local.status } : {}),
-      ...(local.error ? { error: local.error } : {}),
-      ...(remote.error ? { note: `server unavailable, fallback local: ${remote.error}` } : {}),
+      error:
+        remote.error ||
+        "Task status update requires an active Agent server runtime. Start via `sma start` or `sma run` first.",
     },
   });
 }
@@ -350,7 +331,7 @@ function setupCli(registry: Parameters<SmaModule["registerCli"]>[0]): void {
 
 function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void {
   registry.get("/api/task/list", async (c) => {
-    const runtime = getShipRuntimeContext();
+    const runtime = getIntegrationRuntimeDependencies();
     const statusRaw = String(c.req.query("status") || "").trim();
     const status =
       statusRaw === "enabled" || statusRaw === "paused" || statusRaw === "disabled"
@@ -373,7 +354,7 @@ function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void
       return c.json({ success: false, error: "Invalid JSON body" }, 400);
     }
 
-    const runtime = getShipRuntimeContext();
+    const runtime = getIntegrationRuntimeDependencies();
     const result = await createTaskDefinition({
       projectRoot: runtime.rootPath,
       request: {
@@ -400,7 +381,7 @@ function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void
       return c.json({ success: false, error: "Invalid JSON body" }, 400);
     }
 
-    const runtime = getShipRuntimeContext();
+    const runtime = getIntegrationRuntimeDependencies();
     const result = await runTaskDefinition({
       projectRoot: runtime.rootPath,
       request: {
@@ -420,7 +401,7 @@ function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void
       return c.json({ success: false, error: "Invalid JSON body" }, 400);
     }
 
-    const runtime = getShipRuntimeContext();
+    const runtime = getIntegrationRuntimeDependencies();
     const result = await setTaskStatus({
       projectRoot: runtime.rootPath,
       request: {
