@@ -9,6 +9,7 @@
 import path from "node:path";
 import { nanoid } from "nanoid";
 import type { ShipTaskStatus } from "../../types/task.js";
+import type { IntegrationRuntimeDependencies } from "../../infra/integration-runtime-types.js";
 import {
   isValidTaskId,
   normalizeTaskId,
@@ -127,6 +128,7 @@ export async function createTaskDefinition(params: {
 }
 
 export async function runTaskDefinition(params: {
+  context: IntegrationRuntimeDependencies;
   projectRoot: string;
   request: TaskRunRequest;
 }): Promise<TaskRunResponse> {
@@ -136,6 +138,7 @@ export async function runTaskDefinition(params: {
 
   try {
     const result = await runTaskNow({
+      context: params.context,
       projectRoot: root,
       taskId,
       trigger: {

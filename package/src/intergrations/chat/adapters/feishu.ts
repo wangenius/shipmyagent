@@ -7,6 +7,7 @@ import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "./platform-adapter.js";
+import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
 /**
  * Feishu (Lark) chat adapter.
@@ -61,12 +62,13 @@ export class FeishuBot extends BaseChatAdapter {
     new Map();
 
   constructor(
+    context: IntegrationRuntimeDependencies,
     appId: string,
     appSecret: string,
     domain: string | undefined,
     adminUserIds: string[] | undefined,
   ) {
-    super({ channel: "feishu" });
+    super({ channel: "feishu", context });
     this.appId = appId;
     this.appSecret = appSecret;
     this.domain = domain;
@@ -600,12 +602,14 @@ Available commands:
 
 export async function createFeishuBot(
   config: FeishuConfig,
+  context: IntegrationRuntimeDependencies,
 ): Promise<FeishuBot | null> {
   if (!config.enabled || !config.appId || !config.appSecret) {
     return null;
   }
 
   const bot = new FeishuBot(
+    context,
     config.appId,
     config.appSecret,
     config.domain,

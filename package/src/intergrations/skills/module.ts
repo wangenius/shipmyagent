@@ -9,7 +9,6 @@
 
 import path from "node:path";
 import type { Command } from "commander";
-import { getIntegrationRuntimeDependencies } from "../runtime/dependencies.js";
 import { skillAddCommand, skillFindCommand, skillListCommand } from "./command.js";
 import {
   listPinnedSkills,
@@ -17,9 +16,9 @@ import {
   loadSkill,
   unloadSkill,
 } from "./service.js";
-import { resolveChatKey } from "../shared/chat-key.js";
-import { callDaemonJsonApi } from "../shared/daemon-client.js";
-import { printResult } from "../shared/cli-output.js";
+import { resolveChatKey } from "../../infra/chat-key.js";
+import { callDaemonJsonApi } from "../../infra/daemon-client.js";
+import { printResult } from "../../infra/cli-output.js";
 import type {
   SkillListResponse,
   SkillLoadResponse,
@@ -274,10 +273,12 @@ function setupCli(registry: Parameters<SmaModule["registerCli"]>[0]): void {
   });
 }
 
-function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void {
+function setupServer(
+  registry: Parameters<SmaModule["registerServer"]>[0],
+  context: Parameters<SmaModule["registerServer"]>[1],
+): void {
   registry.get("/api/skill/list", (c) => {
-    const runtime = getIntegrationRuntimeDependencies();
-    const result = listSkills(runtime.rootPath);
+    const result = listSkills(context.rootPath);
     return c.json(result);
   });
 
@@ -294,9 +295,8 @@ function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void
     if (!name) return c.json({ success: false, error: "Missing name" }, 400);
     if (!chatKey) return c.json({ success: false, error: "Missing chatKey" }, 400);
 
-    const runtime = getIntegrationRuntimeDependencies();
     const result = await loadSkill({
-      projectRoot: runtime.rootPath,
+      projectRoot: context.rootPath,
       request: { name, chatKey },
     });
 
@@ -316,9 +316,8 @@ function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void
     if (!name) return c.json({ success: false, error: "Missing name" }, 400);
     if (!chatKey) return c.json({ success: false, error: "Missing chatKey" }, 400);
 
-    const runtime = getIntegrationRuntimeDependencies();
     const result = await unloadSkill({
-      projectRoot: runtime.rootPath,
+      projectRoot: context.rootPath,
       request: { name, chatKey },
     });
 
@@ -329,9 +328,8 @@ function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void
     const chatKey = String(c.req.query("chatKey") || "").trim();
     if (!chatKey) return c.json({ success: false, error: "Missing chatKey" }, 400);
 
-    const runtime = getIntegrationRuntimeDependencies();
     const result = await listPinnedSkills({
-      projectRoot: runtime.rootPath,
+      projectRoot: context.rootPath,
       chatKey,
     });
 
@@ -344,7 +342,7 @@ export const skillsModule: SmaModule = {
   registerCli(registry) {
     setupCli(registry);
   },
-  registerServer(registry) {
-    setupServer(registry);
+  registerServer(registry, context) {
+    setupServer(registry, context);
   },
 };

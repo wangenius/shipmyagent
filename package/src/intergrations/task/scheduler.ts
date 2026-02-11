@@ -6,8 +6,8 @@
  * - cron 调度执行器由 server 注入，integration 不依赖具体实现。
  */
 
-import { getIntegrationRuntimeDependencies } from "../runtime/dependencies.js";
-import type { IntegrationCronEngine } from "../../types/integration-runtime-ports.js";
+import type { IntegrationCronEngine } from "../../infra/integration-runtime-ports.js";
+import type { IntegrationRuntimeDependencies } from "../../infra/integration-runtime-types.js";
 import { listTasks, readTask } from "./runtime/store.js";
 import { runTaskNow } from "./runtime/runner.js";
 
@@ -24,9 +24,10 @@ function normalizeCronExpression(raw: string): string | null {
 }
 
 export async function registerTaskCronJobs(params: {
+  context: IntegrationRuntimeDependencies;
   engine: IntegrationCronEngine;
 }): Promise<{ tasksFound: number; jobsScheduled: number }> {
-  const runtime = getIntegrationRuntimeDependencies();
+  const runtime = params.context;
   const logger = runtime.logger;
   const tasks = await listTasks(runtime.rootPath);
 
@@ -70,6 +71,7 @@ export async function registerTaskCronJobs(params: {
           runningByTaskId.add(taskId);
           try {
             const result = await runTaskNow({
+              context: runtime,
               taskId,
               projectRoot: runtime.rootPath,
               trigger: { type: "cron" },

@@ -13,9 +13,9 @@ import path from "node:path";
 import {
   getIntegrationChatRuntimeBridge,
   getIntegrationRequestContextBridge,
-  getIntegrationRuntimeDependencies,
   getIntegrationSessionManager,
-} from "../../runtime/dependencies.js";
+} from "../../../infra/integration-runtime-dependencies.js";
+import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 import type { ShipTaskRunMetaV1, ShipTaskRunTriggerV1 } from "../../../types/task.js";
 import { createTaskRunSessionId, formatTaskRunTimestamp, getTaskRunDir } from "./paths.js";
 import { ensureRunDir, readTask } from "./store.js";
@@ -33,6 +33,7 @@ function summarizeText(text: string, maxChars: number): string {
 }
 
 export async function runTaskNow(params: {
+  context: IntegrationRuntimeDependencies;
   taskId: string;
   trigger: ShipTaskRunTriggerV1;
   projectRoot?: string;
@@ -46,8 +47,8 @@ export async function runTaskNow(params: {
   notified: boolean;
   notifyError?: string;
 }> {
-  const runtime = getIntegrationRuntimeDependencies();
-  const root = String(params.projectRoot || runtime.rootPath || "").trim();
+  const context = params.context;
+  const root = String(params.projectRoot || context.rootPath || "").trim();
   if (!root) throw new Error("projectRoot is required");
 
   const startedAt = Date.now();
@@ -96,10 +97,10 @@ export async function runTaskNow(params: {
   let errorText = "";
 
   try {
-    const agent = getIntegrationSessionManager().getAgent(runSessionId);
+    const agent = getIntegrationSessionManager(context).getAgent(runSessionId);
 
     // 关键点（中文）：以 scheduler channel 运行，但使用 task-run chatKey 让 history 落盘到 runDir。
-    const result = await getIntegrationRequestContextBridge().withSessionRequestContext(
+    const result = await getIntegrationRequestContextBridge(context).withSessionRequestContext(
       {
         channel: "scheduler",
         targetId: task.taskId,
@@ -118,13 +119,13 @@ export async function runTaskNow(params: {
 
     // 落盘 assistant UIMessage（包含 tool parts），以便 history.jsonl 可审计。
     try {
-      const store = getIntegrationSessionManager().getHistoryStore(runSessionId);
+      const store = getIntegrationSessionManager(context).getHistoryStore(runSessionId);
       const assistantMessage = (result as any)?.assistantMessage;
       if (assistantMessage && typeof assistantMessage === "object") {
         await store.append(assistantMessage as any);
       } else {
         const userVisible =
-          getIntegrationChatRuntimeBridge().pickLastSuccessfulChatSendText(
+          getIntegrationChatRuntimeBridge(context).pickLastSuccessfulChatSendText(
             (result as any)?.toolCalls || [],
           ) || String((result as any)?.output || "");
         if (userVisible && userVisible.trim()) {
@@ -255,7 +256,7 @@ export async function runTaskNow(params: {
       textLines.push("");
       textLines.push(`error: ${summarizeText(errorText, 500)}`);
     }
-    const send = await getIntegrationChatRuntimeBridge().sendTextByChatKey({
+    const send = await getIntegrationChatRuntimeBridge(context).sendTextByChatKey({
       chatKey: task.frontmatter.chatKey,
       text: textLines.join("\n"),
     });

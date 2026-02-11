@@ -13,8 +13,15 @@ import type {
 import { HttpTransport } from "./http-transport.js";
 import { resolveEnvVar, resolveEnvVarsInRecord } from "./env.js";
 import { getShipMcpConfigPath } from "../../../utils.js";
-import { getIntegrationRuntimeDependencies } from "../../runtime/dependencies.js";
+import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
+/**
+ * MCP manager。
+ *
+ * 关键点（中文）
+ * - 由 server 显式注入 context，避免 integration 侧读取全局运行时
+ * - mcp 连接、工具发现、调用都封装在 manager 内
+ */
 export interface McpLogger {
   info(message: string): void;
   warn(message: string): void;
@@ -34,13 +41,15 @@ interface McpClientWrapper {
 export class McpManager {
   private clients: Map<string, McpClientWrapper> = new Map();
   private readonly log: McpLogger;
+  private readonly context: IntegrationRuntimeDependencies;
 
-  constructor() {
-    this.log = getIntegrationRuntimeDependencies().logger;
+  constructor(params: { context: IntegrationRuntimeDependencies; log?: McpLogger }) {
+    this.context = params.context;
+    this.log = params.log ?? params.context.logger;
   }
 
   async initialize(): Promise<void> {
-    const mcpConfigPath = getShipMcpConfigPath(getIntegrationRuntimeDependencies().rootPath);
+    const mcpConfigPath = getShipMcpConfigPath(this.context.rootPath);
     if (!(await fs.pathExists(mcpConfigPath))) {
       this.log.info("No MCP configuration found, skipping MCP initialization");
       return;
@@ -65,19 +74,23 @@ export class McpManager {
     const succeeded = results.filter((r) => r.status === "fulfilled").length;
     const failed = results.filter((r) => r.status === "rejected").length;
 
-    if (succeeded > 0)
+    if (succeeded > 0) {
       this.log.info(`Successfully connected to ${succeeded} MCP server(s)`);
-    if (failed > 0)
+    }
+    if (failed > 0) {
       this.log.warn(`Failed to connect to ${failed} MCP server(s)`);
+    }
   }
 
   getAllTools(): Array<{ server: string; tool: McpToolDefinition }> {
     const allTools: Array<{ server: string; tool: McpToolDefinition }> = [];
     for (const [serverName, wrapper] of this.clients.entries()) {
-      if (wrapper.status !== "connected" || wrapper.tools.length === 0)
+      if (wrapper.status !== "connected" || wrapper.tools.length === 0) {
         continue;
-      for (const tool of wrapper.tools)
+      }
+      for (const tool of wrapper.tools) {
         allTools.push({ server: serverName, tool });
+      }
     }
     return allTools;
   }
@@ -170,7 +183,7 @@ export class McpManager {
         transport = new StdioClientTransport({
           command,
           args,
-          cwd: getIntegrationRuntimeDependencies().rootPath,
+          cwd: this.context.rootPath,
           env: {
             ...(process.env as Record<string, string>),
             ...env,

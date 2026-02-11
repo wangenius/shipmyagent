@@ -6,8 +6,11 @@
  * - 内部通过注入的 request context bridge 做映射读取
  */
 
+import type { IntegrationRuntimeDependencies } from "../../infra/integration-runtime-types.js";
+import {
+  getIntegrationRequestContextBridge,
+} from "../../infra/integration-runtime-dependencies.js";
 import { sendTextByChatKey } from "./runtime/chatkey-send.js";
-import { getIntegrationRequestContextBridge } from "../runtime/dependencies.js";
 import { llmRequestContext } from "../../telemetry/index.js";
 import type {
   ChatContextSnapshot,
@@ -29,9 +32,11 @@ function readEnvNumber(name: string): number | undefined {
 
 export function resolveChatContextSnapshot(input?: {
   chatKey?: string;
+  context?: IntegrationRuntimeDependencies;
 }): ChatContextSnapshot {
-  const requestCtx =
-    getIntegrationRequestContextBridge().getCurrentSessionRequestContext();
+  const requestCtx = input?.context
+    ? getIntegrationRequestContextBridge(input.context).getCurrentSessionRequestContext()
+    : undefined;
   const llmCtx = llmRequestContext.getStore();
 
   const explicitChatKey = String(input?.chatKey || "").trim();
@@ -87,6 +92,7 @@ export function resolveChatKey(input?: { chatKey?: string }): string | undefined
 }
 
 export async function sendChatTextByChatKey(params: {
+  context: IntegrationRuntimeDependencies;
   chatKey: string;
   text: string;
 }): Promise<ChatSendResponse> {
@@ -99,7 +105,11 @@ export async function sendChatTextByChatKey(params: {
     };
   }
 
-  const result = await sendTextByChatKey({ chatKey, text });
+  const result = await sendTextByChatKey({
+    context: params.context,
+    chatKey,
+    text,
+  });
   return {
     success: Boolean(result.success),
     chatKey,

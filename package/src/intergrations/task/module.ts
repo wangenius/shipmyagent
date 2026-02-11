@@ -9,16 +9,15 @@
 
 import path from "node:path";
 import type { Command } from "commander";
-import { getIntegrationRuntimeDependencies } from "../runtime/dependencies.js";
 import {
   createTaskDefinition,
   listTaskDefinitions,
   runTaskDefinition,
   setTaskStatus,
 } from "./service.js";
-import { callDaemonJsonApi } from "../shared/daemon-client.js";
-import { printResult } from "../shared/cli-output.js";
-import { resolveChatKey } from "../shared/chat-key.js";
+import { callDaemonJsonApi } from "../../infra/daemon-client.js";
+import { printResult } from "../../infra/cli-output.js";
+import { resolveChatKey } from "../../infra/chat-key.js";
 import type {
   SmaModule,
   TaskCreateRequest,
@@ -329,9 +328,11 @@ function setupCli(registry: Parameters<SmaModule["registerCli"]>[0]): void {
   });
 }
 
-function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void {
+function setupServer(
+  registry: Parameters<SmaModule["registerServer"]>[0],
+  context: Parameters<SmaModule["registerServer"]>[1],
+): void {
   registry.get("/api/task/list", async (c) => {
-    const runtime = getIntegrationRuntimeDependencies();
     const statusRaw = String(c.req.query("status") || "").trim();
     const status =
       statusRaw === "enabled" || statusRaw === "paused" || statusRaw === "disabled"
@@ -339,7 +340,7 @@ function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void
         : undefined;
 
     const result = await listTaskDefinitions({
-      projectRoot: runtime.rootPath,
+      projectRoot: context.rootPath,
       ...(status ? { status } : {}),
     });
 
@@ -354,9 +355,8 @@ function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void
       return c.json({ success: false, error: "Invalid JSON body" }, 400);
     }
 
-    const runtime = getIntegrationRuntimeDependencies();
     const result = await createTaskDefinition({
-      projectRoot: runtime.rootPath,
+      projectRoot: context.rootPath,
       request: {
         taskId: body?.taskId,
         title: body?.title,
@@ -381,9 +381,9 @@ function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void
       return c.json({ success: false, error: "Invalid JSON body" }, 400);
     }
 
-    const runtime = getIntegrationRuntimeDependencies();
     const result = await runTaskDefinition({
-      projectRoot: runtime.rootPath,
+      context,
+      projectRoot: context.rootPath,
       request: {
         taskId: String(body?.taskId || ""),
         ...(typeof body?.reason === "string" ? { reason: body.reason } : {}),
@@ -401,9 +401,8 @@ function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void
       return c.json({ success: false, error: "Invalid JSON body" }, 400);
     }
 
-    const runtime = getIntegrationRuntimeDependencies();
     const result = await setTaskStatus({
-      projectRoot: runtime.rootPath,
+      projectRoot: context.rootPath,
       request: {
         taskId: String(body?.taskId || ""),
         status: body?.status,
@@ -419,7 +418,7 @@ export const taskModule: SmaModule = {
   registerCli(registry) {
     setupCli(registry);
   },
-  registerServer(registry) {
-    setupServer(registry);
+  registerServer(registry, context) {
+    setupServer(registry, context);
   },
 };

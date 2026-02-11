@@ -20,6 +20,7 @@ import {
   type TelegramUser,
 } from "./shared.js";
 import { TelegramStateStore } from "./state-store.js";
+import type { IntegrationRuntimeDependencies } from "../../../../infra/integration-runtime-types.js";
 
 export class TelegramBot extends BaseChatAdapter {
   private botToken: string;
@@ -42,12 +43,13 @@ export class TelegramBot extends BaseChatAdapter {
   private followupExpiryByActorAndThread: Map<string, number> = new Map();
 
   constructor(
+    context: IntegrationRuntimeDependencies,
     botToken: string,
     chatId: string | undefined,
     followupWindowMs: number | undefined,
     groupAccess: TelegramConfig["groupAccess"] | undefined,
   ) {
-    super({ channel: "telegram" });
+    super({ channel: "telegram", context });
     this.botToken = botToken;
     this.chatId = chatId;
     this.followupWindowMs =
@@ -844,6 +846,7 @@ export class TelegramBot extends BaseChatAdapter {
   ): Promise<void> {
     await handleTelegramCommand(
       {
+        logger: this.logger,
         buildChatKey: (c, t) => this.buildChatKey(c, t),
         runInChat: (key, fn) => this.runInChat(key, fn),
         sendMessage: (c, text, opts) => this.sendMessage(c, text, opts),
@@ -858,6 +861,7 @@ export class TelegramBot extends BaseChatAdapter {
   ): Promise<void> {
     await handleTelegramCallbackQuery(
       {
+        logger: this.logger,
         buildChatKey: (c, t) => this.buildChatKey(c, t),
         runInChat: (key, fn) => this.runInChat(key, fn),
         sendMessage: (c, text, opts) => this.sendMessage(c, text, opts),
@@ -922,12 +926,14 @@ export class TelegramBot extends BaseChatAdapter {
 
 export function createTelegramBot(
   config: TelegramConfig,
+  context: IntegrationRuntimeDependencies,
 ): TelegramBot | null {
   if (!config.enabled || !config.botToken || config.botToken === "${}") {
     return null;
   }
 
   const bot = new TelegramBot(
+    context,
     config.botToken,
     config.chatId,
     config.followupWindowMs,

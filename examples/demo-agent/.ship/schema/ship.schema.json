@@ -94,41 +94,6 @@
         }
       }
     },
-    "acp": {
-      "type": "object",
-      "additionalProperties": true,
-      "description": "Agent Client Protocol proxy config. When enabled, Agent delegates to local ACP process (e.g. codex-acp).",
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "adapter": {
-          "type": "string",
-          "enum": [
-            "codex",
-            "claude-code",
-            "custom"
-          ]
-        },
-        "command": {
-          "type": "string"
-        },
-        "args": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "cwd": {
-          "type": "string"
-        },
-        "requestTimeoutMs": {
-          "type": "integer",
-          "minimum": 1000,
-          "maximum": 3600000
-        }
-      }
-    },
     "context": {
       "type": "object",
       "additionalProperties": true,

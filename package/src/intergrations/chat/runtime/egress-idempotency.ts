@@ -1,43 +1,29 @@
 /**
- * Chat egress idempotency (best-effort de-duplication for outbound sends).
+ * Chat egress idempotency（出站去重）。
  *
- * 问题背景
- * - 在 tool-strict 模式下，模型需要通过 `chat_send` 才能把消息发回平台。
- * - 现实里模型偶尔会在 tool-loop 里重复调用 `chat_send`（甚至参数完全相同），
- *   导致同一条用户消息触发多条重复回复。
- *
- * 设计目标
- * - 以「同一条 inbound messageId + 本次发送内容」为维度做幂等：同一条用户消息的同一段回复最多发送一次。
- * - 采用本地文件原子创建（flag: 'wx'）实现跨进程去重，避免多实例或重启造成重复发送。
- *
- * 存储布局
- * - `${projectRoot}/.ship/.cache/egress/chat_send/<channel>/<encode(chatId)>/<encode(messageKey)>.json`
- *
- * 注意
- * - 只有在能拿到稳定的 `messageId` 时才启用去重；缺失时不阻断发送。
- * - I/O 全部 best-effort：任何异常都不应阻断正常回复。
+ * 关键点（中文）
+ * - 以同一 inbound messageId + messageKey 为幂等维度
+ * - 使用文件原子创建（flag: wx）支持跨进程去重
  */
 
 import path from "path";
 import fs from "fs-extra";
 import { getCacheDirPath } from "../../../utils.js";
 import type { ChatDispatchChannel } from "./chat-send-registry.js";
-import { getIntegrationRuntimeDependencies } from "../../runtime/dependencies.js";
+import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
 export async function tryClaimChatEgressChatSend(params: {
+  context: IntegrationRuntimeDependencies;
   channel: ChatDispatchChannel;
   chatId: string;
   messageId: string;
-  /**
-   * 幂等 key（建议包含 messageId + 回复内容 hash），用于允许同一条用户消息多段不同回复。
-   */
   messageKey: string;
   meta?: Record<string, unknown>;
 }): Promise<
   | { claimed: true; markerFile?: string }
   | { claimed: false; reason: string }
 > {
-  const projectRoot = String(getIntegrationRuntimeDependencies().rootPath || "").trim();
+  const projectRoot = String(params.context.rootPath || "").trim();
   const channel = params.channel;
   const chatId = String(params.chatId || "").trim();
   const messageId = String(params.messageId || "").trim();
@@ -60,7 +46,6 @@ export async function tryClaimChatEgressChatSend(params: {
   try {
     await fs.ensureDir(dir);
   } catch {
-    // 无法创建目录时，不做去重，直接允许发送（避免掉消息）。
     return { claimed: true };
   }
 
@@ -81,11 +66,10 @@ export async function tryClaimChatEgressChatSend(params: {
       flag: "wx",
     });
     return { claimed: true, markerFile };
-  } catch (e: any) {
-    if (e && typeof e === "object" && (e as any).code === "EEXIST") {
+  } catch (error: any) {
+    if (error && typeof error === "object" && (error as any).code === "EEXIST") {
       return { claimed: false, reason: "already_claimed" };
     }
-    // 未知错误：不要阻断发送（宁可重复，也不要丢消息）。
     return { claimed: true };
   }
 }
@@ -112,7 +96,9 @@ export async function markChatEgressChatSendDelivered(params: {
   }
 }
 
-export async function releaseChatEgressChatSendClaim(markerFile: string): Promise<void> {
+export async function releaseChatEgressChatSendClaim(
+  markerFile: string,
+): Promise<void> {
   const file = String(markerFile || "").trim();
   if (!file) return;
   try {

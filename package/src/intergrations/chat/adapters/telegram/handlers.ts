@@ -1,14 +1,16 @@
+import type { Logger } from "../../../../telemetry/index.js";
 import type { TelegramUpdate, TelegramUser } from "./shared.js";
-import { getIntegrationRuntimeDependencies } from "../../../runtime/dependencies.js";
 
 /**
- * Telegram command/callback handlers.
+ * Telegram command/callback handlers。
  *
- * The main Telegram bot class is intentionally kept lean; these handlers are
- * extracted to keep module size under control and make unit testing easier.
+ * 关键点（中文）
+ * - handler 通过参数接收 logger，不依赖全局 runtime
+ * - 方便在不同运行环境复用（server / test）
  */
 
 export type TelegramHandlerContext = {
+  logger: Logger;
   buildChatKey: (chatId: string, messageThreadId?: number) => string;
   runInChat: (chatKey: string, fn: () => Promise<void>) => Promise<void>;
   sendMessage: (
@@ -29,13 +31,10 @@ export async function handleTelegramCommand(
   },
 ): Promise<void> {
   const username = params.from?.username || "Unknown";
-  getIntegrationRuntimeDependencies().logger.info(
-    `Received command: ${params.command} (${username})`,
-  );
+  ctx.logger.info(`Received command: ${params.command} (${username})`);
 
-  const [commandToken, ...rest] = params.command.trim().split(/\s+/);
+  const [commandToken] = params.command.trim().split(/\s+/);
   const cmd = (commandToken || "").split("@")[0]?.toLowerCase();
-  const arg = rest[0];
   const chatKey = ctx.buildChatKey(params.chatId, params.messageThreadId);
 
   switch (cmd) {
@@ -72,7 +71,6 @@ export async function handleTelegramCallbackQuery(
   ctx: TelegramHandlerContext,
   callbackQuery: TelegramUpdate["callback_query"],
 ): Promise<void> {
-  // No-op: approvals are disabled in the simplified "full permission" mode.
   void ctx;
   void callbackQuery;
 }

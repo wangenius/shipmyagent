@@ -1,10 +1,10 @@
 /**
- * Chat module.
+ * Chat module。
  *
  * 关键点（中文）
  * - CLI：`sma chat send/context`
  * - Server：`/api/chat/send`、`/api/chat/context`
- * - chatKey 解析优先级：`--chat-key` > `SMA_CTX_CHAT_KEY` > request context
+ * - 只保留最小注册层，业务逻辑下沉到 service/runtime
  */
 
 import path from "node:path";
@@ -14,8 +14,8 @@ import {
   resolveChatKey,
   sendChatTextByChatKey,
 } from "./service.js";
-import { callDaemonJsonApi } from "../shared/daemon-client.js";
-import { printResult } from "../shared/cli-output.js";
+import { callDaemonJsonApi } from "../../infra/daemon-client.js";
+import { printResult } from "../../infra/cli-output.js";
 import type { ChatSendResponse, SmaModule } from "../../types/module-command.js";
 
 function parsePortOption(value: string): number {
@@ -35,21 +35,32 @@ type ChatSendCliOptions = {
   json?: boolean;
 };
 
+function printSendFailed(params: {
+  asJson?: boolean;
+  chatKey?: string;
+  error: string;
+}): void {
+  printResult({
+    asJson: params.asJson,
+    success: false,
+    title: "chat send failed",
+    payload: {
+      ...(params.chatKey ? { chatKey: params.chatKey } : {}),
+      error: params.error,
+    },
+  });
+}
+
 async function runChatSendCommand(options: ChatSendCliOptions): Promise<void> {
   const projectRoot = path.resolve(String(options.path || "."));
   const text = String(options.text || "");
-  const snapshot = resolveChatContextSnapshot({ chatKey: options.chatKey });
-  const chatKey = resolveChatKey({ chatKey: snapshot.chatKey });
+  const chatKey = resolveChatKey({ chatKey: options.chatKey });
 
   if (!chatKey) {
-    printResult({
+    printSendFailed({
       asJson: options.json,
-      success: false,
-      title: "chat send failed",
-      payload: {
-        error:
-          "Missing chatKey. Provide --chat-key or ensure SMA_CTX_CHAT_KEY is injected in current shell session.",
-      },
+      error:
+        "Missing chatKey. Provide --chat-key or ensure SMA_CTX_CHAT_KEY is injected in current shell session.",
     });
     return;
   }
@@ -60,112 +71,92 @@ async function runChatSendCommand(options: ChatSendCliOptions): Promise<void> {
     method: "POST",
     host: options.host,
     port: options.port,
-    body: {
-      text,
-      chatKey,
-    },
+    body: { text, chatKey },
   });
 
-  if (remote.success && remote.data) {
-    const data = remote.data;
-    printResult({
+  if (!remote.success || !remote.data) {
+    // 兜底（中文）：当本地 server 不可达时，给出明确错误，提示先启动服务。
+    printSendFailed({
       asJson: options.json,
-      success: Boolean(data.success),
-      title: data.success ? "chat sent" : "chat send failed",
-      payload: {
-        chatKey: data.chatKey || chatKey,
-        ...(data.success ? {} : { error: data.error || "chat send failed" }),
-      },
-    });
-    return;
-  }
-
-  // 兜底（中文）：当本地 server 不可达时，给出明确错误，提示先启动服务。
-  printResult({
-    asJson: options.json,
-    success: false,
-    title: "chat send failed",
-    payload: {
       chatKey,
       error:
         remote.error ||
         "Agent server is not reachable. Start service via `sma start` or run in foreground via `sma run`.",
+    });
+    return;
+  }
+
+  const data = remote.data;
+  printResult({
+    asJson: options.json,
+    success: Boolean(data.success),
+    title: data.success ? "chat sent" : "chat send failed",
+    payload: {
+      chatKey: data.chatKey || chatKey,
+      ...(data.success ? {} : { error: data.error || "chat send failed" }),
     },
   });
 }
 
-function setupCli(registry: Parameters<SmaModule["registerCli"]>[0]): void {
-  registry.group("chat", "Chat 服务命令（Bash-first）", (group) => {
-    group.command("send", "发送消息到目标 chatKey", (command: Command) => {
-      command
-        .requiredOption("--text <text>", "消息正文")
-        .option("--chat-key <chatKey>", "目标 chatKey（不传则尝试读取 SMA_CTX_CHAT_KEY）")
-        .option("--path <path>", "项目根目录（默认当前目录）", ".")
-        .option("--host <host>", "Server host（覆盖自动解析）")
-        .option("--port <port>", "Server port（覆盖自动解析）", parsePortOption)
-        .option("--json [enabled]", "以 JSON 输出", true)
-        .action(async (opts: ChatSendCliOptions) => {
-          await runChatSendCommand(opts);
-        });
-    });
-
-    group.command("context", "查看当前会话上下文快照", (command: Command) => {
-      command
-        .option("--chat-key <chatKey>", "显式覆盖 chatKey")
-        .option("--json [enabled]", "以 JSON 输出", true)
-        .action((opts: { chatKey?: string; json?: boolean }) => {
-          const snapshot = resolveChatContextSnapshot({ chatKey: opts.chatKey });
-          printResult({
-            asJson: opts.json,
-            success: true,
-            title: "chat context",
-            payload: {
-              context: snapshot,
-            },
-          });
-        });
-    });
-  });
-}
-
-function setupServer(registry: Parameters<SmaModule["registerServer"]>[0]): void {
-  registry.get("/api/chat/context", (c) => {
-    const snapshot = resolveChatContextSnapshot();
-    return c.json({
-      success: true,
-      context: snapshot,
-    });
-  });
-
-  registry.post("/api/chat/send", async (c) => {
-    let body: any = null;
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ success: false, error: "Invalid JSON body" }, 400);
-    }
-
-    const text = String(body?.text ?? "");
-    const chatKey = String(body?.chatKey || "").trim();
-    if (!chatKey) {
-      return c.json({ success: false, error: "Missing chatKey" }, 400);
-    }
-
-    const result = await sendChatTextByChatKey({
-      chatKey,
-      text,
-    });
-
-    return c.json(result, result.success ? 200 : 400);
+function runChatContextCommand(opts: { chatKey?: string; json?: boolean }): void {
+  const snapshot = resolveChatContextSnapshot({ chatKey: opts.chatKey });
+  printResult({
+    asJson: opts.json,
+    success: true,
+    title: "chat context",
+    payload: { context: snapshot },
   });
 }
 
 export const chatModule: SmaModule = {
   name: "chat",
+
   registerCli(registry) {
-    setupCli(registry);
+    registry.group("chat", "Chat 服务命令（Bash-first）", (group) => {
+      group.command("send", "发送消息到目标 chatKey", (command: Command) => {
+        command
+          .requiredOption("--text <text>", "消息正文")
+          .option("--chat-key <chatKey>", "目标 chatKey（不传则尝试读取 SMA_CTX_CHAT_KEY）")
+          .option("--path <path>", "项目根目录（默认当前目录）", ".")
+          .option("--host <host>", "Server host（覆盖自动解析）")
+          .option("--port <port>", "Server port（覆盖自动解析）", parsePortOption)
+          .option("--json [enabled]", "以 JSON 输出", true)
+          .action(runChatSendCommand);
+      });
+
+      group.command("context", "查看当前会话上下文快照", (command: Command) => {
+        command
+          .option("--chat-key <chatKey>", "显式覆盖 chatKey")
+          .option("--json [enabled]", "以 JSON 输出", true)
+          .action(runChatContextCommand);
+      });
+    });
   },
-  registerServer(registry) {
-    setupServer(registry);
+
+  registerServer(registry, context) {
+    registry.get("/api/chat/context", (c) => {
+      return c.json({
+        success: true,
+        context: resolveChatContextSnapshot({ context }),
+      });
+    });
+
+    registry.post("/api/chat/send", async (c) => {
+      const body = await c.req.json().catch(() => null as any);
+      if (!body || typeof body !== "object") {
+        return c.json({ success: false, error: "Invalid JSON body" }, 400);
+      }
+
+      const text = String((body as any).text ?? "");
+      const chatKey = String((body as any).chatKey || "").trim();
+      if (!chatKey) return c.json({ success: false, error: "Missing chatKey" }, 400);
+
+      const result = await sendChatTextByChatKey({
+        context,
+        chatKey,
+        text,
+      });
+      return c.json(result, result.success ? 200 : 400);
+    });
   },
 };

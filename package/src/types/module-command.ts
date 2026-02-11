@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import type { Handler, Hono } from "hono";
 import type { ShipTaskStatus } from "./task.js";
+import type { IntegrationRuntimeDependencies } from "../infra/integration-runtime-types.js";
 
 export type ChatContextSnapshot = {
   chatKey?: string;
@@ -160,6 +161,9 @@ export interface ServerRouteRegistry {
 export interface SmaModule {
   name: string;
   registerCli(registry: CliCommandRegistry): void;
-  registerServer(registry: ServerRouteRegistry): void;
+  registerServer(
+    registry: ServerRouteRegistry,
+    context: IntegrationRuntimeDependencies,
+  ): void;
 }
 

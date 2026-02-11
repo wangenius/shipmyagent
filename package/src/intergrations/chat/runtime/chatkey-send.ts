@@ -11,7 +11,8 @@
 
 import { getChatSender, type ChatDispatchChannel } from "./chat-send-registry.js";
 import type { ShipSessionMessageV1 } from "../../../types/session-history.js";
-import { getIntegrationSessionManager } from "../../runtime/dependencies.js";
+import { getIntegrationSessionManager } from "../../../infra/integration-runtime-dependencies.js";
+import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
 type DispatchableChannel = "telegram" | "feishu" | "qq";
 
@@ -82,9 +83,11 @@ function pickLatestUserMetaFromMessages(messages: ShipSessionMessageV1[]): {
 }
 
 export async function sendTextByChatKey(params: {
+  context: IntegrationRuntimeDependencies;
   chatKey: string;
   text: string;
 }): Promise<{ success: boolean; error?: string }> {
+  const context = params.context;
   const chatKey = String(params.chatKey || "").trim();
   const text = String(params.text ?? "");
   if (!chatKey) return { success: false, error: "Missing chatKey" };
@@ -105,7 +108,7 @@ export async function sendTextByChatKey(params: {
   }
 
   // 关键点（中文）：尽量从 history 的最近 user message 拿到 chatType/messageThreadId/messageId（尤其 QQ 需要）。
-  const historyStore = getIntegrationSessionManager().getHistoryStore(chatKey);
+  const historyStore = getIntegrationSessionManager(context).getHistoryStore(chatKey);
   let messages: ShipSessionMessageV1[] = [];
   try {
     messages = await historyStore.loadAll();

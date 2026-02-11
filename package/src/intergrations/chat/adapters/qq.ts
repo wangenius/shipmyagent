@@ -6,6 +6,7 @@ import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "./platform-adapter.js";
+import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
 /**
  * QQ official bot adapter (WebSocket gateway).
@@ -84,11 +85,12 @@ export class QQBot extends BaseChatAdapter {
   private botUserId: string = "";
 
   constructor(
+    context: IntegrationRuntimeDependencies,
     appId: string,
     appSecret: string,
     useSandbox: boolean = false,
   ) {
-    super({ channel: "qq" });
+    super({ channel: "qq", context });
     this.appId = appId;
     this.appSecret = appSecret;
     this.useSandbox = useSandbox;
@@ -946,12 +948,13 @@ export class QQBot extends BaseChatAdapter {
  */
 export async function createQQBot(
   config: QQConfig,
+  context: IntegrationRuntimeDependencies,
 ): Promise<QQBot | null> {
   if (!config.enabled || !config.appId || !config.appSecret) {
     return null;
   }
 
-  const bot = new QQBot(config.appId, config.appSecret, config.sandbox || false);
+  const bot = new QQBot(context, config.appId, config.appSecret, config.sandbox || false);
   return bot;
 }
 

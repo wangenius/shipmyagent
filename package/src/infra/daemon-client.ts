@@ -1,8 +1,8 @@
 /**
- * Integration Daemon API 客户端。
+ * Infra Daemon API 客户端。
  *
  * 关键点（中文）
- * - integration CLI 统一通过 daemon API 与运行时通信
+ * - 业务模块统一通过 daemon API 与运行时通信
  * - 地址解析优先级：CLI 参数 > 环境变量 > ship.json.start > 默认值
  */
 
@@ -11,8 +11,8 @@ import {
   type DaemonEndpoint,
   type DaemonJsonApiCallParams,
   type DaemonJsonApiCallResult,
-} from "../../types/daemon-api.js";
-import { getShipJsonPath, loadShipConfig } from "../../utils.js";
+} from "./daemon-api.js";
+import { getShipJsonPath, loadShipConfig } from "../utils.js";
 
 function parsePortLike(input: unknown): number | undefined {
   if (input === undefined || input === null || input === "") return undefined;
@@ -120,4 +120,3 @@ export async function callDaemonJsonApi<T>(
     };
   }
 }
-

@@ -1,113 +1,198 @@
-# Intergration 开发指南（简版）
+# Intergration 开发指南（DI 版）
 
-本文是当前架构下的**最小开发约束**与**落地步骤**，用于新增或改造 `package/src/intergrations/*` 模块。
+这份指南只讲一件事：
 
-## 1) 架构边界（先记住这三条）
+- **integration 只写业务**
+- **server 负责注入依赖**
+- **不允许 integration 直接连 core/server/其他 integration**
 
-- `server` 可以调用 `core` 和 `intergrations`
-- `intergrations` **不能**直接调用 `server`
-- `intergrations` **不能**直接调用 `core`
-- `intergrations` 之间也不应互相直连（除 `intergrations/shared/*` 与 `intergrations/runtime/*`）
-
-一句话：`server` 负责编排与注入，`intergrations` 只消费注入能力。
+> 目标：像 Express 插件一样开发 integration —— 通过函数/类接收参数，不读全局单例。
 
 ---
 
-## 2) 统一依赖注入模型
+## 1) 分层边界（必须遵守）
 
-统一依赖类型：
+### 允许
 
-- `package/src/types/integration-runtime-dependencies.ts`
+- `server -> core`
+- `server -> intergrations`
+- `intergrations -> infra`
 
-统一端口类型：
+### 禁止
 
-- `package/src/types/integration-runtime-ports.ts`
+- `intergrations -> core`
+- `intergrations -> server`
+- `intergrations A -> intergrations B`
 
-统一读取入口：
+### 为什么
 
-- `package/src/intergrations/runtime/dependencies.ts`
-
-`server` 注入位置：
-
-- `package/src/server/ShipRuntimeContext.ts`
-
-### 当前推荐模式
-
-1. 在 `types/integration-runtime-ports.ts` 定义“能力端口”（抽象接口）
-2. 在 `server/ShipRuntimeContext.ts` 注入具体实现（通常来自 `core`）
-3. 在 `intergrations/runtime/dependencies.ts` 提供 `getIntegrationXxx()`
-4. 在具体 integration 中调用 `getIntegrationXxx()`，不要直接 import `core/*`
+- `server` 是唯一编排层（启动、注入、装配）。
+- `integration` 是插件层（业务策略），不能反向依赖框架实现。
+- 通用能力放 `infra`（端口类型、基础 helper、通信工具）。
 
 ---
 
-## 3) 新增一个 integration 的最小骨架
+## 2) 固定注入依赖（所有 integration 一致）
 
-建议目录：
+统一依赖类型：`package/src/infra/integration-runtime-types.ts`
 
-- `intergrations/<name>/module.ts`：CLI / Server 注册入口
-- `intergrations/<name>/service.ts`：业务编排
-- `intergrations/<name>/runtime/*`：运行时实现细节
-- `intergrations/shared/*`：仅放纯共享能力（无反向依赖）
+```ts
+export type IntegrationRuntimeDependencies = {
+  cwd: string;
+  rootPath: string;
+  logger: Logger;
+  config: ShipConfig;
+  systems: string[];
+  sessionManager?: IntegrationSessionManager;
+  chatRuntimeBridge?: IntegrationChatRuntimeBridge;
+  requestContextBridge?: IntegrationSessionRequestContextBridge;
+  modelFactory?: IntegrationModelFactory;
+};
+```
 
-设计原则：
+规则：
 
-- `module.ts` 只做“注册与参数适配”，不堆业务逻辑
-- 业务逻辑放 `service.ts` / `runtime/*`
-- 需要运行时能力时，优先走注入端口，不做跨层 import
-
----
-
-## 4) 什么时候要新增“注入端口”
-
-当你在 integration 内想用这些能力时，需要走端口注入：
-
-- 请求上下文（例如 `withSessionRequestContext`）
-- 会话管理（`sessionManager`）
-- 模型工厂（`createModel`）
-- 定时调度引擎（cron engine）
-
-不要在 integration 里直接：
-
-- `import ... from "../../core/..."`
-- `import ... from "../../server/..."`
+- 字段集合固定（便于扩展与标准化）。
+- integration 可按需使用，不需要的字段忽略即可。
+- 取能力时通过 `infra/integration-runtime-dependencies.ts` helper，并显式传入 `context`。
 
 ---
 
-## 5) 强制检查（lint）
+## 3) 开发模式：函数工厂 / 类构造注入
 
-边界检查脚本：
+## 模式 A：函数工厂（推荐做 service）
 
-- `package/scripts/lint-import-boundaries.mjs`
+```ts
+// package/src/intergrations/notify/runtime/service.ts
+import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
-执行命令：
+export function createNotifyService(context: IntegrationRuntimeDependencies) {
+  return {
+    async send(text: string) {
+      const message = String(text || "").trim();
+      if (!message) return { success: false, error: "text is required" };
+      await context.logger.log("info", "notify.send", { message });
+      return { success: true, message: `[notify] ${message}` };
+    },
+  };
+}
+```
+
+## 模式 B：类构造注入（适合 adapter/manager）
+
+```ts
+// package/src/intergrations/chat/adapters/base-chat-adapter.ts（真实模式）
+export abstract class BaseChatAdapter extends PlatformAdapter {
+  protected constructor(params: {
+    channel: ChatDispatchChannel;
+    context: IntegrationRuntimeDependencies;
+  }) {
+    super({ channel: params.channel, context: params.context });
+  }
+}
+```
+
+重点：**不要在类内部读取全局 runtime**，一律在构造函数拿 `context`。
+
+---
+
+## 4) module.ts 怎么写（Express 插件风格）
+
+`module.ts` 只做“路由与参数适配”，业务放 service/runtime。
+
+```ts
+// package/src/intergrations/notify/module.ts
+import type { SmaModule } from "../../types/module-command.js";
+import { createNotifyService } from "./runtime/service.js";
+
+function setupServer(
+  registry: Parameters<SmaModule["registerServer"]>[0],
+  context: Parameters<SmaModule["registerServer"]>[1],
+) {
+  const service = createNotifyService(context);
+
+  registry.post("/api/notify/send", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const result = await service.send(String((body as any)?.text || ""));
+    return c.json(result, result.success ? 200 : 400);
+  });
+}
+
+export const notifyModule: SmaModule = {
+  name: "notify",
+  registerCli() {},
+  registerServer(registry, context) {
+    setupServer(registry, context);
+  },
+};
+```
+
+---
+
+## 5) server 如何注入
+
+你不需要在 integration 里做初始化。server 会统一注入：
+
+- `package/src/server/ShipRuntimeContext.ts` 负责构建 `IntegrationRuntimeDependencies`
+- `package/src/core/intergration/registry.ts` 调用 `module.registerServer(registry, context)`
+
+即：
+
+- integration 只声明“我需要 context”
+- server 决定“给你什么实现”
+
+---
+
+## 6) 常见反例（禁止）
+
+### 反例 1：integration 直接 import core
+
+```ts
+// ❌ 不允许
+import { withSessionRequestContext } from "../../core/session/request-context.js";
+```
+
+### 反例 2：integration 直接 import server
+
+```ts
+// ❌ 不允许
+import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
+```
+
+### 反例 3：integration 之间互相 import
+
+```ts
+// ❌ 不允许
+import { sendChatTextByChatKey } from "../chat/service.js";
+```
+
+如需通用能力：
+
+- 提到 `infra/*`（基础 helper/端口类型/协议）
+- 或由 server 注入 bridge（`chatRuntimeBridge`、`modelFactory` 等）
+
+---
+
+## 7) 新增 integration 最小步骤
+
+1. 建目录：`package/src/intergrations/<name>/`
+2. 写 `runtime/*`（业务）
+3. 写 `module.ts`（CLI/Server 适配）
+4. 在 `package/src/core/intergration/registry.ts` 注册模块
+5. 运行校验：
 
 ```bash
 npm --prefix package run lint
 npm --prefix package run typecheck
 ```
 
-当前规则会拦截：
-
-- `intergrations -> server`
-- `intergrations -> core`
-- `intergrations` 跨模块直连（非 `shared/runtime`）
-
 ---
 
-## 6) 常见反模式
+## 8) 提交前 Checklist
 
-- 在 integration 里直接 import `core/session/*`、`core/llm/*`
-- 在 `module.ts` 写大量业务逻辑
-- 为了“省事”做跨 integration 直接调用
-- 把进程状态下沉到 shared（导致边界失真）
-
----
-
-## 7) 开发 Checklist
-
-- [ ] 没有 `intergrations -> core/server` 直接依赖
-- [ ] 需要的能力都通过 `IntegrationRuntimeDependencies` 注入
-- [ ] 端口类型定义在 `types/integration-runtime-ports.ts`
-- [ ] `module.ts` 保持薄，业务在 `service/runtime`
+- [ ] `module.ts` 只做注册与参数归一化
+- [ ] 业务逻辑在 `service.ts` / `runtime/*`
+- [ ] 全部运行时能力来自 `context` 参数
+- [ ] 无 `intergrations -> core/server/intergrations` 直连
+- [ ] 通用模块放 `infra/*`
 - [ ] `lint + typecheck` 全通过
-

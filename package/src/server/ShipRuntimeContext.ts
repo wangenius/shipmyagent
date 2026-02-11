@@ -11,9 +11,7 @@ import { runSessionMemoryMaintenance } from "../intergrations/memory/runtime/ser
 import { pickLastSuccessfulChatSendText } from "../intergrations/chat/runtime/user-visible-text.js";
 import { sendTextByChatKey } from "../intergrations/chat/runtime/chatkey-send.js";
 import { registerIntegrationSystemPromptProviders } from "./system-prompt-providers.js";
-import {
-  setIntegrationRuntimeDependencies,
-} from "../intergrations/runtime/dependencies.js";
+import type { IntegrationRuntimeDependencies } from "../infra/integration-runtime-types.js";
 import {
   getAgentMdPath,
   getCacheDirPath,
@@ -69,11 +67,6 @@ export type ShipRuntimeContext = ShipRuntimeContextBase & {
 let base: ShipRuntimeContextBase | null = null;
 let ready: ShipRuntimeContext | null = null;
 
-const integrationChatRuntimeBridge = {
-  pickLastSuccessfulChatSendText,
-  sendTextByChatKey,
-};
-
 const integrationRequestContextBridge = {
   getCurrentSessionRequestContext: () => sessionRequestContext.getStore(),
   withSessionRequestContext,
@@ -83,37 +76,56 @@ const integrationModelFactory = {
   createModel,
 };
 
-export function setShipRuntimeContextBase(next: ShipRuntimeContextBase): void {
-  base = next;
-  ready = null;
+const integrationChatRuntimeBridge = {
+  pickLastSuccessfulChatSendText,
+  sendTextByChatKey: (params: { chatKey: string; text: string }) =>
+    sendTextByChatKey({
+      context: getShipIntegrationContext(),
+      chatKey: params.chatKey,
+      text: params.text,
+    }),
+};
 
-  setIntegrationRuntimeDependencies({
-    cwd: next.cwd,
-    rootPath: next.rootPath,
-    logger: next.logger,
-    config: next.config,
-    systems: next.systems,
+function buildIntegrationContextBase(
+  input: ShipRuntimeContextBase,
+): IntegrationRuntimeDependencies {
+  return {
+    cwd: input.cwd,
+    rootPath: input.rootPath,
+    logger: input.logger,
+    config: input.config,
+    systems: input.systems,
     chatRuntimeBridge: integrationChatRuntimeBridge,
     requestContextBridge: integrationRequestContextBridge,
     modelFactory: integrationModelFactory,
-  });
+  };
+}
+
+function buildIntegrationContextReady(
+  input: ShipRuntimeContext,
+): IntegrationRuntimeDependencies {
+  return {
+    ...buildIntegrationContextBase(input),
+    sessionManager: input.sessionManager,
+  };
+}
+
+export function getShipIntegrationContextBase(): IntegrationRuntimeDependencies {
+  return buildIntegrationContextBase(getShipRuntimeContextBase());
+}
+
+export function getShipIntegrationContext(): IntegrationRuntimeDependencies {
+  return buildIntegrationContextReady(getShipRuntimeContext());
+}
+
+export function setShipRuntimeContextBase(next: ShipRuntimeContextBase): void {
+  base = next;
+  ready = null;
 }
 
 export function setShipRuntimeContext(next: ShipRuntimeContext): void {
   base = next;
   ready = next;
-
-  setIntegrationRuntimeDependencies({
-    cwd: next.cwd,
-    rootPath: next.rootPath,
-    logger: next.logger,
-    config: next.config,
-    systems: next.systems,
-    sessionManager: next.sessionManager,
-    chatRuntimeBridge: integrationChatRuntimeBridge,
-    requestContextBridge: integrationRequestContextBridge,
-    modelFactory: integrationModelFactory,
-  });
 }
 
 export function getShipRuntimeContextBase(): ShipRuntimeContextBase {
@@ -186,15 +198,16 @@ You are a helpful project assistant.`;
     systems,
   });
 
-  registerIntegrationSystemPromptProviders();
-
-  const mcpManager = new McpManager();
+  const mcpManager = new McpManager({
+    context: getShipIntegrationContextBase(),
+  });
   await mcpManager.initialize();
 
   let sessionManager: SessionManager;
   sessionManager = new SessionManager({
     runMemoryMaintenance: async (sessionId) =>
       runSessionMemoryMaintenance({
+        context: getShipIntegrationContext(),
         sessionId,
         getHistoryStore: (id) => sessionManager.getHistoryStore(id),
       }),
@@ -208,6 +221,10 @@ You are a helpful project assistant.`;
     systems,
     mcpManager,
     sessionManager,
+  });
+
+  registerIntegrationSystemPromptProviders({
+    getContext: () => getShipIntegrationContext(),
   });
 }
 

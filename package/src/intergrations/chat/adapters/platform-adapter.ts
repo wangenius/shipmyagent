@@ -1,6 +1,8 @@
 import type { ChatDispatchChannel } from "../runtime/chat-send-registry.js";
 import { registerChatSender } from "../runtime/chat-send-registry.js";
-import { getIntegrationSessionManager } from "../../runtime/dependencies.js";
+import { getIntegrationSessionManager } from "../../../infra/integration-runtime-dependencies.js";
+import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
+import type { IntegrationSessionManager } from "../../../infra/integration-runtime-ports.js";
 import type {
   ChatDispatchAction,
   ChatDispatchSendActionParams,
@@ -23,25 +25,25 @@ export type AdapterSendActionParams = AdapterChatKeyParams & {
 };
 
 /**
- * Base class for platform adapters.
+ * 平台适配器基类。
  *
- * Responsibilities:
- * - Provide a consistent hook for registering adapter capabilities (dispatcher/tools).
- * - Offer shared helpers for persisting chat logs.
- *
- * Note: message delivery is tool-strict; user-visible replies should be sent via tools (e.g. `chat_send`),
- * which route to the registered dispatcher.
+ * 关键点（中文）
+ * - 通过 context 显式注入 sessionManager
+ * - 统一注册 dispatcher，暴露 sendText/sendAction 能力
  */
 export abstract class PlatformAdapter {
   readonly channel: ChatDispatchChannel;
-  protected readonly sessionManager = getIntegrationSessionManager();
+  protected readonly context: IntegrationRuntimeDependencies;
+  protected readonly sessionManager: IntegrationSessionManager;
 
   protected constructor(params: {
     channel: ChatDispatchChannel;
+    context: IntegrationRuntimeDependencies;
   }) {
     this.channel = params.channel;
+    this.context = params.context;
+    this.sessionManager = getIntegrationSessionManager(params.context);
 
-    // Expose adapter send capabilities to the agent via dispatcher + tools.
     const dispatcher: ChatDispatcher = {
       sendText: async (p) => this.sendToolText(p),
     };
@@ -57,13 +59,6 @@ export abstract class PlatformAdapter {
     params: AdapterSendTextParams,
   ): Promise<void>;
 
-  /**
-   * （可选）发送平台动作（例如 Telegram typing）。
-   *
-   * 说明（中文）
-   * - 不同平台支持的动作不同，因此这里保持可选
-   * - 未实现的平台不会在 dispatcher 上暴露 sendAction
-   */
   protected sendActionToPlatform?(
     params: AdapterSendActionParams,
   ): Promise<void>;
@@ -76,15 +71,13 @@ export abstract class PlatformAdapter {
     if (!chatId) return { success: false, error: "Missing chatId" };
     if (!text.trim()) return { success: true };
 
-	    try {
-	      await this.sendTextToPlatform({ ...params, chatId, text });
-		      // 注意：不在这里保存消息到 history（history.jsonl）
-	      // 消息保存由 lane-scheduler 统一处理（以用户可见回复为准），避免重复保存
-	      return { success: true };
-	    } catch (e) {
-	      return { success: false, error: String(e) };
-	    }
-	  }
+    try {
+      await this.sendTextToPlatform({ ...params, chatId, text });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: String(e) };
+    }
+  }
 
   async sendToolAction(
     params: ChatDispatchSendActionParams,

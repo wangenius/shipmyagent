@@ -7,7 +7,10 @@ import http from "node:http";
 import fs from "fs-extra";
 import path from "path";
 import { getShipPublicDirPath } from "../utils.js";
-import { getShipRuntimeContext } from "../server/ShipRuntimeContext.js";
+import {
+  getShipIntegrationContext,
+  getShipRuntimeContext,
+} from "../server/ShipRuntimeContext.js";
 import { pickLastSuccessfulChatSendText } from "../intergrations/chat/runtime/user-visible-text.js";
 import { registerAllModulesForServer } from "../core/intergration/registry.js";
 
@@ -152,7 +155,7 @@ export class AgentServer {
     });
 
     // 统一注册模块路由（chat / skill / task / future）
-    registerAllModulesForServer(this.app);
+    registerAllModulesForServer(this.app, getShipIntegrationContext());
 
     // Execute instruction
     this.app.post("/api/execute", async (c) => {

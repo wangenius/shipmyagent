@@ -9,7 +9,6 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import { getIntegrationRuntimeDependencies } from "../../runtime/dependencies.js";
 import type { ShipTaskDefinitionV1, ShipTaskFrontmatterV1 } from "../../../types/task.js";
 import { parseTaskMarkdown, buildTaskMarkdown } from "./model.js";
 import { getTaskDir, getTaskMdPath, getTaskRootDir, getTaskRunDir, normalizeTaskId } from "./paths.js";
@@ -33,8 +32,8 @@ function isDirectoryNameTimestamp(name: string): boolean {
   return /^\d{8}-\d{6}-\d{3}$/.test(s);
 }
 
-export async function listTasks(projectRoot?: string): Promise<TaskListItem[]> {
-  const root = String(projectRoot || getIntegrationRuntimeDependencies().rootPath || "").trim();
+export async function listTasks(projectRoot: string): Promise<TaskListItem[]> {
+  const root = String(projectRoot || "").trim();
   if (!root) return [];
 
   const dir = getTaskRootDir(root);
@@ -102,8 +101,8 @@ export async function listTasks(projectRoot?: string): Promise<TaskListItem[]> {
   return items;
 }
 
-export async function readTask(params: { taskId: string; projectRoot?: string }): Promise<ShipTaskDefinitionV1> {
-  const root = String(params.projectRoot || getIntegrationRuntimeDependencies().rootPath || "").trim();
+export async function readTask(params: { taskId: string; projectRoot: string }): Promise<ShipTaskDefinitionV1> {
+  const root = String(params.projectRoot || "").trim();
   if (!root) throw new Error("projectRoot is required");
   const taskId = normalizeTaskId(params.taskId);
 
@@ -123,10 +122,10 @@ export async function writeTask(params: {
   taskId: string;
   frontmatter: ShipTaskFrontmatterV1;
   body: string;
-  projectRoot?: string;
+  projectRoot: string;
   overwrite?: boolean;
 }): Promise<{ taskId: string; taskMdPath: string }> {
-  const root = String(params.projectRoot || getIntegrationRuntimeDependencies().rootPath || "").trim();
+  const root = String(params.projectRoot || "").trim();
   if (!root) throw new Error("projectRoot is required");
   const taskId = normalizeTaskId(params.taskId);
 
@@ -151,9 +150,9 @@ export async function writeTask(params: {
 export async function ensureRunDir(params: {
   taskId: string;
   timestamp: string;
-  projectRoot?: string;
+  projectRoot: string;
 }): Promise<{ runDir: string; runDirRel: string }> {
-  const root = String(params.projectRoot || getIntegrationRuntimeDependencies().rootPath || "").trim();
+  const root = String(params.projectRoot || "").trim();
   if (!root) throw new Error("projectRoot is required");
   const taskId = normalizeTaskId(params.taskId);
   const runDir = getTaskRunDir(root, taskId, params.timestamp);

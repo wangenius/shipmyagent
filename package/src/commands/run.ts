@@ -14,6 +14,7 @@ import { createTelegramBot } from "../intergrations/chat/adapters/telegram.js";
 import { createFeishuBot } from "../intergrations/chat/adapters/feishu.js";
 import { createQQBot } from "../intergrations/chat/adapters/qq.js";
 import {
+  getShipIntegrationContext,
   getShipRuntimeContext,
   initShipRuntimeContext,
 } from "../server/ShipRuntimeContext.js";
@@ -92,7 +93,7 @@ export async function runCommand(
   let telegramBot = null;
   if (adapters.telegram?.enabled) {
     logger.info("Telegram adapter enabled");
-    telegramBot = createTelegramBot(adapters.telegram);
+    telegramBot = createTelegramBot(adapters.telegram, getShipIntegrationContext());
   }
 
   // Create Feishu Adapter (if enabled)
@@ -121,7 +122,7 @@ export async function runCommand(
         : undefined,
     };
 
-    feishuBot = await createFeishuBot(feishuConfig);
+    feishuBot = await createFeishuBot(feishuConfig, getShipIntegrationContext());
   }
 
   // Create QQ Adapter (if enabled)
@@ -149,7 +150,7 @@ export async function runCommand(
           : (process.env.QQ_SANDBOX || "").toLowerCase() === "true",
     };
 
-    qqBot = await createQQBot(qqConfig);
+    qqBot = await createQQBot(qqConfig, getShipIntegrationContext());
   }
 
   // 创建交互式 Web 服务器（如果已启用）
@@ -245,6 +246,7 @@ export async function runCommand(
   try {
     cronTriggerEngine = new CronTriggerEngine();
     const registerResult = await registerTaskCronJobs({
+      context: getShipIntegrationContext(),
       engine: cronTriggerEngine,
     });
     await cronTriggerEngine.start();

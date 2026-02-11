@@ -1,38 +1,56 @@
 import { generateText } from "ai";
 import type { LanguageModel } from "ai";
-import type { MemoryEntry, MemoryExtractParams, MemoryCompressParams } from "../../../types/memory.js";
+import type {
+  MemoryEntry,
+  MemoryExtractParams,
+  MemoryCompressParams,
+} from "../../../types/memory.js";
 import { getLogger } from "../../../telemetry/index.js";
 import {
-  getIntegrationRuntimeDependencies,
   getIntegrationSessionManager,
-} from "../../runtime/dependencies.js";
+} from "../../../infra/integration-runtime-dependencies.js";
+import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
 /**
  * 从历史对话中提取记忆摘要。
  *
- * 重要：此函数使用 LLM 生成摘要，应该异步调用，不阻塞主流程。
+ * 关键点（中文）
+ * - LLM 处理较重，建议异步触发
+ * - session/history 通过 context 显式注入
  */
 export async function extractMemoryFromHistory(
-  params: MemoryExtractParams & { model: LanguageModel },
+  params: MemoryExtractParams & {
+    context: IntegrationRuntimeDependencies;
+    model: LanguageModel;
+  },
 ): Promise<MemoryEntry> {
-  const { sessionId, entryRange, model } = params;
+  const { context, sessionId, entryRange, model } = params;
   const [startIndex, endIndex] = entryRange;
-  const logger = getLogger(getIntegrationRuntimeDependencies().rootPath, "info");
+  const logger = getLogger(context.rootPath, "info");
 
   try {
-    // 1. 加载指定范围的 history（UIMessage[]）
-    const historyStore = getIntegrationSessionManager().getHistoryStore(sessionId);
+    const historyStore = getIntegrationSessionManager(context).getHistoryStore(
+      sessionId,
+    );
     const messages = await historyStore.loadRange(startIndex, endIndex);
 
     const historyText = (() => {
       const lines: string[] = [];
-      for (const m of messages) {
-        if (!m || typeof m !== "object") continue;
-        const role = m.role === "user" ? "User" : "Assistant";
-        const parts = Array.isArray((m as any).parts) ? (m as any).parts : [];
+      for (const message of messages) {
+        if (!message || typeof message !== "object") continue;
+        const role = message.role === "user" ? "User" : "Assistant";
+        const parts = Array.isArray((message as any).parts)
+          ? (message as any).parts
+          : [];
         const text = parts
-          .filter((p: any) => p && typeof p === "object" && p.type === "text" && typeof p.text === "string")
-          .map((p: any) => String(p.text ?? ""))
+          .filter(
+            (part: any) =>
+              part &&
+              typeof part === "object" &&
+              part.type === "text" &&
+              typeof part.text === "string",
+          )
+          .map((part: any) => String(part.text ?? ""))
           .join("\n")
           .trim();
         if (!text) continue;
@@ -42,7 +60,6 @@ export async function extractMemoryFromHistory(
     })();
 
     if (!historyText || !historyText.trim()) {
-      // 没有历史内容，返回空摘要
       return {
         timestamp: Date.now(),
         roundRange: entryRange,
@@ -51,7 +68,6 @@ export async function extractMemoryFromHistory(
       };
     }
 
-    // 2. 使用 LLM 提取摘要
     const result = await generateText({
       model,
       system: [
@@ -103,34 +119,37 @@ ${historyText}
 请以 JSON 格式返回提取结果。`,
     });
 
-    // 3. 解析 LLM 返回的 JSON
     let summary = "";
     let keyFacts: string[] = [];
 
     try {
       const text = result.text.trim();
-      // 尝试提取 JSON（可能被包裹在代码块中）
-      const jsonMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/) ||
-                       text.match(/(\{[\s\S]*\})/);
+      const jsonMatch =
+        text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/) ||
+        text.match(/(\{[\s\S]*\})/);
 
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[1]);
         summary = String(parsed.summary || "");
-        keyFacts = Array.isArray(parsed.keyFacts) ? parsed.keyFacts.map(String) : [];
+        keyFacts = Array.isArray(parsed.keyFacts)
+          ? parsed.keyFacts.map(String)
+          : [];
       } else {
-        // 降级：直接使用返回的文本作为摘要
         summary = text;
         keyFacts = [];
       }
     } catch (parseError) {
-      // JSON 解析失败，使用原始文本
       summary = result.text.trim();
       keyFacts = [];
-      await logger.log("warn", "Failed to parse memory extraction JSON, using raw text", {
-        sessionId,
-        entryRange,
-        error: String(parseError),
-      });
+      await logger.log(
+        "warn",
+        "Failed to parse memory extraction JSON, using raw text",
+        {
+          sessionId,
+          entryRange,
+          error: String(parseError),
+        },
+      );
     }
 
     return {
@@ -146,7 +165,6 @@ ${historyText}
       error: String(error),
     });
 
-    // 返回错误摘要
     return {
       timestamp: Date.now(),
       roundRange: entryRange,
@@ -159,13 +177,17 @@ ${historyText}
 /**
  * 使用 LLM 压缩记忆文件。
  *
- * 重要：此函数使用 LLM 处理，应该异步调用，不阻塞主流程。
+ * 关键点（中文）
+ * - 压缩失败时返回原文，避免数据丢失
  */
 export async function compressMemory(
-  params: MemoryCompressParams & { model: LanguageModel },
+  params: MemoryCompressParams & {
+    context: IntegrationRuntimeDependencies;
+    model: LanguageModel;
+  },
 ): Promise<string> {
-  const { sessionId, currentContent, targetChars, model } = params;
-  const logger = getLogger(getIntegrationRuntimeDependencies().rootPath, "info");
+  const { context, sessionId, currentContent, targetChars, model } = params;
+  const logger = getLogger(context.rootPath, "info");
 
   try {
     const result = await generateText({
@@ -224,7 +246,6 @@ ${currentContent}
       error: String(error),
     });
 
-    // 压缩失败，返回原内容（可能会超长，但总比丢失数据好）
     return currentContent;
   }
 }

@@ -1,23 +1,25 @@
-import type { IntegrationSessionHistoryStore } from "../../../types/integration-runtime-ports.js";
+import type { IntegrationSessionHistoryStore } from "../../../infra/integration-runtime-ports.js";
+import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 import { getLogger } from "../../../telemetry/index.js";
-import {
-  getIntegrationModelFactory,
-  getIntegrationRuntimeDependencies,
-} from "../../runtime/dependencies.js";
+import { getIntegrationModelFactory } from "../../../infra/integration-runtime-dependencies.js";
 import { MemoryManager } from "./manager.js";
 import { compressMemory, extractMemoryFromHistory } from "./extractor.js";
 
 const memoryManagers: Map<string, MemoryManager> = new Map();
 
-function getMemoryManager(sessionId: string): MemoryManager {
+function getMemoryManager(
+  context: IntegrationRuntimeDependencies,
+  sessionId: string,
+): MemoryManager {
   const key = String(sessionId || "").trim();
   if (!key) {
     throw new Error("Memory service requires a non-empty sessionId");
   }
-  const existing = memoryManagers.get(key);
+  const cacheKey = `${context.rootPath}::${key}`;
+  const existing = memoryManagers.get(cacheKey);
   if (existing) return existing;
-  const created = new MemoryManager(key);
-  memoryManagers.set(key, created);
+  const created = new MemoryManager(context, key);
+  memoryManagers.set(cacheKey, created);
   return created;
 }
 
@@ -29,14 +31,15 @@ function getMemoryManager(sessionId: string): MemoryManager {
  * - core 只在“消息追加后”触发，不关心具体提取/压缩细节
  */
 export async function runSessionMemoryMaintenance(params: {
+  context: IntegrationRuntimeDependencies;
   sessionId: string;
   getHistoryStore: (sessionId: string) => IntegrationSessionHistoryStore;
 }): Promise<void> {
   const sessionId = String(params.sessionId || "").trim();
   if (!sessionId) return;
 
-  const runtime = getIntegrationRuntimeDependencies();
-  const config = runtime.config?.context?.memory;
+  const context = params.context;
+  const config = context.config?.context?.memory;
   const enabled = config?.autoExtractEnabled ?? true;
   if (!enabled) return;
 
@@ -46,7 +49,7 @@ export async function runSessionMemoryMaintenance(params: {
     const store = params.getHistoryStore(sessionId);
     const totalEntries = await store.getTotalMessageCount();
 
-    const memoryManager = getMemoryManager(sessionId);
+    const memoryManager = getMemoryManager(context, sessionId);
     const meta = await memoryManager.loadMeta();
     const lastMemorizedEntryCount = meta.lastMemorizedEntryCount ?? 0;
     const unmemorizedCount = totalEntries - lastMemorizedEntryCount;
@@ -54,6 +57,7 @@ export async function runSessionMemoryMaintenance(params: {
     if (unmemorizedCount < extractMinEntries) return;
 
     void extractAndSaveMemory({
+      context,
       sessionId,
       startIndex: lastMemorizedEntryCount,
       endIndex: totalEntries,
@@ -64,13 +68,13 @@ export async function runSessionMemoryMaintenance(params: {
 }
 
 async function extractAndSaveMemory(params: {
+  context: IntegrationRuntimeDependencies;
   sessionId: string;
   startIndex: number;
   endIndex: number;
 }): Promise<void> {
-  const { sessionId, startIndex, endIndex } = params;
-  const runtime = getIntegrationRuntimeDependencies();
-  const logger = getLogger(runtime.rootPath, "info");
+  const { context, sessionId, startIndex, endIndex } = params;
+  const logger = getLogger(context.rootPath, "info");
 
   try {
     await logger.log("info", "Memory extraction started (async)", {
@@ -78,17 +82,18 @@ async function extractAndSaveMemory(params: {
       entryRange: [startIndex, endIndex],
     });
 
-    const model = await getIntegrationModelFactory().createModel({
-      config: runtime.config,
+    const model = await getIntegrationModelFactory(context).createModel({
+      config: context.config,
     });
 
     const memoryEntry = await extractMemoryFromHistory({
+      context,
       sessionId,
       entryRange: [startIndex, endIndex],
       model,
     });
 
-    const memoryManager = getMemoryManager(sessionId);
+    const memoryManager = getMemoryManager(context, sessionId);
     await memoryManager.append(memoryEntry);
 
     const meta = await memoryManager.loadMeta();
@@ -98,7 +103,7 @@ async function extractAndSaveMemory(params: {
       lastExtractedAt: Date.now(),
     });
 
-    await checkAndCompressMemory(sessionId, model);
+    await checkAndCompressMemory(context, sessionId, model);
 
     await logger.log("info", "Memory extraction completed (async)", {
       sessionId,
@@ -113,19 +118,19 @@ async function extractAndSaveMemory(params: {
 }
 
 async function checkAndCompressMemory(
+  context: IntegrationRuntimeDependencies,
   sessionId: string,
   model: any,
 ): Promise<void> {
-  const runtime = getIntegrationRuntimeDependencies();
-  const logger = getLogger(runtime.rootPath, "info");
+  const logger = getLogger(context.rootPath, "info");
 
   try {
-    const config = runtime.config?.context?.memory;
+    const config = context.config?.context?.memory;
     const compressEnabled = config?.compressOnOverflow ?? true;
     if (!compressEnabled) return;
 
     const maxChars = config?.maxPrimaryChars ?? 15000;
-    const memoryManager = getMemoryManager(sessionId);
+    const memoryManager = getMemoryManager(context, sessionId);
     const currentSize = await memoryManager.getSize();
 
     if (currentSize <= maxChars) return;
@@ -148,6 +153,7 @@ async function checkAndCompressMemory(
     const currentContent = await memoryManager.load();
     const targetChars = Math.floor(maxChars * 0.8);
     const compressed = await compressMemory({
+      context,
       sessionId,
       currentContent,
       targetChars,

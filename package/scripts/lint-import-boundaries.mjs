@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
  * 关键点（中文）
  * - 限制 integrations 层对 core/server 的反向依赖
  * - 限制 integration module 入口对 core/server 的直接依赖
- * - 限制 integrations 之间的横向直接依赖（仅允许 shared/runtime）
+ * - 限制 integrations 之间的横向直接依赖（全部禁止）
  * - 以脚本方式落地，避免引入额外 lint 工具链
  */
 
@@ -46,13 +46,6 @@ function getIntegrationName(srcRelativePath) {
   const seg = srcRelativePath.split("/");
   if (seg.length < 2 || seg[0] !== "intergrations") return "";
   return seg[1] || "";
-}
-
-function isAllowedCrossIntegrationTarget(target) {
-  return (
-    target.startsWith("intergrations/shared/") ||
-    target.startsWith("intergrations/runtime/")
-  );
 }
 
 async function collectTsFiles(dirPath) {
@@ -113,19 +106,17 @@ async function run() {
         });
       }
 
-      // 规则 3（中文）：integration 全量禁止跨 integration 直接依赖（shared/runtime 除外）。
+      // 规则 3（中文）：integration 全量禁止跨 integration 直接依赖（无例外）。
       if (target.startsWith("intergrations/")) {
         const targetIntegrationName = getIntegrationName(target);
         const isSameIntegration =
           currentIntegrationName && targetIntegrationName === currentIntegrationName;
-        const isAllowed = isAllowedCrossIntegrationTarget(target);
-
-        if (!isSameIntegration && !isAllowed) {
+        if (!isSameIntegration) {
           violations.push({
             file: srcRelativeFilePath,
             specifier,
             reason:
-              "intergrations/* 禁止直接依赖其他 integration 模块，请通过 server 注入或 shared/runtime 能力解耦",
+              "intergrations/* 禁止直接依赖其他 integration 模块，请通过 infra 抽象能力或 server 注入解耦",
           });
         }
       }

@@ -1,5 +1,5 @@
 /**
- * Integration CLI 输出工具。
+ * Infra CLI 输出工具。
  *
  * 关键点（中文）
  * - 统一支持 JSON / 文本输出

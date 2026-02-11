@@ -8,6 +8,7 @@
 
 import type { Command } from "commander";
 import type { Hono } from "hono";
+import type { IntegrationRuntimeDependencies } from "../../infra/integration-runtime-types.js";
 import type { SmaModule } from "../../types/module-command.js";
 import { createCliCommandRegistry } from "./cli-registry.js";
 import { createServerRouteRegistry } from "./server-registry.js";
@@ -32,9 +33,12 @@ export function registerAllModulesForCli(program: Command): void {
   }
 }
 
-export function registerAllModulesForServer(app: Hono): void {
+export function registerAllModulesForServer(
+  app: Hono,
+  context: IntegrationRuntimeDependencies,
+): void {
   const registry = createServerRouteRegistry(app);
   for (const module of MODULES) {
-    module.registerServer(registry);
+    module.registerServer(registry, context);
   }
 }

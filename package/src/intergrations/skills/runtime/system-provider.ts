@@ -1,5 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
+import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
+import { getIntegrationSessionManager } from "../../../infra/integration-runtime-dependencies.js";
 import type { LoadedSkillV1 } from "../../../types/loaded-skill.js";
 import type {
   SystemPromptProvider,
@@ -13,10 +15,6 @@ import {
   setSessionAvailableSkills,
   setSessionLoadedSkills,
 } from "./store.js";
-import {
-  getIntegrationRuntimeDependencies,
-  getIntegrationSessionManager,
-} from "../../runtime/dependencies.js";
 
 function normalizeAllowedTools(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
@@ -47,10 +45,13 @@ function toLoadedSkill(params: {
 }
 
 async function buildSkillsProviderOutput(
+  getContext: () => IntegrationRuntimeDependencies,
   ctx: SystemPromptProviderContext,
 ): Promise<SystemPromptProviderOutput> {
-  const runtime = getIntegrationRuntimeDependencies();
-  const historyStore = getIntegrationSessionManager().getHistoryStore(ctx.sessionId);
+  const runtime = getContext();
+  const historyStore = getIntegrationSessionManager(runtime).getHistoryStore(
+    ctx.sessionId,
+  );
   const discoveredSkills = discoverClaudeSkillsSync(runtime.rootPath, runtime.config);
   setSessionAvailableSkills(ctx.sessionId, discoveredSkills);
 
@@ -158,8 +159,12 @@ async function buildSkillsProviderOutput(
  * - skills 发现/加载/pinned 清理都在 integration 内完成
  * - core/runtime 只消费 provider 输出
  */
-export const skillsSystemPromptProvider: SystemPromptProvider = {
-  id: "skills",
-  order: 200,
-  provide: buildSkillsProviderOutput,
-};
+export function createSkillsSystemPromptProvider(
+  getContext: () => IntegrationRuntimeDependencies,
+): SystemPromptProvider {
+  return {
+    id: "skills",
+    order: 200,
+    provide: (ctx) => buildSkillsProviderOutput(getContext, ctx),
+  };
+}
