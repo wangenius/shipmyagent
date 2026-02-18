@@ -1,3 +1,12 @@
+/**
+ * Session history 存储模块。
+ *
+ * 关键点（中文）
+ * - 基于 JSONL 持久化 UIMessage。
+ * - 通过文件锁协调 append 与 compact 的并发写入。
+ * - 提供 meta/archive 以支持可审计的历史压缩。
+ */
+
 import fs from "fs-extra";
 import { open as openFile, readFile as readFileNative, stat as statNative } from "node:fs/promises";
 import path from "node:path";
@@ -11,8 +20,8 @@ import {
   getShipSessionHistoryPath,
   getShipSessionMessagesDirPath,
 } from "../../utils.js";
-import type { ShipSessionMetadataV1, ShipSessionMessageV1 } from "../../types/session-history.js";
-import type { ShipSessionMessagesMetaV1 } from "../../types/session-messages-meta.js";
+import type { ShipSessionMetadataV1, ShipSessionMessageV1 } from "../types/session-history.js";
+import type { ShipSessionMessagesMetaV1 } from "../types/session-messages-meta.js";
 import { getLogger } from "../../telemetry/index.js";
 import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 
@@ -91,16 +100,25 @@ export class SessionHistoryStore {
         : undefined;
   }
 
+  /**
+   * 获取 session 目录路径。
+   */
   getSessionDirPath(): string {
     if (this.overrideSessionDirPath) return this.overrideSessionDirPath;
     return getShipSessionDirPath(this.rootPath, this.sessionId);
   }
 
+  /**
+   * 获取 messages 目录路径。
+   */
   getMessagesDirPath(): string {
     if (this.overrideMessagesDirPath) return this.overrideMessagesDirPath;
     return getShipSessionMessagesDirPath(this.rootPath, this.sessionId);
   }
 
+  /**
+   * 获取 history.jsonl 路径。
+   */
   getMessagesFilePath(): string {
     if (this.overrideMessagesFilePath) return this.overrideMessagesFilePath;
     if (this.overrideMessagesDirPath) {
@@ -110,28 +128,45 @@ export class SessionHistoryStore {
     return getShipSessionHistoryPath(this.rootPath, this.sessionId);
   }
 
+  /**
+   * 获取 meta.json 路径。
+   */
   getMetaFilePath(): string {
     if (this.overrideMetaFilePath) return this.overrideMetaFilePath;
     if (this.overrideMessagesDirPath) return path.join(this.overrideMessagesDirPath, "meta.json");
     return getShipSessionHistoryMetaPath(this.rootPath, this.sessionId);
   }
 
+  /**
+   * 获取 archive 目录路径。
+   */
   getArchiveDirPath(): string {
     if (this.overrideArchiveDirPath) return this.overrideArchiveDirPath;
     if (this.overrideMessagesDirPath) return path.join(this.overrideMessagesDirPath, "archive");
     return getShipSessionHistoryArchiveDirPath(this.rootPath, this.sessionId);
   }
 
+  /**
+   * 获取 history 写锁文件路径。
+   */
   private getLockFilePath(): string {
     return path.join(this.getMessagesDirPath(), ".history.lock");
   }
 
+  /**
+   * 确保 messages/meta/archive 的目录与文件存在。
+   */
   private async ensureLayout(): Promise<void> {
     await fs.ensureDir(this.getMessagesDirPath());
     await fs.ensureDir(this.getArchiveDirPath());
     await fs.ensureFile(this.getMessagesFilePath());
   }
 
+  /**
+   * 归一化 pinnedSkillIds。
+   *
+   * - 仅保留非空字符串；去重并限制上限，避免 meta 异常膨胀。
+   */
   private normalizePinnedSkillIds(input: unknown): string[] {
     if (!Array.isArray(input)) return [];
     const out: string[] = [];
@@ -144,6 +179,11 @@ export class SessionHistoryStore {
     return Array.from(new Set(out)).slice(0, 2000);
   }
 
+  /**
+   * 读取 meta（不加锁）。
+   *
+   * - 仅在已持锁或只读场景使用；解析失败回退默认值。
+   */
   private async readMetaUnsafe(): Promise<ShipSessionMessagesMetaV1> {
     const file = this.getMetaFilePath();
     try {
@@ -182,6 +222,11 @@ export class SessionHistoryStore {
     return await this.readMetaUnsafe();
   }
 
+  /**
+   * 写入 meta（不加锁）。
+   *
+   * - 调用方需自行保证并发安全（通常通过 `withWriteLock`）。
+   */
   private async writeMetaUnsafe(next: ShipSessionMessagesMetaV1): Promise<void> {
     const normalized: ShipSessionMessagesMetaV1 = {
       v: 1,
@@ -244,6 +289,14 @@ export class SessionHistoryStore {
     await this.updateMeta({ pinnedSkillIds: Array.isArray(skillIds) ? skillIds : [] } as any);
   }
 
+  /**
+   * 带文件锁的写操作包装。
+   *
+   * 算法说明（中文）
+   * - 使用 `open(lock, "wx")` 实现原子抢锁（文件存在则失败）。
+   * - 锁文件写入 token，释放时校验 token，避免误删他人锁。
+   * - 过期锁（stale）会被清理，防止进程异常退出后永久阻塞。
+   */
   private async withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
     await this.ensureLayout();
     const lockPath = this.getLockFilePath();
@@ -297,12 +350,26 @@ export class SessionHistoryStore {
     }
   }
 
+  /**
+   * 追加一条 UIMessage 到 history.jsonl。
+   *
+   * 关键点（中文）
+   * - append 看起来是简单写入，但仍需与 compact 共享同一把锁。
+   * - 否则 compact rewrite 与 append 并发会造成丢行/覆盖。
+   */
   async append(message: ShipSessionMessageV1): Promise<void> {
     await this.withWriteLock(async () => {
       await fs.appendFile(this.getMessagesFilePath(), JSON.stringify(message) + "\n", "utf8");
     });
   }
 
+  /**
+   * 读取并解析全部历史。
+   *
+   * 关键点（中文）
+   * - 只接收 role=user|assistant 且 parts 合法的行。
+   * - 非法 JSON 行采用容错跳过，避免单行损坏导致整体不可读。
+   */
   async loadAll(): Promise<ShipSessionMessageV1[]> {
     await this.ensureLayout();
     const file = this.getMessagesFilePath();
@@ -324,11 +391,20 @@ export class SessionHistoryStore {
     return out;
   }
 
+  /**
+   * 获取当前历史消息总数。
+   */
   async getTotalMessageCount(): Promise<number> {
     const msgs = await this.loadAll();
     return msgs.length;
   }
 
+  /**
+   * 读取历史子区间（[startIndex, endIndex)）。
+   *
+   * 关键点（中文）
+   * - 统一做 floor + 边界裁剪，保证调用方传异常值也不会抛错。
+   */
   async loadRange(startIndex: number, endIndex: number): Promise<ShipSessionMessageV1[]> {
     const msgs = await this.loadAll();
     const start = Math.max(0, Math.floor(startIndex));
@@ -336,6 +412,9 @@ export class SessionHistoryStore {
     return msgs.slice(start, end);
   }
 
+  /**
+   * 构造 user 文本消息（UIMessage 结构）。
+   */
   createUserTextMessage(params: {
     text: string;
     metadata: Omit<ShipSessionMetadataV1, "v" | "ts"> & Partial<Pick<ShipSessionMetadataV1, "ts">>;
@@ -359,6 +438,9 @@ export class SessionHistoryStore {
     } as any;
   }
 
+  /**
+   * 构造 assistant 文本消息（可标记 normal/summary 与 source）。
+   */
   createAssistantTextMessage(params: {
     text: string;
     metadata: Omit<ShipSessionMetadataV1, "v" | "ts"> & Partial<Pick<ShipSessionMetadataV1, "ts">>;
@@ -384,12 +466,26 @@ export class SessionHistoryStore {
     } as any;
   }
 
+  /**
+   * 近似 token 估算。
+   *
+   * 算法说明（中文）
+   * - 这里使用经验近似，不追求精确 tokenizer 一致性。
+   * - 目标是为 compact 提供保守预算，宁可略高估也不要低估。
+   */
   private estimateTokensApproxFromText(text: string): number {
     const t = String(text || "");
     // 经验值：英文 ~4 chars/token；中文更接近 1-2 chars/token。这里用保守的 3 chars/token。
     return Math.ceil(t.length / 3);
   }
 
+  /**
+   * 从 UIMessage 提取可摘要的纯文本。
+   *
+   * 关键点（中文）
+   * - 统一把 user/assistant 内容线性化，作为 compact 摘要输入。
+   * - tool 原始结构不会原样输出，避免把噪声日志喂给摘要模型。
+   */
   private extractPlainTextFromMessages(messages: ShipSessionMessageV1[]): string {
     const lines: string[] = [];
     for (const m of messages) {
@@ -422,7 +518,10 @@ export class SessionHistoryStore {
   }): Promise<{ compacted: boolean; reason?: string }> {
     const logger = getLogger(this.rootPath, "info");
 
+    // 算法阶段（中文）
     // phase 1：snapshot（短锁）
+    // - 仅负责拿一致性快照，不做耗时的模型调用。
+    // - 目的是把锁持有时间降到最低。
     let snapshot: ShipSessionMessageV1[] = [];
     let snapshotTailId = "";
     await this.withWriteLock(async () => {
@@ -457,7 +556,8 @@ export class SessionHistoryStore {
         ? "（注意：更早历史过长，已截断保留末尾）\n" + olderTextAll.slice(-maxOlderChars)
         : olderTextAll;
 
-    // 生成摘要（不持锁）
+    // phase 1.5：生成摘要（不持锁）
+    // - 这一步最耗时，必须在锁外执行，避免阻塞 append。
     let summary = "";
     try {
       const r = await generateText({
@@ -502,6 +602,7 @@ export class SessionHistoryStore {
     const archiveId = `compact-${Date.now()}-${generateId()}`;
 
     // phase 2：写入（短锁，且避免覆盖新追加）
+    // - 以“当前最新 history”为准重算 currentOlder/currentKept，避免覆盖并发新消息。
     await this.withWriteLock(async () => {
       const current = await this.loadAll();
       if (!current.length) return;
@@ -542,7 +643,11 @@ export class SessionHistoryStore {
   }
 
   /**
-   * 把当前 history 转为 ModelMessages（用于 `generateText`）。
+   * 转换为模型输入 messages。
+   *
+   * 关键点（中文）
+   * - 去掉 UIMessage 的 id 字段，仅保留模型可消费结构。
+   * - `ignoreIncompleteToolCalls=true` 以容忍中断场景下的半成品 tool 记录。
    */
   async toModelMessages(params: { tools?: any }): Promise<any[]> {
     const msgs = await this.loadAll();

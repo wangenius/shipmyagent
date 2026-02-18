@@ -49,6 +49,14 @@ const EventType = {
   AT_MESSAGE_CREATE: "AT_MESSAGE_CREATE",
 };
 
+/**
+ * QQ 平台适配器。
+ *
+ * 关键职责（中文）
+ * - 维护 OAuth token + Gateway 连接生命周期
+ * - 处理 WS 事件并映射为统一会话入站
+ * - 按平台约束发送文本（群聊/C2C/频道）
+ */
 export class QQBot extends BaseChatAdapter {
   private appId: string;
   private appSecret: string;
@@ -147,6 +155,13 @@ export class QQBot extends BaseChatAdapter {
    * 获取鉴权 Token (支持新版 API v2)
    * 新版 API 需要先获取 access_token
    * 注意：鉴权 API 使用 bots.qq.com 域名
+   */
+  /**
+   * 获取并缓存 Access Token。
+   *
+   * 说明（中文）
+   * - 使用过期时间戳做本地缓存，避免每次请求都换 token
+   * - 异常直接上抛，由上层启动/重连流程统一处理
    */
   private async getAccessToken(): Promise<string> {
     // 如果缓存的 token 还有效（提前 60 秒刷新）
@@ -310,6 +325,13 @@ export class QQBot extends BaseChatAdapter {
 
   /**
    * 连接 WebSocket
+   */
+  /**
+   * 建立 Gateway WebSocket 连接并接管事件循环。
+   *
+   * 说明（中文）
+   * - `Hello` 到达后 resolve，表示握手链路可继续
+   * - close 时按退避策略重连，并重置 token 缓存
    */
   private async connectWebSocket(gatewayUrl: string): Promise<void> {
     this.logger.info(`正在连接 WebSocket: ${gatewayUrl}`);
@@ -569,6 +591,13 @@ export class QQBot extends BaseChatAdapter {
 
   /**
    * 处理事件分发
+   */
+  /**
+   * 处理 Dispatch 事件总入口。
+   *
+   * 说明（中文）
+   * - 只在此处分发到各类消息处理器，保持事件路由单一出口
+   * - 未识别事件仅 debug 记录，不阻断连接
    */
   private async handleDispatch(eventType: string, data: any): Promise<void> {
     this.logger.info(`收到事件: ${eventType}`);

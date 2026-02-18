@@ -10,8 +10,11 @@
 import yaml from "js-yaml";
 import path from "node:path";
 import { parseFrontMatter } from "./frontmatter.js";
-import type { ShipTaskDefinitionV1, ShipTaskFrontmatterV1, ShipTaskStatus } from "../../../types/task.js";
+import type { ShipTaskDefinitionV1, ShipTaskFrontmatterV1, ShipTaskStatus } from "../types/task.js";
 
+/**
+ * 必填 frontmatter 字段清单。
+ */
 const REQUIRED_FIELDS: Array<keyof ShipTaskFrontmatterV1> = [
   "title",
   "cron",
@@ -20,6 +23,12 @@ const REQUIRED_FIELDS: Array<keyof ShipTaskFrontmatterV1> = [
   "status",
 ];
 
+/**
+ * 归一化 task 状态。
+ *
+ * 关键点（中文）
+ * - 输入不合法时返回 `null`，由上层统一产出可读错误。
+ */
 export function normalizeTaskStatus(input: unknown): ShipTaskStatus | null {
   const s = typeof input === "string" ? input.trim().toLowerCase() : "";
   if (s === "enabled") return "enabled";
@@ -28,6 +37,14 @@ export function normalizeTaskStatus(input: unknown): ShipTaskStatus | null {
   return null;
 }
 
+/**
+ * 解析 task.md 为结构化定义。
+ *
+ * 算法（中文）
+ * 1) 解析 frontmatter 与 body
+ * 2) 校验必填字段与 status 枚举
+ * 3) 规范化路径与字符串字段
+ */
 export function parseTaskMarkdown(params: {
   taskId: string;
   markdown: string;
@@ -99,6 +116,12 @@ export function parseTaskMarkdown(params: {
   return { ok: true, task };
 }
 
+/**
+ * 生成 task.md 文本。
+ *
+ * 关键点（中文）
+ * - 输出稳定的 YAML + 正文格式，便于人工编辑与机器解析。
+ */
 export function buildTaskMarkdown(params: {
   frontmatter: ShipTaskFrontmatterV1;
   body: string;

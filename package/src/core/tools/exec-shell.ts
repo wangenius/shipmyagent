@@ -60,6 +60,9 @@ type ExecSession = {
 
 const execSessions = new Map<number, ExecSession>();
 
+/**
+ * 归一化 yieldTime。
+ */
 function clampYieldTimeMs(value: number | undefined, fallback: number): number {
   const n =
     typeof value === "number" && Number.isFinite(value)
@@ -125,6 +128,11 @@ function resolveOutputLimits(maxOutputTokens?: number): OutputLimits {
   };
 }
 
+/**
+ * 解析命令工作目录。
+ *
+ * - 空值回退 projectRoot；相对路径按 projectRoot 解析。
+ */
 function resolveExecWorkdir(projectRoot: string, workdir?: string): string {
   const trimmed = String(workdir ?? "").trim();
   if (!trimmed) return projectRoot;
@@ -153,6 +161,12 @@ function setEnvNumber(
   env[key] = String(Math.trunc(value));
 }
 
+/**
+ * 构建子进程环境变量。
+ *
+ * 关键点（中文）
+ * - 把 session/request 上下文字段透传给命令执行环境。
+ */
 function buildExecContextEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
   const sessionCtx = sessionRequestContext.getStore();
@@ -184,6 +198,11 @@ function notifySessionWaiters(session: ExecSession): void {
   for (const resolve of waiters) resolve();
 }
 
+/**
+ * 追加进程输出到会话缓冲区。
+ *
+ * - 达到上限后截断最旧内容，并累计 `droppedChars`。
+ */
 function appendSessionOutput(session: ExecSession, raw: string): void {
   const chunk = normalizeOutputChunk(raw);
   if (!chunk) return;
@@ -200,6 +219,9 @@ function appendSessionOutput(session: ExecSession, raw: string): void {
   notifySessionWaiters(session);
 }
 
+/**
+ * 安排会话延迟清理。
+ */
 function scheduleSessionCleanup(session: ExecSession): void {
   if (session.cleanupTimer) clearTimeout(session.cleanupTimer);
   session.cleanupTimer = setTimeout(
@@ -214,6 +236,12 @@ function scheduleSessionCleanup(session: ExecSession): void {
     session.cleanupTimer.unref();
 }
 
+/**
+ * 控制活跃会话上限。
+ *
+ * 策略（中文）
+ * - 超上限时优先回收最旧且已退出会话。
+ */
 function ensureSessionCapacity(): void {
   if (execSessions.size < MAX_ACTIVE_EXEC_SESSIONS) return;
 
@@ -234,6 +262,14 @@ function ensureSessionCapacity(): void {
   }
 }
 
+/**
+ * 创建一个命令执行会话。
+ *
+ * 流程（中文）
+ * 1) 生成 sessionId
+ * 2) spawn shell 子进程
+ * 3) 绑定 stdout/stderr/error/close 事件
+ */
 function createExecSession(input: {
   command: string;
   cwd: string;
@@ -304,6 +340,9 @@ function createExecSession(input: {
   return session;
 }
 
+/**
+ * 按字符/行预算切分页输出。
+ */
 function splitOutputPage(
   text: string,
   limits: OutputLimits,
@@ -329,6 +368,9 @@ function splitOutputPage(
   };
 }
 
+/**
+ * 消费一页输出并更新会话缓冲区。
+ */
 function consumeSessionOutputPage(
   session: ExecSession,
   limits: OutputLimits,
@@ -368,6 +410,9 @@ function consumeSessionOutputPage(
   };
 }
 
+/**
+ * 等待会话信号（输出到达或进程退出）。
+ */
 async function waitForSessionSignal(
   session: ExecSession,
   timeoutMs: number,
@@ -429,6 +474,9 @@ async function collectOutputUntilDeadline(
   }
 }
 
+/**
+ * 获取会话，不存在则抛错。
+ */
 function getSessionOrThrow(sessionId: number): ExecSession {
   const session = execSessions.get(sessionId);
   if (!session) {
@@ -437,6 +485,9 @@ function getSessionOrThrow(sessionId: number): ExecSession {
   return session;
 }
 
+/**
+ * 向会话 stdin 写入输入。
+ */
 async function writeSessionStdin(
   session: ExecSession,
   chars: string,
@@ -512,6 +563,9 @@ function closeExecSession(
   };
 }
 
+/**
+ * 在“已退出且输出已读空”时自动回收会话。
+ */
 function finalizeSessionIfDrainComplete(
   session: ExecSession,
   hasMoreOutput: boolean,
@@ -529,6 +583,9 @@ function finalizeSessionIfDrainComplete(
   return null;
 }
 
+/**
+ * 统一格式化 exec/write 的响应结构。
+ */
 function formatSessionResponse(input: {
   session: ExecSession;
   page: {
@@ -570,6 +627,9 @@ function formatSessionResponse(input: {
   };
 }
 
+/**
+ * `exec_command`：启动命令会话。
+ */
 export const exec_command = tool({
   description:
     "Start a shell command session. Returns process_id for follow-up polling/input via write_stdin.",
@@ -646,6 +706,9 @@ export const exec_command = tool({
   },
 });
 
+/**
+ * `write_stdin`：向现有会话写入输入或轮询输出。
+ */
 export const write_stdin = tool({
   description:
     "Write chars to an existing exec session and return next output chunk. Use empty chars to poll.",
@@ -710,6 +773,9 @@ export const write_stdin = tool({
   },
 });
 
+/**
+ * `close_session`：主动关闭并回收会话。
+ */
 export const close_session = tool({
   description:
     "Close an existing exec session and release resources. Use force=true to send SIGKILL.",
@@ -757,6 +823,9 @@ export const close_session = tool({
   },
 });
 
+/**
+ * Shell 工具导出集合。
+ */
 export const execShellTools = {
   exec_command,
   write_stdin,

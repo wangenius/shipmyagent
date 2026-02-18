@@ -1,4 +1,12 @@
-import type { LoadedSkillV1 } from "../../../types/loaded-skill.js";
+/**
+ * Active skills prompt 构建器。
+ *
+ * 关键点（中文）
+ * - 将已加载 skills 渲染为强约束 system prompt。
+ * - 同步计算 activeTools 白名单，交给上层执行器约束。
+ */
+
+import type { LoadedSkillV1 } from "../types/loaded-skill.js";
 
 /**
  * 生成 active skills 的 system prompt。
@@ -6,6 +14,14 @@ import type { LoadedSkillV1 } from "../../../types/loaded-skill.js";
  * 关键点（中文）
  * - 这是 skills integration 的运行时实现细节，不属于 core/prompts
  * - 除 prompt 文本外，还负责计算 activeTools 约束
+ */
+/**
+ * 构建 active skills system 文本与 tool 白名单。
+ *
+ * 算法（中文）
+ * 1) 按 loaded skills 逐个拼接强约束说明
+ * 2) 汇总 `allowedTools` 并并入命令执行基础工具
+ * 3) 与 `allToolNames` 求交集，避免注入不存在工具
  */
 export function buildLoadedSkillsSystemText(params: {
   loaded: Map<string, LoadedSkillV1>;

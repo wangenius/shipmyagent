@@ -1,3 +1,11 @@
+/**
+ * Skills discovery：扫描可用 skills 并生成索引。
+ *
+ * 关键点（中文）
+ * - 扫描范围由 `paths.ts` 决定（项目、用户目录、可选外部目录）。
+ * - 同名 skill 按根目录优先级“先到先得”。
+ */
+
 import fs from "fs-extra";
 import yaml from "js-yaml";
 import path from "path";
@@ -6,7 +14,7 @@ import type { ShipConfig } from "../../../utils.js";
 import { parseFrontMatter } from "./frontmatter.js";
 import { getClaudeSkillSearchRoots } from "./paths.js";
 import { isSubpath } from "./utils.js";
-import type { ClaudeSkill } from "../../../types/claude-skill.js";
+import type { ClaudeSkill } from "../types/claude-skill.js";
 
 /**
  * 扫描并发现 Claude Code-compatible skills。
@@ -14,6 +22,13 @@ import type { ClaudeSkill } from "../../../types/claude-skill.js";
  * 关键点（中文）
  * - skills 的扫描根目录与 projectRoot 强相关（默认 `.ship/skills`）
  * - 这里做成同步函数：启动时扫描一次，产出 prompt section 与 tools 索引
+ */
+/**
+ * 发现技能算法（中文）
+ * 1) 计算扫描根目录列表
+ * 2) 逐目录读取 `SKILL.md` 与 frontmatter
+ * 3) 按 id 去重并构造 ClaudeSkill
+ * 4) 最终按 name 排序，保证输出稳定
  */
 export function discoverClaudeSkillsSync(
   projectRoot: string,

@@ -15,13 +15,25 @@ import { llmRequestContext } from "../../telemetry/index.js";
 import type {
   ChatContextSnapshot,
   ChatSendResponse,
-} from "../../types/module-command.js";
+} from "./types/chat-command.js";
 
+/**
+ * 读取字符串环境变量。
+ *
+ * 关键点（中文）
+ * - 自动 trim；空字符串视为未设置。
+ */
 function readEnvString(name: string): string | undefined {
   const value = String(process.env[name] || "").trim();
   return value ? value : undefined;
 }
 
+/**
+ * 读取数字环境变量。
+ *
+ * 关键点（中文）
+ * - 解析失败返回 undefined，不抛错。
+ */
 function readEnvNumber(name: string): number | undefined {
   const raw = readEnvString(name);
   if (!raw) return undefined;
@@ -30,6 +42,14 @@ function readEnvNumber(name: string): number | undefined {
   return parsed;
 }
 
+/**
+ * 解析 chat 上下文快照。
+ *
+ * 优先级（中文）
+ * 1) 显式参数
+ * 2) request context bridge（server 注入）
+ * 3) 环境变量回退
+ */
 export function resolveChatContextSnapshot(input?: {
   chatKey?: string;
   context?: IntegrationRuntimeDependencies;
@@ -85,12 +105,22 @@ export function resolveChatContextSnapshot(input?: {
   return snapshot;
 }
 
+/**
+ * 提取最终 chatKey（用于发送路径）。
+ */
 export function resolveChatKey(input?: { chatKey?: string }): string | undefined {
   const snapshot = resolveChatContextSnapshot({ chatKey: input?.chatKey });
   const key = String(snapshot.chatKey || "").trim();
   return key ? key : undefined;
 }
 
+/**
+ * 按 chatKey 发送文本。
+ *
+ * 关键点（中文）
+ * - service 不关心具体平台；由 runtime sender 做 channel 分发。
+ * - 返回统一结构，便于上层链路做可观测与错误汇总。
+ */
 export async function sendChatTextByChatKey(params: {
   context: IntegrationRuntimeDependencies;
   chatKey: string;

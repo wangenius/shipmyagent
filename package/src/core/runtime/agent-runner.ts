@@ -1,3 +1,12 @@
+/**
+ * SessionAgentRunner：单会话 Agent 执行器。
+ *
+ * 关键职责（中文）
+ * - 组装 system prompt（运行时上下文 + providers）。
+ * - 执行 tool-loop，并把 assistant/tool 调用结果回写 history。
+ * - 在上下文超窗时按策略逐步收紧 compact 参数并重试。
+ */
+
 import {
   generateText,
   streamText,
@@ -14,23 +23,23 @@ import {
   transformPromptsIntoSystemMessages,
 } from "../prompts/system.js";
 import { createModel } from "../llm/create-model.js";
-import type { AgentRunInput, AgentResult } from "../../types/agent.js";
+import type { AgentRunInput, AgentResult } from "../types/agent.js";
 import type { Logger } from "../../telemetry/index.js";
 import { sessionRequestContext } from "../session/request-context.js";
 import { createAgentTools } from "../tools/agent-tools.js";
 import { openai } from "@ai-sdk/openai";
-import type { ShipSessionMetadataV1 } from "../../types/session-history.js";
+import type { ShipSessionMetadataV1 } from "../types/session-history.js";
 import {
   getShipRuntimeContext,
   getShipRuntimeContextBase,
 } from "../../server/ShipRuntimeContext.js";
-import type { SessionAgent } from "../../types/session-agent.js";
+import type { SessionAgent } from "../types/session-agent.js";
 import { collectSystemPromptProviderResult } from "../prompts/index.js";
 import {
   extractTextFromUiMessage,
   extractToolCallsFromUiMessage,
 } from "./ui-message.js";
-import type { SystemPromptProviderResult } from "../../types/system-prompt-provider.js";
+import type { SystemPromptProviderResult } from "../types/system-prompt-provider.js";
 
 export class SessionAgentRunner implements SessionAgent {
   // 是否初始化
@@ -50,10 +59,21 @@ export class SessionAgentRunner implements SessionAgent {
 
   constructor() {}
 
+  /**
+   * 获取运行时 logger。
+   */
   getLogger(): Logger {
     return getShipRuntimeContextBase().logger;
   }
 
+  /**
+   * 初始化 Agent 运行依赖。
+   *
+   * 流程（中文）
+   * 1) 构建工具集合
+   * 2) 根据 ship.json 创建模型实例
+   * 3) 标记 initialized=true
+   */
   async initialize(): Promise<void> {
     try {
       this.tools = createAgentTools();
@@ -71,6 +91,14 @@ export class SessionAgentRunner implements SessionAgent {
     }
   }
 
+  /**
+   * run：对外统一入口。
+   *
+   * 流程（中文）
+   * 1) 记录 requestId 与日志
+   * 2) 检查初始化状态
+   * 3) 进入 tool-loop 主流程
+   */
   async run(input: AgentRunInput): Promise<AgentResult> {
     const { query, sessionId, drainLaneMerged } = input;
     const startTime = Date.now();
@@ -99,6 +127,9 @@ export class SessionAgentRunner implements SessionAgent {
     };
   }
 
+  /**
+   * 绑定 sessionId（单实例单会话约束）。
+   */
   private bindSessionId(sessionId: string): string {
     const key = String(sessionId || "").trim();
     if (!key) throw new Error("Agent.run requires a non-empty sessionId");
@@ -112,6 +143,15 @@ export class SessionAgentRunner implements SessionAgent {
     return key;
   }
 
+  /**
+   * tool-loop 主执行流程。
+   *
+   * 算法步骤（中文）
+   * - 绑定 sessionId，防止一个实例跨会话串线。
+   * - 读取/补齐用户消息到 history（防止入口未写入）。
+   * - 收集 system prompt providers，得到 activeTools 与附加系统消息。
+   * - 执行模型调用；若超窗则按 compact policy 递进重试。
+   */
   private async runWithToolLoopAgent(
     userText: string,
     startTime: number,
@@ -137,6 +177,7 @@ export class SessionAgentRunner implements SessionAgent {
       this.bindSessionId(sessionId);
 
       const runtime = getShipRuntimeContext();
+      // phase 0（中文）：装配 history 与 runtime/system prompt 基础上下文。
       const historyStore = runtime.sessionManager.getHistoryStore(sessionId);
 
       const runtimeSystemMessages = this.buildRuntimeSystemMessages({
@@ -153,6 +194,7 @@ export class SessionAgentRunner implements SessionAgent {
         requestId,
       });
 
+      // phase 1（中文）：收集 provider 结果（附加系统消息 + activeTools）。
       const providerResult = await collectSystemPromptProviderResult({
         projectRoot: runtime.rootPath,
         sessionId,
@@ -279,6 +321,7 @@ export class SessionAgentRunner implements SessionAgent {
         } as any;
       }
 
+      // phase 2（中文）：进入 tool-loop。
       const result = await withLlmRequestContext({ sessionId, requestId }, () => {
         return streamText({
           model: this.model,
@@ -324,6 +367,7 @@ export class SessionAgentRunner implements SessionAgent {
         });
       });
 
+      // phase 3（中文）：把 stream 结果固化为最终 assistant UIMessage。
       // 关键点（中文）：用 ai-sdk v6 的 UIMessage 流来生成最终 assistant UIMessage（包含 tool parts），避免手工拼装。
       let finalAssistantUiMessage: any = null;
       try {
@@ -396,6 +440,7 @@ export class SessionAgentRunner implements SessionAgent {
         }
       }
 
+      // phase 4（中文）：统计结果并返回标准 AgentResult。
       const duration = Date.now() - startTime;
       await logger.log("info", "Agent execution completed", {
         duration,
@@ -428,6 +473,7 @@ export class SessionAgentRunner implements SessionAgent {
       };
     } catch (error) {
       const errorMsg = String(error);
+      // 超窗重试策略（中文）：识别 context window 类错误并触发 compact 递进重试。
       if (
         errorMsg.includes("context_length") ||
         errorMsg.includes("too long") ||
@@ -470,6 +516,12 @@ export class SessionAgentRunner implements SessionAgent {
     }
   }
 
+  /**
+   * 构建运行时 system message。
+   *
+   * 关键点（中文）
+   * - 将 session request-context（channel/target/user）注入到 system prompt。
+   */
   private buildRuntimeSystemMessages(input: {
     projectRoot: string;
     sessionId: string;
@@ -500,6 +552,13 @@ export class SessionAgentRunner implements SessionAgent {
     ];
   }
 
+  /**
+   * 构造 step 覆盖配置。
+   *
+   * 关键点（中文）
+   * - provider 有 messages 时，用运行时系统消息替换默认系统消息。
+   * - provider 有 activeTools 时，收敛可用工具集合。
+   */
   private buildStepOverrides(input: {
     providerResult: SystemPromptProviderResult;
     baseSystemMessages: SystemModelMessage[];
@@ -526,6 +585,13 @@ export class SessionAgentRunner implements SessionAgent {
     return out;
   }
 
+  /**
+   * 计算 compact 重试策略。
+   *
+   * 算法说明（中文）
+   * - retry 次数越高，keepLastMessages/maxInputTokensApprox 越小（指数收缩）。
+   * - 目标是在不直接失败的前提下，尽量保留可用上下文。
+   */
   private resolveCompactPolicy(retryAttempts: number): {
     keepLastMessages: number;
     maxInputTokensApprox: number;
@@ -580,6 +646,13 @@ export class SessionAgentRunner implements SessionAgent {
     };
   }
 
+  /**
+   * 确保当前用户消息已经落盘。
+   *
+   * 关键点（中文）
+   * - 某些入口可能未提前 append user message；这里兜底补写。
+   * - 通过“最后一条 user 文本相等”做幂等，避免重复写入。
+   */
   private async ensureCurrentUserRecorded(params: {
     historyStore: ReturnType<typeof getShipRuntimeContext>["sessionManager"] extends {
       getHistoryStore: (...args: any[]) => infer T;
@@ -629,6 +702,9 @@ export class SessionAgentRunner implements SessionAgent {
     }
   }
 
+  /**
+   * 是否已完成初始化。
+   */
   isInitialized(): boolean {
     return this.initialized;
   }

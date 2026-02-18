@@ -6,6 +6,14 @@
  * - 用于避免 skills/task module 反向依赖 chat/service
  */
 
+/**
+ * 解析 chatKey。
+ *
+ * 优先级（中文）
+ * 1) 显式参数 `input.chatKey`
+ * 2) `SMA_CTX_SESSION_ID`
+ * 3) `SMA_CTX_CHAT_KEY`
+ */
 export function resolveChatKey(input?: { chatKey?: string }): string | undefined {
   const explicit = String(input?.chatKey || "").trim();
   if (explicit) return explicit;

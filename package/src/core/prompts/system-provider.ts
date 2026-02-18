@@ -1,10 +1,18 @@
+/**
+ * System prompt provider 注册中心。
+ *
+ * 关键点（中文）
+ * - 按 order 升序稳定执行 provider。
+ * - provider 失败不影响主流程（fail-open）。
+ */
+
 import type { SystemModelMessage } from "ai";
 import type {
   SystemPromptProvider,
   SystemPromptProviderContext,
   SystemPromptProviderOutput,
   SystemPromptProviderResult,
-} from "../../types/system-prompt-provider.js";
+} from "../types/system-prompt-provider.js";
 
 const systemPromptProviders = new Map<string, SystemPromptProvider>();
 
@@ -61,6 +69,12 @@ function normalizeProviderOutput(output: unknown): SystemPromptProviderOutput {
  * - core 只维护 provider 容器，不实现业务能力
  * - 业务能力由 integrations 调用该函数注入
  */
+/**
+ * 注册一个 provider。
+ *
+ * 关键点（中文）
+ * - 以 id 去重：重复注册时覆盖旧 provider。
+ */
 export function registerSystemPromptProvider(provider: SystemPromptProvider): void {
   const id = normalizeProviderId(provider?.id || "");
   systemPromptProviders.set(id, {
@@ -74,10 +88,19 @@ export function unregisterSystemPromptProvider(id: string): void {
   systemPromptProviders.delete(key);
 }
 
+/**
+ * 清空所有 provider（通常在 server 启动阶段重建）。
+ */
 export function clearSystemPromptProviders(): void {
   systemPromptProviders.clear();
 }
 
+/**
+ * 列出 provider（按 order, id 排序）。
+ *
+ * 算法说明（中文）
+ * - 先按 order（默认 1000）升序，再按 id 字典序，保证输出稳定。
+ */
 export function listSystemPromptProviders(): SystemPromptProvider[] {
   return Array.from(systemPromptProviders.values()).sort((a, b) => {
     const ao = typeof a.order === "number" ? a.order : 1000;
@@ -105,6 +128,15 @@ function mergeActiveTools(
 
 /**
  * 执行并聚合所有 system prompt provider。
+ */
+/**
+ * 收集并聚合所有 provider 输出。
+ *
+ * 聚合规则（中文）
+ * - messages: 依注册顺序追加
+ * - activeTools: 求并集并去重
+ * - loadedSkills: 以 skill.id 去重（后写覆盖）
+ * - 单个 provider 报错：记录日志并继续（fail-open）
  */
 export async function collectSystemPromptProviderResult(
   ctx: SystemPromptProviderContext,

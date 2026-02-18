@@ -10,6 +10,12 @@ import type { ShipConfig } from "../utils.js";
  * - 具体实现由 server 在启动时注入
  */
 
+/**
+ * 会话请求上下文。
+ *
+ * 关键点（中文）
+ * - 这是跨 integration 共享的最小上下文字段集合。
+ */
 export type IntegrationSessionRequestContext = {
   channel?: "telegram" | "feishu" | "qq" | "cli" | "scheduler" | "api";
   sessionId?: string;
@@ -21,6 +27,11 @@ export type IntegrationSessionRequestContext = {
   messageId?: string;
 };
 
+/**
+ * 请求上下文桥接端口。
+ *
+ * - `withSessionRequestContext` 用于在一次调用栈内绑定上下文。
+ */
 export type IntegrationSessionRequestContextBridge = {
   getCurrentSessionRequestContext(): IntegrationSessionRequestContext | undefined;
   withSessionRequestContext<T>(
@@ -29,6 +40,9 @@ export type IntegrationSessionRequestContextBridge = {
   ): T;
 };
 
+/**
+ * 会话历史存储端口。
+ */
 export type IntegrationSessionHistoryStore = {
   loadAll(): Promise<any[]>;
   loadRange(startIndex: number, endIndex: number): Promise<any[]>;
@@ -39,10 +53,19 @@ export type IntegrationSessionHistoryStore = {
   createAssistantTextMessage(params: any): any;
 };
 
+/**
+ * 会话 Agent 端口。
+ */
 export type IntegrationSessionAgent = {
   run(params: { sessionId: string; query: string }): Promise<any>;
 };
 
+/**
+ * 会话管理端口。
+ *
+ * 关键点（中文）
+ * - 对 integration 暴露消息入队、历史访问、agent 获取等最小能力。
+ */
 export type IntegrationSessionManager = {
   getAgent(sessionId: string): IntegrationSessionAgent;
   getHistoryStore(sessionId: string): IntegrationSessionHistoryStore;
@@ -73,6 +96,9 @@ export type IntegrationSessionManager = {
   }): Promise<{ lanePosition: number }>;
 };
 
+/**
+ * cron 触发定义。
+ */
 export type IntegrationCronTriggerDefinition = {
   id: string;
   expression: string;
@@ -80,10 +106,16 @@ export type IntegrationCronTriggerDefinition = {
   execute: () => Promise<void> | void;
 };
 
+/**
+ * cron 引擎端口。
+ */
 export type IntegrationCronEngine = {
   register(definition: IntegrationCronTriggerDefinition): void;
 };
 
+/**
+ * 模型工厂端口。
+ */
 export type IntegrationModelFactory = {
   createModel(input: { config: ShipConfig }): Promise<LanguageModel>;
 };

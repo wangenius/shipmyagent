@@ -1,3 +1,11 @@
+/**
+ * 统一日志实现（控制台 + JSONL 落盘）。
+ *
+ * 关键点（中文）
+ * - 支持按项目根目录动态绑定日志目录。
+ * - 结构化字段写入 JSONL，便于后续检索与审计。
+ */
+
 import fs from "fs-extra";
 import path from "path";
 import { getLogsDirPath, getTimestamp } from "../utils.js";
@@ -28,6 +36,13 @@ export interface LogEntry {
   level?: string;
 }
 
+/**
+ * Logger：项目级日志器。
+ *
+ * 关键职责（中文）
+ * - 控制台可读输出（开发期）
+ * - JSONL 持久化输出（排障/审计）
+ */
 export class Logger {
   private logs: LogEntry[] = [];
   private logLevel: string = "info";
@@ -43,9 +58,9 @@ export class Logger {
    * 绑定进程级 projectRoot。
    *
    * 关键点（中文）
-   * - 我们约束“一个进程只服务一个 projectRoot”
-   * - Logger 作为单例存在，但落盘目录必须在启动入口初始化后才能确定
-   * - 未绑定 projectRoot 时，只打印到 console，不写入 `.ship/logs/*`
+   * - 我们约束“一个进程只服务一个 projectRoot”。
+   * - Logger 作为单例存在，但落盘目录必须在启动入口初始化后才能确定。
+   * - 未绑定 projectRoot 时，只打印到 console，不写入 `.ship/logs/*`。
    */
   bindProjectRoot(projectRoot: string): void {
     const root = String(projectRoot || "").trim();
@@ -96,6 +111,10 @@ export class Logger {
     return "info";
   }
 
+  /**
+   * 写入策略（中文）
+   * - 先写内存与控制台，再串行追加到 JSONL，避免并发写乱序。
+   */
   private async emit(
     type: LogEntry["type"],
     message: string,
@@ -148,6 +167,11 @@ export class Logger {
     }
   }
 
+  /**
+   * 落盘算法（中文）
+   * - 日志按自然日分片：`.ship/logs/YYYY-MM-DD.jsonl`。
+   * - 每条日志一行 JSON，便于 grep/流式消费。
+   */
   private async saveToFile(entry: LogEntry): Promise<void> {
     if (!this.projectRoot) return;
     const logsDir = getLogsDirPath(this.projectRoot);

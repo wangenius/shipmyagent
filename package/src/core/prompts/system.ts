@@ -10,7 +10,11 @@
 import { SystemModelMessage } from "ai";
 
 /**
- * Build the default (runtime) system prompt for an agent run.
+ * 构建一次运行的运行时 system prompt。
+ *
+ * 关键点（中文）
+ * - 注入 project/session/request 等请求级上下文。
+ * - 与固定规则拼接，形成每次调用的最小安全边界。
  */
 export function buildContextSystemPrompt(input: {
   projectRoot: string;
@@ -42,16 +46,30 @@ export function buildContextSystemPrompt(input: {
   return [runtimeContextLines.join("\n"), "", outputRules].join("\n");
 }
 
+/**
+ * 获取当前时间字符串（ISO8601）。
+ */
 function getCurrentTimeString(): string {
   // 使用 ISO 时间，避免 locale 造成不可预测的格式差异
   return new Date().toISOString();
 }
 
+/**
+ * 替换 prompt 模板变量。
+ *
+ * 当前支持（中文）
+ * - `{{current_time}}`
+ */
 export function replaceVariablesInPrompts(prompt: string): string {
   if (!prompt) return prompt;
   return prompt.replaceAll("{{current_time}}", getCurrentTimeString());
 }
 
+/**
+ * 将纯文本 prompts 转为 `system` messages。
+ *
+ * - 自动过滤空串并执行变量替换。
+ */
 export function transformPromptsIntoSystemMessages(
   prompts: string[],
 ): SystemModelMessage[] {
@@ -63,6 +81,12 @@ export function transformPromptsIntoSystemMessages(
   return result;
 }
 
+/**
+ * Ship 默认系统提示模板。
+ *
+ * 关键点（中文）
+ * - 这是“全局基线约束”，会与 Agent.md、skills provider 输出一起组成最终系统提示。
+ */
 export const DEFAULT_SHIP_PROMPTS = `
 你是当前项目 {{project_path}} 的维护人员。
 1. 你可以使用和执行该项目内的任何代码、脚本等等。

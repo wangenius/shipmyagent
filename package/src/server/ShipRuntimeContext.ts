@@ -67,15 +67,30 @@ export type ShipRuntimeContext = ShipRuntimeContextBase & {
 let base: ShipRuntimeContextBase | null = null;
 let ready: ShipRuntimeContext | null = null;
 
+/**
+ * integration 请求上下文桥接实现。
+ *
+ * 关键点（中文）
+ * - server 负责把 core 的 request-context 能力适配为 infra 端口。
+ */
 const integrationRequestContextBridge = {
   getCurrentSessionRequestContext: () => sessionRequestContext.getStore(),
   withSessionRequestContext,
 };
 
+/**
+ * integration 模型工厂桥接实现。
+ */
 const integrationModelFactory = {
   createModel,
 };
 
+/**
+ * integration chat 运行时桥接实现。
+ *
+ * 关键点（中文）
+ * - 通过 `getShipIntegrationContext()` 延迟获取依赖，确保拿到最新 sessionManager。
+ */
 const integrationChatRuntimeBridge = {
   pickLastSuccessfulChatSendText,
   sendTextByChatKey: (params: { chatKey: string; text: string }) =>
@@ -86,6 +101,12 @@ const integrationChatRuntimeBridge = {
     }),
 };
 
+/**
+ * 构建基础 integration context（不含 sessionManager）。
+ *
+ * 场景（中文）
+ * - runtime 尚未 ready（例如 MCP 初始化阶段）也可安全使用。
+ */
 function buildIntegrationContextBase(
   input: ShipRuntimeContextBase,
 ): IntegrationRuntimeDependencies {
@@ -101,6 +122,9 @@ function buildIntegrationContextBase(
   };
 }
 
+/**
+ * 构建 ready integration context（含 sessionManager）。
+ */
 function buildIntegrationContextReady(
   input: ShipRuntimeContext,
 ): IntegrationRuntimeDependencies {
@@ -110,24 +134,45 @@ function buildIntegrationContextReady(
   };
 }
 
+/**
+ * 获取基础 integration context。
+ */
 export function getShipIntegrationContextBase(): IntegrationRuntimeDependencies {
   return buildIntegrationContextBase(getShipRuntimeContextBase());
 }
 
+/**
+ * 获取完整 integration context。
+ */
 export function getShipIntegrationContext(): IntegrationRuntimeDependencies {
   return buildIntegrationContextReady(getShipRuntimeContext());
 }
 
+/**
+ * 设置 base context（未 ready）。
+ *
+ * 关键点（中文）
+ * - 每次更新 base 都会重置 ready，避免读取到过期对象。
+ */
 export function setShipRuntimeContextBase(next: ShipRuntimeContextBase): void {
   base = next;
   ready = null;
 }
 
+/**
+ * 设置 ready context（完整可用）。
+ */
 export function setShipRuntimeContext(next: ShipRuntimeContext): void {
   base = next;
   ready = next;
 }
 
+/**
+ * 获取 base context。
+ *
+ * 失败语义（中文）
+ * - 未初始化直接抛错，提示启动阶段必须先调用 init。
+ */
 export function getShipRuntimeContextBase(): ShipRuntimeContextBase {
   if (base) return base;
   throw new Error(
@@ -135,6 +180,13 @@ export function getShipRuntimeContextBase(): ShipRuntimeContextBase {
   );
 }
 
+/**
+ * 获取 ready context。
+ *
+ * 失败语义（中文）
+ * - base 未初始化：启动流程缺失。
+ * - base 已有但 ready 为空：说明初始化尚未完成。
+ */
 export function getShipRuntimeContext(): ShipRuntimeContext {
   if (ready) return ready;
   if (!base) {
@@ -148,8 +200,14 @@ export function getShipRuntimeContext(): ShipRuntimeContext {
 }
 
 /**
- * 初始化入口：
- * - 启动命令调用 `initShipRuntimeContext(cwd)`
+ * 初始化入口。
+ *
+ * 阶段说明（中文）
+ * 1) 解析 rootPath + 绑定 logger 落盘目录
+ * 2) 校验关键文件并确保 `.ship` 目录结构
+ * 3) 加载 dotenv + ship.json，建立 base context
+ * 4) 初始化 MCP / SessionManager，建立 ready context
+ * 5) 注册 integration system prompt providers
  */
 
 export async function initShipRuntimeContext(cwd: string): Promise<void> {
@@ -228,6 +286,9 @@ You are a helpful project assistant.`;
   });
 }
 
+/**
+ * 校验项目初始化关键文件。
+ */
 function ensureContextFiles(projectRoot: string): void {
   // Check if initialized（启动入口一次性确认工程根目录与关键文件）
   if (!fs.existsSync(getAgentMdPath(projectRoot))) {
@@ -245,6 +306,9 @@ function ensureContextFiles(projectRoot: string): void {
   }
 }
 
+/**
+ * 确保 `.ship` 运行目录结构完整。
+ */
 function ensureShipDirectories(projectRoot: string): void {
   // 关键点（中文）：尽量只在启动时确保目录结构存在，避免在 Agent/Tool 执行过程中反复 ensure。
   fs.ensureDirSync(getShipDirPath(projectRoot));

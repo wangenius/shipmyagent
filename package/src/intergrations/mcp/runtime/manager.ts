@@ -1,3 +1,11 @@
+/**
+ * MCP runtime manager。
+ *
+ * 关键点（中文）
+ * - 负责 mcp.json 读取、服务连接、工具发现与工具调用。
+ * - 对外暴露统一状态查询与生命周期管理接口。
+ */
+
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
@@ -28,6 +36,9 @@ export interface McpLogger {
   error(message: string): void;
 }
 
+/**
+ * MCP 客户端包装状态。
+ */
 interface McpClientWrapper {
   client: Client;
   transport: StdioClientTransport | SSEClientTransport | HttpTransport;
@@ -38,16 +49,35 @@ interface McpClientWrapper {
   connectedAt?: Date;
 }
 
+/**
+ * McpManager。
+ *
+ * 生命周期（中文）
+ * - `initialize()` 建连并发现工具。
+ * - 运行期通过 `callTool()` 执行远程工具。
+ * - 退出时 `close()` 统一回收连接。
+ */
 export class McpManager {
   private clients: Map<string, McpClientWrapper> = new Map();
   private readonly log: McpLogger;
   private readonly context: IntegrationRuntimeDependencies;
 
+  /**
+   * 构造函数：注入 runtime context 与可选 logger。
+   */
   constructor(params: { context: IntegrationRuntimeDependencies; log?: McpLogger }) {
     this.context = params.context;
     this.log = params.log ?? params.context.logger;
   }
 
+  /**
+   * 初始化 MCP 连接。
+   *
+   * 流程（中文）
+   * 1) 读取 `.ship/config/mcp.json`
+   * 2) 并行连接全部 servers
+   * 3) 汇总成功/失败数量并记录日志
+   */
   async initialize(): Promise<void> {
     const mcpConfigPath = getShipMcpConfigPath(this.context.rootPath);
     if (!(await fs.pathExists(mcpConfigPath))) {
@@ -82,6 +112,11 @@ export class McpManager {
     }
   }
 
+  /**
+   * 获取全部可用 MCP 工具清单。
+   *
+   * - 仅返回 `status=connected` 的服务工具。
+   */
   getAllTools(): Array<{ server: string; tool: McpToolDefinition }> {
     const allTools: Array<{ server: string; tool: McpToolDefinition }> = [];
     for (const [serverName, wrapper] of this.clients.entries()) {
@@ -95,6 +130,13 @@ export class McpManager {
     return allTools;
   }
 
+  /**
+   * 调用指定 MCP 工具。
+   *
+   * 失败语义（中文）
+   * - 服务不存在或未连接：直接抛错。
+   * - 远端调用失败：记录日志后抛错。
+   */
   async callTool(
     serverName: string,
     toolName: string,
@@ -129,6 +171,9 @@ export class McpManager {
     }
   }
 
+  /**
+   * 获取单个服务状态快照。
+   */
   getServerInfo(serverName: string): McpServerInfo | undefined {
     const wrapper = this.clients.get(serverName);
     if (!wrapper) return undefined;
@@ -143,12 +188,18 @@ export class McpManager {
     };
   }
 
+  /**
+   * 获取全部服务状态快照。
+   */
   getAllServerInfo(): McpServerInfo[] {
     return Array.from(this.clients.keys())
       .map((name) => this.getServerInfo(name))
       .filter((info): info is McpServerInfo => info !== undefined);
   }
 
+  /**
+   * 关闭全部 MCP 连接并清空缓存。
+   */
   async close(): Promise<void> {
     this.log.info("Closing all MCP connections...");
 
@@ -168,6 +219,13 @@ export class McpManager {
     this.log.info("All MCP connections closed");
   }
 
+  /**
+   * 连接单个 MCP 服务并缓存工具定义。
+   *
+   * 关键点（中文）
+   * - 支持 `stdio` / `sse` / `http` 三种 transport。
+   * - 失败时也会写入 error 状态，便于观测。
+   */
   private async connectServer(
     name: string,
     config: McpServerConfig,
@@ -248,6 +306,11 @@ export class McpManager {
     }
   }
 
+  /**
+   * 解析配置中的环境变量占位符。
+   *
+   * - 覆盖 `env` / `headers` / `url` 三类字段。
+   */
   private resolveEnvVars(config: McpServerConfig): McpServerConfig {
     const resolved = { ...config } as any;
 

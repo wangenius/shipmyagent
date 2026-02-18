@@ -1,3 +1,12 @@
+/**
+ * InteractiveServer：交互式 Web UI 网关。
+ *
+ * 关键职责（中文）
+ * - 提供独立 UI 静态资源。
+ * - 将 `/api/*`、`/health`、`/webhook/*` 代理到主 Agent API。
+ * - 作为前端开发与运维观察入口，不承载核心业务状态。
+ */
+
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
@@ -9,6 +18,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/**
+ * 交互式服务上下文。
+ */
 export interface InteractiveServerContext {
   agentApiUrl: string; // 主 API 服务器的地址
 }
@@ -21,6 +33,9 @@ export interface InteractiveStartOptions {
 /**
  * 交互式 Web 服务器
  * 在独立端口上提供 Web UI，通过代理调用主 API 服务器
+ */
+/**
+ * InteractiveServer。
  */
 export class InteractiveServer {
   private app: Hono;
@@ -53,6 +68,13 @@ export class InteractiveServer {
     this.setupRoutes();
   }
 
+  /**
+   * 注册交互式路由。
+   *
+   * 关键点（中文）
+   * - UI 资源本地提供，API 与 webhook 走反向代理。
+   * - 代理时过滤 Host/Content-Length 等头，避免上游校验冲突。
+   */
   private setupRoutes(): void {
     // 静态文件服务 - 主页
     this.app.get('/', async (c) => {
@@ -94,6 +116,7 @@ export class InteractiveServer {
     });
 
     // API 代理 - 将所有 /api/* 请求代理到主 API 服务器
+    // 算法说明（中文）：保留请求方法与主体，头部做最小必要过滤后透传。
     this.app.all('/api/*', async (c) => {
       try {
         const reqUrl = new URL(c.req.url);
@@ -191,6 +214,9 @@ export class InteractiveServer {
     });
   }
 
+  /**
+   * 启动交互式 Web 服务。
+   */
   async start(options: InteractiveStartOptions): Promise<void> {
     const { port, host } = options;
 
@@ -244,6 +270,9 @@ export class InteractiveServer {
     });
   }
 
+  /**
+   * 停止交互式 Web 服务。
+   */
   async stop(): Promise<void> {
     if (this.server) {
       this.server.close();

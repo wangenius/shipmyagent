@@ -6,8 +6,8 @@
  * - core 不负责也不感知 skill/memory 业务状态
  */
 
-import type { ClaudeSkill } from "../../../types/claude-skill.js";
-import type { LoadedSkillV1 } from "../../../types/loaded-skill.js";
+import type { ClaudeSkill } from "../types/claude-skill.js";
+import type { LoadedSkillV1 } from "../types/loaded-skill.js";
 import type {
   SessionSkillStateInternal,
   SessionSkillStateSnapshot,
@@ -15,6 +15,12 @@ import type {
 
 const sessionSkillStateStore = new Map<string, SessionSkillStateInternal>();
 
+/**
+ * 归一化 sessionId。
+ *
+ * 关键点（中文）
+ * - 空 sessionId 视为调用错误，直接抛异常，避免污染全局状态。
+ */
 function normalizeSessionId(sessionId: string): string {
   const value = String(sessionId || "").trim();
   if (!value) {
@@ -23,6 +29,9 @@ function normalizeSessionId(sessionId: string): string {
   return value;
 }
 
+/**
+ * 获取或创建 session 技能状态。
+ */
 function getOrCreateState(sessionId: string): SessionSkillStateInternal {
   const key = normalizeSessionId(sessionId);
   const existing = sessionSkillStateStore.get(key);
@@ -37,6 +46,12 @@ function getOrCreateState(sessionId: string): SessionSkillStateInternal {
   return created;
 }
 
+/**
+ * 设置会话可用技能集合。
+ *
+ * 算法（中文）
+ * - 以 id 归一化后整体替换，避免残留脏状态。
+ */
 export function setSessionAvailableSkills(sessionId: string, skills: ClaudeSkill[]): void {
   const state = getOrCreateState(sessionId);
   const next = new Map<string, ClaudeSkill>();
@@ -51,6 +66,13 @@ export function setSessionAvailableSkills(sessionId: string, skills: ClaudeSkill
   state.updatedAt = Date.now();
 }
 
+/**
+ * 设置会话已加载技能集合。
+ *
+ * 支持输入（中文）
+ * - `Map<string, LoadedSkillV1>`：直接复制
+ * - `LoadedSkillV1[]`：按 `id` 重建索引
+ */
 export function setSessionLoadedSkills(
   sessionId: string,
   loaded: Map<string, LoadedSkillV1> | LoadedSkillV1[],
@@ -76,6 +98,9 @@ export function setSessionLoadedSkills(
   state.updatedAt = Date.now();
 }
 
+/**
+ * 获取会话技能状态快照。
+ */
 export function getSessionSkillState(sessionId: string): SessionSkillStateSnapshot {
   const key = normalizeSessionId(sessionId);
   const state = sessionSkillStateStore.get(key);
@@ -97,6 +122,9 @@ export function getSessionSkillState(sessionId: string): SessionSkillStateSnapsh
   };
 }
 
+/**
+ * 清理会话技能状态。
+ */
 export function clearSessionSkillState(sessionId: string): void {
   const key = normalizeSessionId(sessionId);
   sessionSkillStateStore.delete(key);

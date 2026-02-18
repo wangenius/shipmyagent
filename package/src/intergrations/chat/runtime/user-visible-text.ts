@@ -7,6 +7,12 @@
  * - 因此需要一个稳定的、与 Agent 解耦的提取逻辑（属于 chat/egress 语义）
  */
 
+/**
+ * 提取策略（中文）
+ * - 倒序扫描：优先使用最后一次 `chat_send`，与最终用户感知一致。
+ * - 若 output 可解析且 success=true，则确认采用 input.text。
+ * - 若 output 为空/非 JSON，走 best-effort 采用 input.text。
+ */
 export function pickLastSuccessfulChatSendText(toolCalls: any[]): string {
   // 关键点（中文）：优先从 chat_send 的 input.text 还原"用户可见回复"。
   for (let i = toolCalls.length - 1; i >= 0; i -= 1) {

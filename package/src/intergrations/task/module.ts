@@ -19,14 +19,14 @@ import { callDaemonJsonApi } from "../../infra/daemon-client.js";
 import { printResult } from "../../infra/cli-output.js";
 import { resolveChatKey } from "../../infra/chat-key.js";
 import type {
-  SmaModule,
   TaskCreateRequest,
   TaskCreateResponse,
   TaskListResponse,
   TaskRunResponse,
   TaskSetStatusResponse,
-} from "../../types/module-command.js";
-import type { ShipTaskStatus } from "../../types/task.js";
+} from "./types/task-command.js";
+import type { SmaModule } from "../../infra/module-registry-types.js";
+import type { ShipTaskStatus } from "./types/task.js";
 
 function parsePortOption(value: string): number {
   const port = Number.parseInt(value, 10);

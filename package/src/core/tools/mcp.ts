@@ -11,6 +11,13 @@ import { tool } from "ai";
 import type { McpToolDefinition } from "../../intergrations/mcp/runtime/index.js";
 import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
 
+/**
+ * 将 MCP tool 定义转换为 AI SDK tool。
+ *
+ * 关键点（中文）
+ * - 输入 schema 采用宽松映射（字段级 `z.any()`），由 MCP 侧做最终校验。
+ * - 执行阶段只做结果形态归一化，不绑定具体业务协议。
+ */
 export function createMcpAiTool(params: {
   server: string;
   mcpTool: McpToolDefinition;

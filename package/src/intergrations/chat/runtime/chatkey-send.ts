@@ -10,12 +10,21 @@
  */
 
 import { getChatSender, type ChatDispatchChannel } from "./chat-send-registry.js";
-import type { ShipSessionMessageV1 } from "../../../types/session-history.js";
+import type { ShipSessionMessageV1 } from "../../../infra/session-history-types.js";
 import { getIntegrationSessionManager } from "../../../infra/integration-runtime-dependencies.js";
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
 type DispatchableChannel = "telegram" | "feishu" | "qq";
 
+/**
+ * 解析 chatKey 为 dispatch 参数。
+ *
+ * 支持格式（中文）
+ * - telegram-chat-<id>
+ * - telegram-chat-<id>-topic-<thread>
+ * - feishu-chat-<id>
+ * - qq-<chatType>-<chatId>
+ */
 export function parseChatKeyForDispatch(chatKey: string): {
   channel: DispatchableChannel;
   chatId: string;
@@ -48,6 +57,13 @@ export function parseChatKeyForDispatch(chatKey: string): {
   return null;
 }
 
+/**
+ * 从历史消息逆序提取最近 user 元数据。
+ *
+ * 算法（中文）
+ * - 从尾到头扫描，遇到首个带元数据的 user 消息即返回。
+ * - 这样可尽量命中“当前对话最近一次有效入站消息”的上下文。
+ */
 function pickLatestUserMetaFromMessages(messages: ShipSessionMessageV1[]): {
   chatType?: string;
   messageThreadId?: number;
@@ -82,6 +98,14 @@ function pickLatestUserMetaFromMessages(messages: ShipSessionMessageV1[]): {
   return {};
 }
 
+/**
+ * 按 chatKey 发送文本到对应平台。
+ *
+ * 流程（中文）
+ * 1) 解析 chatKey 并定位 channel dispatcher
+ * 2) 从 session history 回填 chatType/threadId/messageId
+ * 3) 合并参数后调用 dispatcher 发送
+ */
 export async function sendTextByChatKey(params: {
   context: IntegrationRuntimeDependencies;
   chatKey: string;

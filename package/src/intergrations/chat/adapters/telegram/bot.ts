@@ -22,6 +22,14 @@ import {
 import { TelegramStateStore } from "./state-store.js";
 import type { IntegrationRuntimeDependencies } from "../../../../infra/integration-runtime-types.js";
 
+/**
+ * Telegram 平台适配器。
+ *
+ * 关键职责（中文）
+ * - 轮询拉取 updates，并转换为统一会话输入
+ * - 维护 follow-up 窗口与群聊访问策略，降低误触发
+ * - 统一走 BaseChatAdapter 入库 + enqueue，确保调度语义一致
+ */
 export class TelegramBot extends BaseChatAdapter {
   private botToken: string;
   private chatId?: string;
@@ -191,6 +199,13 @@ export class TelegramBot extends BaseChatAdapter {
     }
   }
 
+  /**
+   * 构建 lane 维度 chatKey。
+   *
+   * 说明（中文）
+   * - supergroup topic 以 messageThreadId 细分 lane
+   * - 普通私聊/群聊共享 chatId 级别 lane
+   */
   private buildChatKey(chatId: string, messageThreadId?: number): string {
     if (
       typeof messageThreadId === "number" &&
@@ -443,6 +458,13 @@ export class TelegramBot extends BaseChatAdapter {
     // tool_strict: do not auto-push run completion messages; agent should use `chat_send`.
   }
 
+  /**
+   * 长轮询入口。
+   *
+   * 说明（中文）
+   * - 使用 pollInFlight 防重入，避免并发轮询造成 offset 竞争
+   * - 先推进 lastUpdateId 再逐条处理，保证 at-least-once + 幂等容错
+   */
   private async pollUpdates(): Promise<void> {
     if (!this.isRunning) return;
     if (this.pollInFlight) return;

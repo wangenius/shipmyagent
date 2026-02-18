@@ -7,16 +7,28 @@
  * - 能力字段固定在统一依赖对象中，是否使用由具体 integration 自行决定
  */
 
+/**
+ * 按 chatKey 发送文本参数。
+ */
 export type IntegrationChatSendByKeyParams = {
   chatKey: string;
   text: string;
 };
 
+/**
+ * 按 chatKey 发送结果。
+ */
 export type IntegrationChatSendByKeyResult = {
   success: boolean;
   error?: string;
 };
 
+/**
+ * Chat 运行时桥接端口。
+ *
+ * - `pickLastSuccessfulChatSendText`：从 toolCalls 还原用户可见文本。
+ * - `sendTextByChatKey`：向指定会话回发消息。
+ */
 export type IntegrationChatRuntimeBridge = {
   pickLastSuccessfulChatSendText(toolCalls: unknown[]): string;
   sendTextByChatKey(

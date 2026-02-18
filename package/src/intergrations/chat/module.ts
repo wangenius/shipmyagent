@@ -16,8 +16,15 @@ import {
 } from "./service.js";
 import { callDaemonJsonApi } from "../../infra/daemon-client.js";
 import { printResult } from "../../infra/cli-output.js";
-import type { ChatSendResponse, SmaModule } from "../../types/module-command.js";
+import type { SmaModule } from "../../infra/module-registry-types.js";
+import type { ChatSendResponse } from "./types/chat-command.js";
 
+/**
+ * 解析端口参数。
+ *
+ * 关键点（中文）
+ * - 统一校验范围 1~65535，避免各命令重复实现。
+ */
 function parsePortOption(value: string): number {
   const port = Number.parseInt(value, 10);
   if (!Number.isFinite(port) || Number.isNaN(port) || !Number.isInteger(port) || port <= 0 || port > 65535) {
@@ -51,6 +58,14 @@ function printSendFailed(params: {
   });
 }
 
+/**
+ * CLI: `chat send`。
+ *
+ * 流程（中文）
+ * 1) 解析 chatKey（显式参数优先）
+ * 2) 通过 daemon API 转发到 server
+ * 3) 标准化输出 JSON/文本结果
+ */
 async function runChatSendCommand(options: ChatSendCliOptions): Promise<void> {
   const projectRoot = path.resolve(String(options.path || "."));
   const text = String(options.text || "");
@@ -98,6 +113,12 @@ async function runChatSendCommand(options: ChatSendCliOptions): Promise<void> {
   });
 }
 
+/**
+ * CLI: `chat context`。
+ *
+ * 关键点（中文）
+ * - 只读取上下文快照，不做任何写操作。
+ */
 function runChatContextCommand(opts: { chatKey?: string; json?: boolean }): void {
   const snapshot = resolveChatContextSnapshot({ chatKey: opts.chatKey });
   printResult({

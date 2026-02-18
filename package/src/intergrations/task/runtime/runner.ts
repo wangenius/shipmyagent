@@ -16,15 +16,24 @@ import {
   getIntegrationSessionManager,
 } from "../../../infra/integration-runtime-dependencies.js";
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
-import type { ShipTaskRunMetaV1, ShipTaskRunTriggerV1 } from "../../../types/task.js";
+import type { ShipTaskRunMetaV1, ShipTaskRunTriggerV1 } from "../types/task.js";
 import { createTaskRunSessionId, formatTaskRunTimestamp, getTaskRunDir } from "./paths.js";
 import { ensureRunDir, readTask } from "./store.js";
 
+/**
+ * 把相对路径渲染为 markdown 行内链接文本。
+ */
 function toMdLink(relPath: string): string {
   const p = String(relPath || "").trim();
   return p ? `\`${p}\`` : "";
 }
 
+/**
+ * 文本摘要裁剪。
+ *
+ * 关键点（中文）
+ * - 用于 result.md/error 通知，避免写入超长原文。
+ */
 function summarizeText(text: string, maxChars: number): string {
   const t = String(text ?? "").trim();
   if (!t) return "";
@@ -32,6 +41,20 @@ function summarizeText(text: string, maxChars: number): string {
   return t.slice(0, Math.max(0, maxChars - 3)).trimEnd() + "...";
 }
 
+/**
+ * 立即执行任务定义。
+ *
+ * 算法流程（中文）
+ * 1) 解析 task + 创建 run 目录
+ * 2) 在 scheduler 上下文里执行 agent
+ * 3) 产物落盘（input/output/result/error/run.json）
+ * 4) 向 chatKey 发送执行通知（成功/失败都通知）
+ *
+ * 返回值（中文）
+ * - `ok`/`status`：任务执行结果。
+ * - `runDir`/`runDirRel`：执行产物目录。
+ * - `notified`/`notifyError`：回传 chat 通知状态。
+ */
 export async function runTaskNow(params: {
   context: IntegrationRuntimeDependencies;
   taskId: string;
@@ -96,6 +119,8 @@ export async function runTaskNow(params: {
   let outputText = "";
   let errorText = "";
 
+  // phase 1：执行任务主体（agent run）
+  // 失败容错（中文）：即使 agent 执行失败，仍会继续落盘 result/error 并尝试通知 chatKey。
   try {
     const agent = getIntegrationSessionManager(context).getAgent(runSessionId);
 
@@ -132,7 +157,7 @@ export async function runTaskNow(params: {
           await store.append(
             store.createAssistantTextMessage({
               text: userVisible,
-                metadata: {
+              metadata: {
                 chatKey: runSessionId,
                 channel: "scheduler",
                 targetId: task.taskId,
@@ -157,6 +182,7 @@ export async function runTaskNow(params: {
     errorText = String(e);
   }
 
+  // phase 2：写入执行产物与元数据
   const endedAt = Date.now();
   const durationMs = endedAt - startedAt;
 
@@ -242,7 +268,8 @@ export async function runTaskNow(params: {
 
   await fs.writeFile(resultMdPath, resultLines.join("\n"), "utf-8");
 
-  // 通知 chatKey：成功/失败都发
+  // phase 3：通知 chatKey（成功/失败都发，便于可观测）
+  // 通知策略（中文）：通知失败不影响任务主状态，只记录 `notifyError` 供排查。
   let notified = false;
   let notifyError: string | undefined;
   try {

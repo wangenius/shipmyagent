@@ -42,12 +42,18 @@ import {
 } from "../utils.js";
 import { SHIP_JSON_SCHEMA } from "../schemas/ship.schema.js";
 import { MCP_JSON_SCHEMA } from "../schemas/mcp.schema.js";
-import type { AdapterKey, InitOptions } from "../types/init.js";
+import type { AdapterKey, InitOptions } from "./types/init.js";
 
+/**
+ * 获取用户级 `.ship/skills` 目录。
+ */
 function getUserShipSkillsDir(): string {
   return path.join(os.homedir(), ".ship", "skills");
 }
 
+/**
+ * 推断发布包内置 skills 目录。
+ */
 function getBuiltInSkillsDirFromBin(): string {
   // 关键点（中文）
   // - 发布包中该文件在 `bin/commands/init.js`
@@ -58,6 +64,12 @@ function getBuiltInSkillsDirFromBin(): string {
   return path.join(binRoot, "intergrations", "skills", "built-in");
 }
 
+/**
+ * 安装内置 skills 到用户目录。
+ *
+ * 关键点（中文）
+ * - 采用覆盖复制策略，保证升级后用户目录可获得最新内置能力。
+ */
 async function installBuiltInSkillsToUserDir(): Promise<void> {
   const src = getBuiltInSkillsDirFromBin();
   const dst = getUserShipSkillsDir();
@@ -81,6 +93,12 @@ async function installBuiltInSkillsToUserDir(): Promise<void> {
   }
 }
 
+/**
+ * 同步 `~/.claude/skills` 到 `~/.ship/skills`。
+ *
+ * 关键点（中文）
+ * - 这是兼容开发者本地习惯的“软同步”，失败不阻断 init。
+ */
 async function syncClaudeSkillsToUserShipSkills(): Promise<void> {
   const src = path.join(os.homedir(), ".claude", "skills");
   const dst = getUserShipSkillsDir();
@@ -95,6 +113,15 @@ async function syncClaudeSkillsToUserShipSkills(): Promise<void> {
   }
 }
 
+/**
+ * init 命令入口。
+ *
+ * 流程（中文）
+ * 1) 校验项目目录与覆盖策略
+ * 2) 交互收集配置
+ * 3) 生成配置与目录
+ * 4) 可选安装推荐 skills
+ */
 export async function initCommand(
   cwd: string = ".",
   options: InitOptions = {},
@@ -136,6 +163,7 @@ export async function initCommand(
   }
 
   // Collect configuration information
+  // 交互采集（中文）：模型 + adapters + 推荐 skills，最小化首启配置成本。
   const response = await prompts([
     {
       type: "text",

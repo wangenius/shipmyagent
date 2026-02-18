@@ -5,8 +5,15 @@
  * - daemon 实际启动的是 `shipmyagent run`（前台逻辑），这里拼装出对应的 argv。
  */
 
-import type { StartOptions } from "../../types/start.js";
+import type { StartOptions } from "../../commands/types/start.js";
 
+/**
+ * 将 start/restart 选项转换为 `run` 子进程 argv。
+ *
+ * 关键点（中文）
+ * - daemon 始终启动 `run`，因此参数统一映射到 `run` 的 CLI 形态。
+ * - 只透传用户显式传入的字段，避免污染默认值决策。
+ */
 export const buildRunArgsFromOptions = (
   projectRoot: string,
   options: StartOptions,

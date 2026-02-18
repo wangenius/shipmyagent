@@ -18,19 +18,20 @@ import {
   getShipRuntimeContext,
   initShipRuntimeContext,
 } from "../server/ShipRuntimeContext.js";
-import type { StartOptions } from "../types/start.js";
+import type { StartOptions } from "./types/start.js";
 import { logger } from "../telemetry/index.js";
 import { CronTriggerEngine } from "../core/intergration/cron-trigger.js";
 import { registerTaskCronJobs } from "../intergrations/task/scheduler.js";
 
 /**
- * `shipmyagent run` command entrypoint.
+ * `shipmyagent run` 命令入口。
  *
- * Responsibilities:
- * - Load `ship.json` and validate startup options
- * - Bootstrap the unified logger + MCP manager
- * - Create AgentRuntime (via factory)
- * - Start the HTTP server and optional interactive web server / chat adapters
+ * 职责（中文）
+ * - 初始化 runtime 上下文（配置、日志、integration 依赖）
+ * - 解析并合并启动参数（CLI > ship.json > 默认值）
+ * - 启动主 HTTP 服务、可选交互式 Web、各聊天适配器
+ * - 注册并启动任务 cron 触发器
+ * - 统一处理进程信号并优雅停机
  */
 export async function runCommand(
   cwd: string = ".",
@@ -38,7 +39,9 @@ export async function runCommand(
 ): Promise<void> {
   // 初始化加载（进程级单例上下文：root/config/logger/chat/mcp/agents 等）
   await initShipRuntimeContext(cwd);
+  // 占位符判定（中文）：init 生成的模板值 `${...}` 不应被当作真实密钥。
   const isPlaceholder = (value?: string): boolean => value === "${}";
+  // 端口解析（中文）：允许 number/string；空值返回 undefined 以便走配置回退链。
   const parsePort = (value: unknown, label: string): number | undefined => {
     if (value === undefined || value === null || value === "") return undefined;
     const num =
@@ -51,6 +54,7 @@ export async function runCommand(
     }
     return num;
   };
+  // 布尔解析（中文）：兼容 true/false、1/0、yes/no、on/off。
   const parseBoolean = (value: unknown): boolean | undefined => {
     if (value === undefined || value === null || value === "") return undefined;
     if (typeof value === "boolean") return value;
@@ -163,6 +167,7 @@ export async function runCommand(
   }
 
   // 处理进程信号
+  // 停机顺序（中文）：cron -> adapters -> interactive server -> API server -> flush logs。
   let isShuttingDown = false;
   let cronTriggerEngine: CronTriggerEngine | null = null;
   const shutdown = async (signal: string) => {
@@ -243,6 +248,7 @@ export async function runCommand(
   }
 
   // Start task cron jobs via core cron engine
+  // 调度策略（中文）：注册失败仅记日志，不阻断主服务启动。
   try {
     cronTriggerEngine = new CronTriggerEngine();
     const registerResult = await registerTaskCronJobs({

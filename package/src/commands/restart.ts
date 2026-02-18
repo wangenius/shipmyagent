@@ -8,8 +8,16 @@ import { fileURLToPath } from "url";
 import { getAgentMdPath, getShipJsonPath } from "../utils.js";
 import { buildRunArgsFromOptions } from "../server/daemon/cli-args.js";
 import { startDaemonProcess, stopDaemonProcess } from "../server/daemon/manager.js";
-import type { StartOptions } from "../types/start.js";
+import type { StartOptions } from "./types/start.js";
 
+/**
+ * restart 命令执行流程。
+ *
+ * 关键点（中文）
+ * 1) 校验项目初始化状态
+ * 2) 停止旧 daemon
+ * 3) 按当前参数重建启动参数并拉起新 daemon
+ */
 export async function restartCommand(
   cwd: string = ".",
   options: StartOptions,

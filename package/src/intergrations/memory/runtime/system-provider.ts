@@ -1,5 +1,13 @@
+/**
+ * Memory system provider。
+ *
+ * 关键点（中文）
+ * - 仅负责把 Primary.md 内容转为 system prompt 片段。
+ * - 不做提取/压缩逻辑（那部分在 memory service）。
+ */
+
 import fs from "fs-extra";
-import type { SystemPromptProvider } from "../../../types/system-prompt-provider.js";
+import type { SystemPromptProvider } from "../../../infra/system-prompt-provider-types.js";
 import {
   getShipProfileOtherPath,
   getShipProfilePrimaryPath,
@@ -16,11 +24,12 @@ async function readOptionalMarkdown(filePath: string): Promise<string> {
 }
 
 /**
- * memory system provider。
+ * memory provider 定义。
  *
  * 关键点（中文）
- * - memory 的“加载/组装”位于 integrations
- * - core 只消费最终 system message
+ * - memory 的“加载/组装”位于 integrations，core 只消费最终 system message。
+ * - 若 Primary.md 缺失或为空，则返回空消息列表。
+ * - 读取失败走容错，不阻断主流程。
  */
 export const memorySystemPromptProvider: SystemPromptProvider = {
   id: "memory",

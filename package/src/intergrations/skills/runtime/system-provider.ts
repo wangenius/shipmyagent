@@ -2,12 +2,12 @@ import fs from "fs-extra";
 import path from "node:path";
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 import { getIntegrationSessionManager } from "../../../infra/integration-runtime-dependencies.js";
-import type { LoadedSkillV1 } from "../../../types/loaded-skill.js";
+import type { LoadedSkillV1 } from "../types/loaded-skill.js";
 import type {
   SystemPromptProvider,
   SystemPromptProviderContext,
   SystemPromptProviderOutput,
-} from "../../../types/system-prompt-provider.js";
+} from "../../../infra/system-prompt-provider-types.js";
 import { discoverClaudeSkillsSync } from "./discovery.js";
 import { renderClaudeSkillsPromptSection } from "./prompt.js";
 import { buildLoadedSkillsSystemText } from "./active-skills-prompt.js";
@@ -16,6 +16,12 @@ import {
   setSessionLoadedSkills,
 } from "./store.js";
 
+/**
+ * 归一化 allowed tools。
+ *
+ * 关键点（中文）
+ * - 去空值 + 去重，保证 provider 输出稳定。
+ */
 function normalizeAllowedTools(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
   const out: string[] = [];
@@ -27,6 +33,9 @@ function normalizeAllowedTools(input: unknown): string[] {
   return Array.from(new Set(out));
 }
 
+/**
+ * 将 discovered skill + 文件内容转为 loaded skill 结构。
+ */
 function toLoadedSkill(params: {
   projectRoot: string;
   id: string;
@@ -44,6 +53,15 @@ function toLoadedSkill(params: {
   };
 }
 
+/**
+ * 构建 skills provider 输出。
+ *
+ * 算法流程（中文）
+ * 1) 发现可用 skills 并写入 session 可见列表
+ * 2) 读取 pinnedSkillIds，尝试装载 SKILL.md
+ * 3) 清理失效 pin（不存在或内容不可读）
+ * 4) 输出系统提示片段 + activeTools 收敛结果
+ */
 async function buildSkillsProviderOutput(
   getContext: () => IntegrationRuntimeDependencies,
   ctx: SystemPromptProviderContext,
@@ -70,6 +88,7 @@ async function buildSkillsProviderOutput(
 
   const loadedSkillsById = new Map<string, LoadedSkillV1>();
 
+  // phase 1：读取并装载 pinned skills
   try {
     const meta = await historyStore.loadMeta();
     const pinnedSkillIds = Array.isArray(meta.pinnedSkillIds)
@@ -124,6 +143,7 @@ async function buildSkillsProviderOutput(
     setSessionLoadedSkills(ctx.sessionId, loadedSkillsById);
   }
 
+  // phase 2：没有已加载 skill 时，仅返回 overview
   if (loadedSkillsById.size === 0) {
     return {
       messages,
@@ -131,6 +151,7 @@ async function buildSkillsProviderOutput(
     };
   }
 
+  // phase 3：把 loaded skills 渲染成最终 system prompt
   const built = buildLoadedSkillsSystemText({
     loaded: loadedSkillsById,
     allToolNames: ctx.allToolNames,

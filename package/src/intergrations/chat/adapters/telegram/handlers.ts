@@ -9,6 +9,12 @@ import type { TelegramUpdate, TelegramUser } from "./shared.js";
  * - 方便在不同运行环境复用（server / test）
  */
 
+/**
+ * Telegram 指令处理上下文。
+ *
+ * 说明（中文）
+ * - 采用显式注入，避免 handler 反向依赖 server/core 单例
+ */
 export type TelegramHandlerContext = {
   logger: Logger;
   buildChatKey: (chatId: string, messageThreadId?: number) => string;
@@ -21,6 +27,12 @@ export type TelegramHandlerContext = {
   clearChat: (chatKey: string) => void;
 };
 
+/**
+ * 处理 Telegram 斜杠命令。
+ *
+ * 说明（中文）
+ * - 当前只处理少量内置命令，其他消息走常规会话链路
+ */
 export async function handleTelegramCommand(
   ctx: TelegramHandlerContext,
   params: {
@@ -67,6 +79,12 @@ Available commands:
   }
 }
 
+/**
+ * 处理 callback_query（按钮回调）。
+ *
+ * 当前策略（中文）
+ * - 预留扩展点；默认不执行任何业务逻辑
+ */
 export async function handleTelegramCallbackQuery(
   ctx: TelegramHandlerContext,
   callbackQuery: TelegramUpdate["callback_query"],

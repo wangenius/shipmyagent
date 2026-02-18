@@ -1,5 +1,5 @@
-import type { ClaudeSkill } from "../../../types/claude-skill.js";
-import type { LoadedSkillV1 } from "../../../types/loaded-skill.js";
+import type { ClaudeSkill } from "../types/claude-skill.js";
+import type { LoadedSkillV1 } from "../types/loaded-skill.js";
 
 /**
  * Session skills state 对外快照。

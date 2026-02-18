@@ -8,7 +8,7 @@
 
 import path from "node:path";
 import { nanoid } from "nanoid";
-import type { ShipTaskStatus } from "../../types/task.js";
+import type { ShipTaskStatus } from "./types/task.js";
 import type { IntegrationRuntimeDependencies } from "../../infra/integration-runtime-types.js";
 import {
   isValidTaskId,
@@ -25,7 +25,7 @@ import type {
   TaskRunResponse,
   TaskSetStatusRequest,
   TaskSetStatusResponse,
-} from "../../types/module-command.js";
+} from "./types/task-command.js";
 
 function resolveTaskStatus(input: unknown, fallback: ShipTaskStatus): ShipTaskStatus {
   const normalized = normalizeTaskStatus(input);

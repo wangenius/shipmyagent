@@ -14,7 +14,7 @@ import {
   getShipSessionMessagesDirPath,
   loadShipConfig,
 } from "../../utils.js";
-import type { ClaudeSkill } from "../../types/claude-skill.js";
+import type { ClaudeSkill } from "./types/claude-skill.js";
 import type {
   SkillListResponse,
   SkillLoadRequest,
@@ -23,7 +23,7 @@ import type {
   SkillSummary,
   SkillUnloadRequest,
   SkillUnloadResponse,
-} from "../../types/module-command.js";
+} from "./types/skill-command.js";
 
 function normalizeAllowedTools(input: unknown): string[] {
   if (!Array.isArray(input)) return [];

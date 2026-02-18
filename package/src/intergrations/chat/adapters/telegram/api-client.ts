@@ -10,10 +10,17 @@ import {
   type TelegramApiResponse,
   type TelegramAttachmentType,
 } from "./shared.js";
-import type { ChatDispatchAction } from "../../../../types/chat-dispatcher.js";
+import type { ChatDispatchAction } from "../../types/chat-dispatcher.js";
 
 
 /**
+ * Telegram API 客户端。
+ *
+ * 关键职责（中文）
+ * - 统一封装 Bot API 的 JSON/FormData 调用
+ * - 下载入站附件并落到本地缓存目录
+ * - 处理文本/附件发送细节，避免 bot.ts 过重
+ *
  * Telegram API client utilities for the Telegram adapter.
  *
  * This module centralizes:
@@ -35,6 +42,13 @@ export class TelegramApiClient {
     this.logger = opts.logger;
   }
 
+  /**
+   * 发送 JSON 请求并执行统一错误归一化。
+   *
+   * 说明（中文）
+   * - HTTP 非 2xx 和 `ok=false` 均抛错
+   * - 错误消息尽量携带平台 description，便于定位
+   */
   async requestJson<T>(
     method: string,
     data: Record<string, unknown>,
@@ -62,6 +76,13 @@ export class TelegramApiClient {
     return payload.result as T;
   }
 
+  /**
+   * 发送 multipart/form-data 请求。
+   *
+   * 说明（中文）
+   * - 主要用于上传附件（photo/document/audio 等）
+   * - 与 requestJson 采用同一套错误归一化策略
+   */
   async requestForm<T>(method: string, form: FormData): Promise<T> {
     const url = `https://api.telegram.org/bot${this.botToken}/${method}`;
     const response = await fetch(url, {
@@ -85,6 +106,13 @@ export class TelegramApiClient {
     return payload.result as T;
   }
 
+  /**
+   * 下载 Telegram 文件并保存到 `.ship/.cache/telegram`。
+   *
+   * 说明（中文）
+   * - 文件名会做安全化处理，避免路径注入
+   * - 返回本地绝对路径，供后续工具链消费
+   */
   async downloadTelegramFile(
     fileId: string,
     suggestedName?: string,
@@ -124,6 +152,13 @@ export class TelegramApiClient {
     return outPath;
   }
 
+  /**
+   * 发送文本消息。
+   *
+   * 说明（中文）
+   * - 自动拆分超长消息（保留换行优先）
+   * - 先尝试 Markdown，失败后回退纯文本
+   */
   async sendMessage(
     chatId: string,
     text: string,

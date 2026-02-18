@@ -4,6 +4,14 @@ import type { Logger } from "../../../telemetry/index.js";
 import { getIntegrationSessionManager } from "../../../infra/integration-runtime-dependencies.js";
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
+/**
+ * 入站消息统一结构（跨平台最小公共字段）。
+ *
+ * 说明（中文）
+ * - chatId 是平台原始会话标识（非 sessionId）
+ * - messageThreadId 用于支持 topic/thread 细粒度并发
+ * - 该结构只描述“接收侧”，不包含平台发送参数
+ */
 export type IncomingChatMessage = {
   chatId: string;
   text: string;
@@ -38,11 +46,25 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     this.logger = params.context.logger;
   }
 
+  /**
+   * 清理某个 chatKey 对应的 agent 会话状态。
+   *
+   * 说明（中文）
+   * - 只清理 runtime/session 层状态，不直接删历史文件
+   * - 常用于用户触发“重置对话”类命令
+   */
   clearChat(chatKey: string): void {
     getIntegrationSessionManager(this.context).clearAgent(chatKey);
     this.logger.info(`Cleared chat: ${chatKey}`);
   }
 
+  /**
+   * 将入站消息追加到 UIMessage 历史（审计事实源）。
+   *
+   * 说明（中文）
+   * - 该方法只负责“落盘记录”，不负责调度执行
+   * - channel/targetId/sessionId 三元组由适配层统一补齐
+   */
   protected async appendUserMessage(params: {
     chatId: string;
     chatKey: string;
@@ -70,6 +92,13 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     });
   }
 
+  /**
+   * 将消息送入会话调度器队列。
+   *
+   * 返回值语义（中文）
+   * - chatKey: lane 归属键（同 key 串行）
+   * - position: 当前 lane 中排队位置（便于日志与观测）
+   */
   protected async enqueueMessage(
     msg: IncomingChatMessage,
   ): Promise<{ chatKey: string; position: number }> {

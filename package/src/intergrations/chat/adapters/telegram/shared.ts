@@ -1,5 +1,8 @@
 import path from "path";
 
+/**
+ * Telegram 集成配置。
+ */
 export interface TelegramConfig {
   botToken?: string;
   chatId?: string;
@@ -8,6 +11,9 @@ export interface TelegramConfig {
   enabled: boolean;
 }
 
+/**
+ * Telegram Update 结构（仅保留当前项目需要字段）。
+ */
 export interface TelegramUpdate {
   update_id: number;
   message?: {
@@ -99,6 +105,9 @@ export type TelegramUser = {
   last_name?: string;
 };
 
+/**
+ * Telegram Bot API 通用响应。
+ */
 export interface TelegramApiResponse<T> {
   ok: boolean;
   result?: T;
@@ -108,6 +117,9 @@ export interface TelegramApiResponse<T> {
 
 export type TelegramAttachmentType = "photo" | "document" | "voice" | "audio";
 
+/**
+ * 清洗用户可见文本，避免直接回显冗长工具日志。
+ */
 export function sanitizeChatText(text: string): string {
   if (!text) return text;
 
@@ -157,6 +169,13 @@ export function guessMimeType(fileName: string): string | undefined {
   }
 }
 
+/**
+ * 从文本中解析 `@attach ...` 指令。
+ *
+ * 说明（中文）
+ * - 返回“清理后的正文 + 附件列表”
+ * - 未匹配的行保持原样，便于自然语言与附件混写
+ */
 export function parseTelegramAttachments(text: string): {
   text: string;
   attachments: Array<{
@@ -221,6 +240,9 @@ export function getActorName(from?: {
   return formatActorName(raw);
 }
 
+/**
+ * 拆分超长消息，避免触发 Telegram 4096 限制。
+ */
 export function splitTelegramMessage(text: string): string[] {
   const MAX = 3900; // keep headroom under Telegram's 4096 limit
   if (text.length <= MAX) return [text];

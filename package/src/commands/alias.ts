@@ -1,13 +1,32 @@
+/**
+ * `shipmyagent alias`：向 shell rc 文件写入 `alias sma="shipmyagent"`。
+ *
+ * 关键点（中文）
+ * - 通过标记块（start/end）实现幂等更新。
+ * - 支持 zsh/bash 与 dry-run。
+ */
+
 import os from "os";
 import path from "path";
 import fs from "fs-extra";
 
+/**
+ * alias 命令参数。
+ */
 interface AliasOptions {
   shell?: string;
   dryRun?: boolean;
   print?: boolean;
 }
 
+/**
+ * 幂等写入 alias block。
+ *
+ * 算法（中文）
+ * 1) 若已存在 shipmyagent 标记块：原位替换该块
+ * 2) 若已存在 `alias sma=`：视为用户自定义，跳过
+ * 3) 否则追加到文件末尾
+ */
 function upsertAliasBlock(content: string, aliasLine: string): { next: string; changed: boolean } {
   const start = "# >>> shipmyagent alias >>>";
   const end = "# <<< shipmyagent alias <<<";
@@ -34,6 +53,9 @@ function upsertAliasBlock(content: string, aliasLine: string): { next: string; c
   return { next, changed: true };
 }
 
+/**
+ * 写入 alias 到目标 shell rc 文件。
+ */
 export async function aliasCommand(options: AliasOptions = {}): Promise<void> {
   const aliasLine = `alias sma="shipmyagent"`;
 

@@ -3,6 +3,13 @@ import fs from "fs-extra";
 import { getCacheDirPath } from "../../../../utils.js";
 
 /**
+ * Telegram 轮询模式的持久化状态存储。
+ *
+ * 关键点（中文）
+ * - 保存 lastUpdateId，避免重启后重复消费
+ * - 保存 thread initiator 映射，用于群聊访问控制
+ * - 所有 I/O 都是 best-effort，不能阻断主流程
+ *
  * Persistent state for Telegram polling mode.
  *
  * Telegram's getUpdates polling relies on a monotonic `offset`. Persisting the
@@ -24,6 +31,9 @@ export class TelegramStateStore {
     this.threadInitiatorsFile = path.join(dir, "threadInitiators.json");
   }
 
+  /**
+   * 读取最后一次处理的 update_id。
+   */
   async loadLastUpdateId(): Promise<number | undefined> {
     try {
       if (!(await fs.pathExists(this.lastUpdateIdFile))) return undefined;
@@ -36,6 +46,9 @@ export class TelegramStateStore {
     }
   }
 
+  /**
+   * 持久化最后一次处理的 update_id。
+   */
   async saveLastUpdateId(lastUpdateId: number): Promise<void> {
     try {
       await fs.ensureDir(path.dirname(this.lastUpdateIdFile));
@@ -49,6 +62,9 @@ export class TelegramStateStore {
     }
   }
 
+  /**
+   * 读取 thread 发起人映射。
+   */
   async loadThreadInitiators(): Promise<Map<string, string>> {
     const out = new Map<string, string>();
     try {

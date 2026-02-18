@@ -1,5 +1,4 @@
 import type { SystemModelMessage } from "ai";
-import type { LoadedSkillV1 } from "./loaded-skill.js";
 
 /**
  * System Prompt Provider 上下文。
@@ -8,25 +7,31 @@ import type { LoadedSkillV1 } from "./loaded-skill.js";
  * - 这是 core 传给 integrations 的最小上下文
  * - provider 只负责产出 prompt 片段，不参与执行调度
  */
+export type SystemPromptLoadedSkill = {
+  id: string;
+  name: string;
+  skillMdPath: string;
+  content: string;
+  allowedTools: string[];
+};
+
 export type SystemPromptProviderContext = {
+  /** 项目根目录 */
   projectRoot: string;
+  /** 当前会话 ID */
   sessionId: string;
+  /** 本次请求 ID */
   requestId: string;
+  /** 本次可用工具全集 */
   allToolNames: string[];
 };
 
-/**
- * 单个 provider 的输出。
- */
 export type SystemPromptProviderOutput = {
   messages?: SystemModelMessage[];
   activeTools?: string[];
-  loadedSkills?: LoadedSkillV1[];
+  loadedSkills?: SystemPromptLoadedSkill[];
 };
 
-/**
- * provider 契约。
- */
 export type SystemPromptProvider = {
   id: string;
   order?: number;
@@ -35,12 +40,8 @@ export type SystemPromptProvider = {
     | ((ctx: SystemPromptProviderContext) => SystemPromptProviderOutput);
 };
 
-/**
- * 所有 provider 聚合后的输出。
- */
 export type SystemPromptProviderResult = {
   messages: SystemModelMessage[];
   activeTools?: string[];
-  loadedSkills: Map<string, LoadedSkillV1>;
+  loadedSkills: Map<string, SystemPromptLoadedSkill>;
 };
-

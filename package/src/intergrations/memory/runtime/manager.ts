@@ -5,7 +5,7 @@ import {
   getShipSessionMemoryBackupPath,
   getShipSessionMemoryMetaPath,
 } from "../../../utils.js";
-import type { MemoryEntry } from "../../../types/memory.js";
+import type { MemoryEntry } from "../types/memory.js";
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
 /**

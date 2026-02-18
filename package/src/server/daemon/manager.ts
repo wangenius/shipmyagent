@@ -22,20 +22,38 @@ import {
   DAEMON_META_FILENAME,
   DAEMON_PID_FILENAME,
   type DaemonMeta,
-} from "../../types/daemon.js";
+} from "./types/daemon.js";
 
+/**
+ * 异步睡眠工具。
+ */
 const sleep = async (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * 计算 daemon pid 文件路径。
+ */
 export const getDaemonPidPath = (projectRoot: string): string =>
   path.join(getShipDebugDirPath(projectRoot), DAEMON_PID_FILENAME);
 
+/**
+ * 计算 daemon 日志文件路径。
+ */
 export const getDaemonLogPath = (projectRoot: string): string =>
   path.join(getShipDebugDirPath(projectRoot), DAEMON_LOG_FILENAME);
 
+/**
+ * 计算 daemon 元数据文件路径。
+ */
 export const getDaemonMetaPath = (projectRoot: string): string =>
   path.join(getShipDebugDirPath(projectRoot), DAEMON_META_FILENAME);
 
+/**
+ * 读取 daemon pid。
+ *
+ * 关键点（中文）
+ * - 读取失败或内容非法统一返回 `null`，调用方走无进程分支。
+ */
 export const readDaemonPid = async (
   projectRoot: string,
 ): Promise<number | null> => {
@@ -48,6 +66,9 @@ export const readDaemonPid = async (
   }
 };
 
+/**
+ * 检查进程是否存活。
+ */
 export const isProcessAlive = (pid: number): boolean => {
   try {
     process.kill(pid, 0);
@@ -57,6 +78,12 @@ export const isProcessAlive = (pid: number): boolean => {
   }
 };
 
+/**
+ * 清理僵尸 daemon 标记文件。
+ *
+ * 算法（中文）
+ * - 若 pid 文件存在但进程不存在，移除 pid/meta，恢复可重启状态。
+ */
 export const cleanupStaleDaemonFiles = async (
   projectRoot: string,
 ): Promise<void> => {
@@ -69,6 +96,9 @@ export const cleanupStaleDaemonFiles = async (
   await fs.remove(getDaemonMetaPath(projectRoot));
 };
 
+/**
+ * 写入 daemon pid 与元数据文件。
+ */
 export const writeDaemonFiles = async (
   projectRoot: string,
   meta: DaemonMeta,
@@ -78,6 +108,15 @@ export const writeDaemonFiles = async (
   await fs.writeJson(getDaemonMetaPath(projectRoot), meta, { spaces: 2 });
 };
 
+/**
+ * 启动 daemon 子进程。
+ *
+ * 流程（中文）
+ * 1) 清理脏 pid/meta
+ * 2) 检查是否已有存活 daemon
+ * 3) detached + unref 拉起 `node cli.js run ...`
+ * 4) 写入 pid/meta 供 stop/restart 使用
+ */
 export const startDaemonProcess = async (params: {
   projectRoot: string;
   cliPath: string;
@@ -126,6 +165,13 @@ export const startDaemonProcess = async (params: {
   return { pid: child.pid, logPath };
 };
 
+/**
+ * 停止 daemon 子进程。
+ *
+ * 策略（中文）
+ * - 先发 `SIGTERM` 做优雅退出；超时后回退 `SIGKILL`。
+ * - 无论 stop 结果如何，最终清理 pid/meta，避免状态残留。
+ */
 export const stopDaemonProcess = async (params: {
   projectRoot: string;
   timeoutMs?: number;

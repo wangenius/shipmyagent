@@ -19,6 +19,12 @@ import type { IntegrationRuntimeDependencies } from "../../../infra/integration-
  * - Persist chat logs through UIMessage history via BaseChatAdapter helpers
  */
 
+/**
+ * 飞书适配器配置。
+ *
+ * 说明（中文）
+ * - adminUserIds 仅用于群聊放行策略，不影响私聊
+ */
 interface FeishuConfig {
   appId: string;
   appSecret: string;
@@ -120,6 +126,13 @@ export class FeishuBot extends BaseChatAdapter {
     return fn();
   }
 
+  /**
+   * 加载线程级去重集合（本地文件持久化）。
+   *
+   * 说明（中文）
+   * - 用于处理平台重投递/重连导致的重复消息
+   * - 失败时降级为空集合，保持主流程可用
+   */
   private async loadDedupeSet(threadId: string): Promise<Set<string>> {
     const file = path.join(
       this.dedupeDir,
@@ -135,6 +148,13 @@ export class FeishuBot extends BaseChatAdapter {
     }
   }
 
+  /**
+   * 持久化线程级去重集合。
+   *
+   * 说明（中文）
+   * - 仅保留最近 800 条，限制文件体积
+   * - 写入失败不影响主流程（best-effort）
+   */
   private async persistDedupeSet(
     threadId: string,
     set: Set<string>,
@@ -227,6 +247,14 @@ export class FeishuBot extends BaseChatAdapter {
       .trim();
   }
 
+  /**
+   * 群聊发言权限判断。
+   *
+   * 规则（中文）
+   * - 首次发言者绑定为 thread initiator
+   * - initiator 或管理员可继续对话
+   * - 其他成员默认不触发执行（但消息仍入库）
+   */
   private async isAllowedGroupActor(
     threadId: string,
     actorId: string,

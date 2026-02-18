@@ -102,7 +102,7 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
 
 ```ts
 // package/src/intergrations/notify/module.ts
-import type { SmaModule } from "../../types/module-command.js";
+import type { SmaModule } from "../../infra/module-registry-types.js";
 import { createNotifyService } from "./runtime/service.js";
 
 function setupServer(
@@ -126,6 +126,19 @@ export const notifyModule: SmaModule = {
   },
 };
 ```
+
+---
+
+## 4.1) 类型放置规则（新的约定）
+
+- `core` 内部注册契约（源定义）：`package/src/core/intergration/types/module-registry.ts`
+- `intergrations` 侧引用入口（转发）：`package/src/infra/module-registry-types.ts`
+- `intergrations/chat` 相关类型：放在 `package/src/intergrations/chat/types/`
+- `intergrations/skills` 相关类型：放在 `package/src/intergrations/skills/types/`
+- `intergrations/task` 相关类型：放在 `package/src/intergrations/task/types/`
+- 不再把业务 DTO 统一堆在 `package/src/types/`
+
+> 原则：类型跟着模块走；只有真正跨层的公共基础类型才放公共目录。
 
 ---
 

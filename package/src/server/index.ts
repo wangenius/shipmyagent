@@ -1,3 +1,12 @@
+/**
+ * AgentServer：主 HTTP 服务入口。
+ *
+ * 分层约束（中文）
+ * - server 负责编排与依赖注入，可调用 core / integrations。
+ * - 不把 server 状态反向泄露给 core/integrations。
+ * - 路由层只做协议适配，业务逻辑下沉到模块注册与调度器。
+ */
+
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -14,11 +23,22 @@ import {
 import { pickLastSuccessfulChatSendText } from "../intergrations/chat/runtime/user-visible-text.js";
 import { registerAllModulesForServer } from "../core/intergration/registry.js";
 
+/**
+ * 启动参数。
+ */
 export interface StartOptions {
   port: number;
   host: string;
 }
 
+/**
+ * AgentServer。
+ *
+ * 关键职责（中文）
+ * - 注册公共中间件与基础路由。
+ * - 注册 integrations 暴露的统一模块路由。
+ * - 处理 `/api/execute` 的请求解析、上下文装配与调度调用。
+ */
 export class AgentServer {
   private app: Hono;
   private server: ReturnType<typeof import("http").createServer> | null = null;
@@ -40,6 +60,14 @@ export class AgentServer {
     this.setupRoutes();
   }
 
+  /**
+   * 注册所有 HTTP 路由。
+   *
+   * 关键点（中文）
+   * - 静态资源与 `.ship/public` 暴露路径分离。
+   * - `registerAllModulesForServer` 是模块扩展主入口。
+   * - `/api/execute` 负责把请求转为 session 任务并执行。
+   */
   private setupRoutes(): void {
     // Static file service (frontend pages)
     this.app.get("/", async (c) => {
@@ -158,7 +186,13 @@ export class AgentServer {
     registerAllModulesForServer(this.app, getShipIntegrationContext());
 
     // Execute instruction
+    // `/api/execute` 分段流程（中文）
+    // 1) 请求解析与参数校验
+    // 2) session/request context 注入
+    // 3) 执行结果提取与历史落盘
+    // 4) 错误兜底与 HTTP 返回
     this.app.post("/api/execute", async (c) => {
+      // [阶段1] 请求解析：读取 body 文本并做 JSON 解析。
       let bodyText;
       try {
         bodyText = await c.req.text();
@@ -189,6 +223,7 @@ export class AgentServer {
         );
       }
 
+      // [阶段1] 参数归一化：将请求字段映射为内部统一变量。
       const instructions = body?.instructions;
       const chatId =
         typeof body?.chatId === "string" && body.chatId.trim()
@@ -209,6 +244,7 @@ export class AgentServer {
       }
 
       try {
+        // [阶段2] 上下文注入：构造 sessionId，并写入一条 user 消息到历史。
         const sessionId = `api:chat:${chatId}`;
         const runtime = getShipRuntimeContext();
         const messageId =
@@ -222,6 +258,7 @@ export class AgentServer {
           text: String(instructions),
         });
 
+        // [阶段2] 执行：在 withSessionRequestContext 下运行 agent，保证下游可读取会话上下文。
         // API 也是一种 “chat”（有 chatKey + 可落盘 history），但它不是“平台消息回发”场景：
         // - 不提供 dispatcher 回发能力（响应通过 HTTP body 返回）
         const result = await withSessionRequestContext(
@@ -238,10 +275,12 @@ export class AgentServer {
             }),
         );
 
+        // [阶段3] 结果提取：优先拿 chat_send 的最终文本，其次回退到 result.output。
         const userVisible =
           pickLastSuccessfulChatSendText((result as any)?.toolCalls || []) ||
           String(result?.output || "");
         try {
+          // [阶段3] 历史落盘：优先 append assistantMessage；缺失时生成文本消息兜底。
           const store = runtime.sessionManager.getHistoryStore(sessionId);
           const assistantMessage = (result as any)?.assistantMessage;
           if (assistantMessage && typeof assistantMessage === "object") {
@@ -271,11 +310,15 @@ export class AgentServer {
 
         return c.json(result);
       } catch (error) {
+        // [阶段4] 错误兜底：统一返回 500 + 可读错误文本。
         return c.json({ success: false, message: String(error) }, 500);
       }
     });
   }
 
+  /**
+   * 启动 HTTP 服务。
+   */
   async start(options: StartOptions): Promise<void> {
     const { port, host } = options;
 
@@ -331,6 +374,9 @@ export class AgentServer {
     });
   }
 
+  /**
+   * 停止 HTTP 服务。
+   */
   async stop(): Promise<void> {
     if (this.server) {
       await server_logger.saveAllLogs();

@@ -9,10 +9,13 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import type { ShipTaskDefinitionV1, ShipTaskFrontmatterV1 } from "../../../types/task.js";
+import type { ShipTaskDefinitionV1, ShipTaskFrontmatterV1 } from "../types/task.js";
 import { parseTaskMarkdown, buildTaskMarkdown } from "./model.js";
 import { getTaskDir, getTaskMdPath, getTaskRootDir, getTaskRunDir, normalizeTaskId } from "./paths.js";
 
+/**
+ * Task 列表项（面向 UI/CLI 展示）。
+ */
 export type TaskListItem = {
   taskId: string;
   title: string;
@@ -25,6 +28,9 @@ export type TaskListItem = {
   lastRunTimestamp?: string;
 };
 
+/**
+ * 判断目录名是否为 run 时间戳格式。
+ */
 function isDirectoryNameTimestamp(name: string): boolean {
   const s = String(name || "").trim();
   if (!s) return false;
@@ -32,6 +38,13 @@ function isDirectoryNameTimestamp(name: string): boolean {
   return /^\d{8}-\d{6}-\d{3}$/.test(s);
 }
 
+/**
+ * 列出全部任务。
+ *
+ * 算法（中文）
+ * - 遍历 `.ship/task/*` 目录并解析每个 `task.md`。
+ * - 通过子目录时间戳推断 `lastRunTimestamp`。
+ */
 export async function listTasks(projectRoot: string): Promise<TaskListItem[]> {
   const root = String(projectRoot || "").trim();
   if (!root) return [];
@@ -101,6 +114,9 @@ export async function listTasks(projectRoot: string): Promise<TaskListItem[]> {
   return items;
 }
 
+/**
+ * 读取单个任务定义。
+ */
 export async function readTask(params: { taskId: string; projectRoot: string }): Promise<ShipTaskDefinitionV1> {
   const root = String(params.projectRoot || "").trim();
   if (!root) throw new Error("projectRoot is required");
@@ -118,6 +134,12 @@ export async function readTask(params: { taskId: string; projectRoot: string }):
   return parsed.task;
 }
 
+/**
+ * 写入任务定义（创建或覆盖 task.md）。
+ *
+ * 关键点（中文）
+ * - 默认禁止覆盖，需显式 `overwrite=true`。
+ */
 export async function writeTask(params: {
   taskId: string;
   frontmatter: ShipTaskFrontmatterV1;
@@ -147,6 +169,9 @@ export async function writeTask(params: {
   return { taskId, taskMdPath: path.relative(root, mdPath).split(path.sep).join("/") };
 }
 
+/**
+ * 确保 run 目录存在并返回绝对/相对路径。
+ */
 export async function ensureRunDir(params: {
   taskId: string;
   timestamp: string;

@@ -7,8 +7,15 @@ import type {
   ChatDispatchAction,
   ChatDispatchSendActionParams,
   ChatDispatcher,
-} from "../../../types/chat-dispatcher.js";
+} from "../types/chat-dispatcher.js";
 
+/**
+ * 适配器 chatKey 计算入参。
+ *
+ * 说明（中文）
+ * - chatId 必填；其余字段用于区分 topic/thread/消息上下文
+ * - 不同平台可按需消费这些字段
+ */
 export type AdapterChatKeyParams = {
   chatId: string;
   messageThreadId?: number;
@@ -44,6 +51,8 @@ export abstract class PlatformAdapter {
     this.context = params.context;
     this.sessionManager = getIntegrationSessionManager(params.context);
 
+    // 统一把“平台发送能力”注册到 chat-send registry。
+    // 后续 `chat_send` 等工具只依赖 channel，不耦合具体适配器实例。
     const dispatcher: ChatDispatcher = {
       sendText: async (p) => this.sendToolText(p),
     };
@@ -63,6 +72,14 @@ export abstract class PlatformAdapter {
     params: AdapterSendActionParams,
   ): Promise<void>;
 
+  /**
+   * 供工具层调用的文本发送统一入口。
+   *
+   * 设计点（中文）
+   * - 空 chatId 视为参数错误
+   * - 空文本视为幂等 no-op（返回 success）
+   * - 平台异常收敛为 `{ success: false, error }`，避免抛出破坏工具协议
+   */
   async sendToolText(
     params: AdapterSendTextParams,
   ): Promise<{ success: boolean; error?: string }> {
@@ -79,6 +96,13 @@ export abstract class PlatformAdapter {
     }
   }
 
+  /**
+   * 供工具层调用的动作发送入口（如 typing）。
+   *
+   * 设计点（中文）
+   * - action 可选，缺失时按 no-op 处理
+   * - 若平台未实现 sendActionToPlatform，返回明确 not supported
+   */
   async sendToolAction(
     params: ChatDispatchSendActionParams,
   ): Promise<{ success: boolean; error?: string }> {

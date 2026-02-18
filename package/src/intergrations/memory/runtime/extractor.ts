@@ -4,7 +4,7 @@ import type {
   MemoryEntry,
   MemoryExtractParams,
   MemoryCompressParams,
-} from "../../../types/memory.js";
+} from "../types/memory.js";
 import { getLogger } from "../../../telemetry/index.js";
 import {
   getIntegrationSessionManager,

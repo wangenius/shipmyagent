@@ -1,11 +1,23 @@
 import type { Logger } from "../../../../telemetry/index.js";
 
 /**
+ * Telegram 访问控制辅助函数。
+ *
+ * 说明（中文）
+ * - 用于群聊场景的最小权限判定（是否管理员）
+ * - 仅决定“是否触发执行”，不影响消息入库
+ *
  * Telegram access helpers.
  *
  * ShipMyAgent currently runs in "full permission" mode (no human approvals).
  * We still keep a minimal group-access policy for deciding who is allowed to
  * address the bot in group chats when `groupAccess` is not "anyone".
+ */
+/**
+ * 判断用户是否为群管理员/群主。
+ *
+ * 说明（中文）
+ * - 参数异常或接口失败时返回 false（安全优先）
  */
 export async function isTelegramAdmin(
   requestJson: <T>(method: string, data: Record<string, unknown>) => Promise<T>,

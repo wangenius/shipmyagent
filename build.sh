@@ -38,3 +38,6 @@ elif command -v pnpm >/dev/null 2>&1; then
 else
   npm --prefix "$ROOT_DIR/package" run build
 fi
+
+# 关键点（中文）：每次仓库级 build 后，自动把当前 package 安装到全局 CLI（sma/shipmyagent）。
+npm install -g "$ROOT_DIR/package"

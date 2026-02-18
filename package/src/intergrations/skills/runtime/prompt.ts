@@ -1,7 +1,22 @@
+/**
+ * Skills prompt section 渲染器。
+ *
+ * 关键点（中文）
+ * - 负责把“可用 skills + 扫描根目录”格式化为 system prompt 文本。
+ * - 仅做字符串渲染，不做文件 IO。
+ */
+
 import type { ShipConfig } from "../../../utils.js";
 import { getClaudeSkillSearchRoots } from "./paths.js";
-import type { ClaudeSkill } from "../../../types/claude-skill.js";
+import type { ClaudeSkill } from "../types/claude-skill.js";
 
+/**
+ * 渲染 skills 系统提示片段。
+ *
+ * 约束（中文）
+ * - 为控制 token 成本，最多展示前 40 个 skill。
+ * - roots 会按扫描顺序输出，便于排查冲突覆盖。
+ */
 export function renderClaudeSkillsPromptSection(
   projectRoot: string,
   config: ShipConfig,

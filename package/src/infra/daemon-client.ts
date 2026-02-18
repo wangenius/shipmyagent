@@ -14,6 +14,12 @@ import {
 } from "./daemon-api.js";
 import { getShipJsonPath, loadShipConfig } from "../utils.js";
 
+/**
+ * 解析端口值。
+ *
+ * 关键点（中文）
+ * - 仅接受 1~65535 的整数；非法值返回 undefined。
+ */
 function parsePortLike(input: unknown): number | undefined {
   if (input === undefined || input === null || input === "") return undefined;
   const raw = typeof input === "number" ? input : Number.parseInt(String(input), 10);
@@ -22,6 +28,12 @@ function parsePortLike(input: unknown): number | undefined {
   return raw;
 }
 
+/**
+ * 归一化 host。
+ *
+ * 关键点（中文）
+ * - `0.0.0.0`/`::` 会转换为 `127.0.0.1`，避免客户端直连通配地址失败。
+ */
 function normalizeHost(input: unknown): string | undefined {
   const host = typeof input === "string" ? input.trim() : "";
   if (!host) return undefined;
@@ -29,6 +41,15 @@ function normalizeHost(input: unknown): string | undefined {
   return host;
 }
 
+/**
+ * 解析 daemon endpoint。
+ *
+ * 优先级（中文）
+ * 1) 显式入参 `host/port`
+ * 2) 环境变量 `SMA_SERVER_*` / `SMA_CTX_SERVER_*`
+ * 3) `ship.json.start`
+ * 4) 默认 `127.0.0.1:3000`
+ */
 export function resolveDaemonEndpoint(params: {
   projectRoot: string;
   host?: string;
@@ -67,6 +88,13 @@ export function resolveDaemonEndpoint(params: {
   };
 }
 
+/**
+ * 调用 daemon JSON API。
+ *
+ * 错误语义（中文）
+ * - 网络异常：`success=false` + `error`（无 status）。
+ * - HTTP 非 2xx：`success=false` + `status` + `error`。
+ */
 export async function callDaemonJsonApi<T>(
   params: DaemonJsonApiCallParams,
 ): Promise<DaemonJsonApiCallResult<T>> {

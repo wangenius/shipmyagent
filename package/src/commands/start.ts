@@ -15,8 +15,16 @@ import { fileURLToPath } from "url";
 import { getAgentMdPath, getShipJsonPath } from "../utils.js";
 import { startDaemonProcess } from "../server/daemon/manager.js";
 import { buildRunArgsFromOptions } from "../server/daemon/cli-args.js";
-import type { StartOptions } from "../types/start.js";
+import type { StartOptions } from "./types/start.js";
 
+/**
+ * start 命令入口。
+ *
+ * 流程（中文）
+ * 1) 校验项目初始化文件是否存在
+ * 2) 组装 `run` 子进程参数
+ * 3) 通过 daemon manager 后台拉起并打印 pid/log
+ */
 export async function startCommand(
   cwd: string = ".",
   options: StartOptions,

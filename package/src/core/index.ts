@@ -12,6 +12,6 @@ export { SessionManager } from "./session/manager.js";
 export { Scheduler } from "./session/scheduler.js";
 export { SessionHistoryStore } from "./session/history-store.js";
 
-export type { SessionAgent } from "../types/session-agent.js";
+export type { SessionAgent } from "./types/session-agent.js";
 export { createSessionAgent } from "./runtime/agent.js";
 

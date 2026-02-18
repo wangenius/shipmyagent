@@ -24,8 +24,8 @@ import type {
   SkillLoadResponse,
   SkillPinnedListResponse,
   SkillUnloadResponse,
-  SmaModule,
-} from "../../types/module-command.js";
+} from "./types/skill-command.js";
+import type { SmaModule } from "../../infra/module-registry-types.js";
 
 function parsePortOption(value: string): number {
   const port = Number.parseInt(value, 10);

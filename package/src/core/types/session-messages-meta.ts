@@ -10,15 +10,7 @@ export type ShipSessionMessagesMetaV1 = {
   v: 1;
   sessionId: string;
   updatedAt: number;
-
-  /**
-   * 已 pin 的 skill ids（每次 run 自动注入）。
-   */
   pinnedSkillIds: string[];
-
-  /**
-   * compact 元数据（可选，便于排查）
-   */
   lastArchiveId?: string;
   keepLastMessages?: number;
   maxInputTokensApprox?: number;

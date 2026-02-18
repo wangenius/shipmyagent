@@ -10,7 +10,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 import type { ShipConfig } from "../../../utils.js";
-import type { SkillRoot } from "../../../types/skills.js";
+import type { SkillRoot } from "../types/skill-root.js";
 import { expandHome, uniqStrings } from "./utils.js";
 
 function normalizeSkillRootCandidate(candidate: string): string {

@@ -6,6 +6,13 @@
  * - 保持 shell 调用与 AI 调用都可稳定解析
  */
 
+/**
+ * 标准化输出结果。
+ *
+ * 输出策略（中文）
+ * - 默认 JSON（便于脚本解析）。
+ * - `asJson=false` 时输出可读文本。
+ */
 export function printResult(params: {
   asJson?: boolean;
   success: boolean;

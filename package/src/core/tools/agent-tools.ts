@@ -16,6 +16,9 @@ import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
 import { execShellTools } from "./exec-shell.js";
 import { createMcpAiTool } from "./mcp.js";
 
+/**
+ * Agent toolset logger 抽象。
+ */
 export interface AgentToolsLogger {
   info(message: string): void;
   warn(message: string): void;
@@ -27,6 +30,13 @@ export interface AgentToolsLogger {
   ): Promise<void> | void;
 }
 
+/**
+ * 创建当前 runtime 可用的工具集合。
+ *
+ * 组装策略（中文）
+ * - 先注入本地 shell 会话工具。
+ * - 再把 MCP server tools 映射为 AI SDK tools（`server:tool` 命名）。
+ */
 export function createAgentTools(): Record<string, Tool> {
   // 注意：不要在模块顶层读取 runtime context，否则像 `sma -v` 这种只打印版本号的场景也会因为未初始化而崩溃
   const runtime = getShipRuntimeContext();

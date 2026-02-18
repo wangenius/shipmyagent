@@ -8,15 +8,21 @@
 export type {
   ChatDispatchChannel,
   ChatDispatcher,
-} from "../../../types/chat-dispatcher.js";
+} from "../types/chat-dispatcher.js";
 
 import type {
   ChatDispatchChannel,
   ChatDispatcher,
-} from "../../../types/chat-dispatcher.js";
+} from "../types/chat-dispatcher.js";
 
 const dispatchers = new Map<ChatDispatchChannel, ChatDispatcher>();
 
+/**
+ * 注册 channel -> dispatcher 映射。
+ *
+ * 约束（中文）
+ * - 同一 channel 重复注册时以后者覆盖，便于 server 启动阶段统一重建。
+ */
 export function registerChatSender(
   channel: ChatDispatchChannel,
   dispatcher: ChatDispatcher,
@@ -24,6 +30,9 @@ export function registerChatSender(
   dispatchers.set(channel, dispatcher);
 }
 
+/**
+ * 获取指定 channel 的 dispatcher。
+ */
 export function getChatSender(channel: ChatDispatchChannel): ChatDispatcher | undefined {
   return dispatchers.get(channel);
 }

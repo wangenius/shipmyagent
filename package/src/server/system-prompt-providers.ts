@@ -14,6 +14,11 @@ import { createSkillsSystemPromptProvider } from "../intergrations/skills/runtim
  * - 启动时一次性注册，runtime 只消费 provider 聚合结果
  * - 不做兼容分支，重复注册时以 id 覆盖
  */
+/**
+ * 参数约定（中文）
+ * - `getContext` 由 server 注入统一的 integration 运行依赖。
+ * - provider 自己决定是否使用这些依赖。
+ */
 export function registerIntegrationSystemPromptProviders(params: {
   getContext: () => IntegrationRuntimeDependencies;
 }): void {

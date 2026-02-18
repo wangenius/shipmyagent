@@ -13,6 +13,14 @@ import { type LanguageModel } from "ai";
 import { createLlmLoggingFetch, getLogger } from "../../telemetry/index.js";
 import type { ShipConfig } from "../../utils.js";
 
+/**
+ * 创建 LanguageModel 实例。
+ *
+ * 解析策略（中文）
+ * 1) 解析 provider/model/baseUrl/apiKey（含 `${ENV}` 占位符）
+ * 2) 创建带日志拦截的 fetch
+ * 3) 按 provider 分发到对应 SDK 工厂
+ */
 export async function createModel(input: {
   config: ShipConfig;
 }): Promise<LanguageModel> {
@@ -27,12 +35,14 @@ export async function createModel(input: {
     throw Error("no LLM Model Configured");
   }
 
+  // API Key 解析（中文）：优先 ship.json；若是 `${ENV}` 则转环境变量读取。
   let resolvedApiKey = apiKey;
   if (apiKey && apiKey.startsWith("${") && apiKey.endsWith("}")) {
     const envVar = apiKey.slice(2, -1);
     resolvedApiKey = process.env[envVar];
   }
 
+  // 兜底策略（中文）：兼容常见环境变量命名。
   if (!resolvedApiKey) {
     resolvedApiKey =
       process.env.ANTHROPIC_API_KEY ||
@@ -45,6 +55,7 @@ export async function createModel(input: {
     throw Error("No API Key configured, will use simulation mode");
   }
 
+  // 日志策略（中文）：默认开启 LLM 请求日志，可通过 llm.logMessages 关闭。
   const configLog = (input.config as any)?.llm?.logMessages;
   const logLlmMessages = typeof configLog === "boolean" ? configLog : true;
 
