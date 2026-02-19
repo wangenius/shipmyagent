@@ -1,8 +1,8 @@
 import type { Logger } from "../telemetry/index.js";
 import type {
   IntegrationModelFactory,
-  IntegrationSessionManager,
-  IntegrationSessionRequestContextBridge,
+  IntegrationContextManager,
+  IntegrationContextRequestContextBridge,
 } from "./integration-runtime-ports.js";
 import type { IntegrationChatRuntimeBridge } from "./integration-chat-runtime-bridge.js";
 import type { ShipConfig } from "../utils.js";
@@ -25,8 +25,8 @@ export type IntegrationRuntimeDependencies = {
   logger: Logger;
   config: ShipConfig;
   systems: string[];
-  sessionManager?: IntegrationSessionManager;
+  contextManager?: IntegrationContextManager;
   chatRuntimeBridge?: IntegrationChatRuntimeBridge;
-  requestContextBridge?: IntegrationSessionRequestContextBridge;
+  requestContextBridge?: IntegrationContextRequestContextBridge;
   modelFactory?: IntegrationModelFactory;
 };

@@ -1,21 +1,21 @@
 /**
- * Session 调度器（按 sessionId 分 lane）。
+ * Context 调度器（按 contextId 分 lane）。
  *
  * 关键点（中文）
- * - 同一 sessionId 串行，不同 sessionId 并发。
+ * - 同一 contextId 串行，不同 contextId 并发。
  * - 默认一个 time-slice 只处理一条消息（保持公平）。
  * - 快速矫正通过“drain lane”实现，不在 scheduler 内拼接文本。
  */
 
-import { withSessionRequestContext, type SessionRequestContext } from "./request-context.js";
-import type { SessionAgent } from "../types/session-agent.js";
-import type { SessionManager } from "./manager.js";
+import { withContextRequestContext, type ContextRequestContext } from "./request-context.js";
+import type { ContextAgent } from "../types/context-agent.js";
+import type { ContextManager } from "./manager.js";
 import type { AgentResult } from "../types/agent.js";
 import type {
   SchedulerConfig,
   SchedulerEnqueueResult,
   SchedulerStats,
-} from "../types/session-scheduler.js";
+} from "../types/context-scheduler.js";
 
 /**
  * 队列中的单条消息。
@@ -24,10 +24,10 @@ import type {
  * - 这是 scheduler 的最小调度单元（不是最终 history 结构）。
  * - 字段保持平台无关，平台差异通过 channel/targetType/threadId 表达。
  */
-type QueuedSessionMessage = {
+type QueuedContextMessage = {
   channel: string;
   targetId: string;
-  sessionId: string;
+  contextId: string;
   text: string;
   targetType?: string;
   threadId?: number;
@@ -37,16 +37,16 @@ type QueuedSessionMessage = {
 };
 
 /**
- * Lane：同一个 sessionId 的串行执行队列。
+ * Lane：同一个 contextId 的串行执行队列。
  *
  * 算法约束（中文）
  * - lane.queue 先进先出，保证同会话顺序一致。
  * - lane.running=true 时不允许并发执行第二条，避免上下文竞争。
  */
 type Lane = {
-  sessionId: string;
+  contextId: string;
   channel: string;
-  queue: QueuedSessionMessage[];
+  queue: QueuedContextMessage[];
   running: boolean;
 };
 
@@ -66,7 +66,7 @@ function clampInt(value: unknown, fallback: number, min: number, max: number): n
  * 归一化 scheduler 配置。
  *
  * 默认策略（中文）
- * - `maxConcurrency=2`：跨 session 小并发。
+ * - `maxConcurrency=2`：跨 context 小并发。
  * - correction merge 默认开启，用于吸收短时间连续更正消息。
  */
 function normalizeConfig(input?: Partial<SchedulerConfig>): SchedulerConfig {
@@ -95,15 +95,15 @@ function normalizeConfig(input?: Partial<SchedulerConfig>): SchedulerConfig {
  * Scheduler：多 lane 公平调度器。
  *
  * 并发模型（中文）
- * - lane 内串行：同 `sessionId` 永不并发执行。
+ * - lane 内串行：同 `contextId` 永不并发执行。
  * - lane 间并发：受 `maxConcurrency` 限制。
  */
 export class Scheduler {
   private readonly config: SchedulerConfig;
-  private readonly getAgent: (sessionId: string) => SessionAgent;
-  private readonly getSessionManager: () => SessionManager;
+  private readonly getAgent: (contextId: string) => ContextAgent;
+  private readonly getContextManager: () => ContextManager;
   private readonly deliverResult?: (params: {
-    context: SessionRequestContext;
+    context: ContextRequestContext;
     result: AgentResult;
   }) => Promise<void>;
 
@@ -118,16 +118,16 @@ export class Scheduler {
    */
   constructor(params: {
     config?: Partial<SchedulerConfig>;
-    getAgent: (sessionId: string) => SessionAgent;
-    getSessionManager: () => SessionManager;
+    getAgent: (contextId: string) => ContextAgent;
+    getContextManager: () => ContextManager;
     deliverResult?: (params: {
-      context: SessionRequestContext;
+      context: ContextRequestContext;
       result: AgentResult;
     }) => Promise<void>;
   }) {
     this.config = normalizeConfig(params.config);
     this.getAgent = params.getAgent;
-    this.getSessionManager = params.getSessionManager;
+    this.getContextManager = params.getContextManager;
     this.deliverResult = params.deliverResult;
   }
 
@@ -178,16 +178,16 @@ export class Scheduler {
    * 关键点（中文）
    * - 入队后立刻 `markRunnable + kick`，确保低延迟触发调度。
    */
-  enqueue(msg: QueuedSessionMessage): SchedulerEnqueueResult {
-    const sessionId = String(msg.sessionId || "").trim();
-    if (!sessionId) {
-      throw new Error("Scheduler.enqueue requires a non-empty sessionId");
+  enqueue(msg: QueuedContextMessage): SchedulerEnqueueResult {
+    const contextId = String(msg.contextId || "").trim();
+    if (!contextId) {
+      throw new Error("Scheduler.enqueue requires a non-empty contextId");
     }
 
-    let lane = this.lanes.get(sessionId);
+    let lane = this.lanes.get(contextId);
     if (!lane) {
-      lane = { sessionId, channel: msg.channel, queue: [], running: false };
-      this.lanes.set(sessionId, lane);
+      lane = { contextId, channel: msg.channel, queue: [], running: false };
+      this.lanes.set(contextId, lane);
     }
 
     lane.queue.push(msg);
@@ -195,7 +195,7 @@ export class Scheduler {
     const lanePosition = lane.queue.length + (lane.running ? 1 : 0);
     const lanePending = lane.queue.length + (lane.running ? 1 : 0);
 
-    this.markRunnable(sessionId);
+    this.markRunnable(contextId);
     void this.kick();
 
     return { lanePosition, lanePending, pendingTotal: this.pendingTotal() };
@@ -205,13 +205,13 @@ export class Scheduler {
    * 将 lane 标记为可运行。
    *
    * 算法说明（中文）
-   * - runnableSet 用于去重，避免同一个 sessionId 在 runnable 队列中重复堆积。
-   * - runnable 保持 FIFO，提供跨 session 的近似公平性。
+   * - runnableSet 用于去重，避免同一个 contextId 在 runnable 队列中重复堆积。
+   * - runnable 保持 FIFO，提供跨 context 的近似公平性。
    */
-  private markRunnable(sessionId: string): void {
-    if (this.runnableSet.has(sessionId)) return;
-    this.runnableSet.add(sessionId);
-    this.runnable.push(sessionId);
+  private markRunnable(contextId: string): void {
+    if (this.runnableSet.has(contextId)) return;
+    this.runnableSet.add(contextId);
+    this.runnable.push(contextId);
   }
 
   /**
@@ -256,7 +256,7 @@ export class Scheduler {
           this.runningTotal -= 1;
 
           if (lane.queue.length > 0) {
-            this.markRunnable(lane.sessionId);
+            this.markRunnable(lane.contextId);
           }
           void this.kick();
         });
@@ -283,17 +283,17 @@ export class Scheduler {
    */
   private async processOne(
     lane: Lane,
-    first: QueuedSessionMessage,
+    first: QueuedContextMessage,
   ): Promise<void> {
-    const agent: SessionAgent = this.getAgent(first.sessionId);
+    const agent: ContextAgent = this.getAgent(first.contextId);
     if (!agent.isInitialized()) {
       await agent.initialize();
     }
 
-    const ctx: SessionRequestContext = {
-      channel: first.channel as SessionRequestContext["channel"],
+    const ctx: ContextRequestContext = {
+      channel: first.channel as ContextRequestContext["channel"],
       targetId: first.targetId,
-      sessionId: first.sessionId,
+      contextId: first.contextId,
       actorId: first.actorId,
       actorName: first.actorName,
       targetType: first.targetType,
@@ -315,7 +315,7 @@ export class Scheduler {
       if (roundsUsed >= maxRounds) return null;
       if (lane.queue.length === 0) return null;
 
-      const extras: QueuedSessionMessage[] = [];
+      const extras: QueuedContextMessage[] = [];
       while (
         extras.length < this.config.correctionMaxMergedMessages &&
         lane.queue.length > 0
@@ -335,22 +335,22 @@ export class Scheduler {
       return { drained: extras.length };
     };
 
-    const result = await withSessionRequestContext(ctx, () =>
+    const result = await withContextRequestContext(ctx, () =>
       agent.run({
-        sessionId: first.sessionId,
+        contextId: first.contextId,
         query: first.text,
         drainLaneMerged: drainLaneMergedIfNeeded,
       }),
     );
 
     try {
-      const runtime = this.getSessionManager();
-      const store = runtime.getHistoryStore(first.sessionId);
+      const runtime = this.getContextManager();
+      const store = runtime.getHistoryStore(first.contextId);
       const assistantMessage = (result as any)?.assistantMessage;
 
       if (assistantMessage && typeof assistantMessage === "object") {
         await store.append(assistantMessage as any);
-        void runtime.afterSessionHistoryUpdatedAsync(first.sessionId);
+        void runtime.afterContextHistoryUpdatedAsync(first.contextId);
       } else {
         const userVisible = String((result as any)?.output || "");
         if (userVisible.trim()) {
@@ -358,7 +358,7 @@ export class Scheduler {
             store.createAssistantTextMessage({
               text: userVisible,
               metadata: {
-                sessionId: first.sessionId,
+                contextId: first.contextId,
                 channel: first.channel,
                 targetId: first.targetId,
                 actorId: "bot",
@@ -375,7 +375,7 @@ export class Scheduler {
               source: "egress",
             }),
           );
-          void runtime.afterSessionHistoryUpdatedAsync(first.sessionId);
+          void runtime.afterContextHistoryUpdatedAsync(first.contextId);
         }
       }
     } catch {

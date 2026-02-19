@@ -2,16 +2,16 @@
  * Core 模块入口（barrel exports）。
  */
 
-export type { SessionRequestContext } from "./session/request-context.js";
+export type { ContextRequestContext } from "./context/request-context.js";
 export {
-  sessionRequestContext,
-  withSessionRequestContext,
-} from "./session/request-context.js";
+  contextRequestContext,
+  withContextRequestContext,
+} from "./context/request-context.js";
 
-export { SessionManager } from "./session/manager.js";
-export { Scheduler } from "./session/scheduler.js";
-export { SessionHistoryStore } from "./session/history-store.js";
+export { ContextManager } from "./context/manager.js";
+export { Scheduler } from "./context/scheduler.js";
+export { ContextHistoryStore } from "./context/history-store.js";
 
-export type { SessionAgent } from "./types/session-agent.js";
-export { createSessionAgent } from "./runtime/agent.js";
+export type { ContextAgent } from "./types/context-agent.js";
+export { createContextAgent } from "./runtime/agent.js";
 

@@ -55,7 +55,7 @@ export function resolveChatContextSnapshot(input?: {
   context?: IntegrationRuntimeDependencies;
 }): ChatContextSnapshot {
   const requestCtx = input?.context
-    ? getIntegrationRequestContextBridge(input.context).getCurrentSessionRequestContext()
+    ? getIntegrationRequestContextBridge(input.context).getCurrentContextRequestContext()
     : undefined;
   const llmCtx = llmRequestContext.getStore();
 
@@ -64,9 +64,9 @@ export function resolveChatContextSnapshot(input?: {
   const snapshot: ChatContextSnapshot = {
     chatKey:
       explicitChatKey ||
-      (typeof requestCtx?.sessionId === "string" && requestCtx.sessionId.trim()
-        ? requestCtx.sessionId.trim()
-        : readEnvString("SMA_CTX_SESSION_ID") ||
+      (typeof requestCtx?.contextId === "string" && requestCtx.contextId.trim()
+        ? requestCtx.contextId.trim()
+        : readEnvString("SMA_CTX_CONTEXT_ID") ||
           readEnvString("SMA_CTX_CHAT_KEY")),
     channel:
       (typeof requestCtx?.channel === "string" && requestCtx.channel.trim()

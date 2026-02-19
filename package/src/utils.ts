@@ -56,7 +56,7 @@ export interface ShipConfig {
    * 上下文与历史管理（工程向配置）。
    *
    * 说明
-   * - 历史以 UIMessage[] 为唯一事实源（.ship/session/<sessionId>/messages/history.jsonl）。
+   * - 历史以 UIMessage[] 为唯一事实源（.ship/context/<contextId>/messages/history.jsonl）。
    * - Agent 每次执行直接把 UIMessage[] 转成 ModelMessage[] 作为 messages 输入。
    * - 超出上下文窗口时会自动 compact（更早段压缩为摘要 + 保留最近窗口）。
    */
@@ -87,23 +87,23 @@ export interface ShipConfig {
       archiveOnCompact?: boolean;
     };
     /**
-     * Chat 消息调度（按 sessionId 分 lane）。
+     * Chat 消息调度（按 contextId 分 lane）。
      *
      * 设计目标
-     * - 同一 sessionId 串行：避免上下文错乱/工具竞态
-     * - 不同 sessionId 可并发：提升整体吞吐
+     * - 同一 contextId 串行：避免上下文错乱/工具竞态
+     * - 不同 contextId 可并发：提升整体吞吐
      *
      * 注意
      * - 这是工程运行时行为配置，修改后需重启服务生效。
      */
-    chatQueue?: {
+    contextQueue?: {
       /**
-       * 全局最大并发（不同 sessionId 之间）。
+       * 全局最大并发（不同 contextId 之间）。
        * 默认：2
        */
       maxConcurrency?: number;
       /**
-       * 是否启用“快速补充/纠正”：当一次执行尚未结束时，如果该 sessionId 又收到新消息，
+       * 是否启用“快速补充/纠正”：当一次执行尚未结束时，如果该 contextId 又收到新消息，
        * 会把新消息合并注入当前 in-flight userMessage，帮助模型及时修正。
        * 默认：true
        */
@@ -322,7 +322,7 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
       maxInputTokensApprox: 12000,
       archiveOnCompact: true,
     },
-    chatQueue: {
+    contextQueue: {
       maxConcurrency: 2,
       enableCorrectionMerge: true,
       correctionMaxRounds: 2,
@@ -467,73 +467,73 @@ export function getShipDataDirPath(cwd: string): string {
   return path.join(getShipDirPath(cwd), "data");
 }
 
-export function getShipSessionRootDirPath(cwd: string): string {
-  return path.join(getShipDirPath(cwd), "session");
+export function getShipContextRootDirPath(cwd: string): string {
+  return path.join(getShipDirPath(cwd), "context");
 }
 
-export function getShipSessionDirPath(cwd: string, sessionId: string): string {
-  return path.join(getShipSessionRootDirPath(cwd), encodeURIComponent(sessionId));
+export function getShipContextDirPath(cwd: string, contextId: string): string {
+  return path.join(getShipContextRootDirPath(cwd), encodeURIComponent(contextId));
 }
 
 /**
  * History Messages（对话历史，唯一事实源）。
  *
  * 关键点（中文）
- * - `.ship/session/<encodedSessionId>/messages/history.jsonl`：每行一个 UIMessage（user/assistant）
+ * - `.ship/context/<encodedContextId>/messages/history.jsonl`：每行一个 UIMessage（user/assistant）
  * - compact 会把被折叠的原始段写入 `messages/archive/*`（可审计）
  */
-export function getShipSessionMessagesDirPath(cwd: string, sessionId: string): string {
-  return path.join(getShipSessionDirPath(cwd, sessionId), "messages");
+export function getShipContextMessagesDirPath(cwd: string, contextId: string): string {
+  return path.join(getShipContextDirPath(cwd, contextId), "messages");
 }
 
-export function getShipSessionHistoryPath(cwd: string, sessionId: string): string {
-  return path.join(getShipSessionMessagesDirPath(cwd, sessionId), "history.jsonl");
+export function getShipContextHistoryPath(cwd: string, contextId: string): string {
+  return path.join(getShipContextMessagesDirPath(cwd, contextId), "history.jsonl");
 }
 
-export function getShipSessionHistoryMetaPath(cwd: string, sessionId: string): string {
-  return path.join(getShipSessionMessagesDirPath(cwd, sessionId), "meta.json");
+export function getShipContextHistoryMetaPath(cwd: string, contextId: string): string {
+  return path.join(getShipContextMessagesDirPath(cwd, contextId), "meta.json");
 }
 
-export function getShipSessionHistoryArchiveDirPath(cwd: string, sessionId: string): string {
-  return path.join(getShipSessionMessagesDirPath(cwd, sessionId), "archive");
+export function getShipContextHistoryArchiveDirPath(cwd: string, contextId: string): string {
+  return path.join(getShipContextMessagesDirPath(cwd, contextId), "archive");
 }
 
-export function getShipSessionHistoryArchivePath(
+export function getShipContextHistoryArchivePath(
   cwd: string,
-  sessionId: string,
+  contextId: string,
   archiveId: string,
 ): string {
   return path.join(
-    getShipSessionHistoryArchiveDirPath(cwd, sessionId),
+    getShipContextHistoryArchiveDirPath(cwd, contextId),
     `${encodeURIComponent(String(archiveId || "").trim())}.json`,
   );
 }
 
-export function getShipSessionMemoryDirPath(cwd: string, sessionId: string): string {
-  return path.join(getShipSessionDirPath(cwd, sessionId), "memory");
+export function getShipContextMemoryDirPath(cwd: string, contextId: string): string {
+  return path.join(getShipContextDirPath(cwd, contextId), "memory");
 }
 
-export function getShipSessionMemoryPrimaryPath(cwd: string, sessionId: string): string {
-  return path.join(getShipSessionMemoryDirPath(cwd, sessionId), "Primary.md");
+export function getShipContextMemoryPrimaryPath(cwd: string, contextId: string): string {
+  return path.join(getShipContextMemoryDirPath(cwd, contextId), "Primary.md");
 }
 
-export function getShipSessionMemoryBackupDirPath(cwd: string, sessionId: string): string {
-  return path.join(getShipSessionMemoryDirPath(cwd, sessionId), "backup");
+export function getShipContextMemoryBackupDirPath(cwd: string, contextId: string): string {
+  return path.join(getShipContextMemoryDirPath(cwd, contextId), "backup");
 }
 
-export function getShipSessionMemoryBackupPath(
+export function getShipContextMemoryBackupPath(
   cwd: string,
-  sessionId: string,
+  contextId: string,
   timestamp: number,
 ): string {
   return path.join(
-    getShipSessionMemoryBackupDirPath(cwd, sessionId),
+    getShipContextMemoryBackupDirPath(cwd, contextId),
     `Primary-${timestamp}.md`,
   );
 }
 
-export function getShipSessionMemoryMetaPath(cwd: string, sessionId: string): string {
-  return path.join(getShipSessionMemoryDirPath(cwd, sessionId), ".meta.json");
+export function getShipContextMemoryMetaPath(cwd: string, contextId: string): string {
+  return path.join(getShipContextMemoryDirPath(cwd, contextId), ".meta.json");
 }
 
 export function getShipPublicDirPath(cwd: string): string {

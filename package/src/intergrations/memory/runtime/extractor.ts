@@ -7,7 +7,7 @@ import type {
 } from "../types/memory.js";
 import { getLogger } from "../../../telemetry/index.js";
 import {
-  getIntegrationSessionManager,
+  getIntegrationContextManager,
 } from "../../../infra/integration-runtime-dependencies.js";
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
@@ -16,7 +16,7 @@ import type { IntegrationRuntimeDependencies } from "../../../infra/integration-
  *
  * 关键点（中文）
  * - LLM 处理较重，建议异步触发
- * - session/history 通过 context 显式注入
+ * - context/history 通过 context 显式注入
  */
 export async function extractMemoryFromHistory(
   params: MemoryExtractParams & {
@@ -24,13 +24,13 @@ export async function extractMemoryFromHistory(
     model: LanguageModel;
   },
 ): Promise<MemoryEntry> {
-  const { context, sessionId, entryRange, model } = params;
+  const { context, contextId, entryRange, model } = params;
   const [startIndex, endIndex] = entryRange;
   const logger = getLogger(context.rootPath, "info");
 
   try {
-    const historyStore = getIntegrationSessionManager(context).getHistoryStore(
-      sessionId,
+    const historyStore = getIntegrationContextManager(context).getHistoryStore(
+      contextId,
     );
     const messages = await historyStore.loadRange(startIndex, endIndex);
 
@@ -145,7 +145,7 @@ ${historyText}
         "warn",
         "Failed to parse memory extraction JSON, using raw text",
         {
-          sessionId,
+          contextId,
           entryRange,
           error: String(parseError),
         },
@@ -160,7 +160,7 @@ ${historyText}
     };
   } catch (error) {
     await logger.log("error", "Failed to extract memory from history", {
-      sessionId,
+      contextId,
       entryRange,
       error: String(error),
     });
@@ -186,7 +186,7 @@ export async function compressMemory(
     model: LanguageModel;
   },
 ): Promise<string> {
-  const { context, sessionId, currentContent, targetChars, model } = params;
+  const { context, contextId, currentContent, targetChars, model } = params;
   const logger = getLogger(context.rootPath, "info");
 
   try {
@@ -233,7 +233,7 @@ ${currentContent}
     const compressed = result.text.trim();
 
     await logger.log("info", "Memory compressed successfully", {
-      sessionId,
+      contextId,
       originalChars: currentContent.length,
       compressedChars: compressed.length,
       targetChars,
@@ -242,7 +242,7 @@ ${currentContent}
     return compressed;
   } catch (error) {
     await logger.log("error", "Failed to compress memory", {
-      sessionId,
+      contextId,
       error: String(error),
     });
 

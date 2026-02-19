@@ -32,7 +32,7 @@ enum OpCode {
   Identify = 2, // 客户端发送鉴权
   Resume = 6, // 客户端恢复连接
   Reconnect = 7, // 服务端通知重连
-  InvalidSession = 9, // 无效的 session
+  InvalidContext = 9, // 无效的 context
   Hello = 10, // 服务端发送 hello
   HeartbeatAck = 11, // 服务端回复心跳
 }
@@ -63,7 +63,7 @@ export class QQBot extends BaseChatAdapter {
   private ws: any | null = null;
   private isRunning: boolean = false;
   private heartbeatInterval: NodeJS.Timeout | null = null;
-  private wsSessionId: string = "";
+  private wsContextId: string = "";
   private lastSeq: number = 0;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
@@ -434,8 +434,8 @@ export class QQBot extends BaseChatAdapter {
         this.ws?.close();
         break;
 
-      case OpCode.InvalidSession:
-        this.logger.error("无效的 Session，需要重新鉴权");
+      case OpCode.InvalidContext:
+        this.logger.error("无效的 Context，需要重新鉴权");
         // 清除缓存的 token，强制重新获取
         this.accessToken = "";
         this.accessTokenExpires = 0;
@@ -604,8 +604,8 @@ export class QQBot extends BaseChatAdapter {
 
     switch (eventType) {
       case EventType.READY:
-        this.wsSessionId = data.session_id;
-        this.logger.info(`QQ Bot 已就绪，WS Session ID: ${this.wsSessionId}`);
+        this.wsContextId = data.context_id;
+        this.logger.info(`QQ Bot 已就绪，WS Context ID: ${this.wsContextId}`);
         this.logger.info(`用户: ${data.user?.username || "N/A"}`);
         // best-effort：记录 bot 自己的 userId，供入站过滤使用
         this.botUserId =

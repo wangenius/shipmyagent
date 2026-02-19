@@ -61,7 +61,7 @@ export const SHIP_JSON_SCHEMA: Record<string, unknown> = {
             archiveOnCompact: { type: "boolean" },
           },
         },
-        chatQueue: {
+        contextQueue: {
           type: "object",
           additionalProperties: true,
           properties: {

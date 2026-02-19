@@ -6,7 +6,7 @@
  * without reaching outside `runtime/`.
  *
  * Layering:
- * - Tool implementations may depend on runtime subsystems (session/store/mcp/etc.)
+ * - Tool implementations may depend on runtime subsystems (context/store/mcp/etc.)
  * - Runtime subsystems should NOT depend on tool implementations
  */
 

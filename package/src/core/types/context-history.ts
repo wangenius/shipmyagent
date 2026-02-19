@@ -1,14 +1,14 @@
 import type { UIMessage } from "ai";
 /**
- * Session 历史：以 UIMessage[] 作为唯一事实源。
+ * Context 历史：以 UIMessage[] 作为唯一事实源。
  *
  * 关键点（中文）
- * - 持久化存储在 `.ship/session/<encodedSessionId>/messages/history.jsonl`
+ * - 持久化存储在 `.ship/context/<encodedContextId>/messages/history.jsonl`
  * - 默认只存 `role=user|assistant`
  * - compact 会把更早消息压缩为一条 `assistant` 摘要消息
  */
 
-export type ShipSessionChannel =
+export type ShipContextChannel =
   | "telegram"
   | "feishu"
   | "qq"
@@ -25,15 +25,15 @@ export type ShipMessageSourceRangeV1 = {
   count: number;
 };
 
-export type ShipSessionMetadataV1 = {
+export type ShipContextMetadataV1 = {
   /** schema 版本 */
   v: 1;
   /** 记录时间戳（ms） */
   ts: number;
   /** 会话 ID */
-  sessionId: string;
+  contextId: string;
   /** 渠道类型 */
-  channel: ShipSessionChannel;
+  channel: ShipContextChannel;
   /** 渠道侧目标 ID（chatId 等） */
   targetId: string;
   /** 发起人 ID */
@@ -58,4 +58,4 @@ export type ShipSessionMetadataV1 = {
   extra?: Record<string, unknown>;
 };
 
-export type ShipSessionMessageV1 = UIMessage<ShipSessionMetadataV1>;
+export type ShipContextMessageV1 = UIMessage<ShipContextMetadataV1>;

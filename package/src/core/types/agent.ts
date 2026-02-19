@@ -6,7 +6,7 @@
  * - 不包含具体实现细节
  */
 
-import type { ShipSessionMessageV1 } from "./session-history.js";
+import type { ShipContextMessageV1 } from "./context-history.js";
 
 export interface AgentResult {
   success: boolean;
@@ -16,11 +16,11 @@ export interface AgentResult {
     input: Record<string, unknown>;
     output: string;
   }>;
-  assistantMessage?: ShipSessionMessageV1;
+  assistantMessage?: ShipContextMessageV1;
 }
 
 export interface AgentRunInput {
-  sessionId: string;
+  contextId: string;
   query: string;
   drainLaneMerged?: () => Promise<{ drained: number } | null>;
 }

@@ -1,14 +1,14 @@
 import { PlatformAdapter } from "./platform-adapter.js";
 import type { ChatDispatchChannel } from "../runtime/chat-send-registry.js";
 import type { Logger } from "../../../telemetry/index.js";
-import { getIntegrationSessionManager } from "../../../infra/integration-runtime-dependencies.js";
+import { getIntegrationContextManager } from "../../../infra/integration-runtime-dependencies.js";
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
 /**
  * 入站消息统一结构（跨平台最小公共字段）。
  *
  * 说明（中文）
- * - chatId 是平台原始会话标识（非 sessionId）
+ * - chatId 是平台原始会话标识（非 contextId）
  * - messageThreadId 用于支持 topic/thread 细粒度并发
  * - 该结构只描述“接收侧”，不包含平台发送参数
  */
@@ -50,11 +50,11 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
    * 清理某个 chatKey 对应的 agent 会话状态。
    *
    * 说明（中文）
-   * - 只清理 runtime/session 层状态，不直接删历史文件
+   * - 只清理 runtime/context 层状态，不直接删历史文件
    * - 常用于用户触发“重置对话”类命令
    */
   clearChat(chatKey: string): void {
-    getIntegrationSessionManager(this.context).clearAgent(chatKey);
+    getIntegrationContextManager(this.context).clearAgent(chatKey);
     this.logger.info(`Cleared chat: ${chatKey}`);
   }
 
@@ -63,7 +63,7 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
    *
    * 说明（中文）
    * - 该方法只负责“落盘记录”，不负责调度执行
-   * - channel/targetId/sessionId 三元组由适配层统一补齐
+   * - channel/targetId/contextId 三元组由适配层统一补齐
    */
   protected async appendUserMessage(params: {
     chatId: string;
@@ -74,10 +74,10 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     meta?: Record<string, unknown>;
   }): Promise<void> {
     const meta = (params.meta || {}) as any;
-    await this.sessionManager.appendUserMessage({
+    await this.contextManager.appendUserMessage({
       channel: this.channel,
       targetId: params.chatId,
-      sessionId: params.chatKey,
+      contextId: params.chatKey,
       actorId: params.userId,
       messageId: params.messageId,
       text: params.text,
@@ -109,11 +109,11 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
       messageId: msg.messageId,
     });
 
-    const { lanePosition } = await getIntegrationSessionManager(this.context).enqueue(
+    const { lanePosition } = await getIntegrationContextManager(this.context).enqueue(
       {
         channel: this.channel,
         targetId: msg.chatId,
-        sessionId: chatKey,
+        contextId: chatKey,
         text: msg.text,
         targetType: msg.chatType,
         threadId: msg.messageThreadId,

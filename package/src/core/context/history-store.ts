@@ -1,5 +1,5 @@
 /**
- * Session history 存储模块。
+ * Context history 存储模块。
  *
  * 关键点（中文）
  * - 基于 JSONL 持久化 UIMessage。
@@ -13,20 +13,20 @@ import path from "node:path";
 import { convertToModelMessages, generateText, type LanguageModel, type SystemModelMessage } from "ai";
 import {
   generateId,
-  getShipSessionDirPath,
-  getShipSessionHistoryArchiveDirPath,
-  getShipSessionHistoryArchivePath,
-  getShipSessionHistoryMetaPath,
-  getShipSessionHistoryPath,
-  getShipSessionMessagesDirPath,
+  getShipContextDirPath,
+  getShipContextHistoryArchiveDirPath,
+  getShipContextHistoryArchivePath,
+  getShipContextHistoryMetaPath,
+  getShipContextHistoryPath,
+  getShipContextMessagesDirPath,
 } from "../../utils.js";
-import type { ShipSessionMetadataV1, ShipSessionMessageV1 } from "../types/session-history.js";
-import type { ShipSessionMessagesMetaV1 } from "../types/session-messages-meta.js";
+import type { ShipContextMetadataV1, ShipContextMessageV1 } from "../types/context-history.js";
+import type { ShipContextMessagesMetaV1 } from "../types/context-messages-meta.js";
 import { getLogger } from "../../telemetry/index.js";
 import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 
 /**
- * SessionHistoryStore：基于 UIMessage 的对话历史存储（per sessionId）。
+ * ContextHistoryStore：基于 UIMessage 的对话历史存储（per contextId）。
  *
  * 设计目标（中文）
  * - 单一事实源：UI 展示 + 模型 messages 使用同一份 UIMessage[] 数据
@@ -34,26 +34,26 @@ import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
  * - 可审计：compact 前的原始段写入 archive（可选，但推荐默认开启）
  *
  * 落盘结构
- * - `.ship/session/<encodedSessionId>/messages/history.jsonl`：每行一个 UIMessage（append + compact 时 rewrite）
- * - `.ship/session/<encodedSessionId>/messages/meta.json`：compact 元数据
- * - `.ship/session/<encodedSessionId>/messages/archive/<archiveId>.json`：compact 归档段
+ * - `.ship/context/<encodedContextId>/messages/history.jsonl`：每行一个 UIMessage（append + compact 时 rewrite）
+ * - `.ship/context/<encodedContextId>/messages/meta.json`：compact 元数据
+ * - `.ship/context/<encodedContextId>/messages/archive/<archiveId>.json`：compact 归档段
  */
-export class SessionHistoryStore {
+export class ContextHistoryStore {
   readonly rootPath: string;
-  readonly sessionId: string;
-  private readonly overrideSessionDirPath?: string;
+  readonly contextId: string;
+  private readonly overrideContextDirPath?: string;
   private readonly overrideMessagesDirPath?: string;
   private readonly overrideMessagesFilePath?: string;
   private readonly overrideMetaFilePath?: string;
   private readonly overrideArchiveDirPath?: string;
 
   constructor(
-    sessionId: string,
+    contextId: string,
     options?: {
       /**
-       * override: session directory path (debug/inspection only; messages paths are used for writes)
+       * override: context directory path (debug/inspection only; messages paths are used for writes)
        */
-      sessionDirPath?: string;
+      contextDirPath?: string;
       /**
        * override: directory containing history/meta/archive (e.g. a task run directory)
        */
@@ -73,14 +73,14 @@ export class SessionHistoryStore {
     },
   ) {
     const rootPath = String(getShipRuntimeContextBase().rootPath || "").trim();
-    if (!rootPath) throw new Error("SessionHistoryStore requires a non-empty rootPath");
-    const key = String(sessionId || "").trim();
-    if (!key) throw new Error("SessionHistoryStore requires a non-empty sessionId");
+    if (!rootPath) throw new Error("ContextHistoryStore requires a non-empty rootPath");
+    const key = String(contextId || "").trim();
+    if (!key) throw new Error("ContextHistoryStore requires a non-empty contextId");
     this.rootPath = rootPath;
-    this.sessionId = key;
-    this.overrideSessionDirPath =
-      options?.sessionDirPath && String(options.sessionDirPath).trim()
-        ? String(options.sessionDirPath).trim()
+    this.contextId = key;
+    this.overrideContextDirPath =
+      options?.contextDirPath && String(options.contextDirPath).trim()
+        ? String(options.contextDirPath).trim()
         : undefined;
     this.overrideMessagesDirPath =
       options?.messagesDirPath && String(options.messagesDirPath).trim()
@@ -101,11 +101,11 @@ export class SessionHistoryStore {
   }
 
   /**
-   * 获取 session 目录路径。
+   * 获取 context 目录路径。
    */
-  getSessionDirPath(): string {
-    if (this.overrideSessionDirPath) return this.overrideSessionDirPath;
-    return getShipSessionDirPath(this.rootPath, this.sessionId);
+  getContextDirPath(): string {
+    if (this.overrideContextDirPath) return this.overrideContextDirPath;
+    return getShipContextDirPath(this.rootPath, this.contextId);
   }
 
   /**
@@ -113,7 +113,7 @@ export class SessionHistoryStore {
    */
   getMessagesDirPath(): string {
     if (this.overrideMessagesDirPath) return this.overrideMessagesDirPath;
-    return getShipSessionMessagesDirPath(this.rootPath, this.sessionId);
+    return getShipContextMessagesDirPath(this.rootPath, this.contextId);
   }
 
   /**
@@ -125,7 +125,7 @@ export class SessionHistoryStore {
       // 关键点（中文）：task run 等自定义 layout 默认也遵循 `history.jsonl` 命名。
       return path.join(this.overrideMessagesDirPath, "history.jsonl");
     }
-    return getShipSessionHistoryPath(this.rootPath, this.sessionId);
+    return getShipContextHistoryPath(this.rootPath, this.contextId);
   }
 
   /**
@@ -134,7 +134,7 @@ export class SessionHistoryStore {
   getMetaFilePath(): string {
     if (this.overrideMetaFilePath) return this.overrideMetaFilePath;
     if (this.overrideMessagesDirPath) return path.join(this.overrideMessagesDirPath, "meta.json");
-    return getShipSessionHistoryMetaPath(this.rootPath, this.sessionId);
+    return getShipContextHistoryMetaPath(this.rootPath, this.contextId);
   }
 
   /**
@@ -143,7 +143,7 @@ export class SessionHistoryStore {
   getArchiveDirPath(): string {
     if (this.overrideArchiveDirPath) return this.overrideArchiveDirPath;
     if (this.overrideMessagesDirPath) return path.join(this.overrideMessagesDirPath, "archive");
-    return getShipSessionHistoryArchiveDirPath(this.rootPath, this.sessionId);
+    return getShipContextHistoryArchiveDirPath(this.rootPath, this.contextId);
   }
 
   /**
@@ -184,14 +184,14 @@ export class SessionHistoryStore {
    *
    * - 仅在已持锁或只读场景使用；解析失败回退默认值。
    */
-  private async readMetaUnsafe(): Promise<ShipSessionMessagesMetaV1> {
+  private async readMetaUnsafe(): Promise<ShipContextMessagesMetaV1> {
     const file = this.getMetaFilePath();
     try {
       const raw = (await fs.readJson(file)) as any;
       if (!raw || typeof raw !== "object") throw new Error("invalid_meta");
       return {
         v: 1,
-        sessionId: this.sessionId,
+        contextId: this.contextId,
         updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : 0,
         pinnedSkillIds: this.normalizePinnedSkillIds(raw.pinnedSkillIds),
         ...(typeof raw.lastArchiveId === "string" && raw.lastArchiveId.trim()
@@ -207,7 +207,7 @@ export class SessionHistoryStore {
     } catch {
       return {
         v: 1,
-        sessionId: this.sessionId,
+        contextId: this.contextId,
         updatedAt: 0,
         pinnedSkillIds: [],
       };
@@ -215,9 +215,9 @@ export class SessionHistoryStore {
   }
 
   /**
-   * 读取 sessionId 的 messages meta（不存在则返回默认值）。
+   * 读取 contextId 的 messages meta（不存在则返回默认值）。
    */
-  async loadMeta(): Promise<ShipSessionMessagesMetaV1> {
+  async loadMeta(): Promise<ShipContextMessagesMetaV1> {
     await this.ensureLayout();
     return await this.readMetaUnsafe();
   }
@@ -227,10 +227,10 @@ export class SessionHistoryStore {
    *
    * - 调用方需自行保证并发安全（通常通过 `withWriteLock`）。
    */
-  private async writeMetaUnsafe(next: ShipSessionMessagesMetaV1): Promise<void> {
-    const normalized: ShipSessionMessagesMetaV1 = {
+  private async writeMetaUnsafe(next: ShipContextMessagesMetaV1): Promise<void> {
+    const normalized: ShipContextMessagesMetaV1 = {
       v: 1,
-      sessionId: this.sessionId,
+      contextId: this.contextId,
       updatedAt: typeof next.updatedAt === "number" ? next.updatedAt : Date.now(),
       pinnedSkillIds: this.normalizePinnedSkillIds(next.pinnedSkillIds),
       ...(typeof next.lastArchiveId === "string" && next.lastArchiveId.trim()
@@ -249,14 +249,14 @@ export class SessionHistoryStore {
   /**
    * 合并更新 meta（用于 pin skills / compact 写入等）。
    */
-  async updateMeta(patch: Partial<ShipSessionMessagesMetaV1>): Promise<ShipSessionMessagesMetaV1> {
+  async updateMeta(patch: Partial<ShipContextMessagesMetaV1>): Promise<ShipContextMessagesMetaV1> {
     return await this.withWriteLock(async () => {
       const prev = await this.readMetaUnsafe();
-      const next: ShipSessionMessagesMetaV1 = {
+      const next: ShipContextMessagesMetaV1 = {
         ...prev,
         ...(patch as any),
         v: 1,
-        sessionId: this.sessionId,
+        contextId: this.contextId,
         updatedAt: Date.now(),
         pinnedSkillIds: this.normalizePinnedSkillIds((patch as any)?.pinnedSkillIds ?? prev.pinnedSkillIds),
       };
@@ -320,7 +320,7 @@ export class SessionHistoryStore {
           if (age > staleMs) {
             await fs.remove(lockPath);
             await logger.log("warn", "Removed stale history lock", {
-              sessionId: this.sessionId,
+              contextId: this.contextId,
               lockPath,
               ageMs: age,
             });
@@ -357,7 +357,7 @@ export class SessionHistoryStore {
    * - append 看起来是简单写入，但仍需与 compact 共享同一把锁。
    * - 否则 compact rewrite 与 append 并发会造成丢行/覆盖。
    */
-  async append(message: ShipSessionMessageV1): Promise<void> {
+  async append(message: ShipContextMessageV1): Promise<void> {
     await this.withWriteLock(async () => {
       await fs.appendFile(this.getMessagesFilePath(), JSON.stringify(message) + "\n", "utf8");
     });
@@ -370,12 +370,12 @@ export class SessionHistoryStore {
    * - 只接收 role=user|assistant 且 parts 合法的行。
    * - 非法 JSON 行采用容错跳过，避免单行损坏导致整体不可读。
    */
-  async loadAll(): Promise<ShipSessionMessageV1[]> {
+  async loadAll(): Promise<ShipContextMessageV1[]> {
     await this.ensureLayout();
     const file = this.getMessagesFilePath();
     const raw = await fs.readFile(file, "utf8");
     const lines = raw.split("\n").filter(Boolean);
-    const out: ShipSessionMessageV1[] = [];
+    const out: ShipContextMessageV1[] = [];
     for (const line of lines) {
       try {
         const obj = JSON.parse(line);
@@ -383,7 +383,7 @@ export class SessionHistoryStore {
         const role = String((obj as any).role || "");
         if (role !== "user" && role !== "assistant") continue;
         if (!Array.isArray((obj as any).parts)) continue;
-        out.push(obj as ShipSessionMessageV1);
+        out.push(obj as ShipContextMessageV1);
       } catch {
         // ignore invalid lines
       }
@@ -405,7 +405,7 @@ export class SessionHistoryStore {
    * 关键点（中文）
    * - 统一做 floor + 边界裁剪，保证调用方传异常值也不会抛错。
    */
-  async loadRange(startIndex: number, endIndex: number): Promise<ShipSessionMessageV1[]> {
+  async loadRange(startIndex: number, endIndex: number): Promise<ShipContextMessageV1[]> {
     const msgs = await this.loadAll();
     const start = Math.max(0, Math.floor(startIndex));
     const end = Math.max(start, Math.floor(endIndex));
@@ -417,10 +417,10 @@ export class SessionHistoryStore {
    */
   createUserTextMessage(params: {
     text: string;
-    metadata: Omit<ShipSessionMetadataV1, "v" | "ts"> & Partial<Pick<ShipSessionMetadataV1, "ts">>;
+    metadata: Omit<ShipContextMetadataV1, "v" | "ts"> & Partial<Pick<ShipContextMetadataV1, "ts">>;
     id?: string;
-  }): ShipSessionMessageV1 {
-    const md: ShipSessionMetadataV1 = {
+  }): ShipContextMessageV1 {
+    const md: ShipContextMetadataV1 = {
       v: 1,
       ts: typeof params.metadata.ts === "number" ? params.metadata.ts : Date.now(),
       ...(params.metadata as any),
@@ -429,7 +429,7 @@ export class SessionHistoryStore {
     };
     const id =
       params.id ||
-      (md.messageId ? `u:${this.sessionId}:${String(md.messageId)}` : `u:${this.sessionId}:${generateId()}`);
+      (md.messageId ? `u:${this.contextId}:${String(md.messageId)}` : `u:${this.contextId}:${generateId()}`);
     return {
       id,
       role: "user",
@@ -443,13 +443,13 @@ export class SessionHistoryStore {
    */
   createAssistantTextMessage(params: {
     text: string;
-    metadata: Omit<ShipSessionMetadataV1, "v" | "ts"> & Partial<Pick<ShipSessionMetadataV1, "ts">>;
+    metadata: Omit<ShipContextMetadataV1, "v" | "ts"> & Partial<Pick<ShipContextMetadataV1, "ts">>;
     id?: string;
     kind?: "normal" | "summary";
     source?: "egress" | "compact";
-    sourceRange?: ShipSessionMetadataV1["sourceRange"];
-  }): ShipSessionMessageV1 {
-    const md: ShipSessionMetadataV1 = {
+    sourceRange?: ShipContextMetadataV1["sourceRange"];
+  }): ShipContextMessageV1 {
+    const md: ShipContextMetadataV1 = {
       v: 1,
       ts: typeof params.metadata.ts === "number" ? params.metadata.ts : Date.now(),
       ...(params.metadata as any),
@@ -457,7 +457,7 @@ export class SessionHistoryStore {
       kind: params.kind || "normal",
       ...(params.sourceRange ? { sourceRange: params.sourceRange } : {}),
     };
-    const id = params.id || `a:${this.sessionId}:${generateId()}`;
+    const id = params.id || `a:${this.contextId}:${generateId()}`;
     return {
       id,
       role: "assistant",
@@ -486,7 +486,7 @@ export class SessionHistoryStore {
    * - 统一把 user/assistant 内容线性化，作为 compact 摘要输入。
    * - tool 原始结构不会原样输出，避免把噪声日志喂给摘要模型。
    */
-  private extractPlainTextFromMessages(messages: ShipSessionMessageV1[]): string {
+  private extractPlainTextFromMessages(messages: ShipContextMessageV1[]): string {
     const lines: string[] = [];
     for (const m of messages) {
       if (!m || typeof m !== "object") continue;
@@ -522,7 +522,7 @@ export class SessionHistoryStore {
     // phase 1：snapshot（短锁）
     // - 仅负责拿一致性快照，不做耗时的模型调用。
     // - 目的是把锁持有时间降到最低。
-    let snapshot: ShipSessionMessageV1[] = [];
+    let snapshot: ShipContextMessageV1[] = [];
     let snapshotTailId = "";
     await this.withWriteLock(async () => {
       snapshot = await this.loadAll();
@@ -579,7 +579,7 @@ export class SessionHistoryStore {
       summary = String(r.text || "").trim();
     } catch (e) {
       await logger.log("warn", "History compact summary failed, fallback to lossy truncation", {
-        sessionId: this.sessionId,
+        contextId: this.contextId,
         error: String(e),
       });
       summary = "（系统自动压缩：摘要生成失败，已丢弃更早历史，仅保留最近对话。）";
@@ -590,9 +590,9 @@ export class SessionHistoryStore {
     const summaryMsg = this.createAssistantTextMessage({
       text: summary,
       metadata: {
-        sessionId: this.sessionId,
+        contextId: this.contextId,
         channel: (kept[kept.length - 1]?.metadata as any)?.channel || "api",
-        targetId: (kept[kept.length - 1]?.metadata as any)?.targetId || this.sessionId,
+        targetId: (kept[kept.length - 1]?.metadata as any)?.targetId || this.contextId,
       } as any,
       kind: "summary",
       source: "compact",
@@ -617,8 +617,8 @@ export class SessionHistoryStore {
 
       if (params.archiveOnCompact) {
         await fs.writeJson(
-          getShipSessionHistoryArchivePath(this.rootPath, this.sessionId, archiveId),
-          { v: 1, sessionId: this.sessionId, archivedAt: Date.now(), messages: currentOlder },
+          getShipContextHistoryArchivePath(this.rootPath, this.contextId, archiveId),
+          { v: 1, contextId: this.contextId, archivedAt: Date.now(), messages: currentOlder },
           { spaces: 2 },
         );
       }

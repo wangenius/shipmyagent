@@ -16,17 +16,17 @@ export function createLlmLoggingFetch(args: {
         const ctx = llmRequestContext.getStore() as LlmRequestContext | undefined;
 
         if (parsed) {
-          const sessionId = ctx?.sessionId;
+          const contextId = ctx?.contextId;
           const requestId = ctx?.requestId;
           const message = parsed.requestText
             .replace(/\n===== LLM REQUEST END =====$/, "") +
-            `${sessionId ? `\nsessionId: ${sessionId}` : ""}` +
+            `${contextId ? `\ncontextId: ${contextId}` : ""}` +
             `${requestId ? `\nrequestId: ${requestId}` : ""}` +
             `\n===== LLM REQUEST END =====`;
 
           await args.logger.log("info", message.slice(0, maxChars), {
             ...parsed.meta,
-            sessionId,
+            contextId,
             requestId,
           });
         }

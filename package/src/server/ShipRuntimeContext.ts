@@ -1,13 +1,13 @@
 import { DEFAULT_SHIP_PROMPTS } from "../core/prompts/system.js";
 import { logger as defaultLogger, type Logger } from "../telemetry/index.js";
 import { McpManager } from "../intergrations/mcp/runtime/manager.js";
-import { SessionManager } from "../core/session/manager.js";
+import { ContextManager } from "../core/context/manager.js";
 import {
-  sessionRequestContext,
-  withSessionRequestContext,
-} from "../core/session/request-context.js";
+  contextRequestContext,
+  withContextRequestContext,
+} from "../core/context/request-context.js";
 import { createModel } from "../core/llm/create-model.js";
-import { runSessionMemoryMaintenance } from "../intergrations/memory/runtime/service.js";
+import { runContextMemoryMaintenance } from "../intergrations/memory/runtime/service.js";
 import { pickLastSuccessfulChatSendText } from "../intergrations/chat/runtime/user-visible-text.js";
 import { sendTextByChatKey } from "../intergrations/chat/runtime/chatkey-send.js";
 import { registerIntegrationSystemPromptProviders } from "./system-prompt-providers.js";
@@ -16,7 +16,7 @@ import {
   getAgentMdPath,
   getCacheDirPath,
   getLogsDirPath,
-  getShipSessionRootDirPath,
+  getShipContextRootDirPath,
   getShipConfigDirPath,
   getShipDataDirPath,
   getShipDebugDirPath,
@@ -41,7 +41,7 @@ import path from "path";
  *
  * 初始化时序（关键节点）
  * - 启动入口先 `setShipRuntimeContextBase(...)`
- * - 初始化 MCP/SessionManager 后再 `setShipRuntimeContext(...)`
+ * - 初始化 MCP/ContextManager 后再 `setShipRuntimeContext(...)`
  * - 业务模块只调用 `getShipRuntimeContext()`（未 ready 会抛错）
  */
 export type ShipRuntimeContextBase = {
@@ -61,7 +61,7 @@ export type ShipRuntimeContextBase = {
 
 export type ShipRuntimeContext = ShipRuntimeContextBase & {
   mcpManager: McpManager;
-  sessionManager: SessionManager;
+  contextManager: ContextManager;
 };
 
 let base: ShipRuntimeContextBase | null = null;
@@ -74,8 +74,8 @@ let ready: ShipRuntimeContext | null = null;
  * - server 负责把 core 的 request-context 能力适配为 infra 端口。
  */
 const integrationRequestContextBridge = {
-  getCurrentSessionRequestContext: () => sessionRequestContext.getStore(),
-  withSessionRequestContext,
+  getCurrentContextRequestContext: () => contextRequestContext.getStore(),
+  withContextRequestContext,
 };
 
 /**
@@ -89,7 +89,7 @@ const integrationModelFactory = {
  * integration chat 运行时桥接实现。
  *
  * 关键点（中文）
- * - 通过 `getShipIntegrationContext()` 延迟获取依赖，确保拿到最新 sessionManager。
+ * - 通过 `getShipIntegrationContext()` 延迟获取依赖，确保拿到最新 contextManager。
  */
 const integrationChatRuntimeBridge = {
   pickLastSuccessfulChatSendText,
@@ -102,7 +102,7 @@ const integrationChatRuntimeBridge = {
 };
 
 /**
- * 构建基础 integration context（不含 sessionManager）。
+ * 构建基础 integration context（不含 contextManager）。
  *
  * 场景（中文）
  * - runtime 尚未 ready（例如 MCP 初始化阶段）也可安全使用。
@@ -123,14 +123,14 @@ function buildIntegrationContextBase(
 }
 
 /**
- * 构建 ready integration context（含 sessionManager）。
+ * 构建 ready integration context（含 contextManager）。
  */
 function buildIntegrationContextReady(
   input: ShipRuntimeContext,
 ): IntegrationRuntimeDependencies {
   return {
     ...buildIntegrationContextBase(input),
-    sessionManager: input.sessionManager,
+    contextManager: input.contextManager,
   };
 }
 
@@ -195,7 +195,7 @@ export function getShipRuntimeContext(): ShipRuntimeContext {
     );
   }
   throw new Error(
-    "Ship runtime context is not ready yet. Ensure MCP/SessionManager are initialized before access.",
+    "Ship runtime context is not ready yet. Ensure MCP/ContextManager are initialized before access.",
   );
 }
 
@@ -206,7 +206,7 @@ export function getShipRuntimeContext(): ShipRuntimeContext {
  * 1) 解析 rootPath + 绑定 logger 落盘目录
  * 2) 校验关键文件并确保 `.ship` 目录结构
  * 3) 加载 dotenv + ship.json，建立 base context
- * 4) 初始化 MCP / SessionManager，建立 ready context
+ * 4) 初始化 MCP / ContextManager，建立 ready context
  * 5) 注册 integration system prompt providers
  */
 
@@ -261,13 +261,13 @@ You are a helpful project assistant.`;
   });
   await mcpManager.initialize();
 
-  let sessionManager: SessionManager;
-  sessionManager = new SessionManager({
-    runMemoryMaintenance: async (sessionId) =>
-      runSessionMemoryMaintenance({
+  let contextManager: ContextManager;
+  contextManager = new ContextManager({
+    runMemoryMaintenance: async (contextId) =>
+      runContextMemoryMaintenance({
         context: getShipIntegrationContext(),
-        sessionId,
-        getHistoryStore: (id) => sessionManager.getHistoryStore(id),
+        contextId,
+        getHistoryStore: (id) => contextManager.getHistoryStore(id),
       }),
   });
 
@@ -278,7 +278,7 @@ You are a helpful project assistant.`;
     config,
     systems,
     mcpManager,
-    sessionManager,
+    contextManager,
   });
 
   registerIntegrationSystemPromptProviders({
@@ -317,7 +317,7 @@ function ensureShipDirectories(projectRoot: string): void {
   fs.ensureDirSync(getCacheDirPath(projectRoot));
   fs.ensureDirSync(getShipProfileDirPath(projectRoot));
   fs.ensureDirSync(getShipDataDirPath(projectRoot));
-  fs.ensureDirSync(getShipSessionRootDirPath(projectRoot));
+  fs.ensureDirSync(getShipContextRootDirPath(projectRoot));
   fs.ensureDirSync(getShipPublicDirPath(projectRoot));
   fs.ensureDirSync(getShipConfigDirPath(projectRoot));
   fs.ensureDirSync(path.join(getShipDirPath(projectRoot), "schema"));

@@ -1,15 +1,15 @@
 import fs from "fs-extra";
 import {
-  getShipSessionMemoryPrimaryPath,
-  getShipSessionMemoryBackupDirPath,
-  getShipSessionMemoryBackupPath,
-  getShipSessionMemoryMetaPath,
+  getShipContextMemoryPrimaryPath,
+  getShipContextMemoryBackupDirPath,
+  getShipContextMemoryBackupPath,
+  getShipContextMemoryMetaPath,
 } from "../../../utils.js";
 import type { MemoryEntry } from "../types/memory.js";
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
 /**
- * MemoryManager：管理单个 session 的记忆文件（memory/Primary.md）。
+ * MemoryManager：管理单个 context 的记忆文件（memory/Primary.md）。
  *
  * 关键点（中文）
  * - 通过 context 显式传入 rootPath
@@ -17,17 +17,17 @@ import type { IntegrationRuntimeDependencies } from "../../../infra/integration-
  */
 export class MemoryManager {
   readonly rootPath: string;
-  readonly sessionId: string;
+  readonly contextId: string;
   private readonly filePath: string;
 
-  constructor(context: IntegrationRuntimeDependencies, sessionId: string) {
+  constructor(context: IntegrationRuntimeDependencies, contextId: string) {
     const rootPath = String(context.rootPath || "").trim();
     if (!rootPath) throw new Error("MemoryManager requires a non-empty rootPath");
-    const key = String(sessionId || "").trim();
-    if (!key) throw new Error("MemoryManager requires a non-empty sessionId");
+    const key = String(contextId || "").trim();
+    if (!key) throw new Error("MemoryManager requires a non-empty contextId");
     this.rootPath = rootPath;
-    this.sessionId = key;
-    this.filePath = getShipSessionMemoryPrimaryPath(this.rootPath, this.sessionId);
+    this.contextId = key;
+    this.filePath = getShipContextMemoryPrimaryPath(this.rootPath, this.contextId);
   }
 
   async load(): Promise<string> {
@@ -70,13 +70,13 @@ export class MemoryManager {
       const content = await this.load();
       if (!content) return "";
 
-      const backupDir = getShipSessionMemoryBackupDirPath(this.rootPath, this.sessionId);
+      const backupDir = getShipContextMemoryBackupDirPath(this.rootPath, this.contextId);
       await fs.ensureDir(backupDir);
 
       const timestamp = Date.now();
-      const backupPath = getShipSessionMemoryBackupPath(
+      const backupPath = getShipContextMemoryBackupPath(
         this.rootPath,
-        this.sessionId,
+        this.contextId,
         timestamp,
       );
 
@@ -102,7 +102,7 @@ export class MemoryManager {
     lastExtractedAt?: number;
   }> {
     try {
-      const metaPath = getShipSessionMemoryMetaPath(this.rootPath, this.sessionId);
+      const metaPath = getShipContextMemoryMetaPath(this.rootPath, this.contextId);
       if (!(await fs.pathExists(metaPath))) return {};
 
       const content = await fs.readFile(metaPath, "utf-8");
@@ -118,7 +118,7 @@ export class MemoryManager {
     lastExtractedAt?: number;
   }): Promise<void> {
     try {
-      const metaPath = getShipSessionMemoryMetaPath(this.rootPath, this.sessionId);
+      const metaPath = getShipContextMemoryMetaPath(this.rootPath, this.contextId);
       await fs.ensureFile(metaPath);
       await fs.writeFile(metaPath, JSON.stringify(meta, null, 2), "utf-8");
     } catch (error) {
@@ -158,7 +158,7 @@ export class MemoryManager {
     const lines: string[] = [];
     const date = new Date(firstEntry.timestamp).toLocaleString("zh-CN");
 
-    lines.push("# Session Memory / Primary");
+    lines.push("# Context Memory / Primary");
     lines.push("");
     lines.push(`**最后更新**: ${date}`);
     lines.push(`**总轮次**: ${firstEntry.roundRange[1]}`);

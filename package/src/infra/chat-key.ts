@@ -11,15 +11,15 @@
  *
  * 优先级（中文）
  * 1) 显式参数 `input.chatKey`
- * 2) `SMA_CTX_SESSION_ID`
+ * 2) `SMA_CTX_CONTEXT_ID`
  * 3) `SMA_CTX_CHAT_KEY`
  */
 export function resolveChatKey(input?: { chatKey?: string }): string | undefined {
   const explicit = String(input?.chatKey || "").trim();
   if (explicit) return explicit;
 
-  const envSessionId = String(process.env.SMA_CTX_SESSION_ID || "").trim();
-  if (envSessionId) return envSessionId;
+  const envContextId = String(process.env.SMA_CTX_CONTEXT_ID || "").trim();
+  if (envContextId) return envContextId;
 
   const envChatKey = String(process.env.SMA_CTX_CHAT_KEY || "").trim();
   if (envChatKey) return envChatKey;

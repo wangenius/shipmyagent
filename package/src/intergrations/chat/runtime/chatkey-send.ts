@@ -10,8 +10,8 @@
  */
 
 import { getChatSender, type ChatDispatchChannel } from "./chat-send-registry.js";
-import type { ShipSessionMessageV1 } from "../../../infra/session-history-types.js";
-import { getIntegrationSessionManager } from "../../../infra/integration-runtime-dependencies.js";
+import type { ShipContextMessageV1 } from "../../../infra/context-history-types.js";
+import { getIntegrationContextManager } from "../../../infra/integration-runtime-dependencies.js";
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
 type DispatchableChannel = "telegram" | "feishu" | "qq";
@@ -64,7 +64,7 @@ export function parseChatKeyForDispatch(chatKey: string): {
  * - 从尾到头扫描，遇到首个带元数据的 user 消息即返回。
  * - 这样可尽量命中“当前对话最近一次有效入站消息”的上下文。
  */
-function pickLatestUserMetaFromMessages(messages: ShipSessionMessageV1[]): {
+function pickLatestUserMetaFromMessages(messages: ShipContextMessageV1[]): {
   chatType?: string;
   messageThreadId?: number;
   messageId?: string;
@@ -103,7 +103,7 @@ function pickLatestUserMetaFromMessages(messages: ShipSessionMessageV1[]): {
  *
  * 流程（中文）
  * 1) 解析 chatKey 并定位 channel dispatcher
- * 2) 从 session history 回填 chatType/threadId/messageId
+ * 2) 从 context history 回填 chatType/threadId/messageId
  * 3) 合并参数后调用 dispatcher 发送
  */
 export async function sendTextByChatKey(params: {
@@ -132,8 +132,8 @@ export async function sendTextByChatKey(params: {
   }
 
   // 关键点（中文）：尽量从 history 的最近 user message 拿到 chatType/messageThreadId/messageId（尤其 QQ 需要）。
-  const historyStore = getIntegrationSessionManager(context).getHistoryStore(chatKey);
-  let messages: ShipSessionMessageV1[] = [];
+  const historyStore = getIntegrationContextManager(context).getHistoryStore(chatKey);
+  let messages: ShipContextMessageV1[] = [];
   try {
     messages = await historyStore.loadAll();
   } catch {

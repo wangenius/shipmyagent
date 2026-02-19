@@ -7,7 +7,7 @@
  * - run dir: `./.ship/task/<taskId>/<timestamp>/`
  * - run history: `./.ship/task/<taskId>/<timestamp>/history.jsonl`
  *
- * 同时定义“task run sessionId”格式，用于把 Agent 的 historyStore 映射到 run 目录：
+ * 同时定义“task run contextId”格式，用于把 Agent 的 historyStore 映射到 run 目录：
  * - `task-run:<taskId>:<timestamp>`
  */
 
@@ -65,15 +65,15 @@ export function getTaskRunDir(
   return path.join(getTaskDir(projectRoot, taskId), ts);
 }
 
-export function createTaskRunSessionId(taskId: string, timestamp: string): string {
+export function createTaskRunContextId(taskId: string, timestamp: string): string {
   const id = normalizeTaskId(taskId);
   const ts = String(timestamp || "").trim();
   if (!ts) throw new Error("timestamp is required");
   return `task-run:${id}:${ts}`;
 }
 
-export function parseTaskRunSessionId(sessionId: string): { taskId: string; timestamp: string } | null {
-  const key = String(sessionId || "").trim();
+export function parseTaskRunContextId(contextId: string): { taskId: string; timestamp: string } | null {
+  const key = String(contextId || "").trim();
   if (!key) return null;
   const m = key.match(/^task-run:([^:]+):(.+)$/);
   if (!m) return null;

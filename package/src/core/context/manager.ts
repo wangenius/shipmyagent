@@ -1,41 +1,41 @@
 /**
- * SessionManager：会话生命周期编排器。
+ * ContextManager：会话生命周期编排器。
  *
  * 关键职责（中文）
- * - 管理 sessionId -> Agent/HistoryStore 缓存
+ * - 管理 contextId -> Agent/HistoryStore 缓存
  * - 负责消息入库与调度入队
  * - 在历史更新后触发 memory 维护钩子
  */
 
-import type { SessionAgent } from "../types/session-agent.js";
-import type { SchedulerEnqueueResult } from "../types/session-scheduler.js";
+import type { ContextAgent } from "../types/context-agent.js";
+import type { SchedulerEnqueueResult } from "../types/context-scheduler.js";
 import { Scheduler } from "./scheduler.js";
-import { createSessionAgent } from "../runtime/agent.js";
-import { SessionHistoryStore } from "./history-store.js";
-import type { ShipSessionMetadataV1 } from "../types/session-history.js";
+import { createContextAgent } from "../runtime/agent.js";
+import { ContextHistoryStore } from "./history-store.js";
+import type { ShipContextMetadataV1 } from "../types/context-history.js";
 import type { AgentResult } from "../types/agent.js";
-import type { SessionRequestContext } from "./request-context.js";
+import type { ContextRequestContext } from "./request-context.js";
 import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 import path from "node:path";
 import {
-  parseTaskRunSessionId,
+  parseTaskRunContextId,
   getTaskRunDir,
 } from "../../intergrations/task/runtime/paths.js";
 
 /**
- * SessionManager：统一会话运行管理容器。
+ * ContextManager：统一会话运行管理容器。
  *
  * 关键点（中文）
- * - 一个 sessionId 对应一个 Agent 实例与一个 HistoryStore 实例。
- * - scheduler 只处理执行时序；SessionManager 负责上下文对象组装。
+ * - 一个 contextId 对应一个 Agent 实例与一个 HistoryStore 实例。
+ * - scheduler 只处理执行时序；ContextManager 负责上下文对象组装。
  */
-export class SessionManager {
-  private readonly agentsBySessionId: Map<string, SessionAgent> = new Map();
-  private readonly historyStoresBySessionId: Map<string, SessionHistoryStore> =
+export class ContextManager {
+  private readonly agentsByContextId: Map<string, ContextAgent> = new Map();
+  private readonly historyStoresByContextId: Map<string, ContextHistoryStore> =
     new Map();
 
   private readonly scheduler: Scheduler;
-  private readonly runMemoryMaintenance?: (sessionId: string) => Promise<void>;
+  private readonly runMemoryMaintenance?: (contextId: string) => Promise<void>;
 
   /**
    * 构造函数：装配 scheduler 与可选回调。
@@ -46,19 +46,19 @@ export class SessionManager {
    */
   constructor(params?: {
     deliverResult?: (params: {
-      context: SessionRequestContext;
+      context: ContextRequestContext;
       result: AgentResult;
     }) => Promise<void>;
-    runMemoryMaintenance?: (sessionId: string) => Promise<void>;
+    runMemoryMaintenance?: (contextId: string) => Promise<void>;
   }) {
     const base = getShipRuntimeContextBase();
-    const queueConfig = (base.config?.context as any)?.sessionQueue || {};
+    const queueConfig = (base.config?.context as any)?.contextQueue || {};
 
     this.runMemoryMaintenance = params?.runMemoryMaintenance;
     this.scheduler = new Scheduler({
       config: queueConfig,
-      getAgent: (sessionId) => this.getAgent(sessionId),
-      getSessionManager: () => this,
+      getAgent: (contextId) => this.getAgent(contextId),
+      getContextManager: () => this,
       deliverResult: params?.deliverResult,
     });
   }
@@ -86,21 +86,21 @@ export class SessionManager {
    * 获取（或创建）HistoryStore。
    *
    * 算法说明（中文）
-   * - 常规 session：使用默认 `.ship/session/.../messages/*` 路径。
-   * - task run session：重定向到 `.ship/task/<taskId>/<timestamp>/`，实现任务执行审计隔离。
+   * - 常规 context：使用默认 `.ship/context/.../messages/*` 路径。
+   * - task run context：重定向到 `.ship/task/<taskId>/<timestamp>/`，实现任务执行审计隔离。
    */
-  getHistoryStore(sessionId: string): SessionHistoryStore {
-    const key = String(sessionId || "").trim();
+  getHistoryStore(contextId: string): ContextHistoryStore {
+    const key = String(contextId || "").trim();
     if (!key) {
       throw new Error(
-        "SessionManager.getHistoryStore requires a non-empty sessionId",
+        "ContextManager.getHistoryStore requires a non-empty contextId",
       );
     }
 
-    const existing = this.historyStoresBySessionId.get(key);
+    const existing = this.historyStoresByContextId.get(key);
     if (existing) return existing;
 
-    const parsedRun = parseTaskRunSessionId(key);
+    const parsedRun = parseTaskRunContextId(key);
     const created = parsedRun
       ? (() => {
           const runDir = getTaskRunDir(
@@ -108,63 +108,63 @@ export class SessionManager {
             parsedRun.taskId,
             parsedRun.timestamp,
           );
-          return new SessionHistoryStore(key, {
-            sessionDirPath: runDir,
+          return new ContextHistoryStore(key, {
+            contextDirPath: runDir,
             messagesDirPath: runDir,
             messagesFilePath: path.join(runDir, "history.jsonl"),
             metaFilePath: path.join(runDir, "meta.json"),
             archiveDirPath: path.join(runDir, "archive"),
           });
         })()
-      : new SessionHistoryStore(key);
+      : new ContextHistoryStore(key);
 
-    this.historyStoresBySessionId.set(key, created);
+    this.historyStoresByContextId.set(key, created);
     return created;
   }
 
   /**
-   * 获取（或创建）SessionAgent。
+   * 获取（或创建）ContextAgent。
    *
    * 关键点（中文）
-   * - 保证同一 sessionId 复用同一个 Agent 实例，避免上下文状态割裂。
+   * - 保证同一 contextId 复用同一个 Agent 实例，避免上下文状态割裂。
    */
-  getAgent(sessionId: string): SessionAgent {
-    const key = String(sessionId || "").trim();
+  getAgent(contextId: string): ContextAgent {
+    const key = String(contextId || "").trim();
     if (!key) {
       throw new Error(
-        "SessionManager.getAgent requires a non-empty sessionId",
+        "ContextManager.getAgent requires a non-empty contextId",
       );
     }
-    const existing = this.agentsBySessionId.get(key);
+    const existing = this.agentsByContextId.get(key);
     if (existing) return existing;
-    const created = createSessionAgent();
-    this.agentsBySessionId.set(key, created);
+    const created = createContextAgent();
+    this.agentsByContextId.set(key, created);
     return created;
   }
 
   /**
    * 清理 Agent 缓存。
    *
-   * - 传 sessionId：仅清理单会话 Agent。
+   * - 传 contextId：仅清理单会话 Agent。
    * - 不传：清空全部 Agent 缓存。
    */
-  clearAgent(sessionId?: string): void {
-    if (typeof sessionId === "string" && sessionId.trim()) {
-      this.agentsBySessionId.delete(sessionId.trim());
+  clearAgent(contextId?: string): void {
+    if (typeof contextId === "string" && contextId.trim()) {
+      this.agentsByContextId.delete(contextId.trim());
       return;
     }
-    this.agentsBySessionId.clear();
+    this.agentsByContextId.clear();
   }
 
   /**
-   * 触发 session 记忆维护。
+   * 触发 context 记忆维护。
    *
    * 关键点（中文）
    * - core 只负责触发，不承载 memory 提取/压缩细节
    * - 具体策略由 integration 通过 runMemoryMaintenance 注入
    */
-  async afterSessionHistoryUpdatedAsync(sessionId: string): Promise<void> {
-    const key = String(sessionId || "").trim();
+  async afterContextHistoryUpdatedAsync(contextId: string): Promise<void> {
+    const key = String(contextId || "").trim();
     if (!key) return;
     if (!this.runMemoryMaintenance) return;
     try {
@@ -184,7 +184,7 @@ export class SessionManager {
   async appendUserMessage(params: {
     channel: string;
     targetId: string;
-    sessionId: string;
+    contextId: string;
     text: string;
     actorId?: string;
     actorName?: string;
@@ -194,14 +194,14 @@ export class SessionManager {
     requestId?: string;
     extra?: Record<string, unknown>;
   }): Promise<void> {
-    const sessionId = String(params.sessionId || "").trim();
-    if (!sessionId) return;
+    const contextId = String(params.contextId || "").trim();
+    if (!contextId) return;
     try {
-      const store = this.getHistoryStore(sessionId);
+      const store = this.getHistoryStore(contextId);
       const msg = store.createUserTextMessage({
         text: params.text,
         metadata: {
-          sessionId,
+          contextId,
           channel: params.channel as any,
           targetId: params.targetId,
           actorId: params.actorId,
@@ -211,10 +211,10 @@ export class SessionManager {
           targetType: params.targetType,
           requestId: params.requestId,
           extra: params.extra,
-        } as Omit<ShipSessionMetadataV1, "v" | "ts">,
+        } as Omit<ShipContextMetadataV1, "v" | "ts">,
       });
       await store.append(msg);
-      void this.afterSessionHistoryUpdatedAsync(sessionId);
+      void this.afterContextHistoryUpdatedAsync(contextId);
     } catch {
       // ignore
     }
@@ -225,7 +225,7 @@ export class SessionManager {
    *
    * 流程（中文）
    * 1) append user message
-   * 2) 交给 scheduler 按 session lane 串行调度
+   * 2) 交给 scheduler 按 context lane 串行调度
    *
    * 一致性（中文）
    * - 先写 history 再入 scheduler，保证执行时上下文可回放。
@@ -233,7 +233,7 @@ export class SessionManager {
   async enqueue(params: {
     channel: string;
     targetId: string;
-    sessionId: string;
+    contextId: string;
     text: string;
     targetType?: string;
     threadId?: number;
@@ -241,15 +241,15 @@ export class SessionManager {
     actorId?: string;
     actorName?: string;
   }): Promise<SchedulerEnqueueResult> {
-    const sessionId = String(params.sessionId || "").trim();
-    if (!sessionId) {
-      throw new Error("SessionManager.enqueue requires a non-empty sessionId");
+    const contextId = String(params.contextId || "").trim();
+    if (!contextId) {
+      throw new Error("ContextManager.enqueue requires a non-empty contextId");
     }
 
     await this.appendUserMessage({
       channel: params.channel,
       targetId: params.targetId,
-      sessionId,
+      contextId,
       actorId: params.actorId,
       actorName: params.actorName,
       messageId: params.messageId,
@@ -261,7 +261,7 @@ export class SessionManager {
     return this.scheduler.enqueue({
       channel: params.channel,
       targetId: params.targetId,
-      sessionId,
+      contextId,
       text: params.text,
       targetType: params.targetType,
       threadId: params.threadId,

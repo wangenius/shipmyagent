@@ -11,7 +11,7 @@ import type { SystemPromptProvider } from "../../../infra/system-prompt-provider
 import {
   getShipProfileOtherPath,
   getShipProfilePrimaryPath,
-  getShipSessionMemoryPrimaryPath,
+  getShipContextMemoryPrimaryPath,
 } from "../../../utils.js";
 
 async function readOptionalMarkdown(filePath: string): Promise<string> {
@@ -57,13 +57,13 @@ export const memorySystemPromptProvider: SystemPromptProvider = {
       });
     }
 
-    const sessionMemoryPrimary = await readOptionalMarkdown(
-      getShipSessionMemoryPrimaryPath(ctx.projectRoot, ctx.sessionId),
+    const contextMemoryPrimary = await readOptionalMarkdown(
+      getShipContextMemoryPrimaryPath(ctx.projectRoot, ctx.contextId),
     );
-    if (sessionMemoryPrimary) {
+    if (contextMemoryPrimary) {
       messages.push({
         role: "system",
-        content: ["# Session Memory / Primary", sessionMemoryPrimary].join(
+        content: ["# Context Memory / Primary", contextMemoryPrimary].join(
           "\n\n",
         ),
       });

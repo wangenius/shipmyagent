@@ -1,5 +1,5 @@
 /**
- * Shell session tools（Codex 风格）。
+ * Shell context tools（Codex 风格）。
  *
  * 设计目标（中文）
  * - 只提供会话式命令工具：`exec_command` + `write_stdin`
@@ -13,7 +13,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import { z } from "zod";
 import { tool } from "ai";
 import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
-import { sessionRequestContext } from "../session/request-context.js";
+import { contextRequestContext } from "../context/request-context.js";
 import { llmRequestContext } from "../../telemetry/index.js";
 
 const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
@@ -33,17 +33,17 @@ const MAX_YIELD_TIME_MS = 30_000;
  * - 缓存的是“尚未被读取”的输出。
  * - 超出上限时丢弃最旧部分，保证进程不会无限吃内存。
  */
-const MAX_SESSION_PENDING_CHARS = 1_000_000;
-const MAX_ACTIVE_EXEC_SESSIONS = 64;
+const MAX_CONTEXT_PENDING_CHARS = 1_000_000;
+const MAX_ACTIVE_EXEC_CONTEXTS = 64;
 
-let nextSessionId = 1000;
+let nextContextId = 1000;
 
 type OutputLimits = {
   maxChars: number;
   maxLines: number;
 };
 
-type ExecSession = {
+type ExecContext = {
   id: number;
   command: string;
   cwd: string;
@@ -58,7 +58,7 @@ type ExecSession = {
   lastActiveAt: number;
 };
 
-const execSessions = new Map<number, ExecSession>();
+const execContexts = new Map<number, ExecContext>();
 
 /**
  * 归一化 yieldTime。
@@ -165,20 +165,20 @@ function setEnvNumber(
  * 构建子进程环境变量。
  *
  * 关键点（中文）
- * - 把 session/request 上下文字段透传给命令执行环境。
+ * - 把 context/request 上下文字段透传给命令执行环境。
  */
 function buildExecContextEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
-  const sessionCtx = sessionRequestContext.getStore();
+  const contextCtx = contextRequestContext.getStore();
   const llmCtx = llmRequestContext.getStore();
 
-  setEnvString(env, "SMA_CTX_SESSION_ID", sessionCtx?.sessionId);
-  setEnvString(env, "SMA_CTX_CHANNEL", sessionCtx?.channel);
-  setEnvString(env, "SMA_CTX_TARGET_ID", sessionCtx?.targetId);
-  setEnvString(env, "SMA_CTX_TARGET_TYPE", sessionCtx?.targetType);
-  setEnvString(env, "SMA_CTX_ACTOR_ID", sessionCtx?.actorId);
-  setEnvString(env, "SMA_CTX_MESSAGE_ID", sessionCtx?.messageId);
-  setEnvNumber(env, "SMA_CTX_THREAD_ID", sessionCtx?.threadId);
+  setEnvString(env, "SMA_CTX_CONTEXT_ID", contextCtx?.contextId);
+  setEnvString(env, "SMA_CTX_CHANNEL", contextCtx?.channel);
+  setEnvString(env, "SMA_CTX_TARGET_ID", contextCtx?.targetId);
+  setEnvString(env, "SMA_CTX_TARGET_TYPE", contextCtx?.targetType);
+  setEnvString(env, "SMA_CTX_ACTOR_ID", contextCtx?.actorId);
+  setEnvString(env, "SMA_CTX_MESSAGE_ID", contextCtx?.messageId);
+  setEnvNumber(env, "SMA_CTX_THREAD_ID", contextCtx?.threadId);
   setEnvString(env, "SMA_CTX_REQUEST_ID", llmCtx?.requestId);
 
   // 关键点（中文）：把当前 server 地址透传给子进程，便于 `sma message/skill/task` 自动命中本地服务。
@@ -188,13 +188,13 @@ function buildExecContextEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-function touchSession(session: ExecSession): void {
-  session.lastActiveAt = Date.now();
+function touchContext(context: ExecContext): void {
+  context.lastActiveAt = Date.now();
 }
 
-function notifySessionWaiters(session: ExecSession): void {
-  const waiters = Array.from(session.waiters);
-  session.waiters.clear();
+function notifyContextWaiters(context: ExecContext): void {
+  const waiters = Array.from(context.waiters);
+  context.waiters.clear();
   for (const resolve of waiters) resolve();
 }
 
@@ -203,37 +203,37 @@ function notifySessionWaiters(session: ExecSession): void {
  *
  * - 达到上限后截断最旧内容，并累计 `droppedChars`。
  */
-function appendSessionOutput(session: ExecSession, raw: string): void {
+function appendContextOutput(context: ExecContext, raw: string): void {
   const chunk = normalizeOutputChunk(raw);
   if (!chunk) return;
 
-  session.pendingOutput += chunk;
+  context.pendingOutput += chunk;
 
-  if (session.pendingOutput.length > MAX_SESSION_PENDING_CHARS) {
-    const overflow = session.pendingOutput.length - MAX_SESSION_PENDING_CHARS;
-    session.pendingOutput = session.pendingOutput.slice(overflow);
-    session.droppedChars += overflow;
+  if (context.pendingOutput.length > MAX_CONTEXT_PENDING_CHARS) {
+    const overflow = context.pendingOutput.length - MAX_CONTEXT_PENDING_CHARS;
+    context.pendingOutput = context.pendingOutput.slice(overflow);
+    context.droppedChars += overflow;
   }
 
-  touchSession(session);
-  notifySessionWaiters(session);
+  touchContext(context);
+  notifyContextWaiters(context);
 }
 
 /**
  * 安排会话延迟清理。
  */
-function scheduleSessionCleanup(session: ExecSession): void {
-  if (session.cleanupTimer) clearTimeout(session.cleanupTimer);
-  session.cleanupTimer = setTimeout(
+function scheduleContextCleanup(context: ExecContext): void {
+  if (context.cleanupTimer) clearTimeout(context.cleanupTimer);
+  context.cleanupTimer = setTimeout(
     () => {
-      const current = execSessions.get(session.id);
+      const current = execContexts.get(context.id);
       if (!current) return;
-      if (current.exited) execSessions.delete(session.id);
+      if (current.exited) execContexts.delete(context.id);
     },
     10 * 60 * 1000,
   );
-  if (typeof session.cleanupTimer.unref === "function")
-    session.cleanupTimer.unref();
+  if (typeof context.cleanupTimer.unref === "function")
+    context.cleanupTimer.unref();
 }
 
 /**
@@ -242,22 +242,22 @@ function scheduleSessionCleanup(session: ExecSession): void {
  * 策略（中文）
  * - 超上限时优先回收最旧且已退出会话。
  */
-function ensureSessionCapacity(): void {
-  if (execSessions.size < MAX_ACTIVE_EXEC_SESSIONS) return;
+function ensureContextCapacity(): void {
+  if (execContexts.size < MAX_ACTIVE_EXEC_CONTEXTS) return;
 
-  const removable = Array.from(execSessions.values())
+  const removable = Array.from(execContexts.values())
     .filter((s) => s.exited && s.pendingOutput.length === 0)
     .sort((a, b) => a.lastActiveAt - b.lastActiveAt);
 
-  for (const session of removable) {
-    if (execSessions.size < MAX_ACTIVE_EXEC_SESSIONS) break;
-    if (session.cleanupTimer) clearTimeout(session.cleanupTimer);
-    execSessions.delete(session.id);
+  for (const context of removable) {
+    if (execContexts.size < MAX_ACTIVE_EXEC_CONTEXTS) break;
+    if (context.cleanupTimer) clearTimeout(context.cleanupTimer);
+    execContexts.delete(context.id);
   }
 
-  if (execSessions.size >= MAX_ACTIVE_EXEC_SESSIONS) {
+  if (execContexts.size >= MAX_ACTIVE_EXEC_CONTEXTS) {
     throw new Error(
-      `Too many exec sessions (${execSessions.size}). Please drain finished sessions first.`,
+      `Too many exec contexts (${execContexts.size}). Please drain finished contexts first.`,
     );
   }
 }
@@ -266,20 +266,20 @@ function ensureSessionCapacity(): void {
  * 创建一个命令执行会话。
  *
  * 流程（中文）
- * 1) 生成 sessionId
+ * 1) 生成 contextId
  * 2) spawn shell 子进程
  * 3) 绑定 stdout/stderr/error/close 事件
  */
-function createExecSession(input: {
+function createExecContext(input: {
   command: string;
   cwd: string;
   shellPath?: string;
   login?: boolean;
-}): ExecSession {
-  ensureSessionCapacity();
+}): ExecContext {
+  ensureContextCapacity();
 
-  const sessionId = nextSessionId;
-  nextSessionId += 1;
+  const contextId = nextContextId;
+  nextContextId += 1;
 
   const shellPath =
     String(input.shellPath ?? process.env.SHELL ?? "/bin/zsh").trim() ||
@@ -295,8 +295,8 @@ function createExecSession(input: {
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
 
-  const session: ExecSession = {
-    id: sessionId,
+  const context: ExecContext = {
+    id: contextId,
     command: input.command,
     cwd: input.cwd,
     child,
@@ -310,34 +310,34 @@ function createExecSession(input: {
     lastActiveAt: Date.now(),
   };
 
-  execSessions.set(sessionId, session);
+  execContexts.set(contextId, context);
 
   child.stdout.on("data", (chunk: string | Buffer) => {
-    appendSessionOutput(session, String(chunk ?? ""));
+    appendContextOutput(context, String(chunk ?? ""));
   });
 
   child.stderr.on("data", (chunk: string | Buffer) => {
-    appendSessionOutput(session, String(chunk ?? ""));
+    appendContextOutput(context, String(chunk ?? ""));
   });
 
   child.on("error", (err: unknown) => {
-    appendSessionOutput(session, `\n[process error] ${String(err)}\n`);
-    session.exited = true;
-    session.exitCode = -1;
-    touchSession(session);
-    notifySessionWaiters(session);
-    scheduleSessionCleanup(session);
+    appendContextOutput(context, `\n[process error] ${String(err)}\n`);
+    context.exited = true;
+    context.exitCode = -1;
+    touchContext(context);
+    notifyContextWaiters(context);
+    scheduleContextCleanup(context);
   });
 
   child.on("close", (code: number | null) => {
-    session.exited = true;
-    session.exitCode = typeof code === "number" ? code : -1;
-    touchSession(session);
-    notifySessionWaiters(session);
-    scheduleSessionCleanup(session);
+    context.exited = true;
+    context.exitCode = typeof code === "number" ? code : -1;
+    touchContext(context);
+    notifyContextWaiters(context);
+    scheduleContextCleanup(context);
   });
 
-  return session;
+  return context;
 }
 
 /**
@@ -371,8 +371,8 @@ function splitOutputPage(
 /**
  * 消费一页输出并更新会话缓冲区。
  */
-function consumeSessionOutputPage(
-  session: ExecSession,
+function consumeContextOutputPage(
+  context: ExecContext,
   limits: OutputLimits,
 ): {
   output: string;
@@ -381,11 +381,11 @@ function consumeSessionOutputPage(
   originalLines: number;
   droppedChars: number;
 } {
-  const text = session.pendingOutput;
+  const text = context.pendingOutput;
   const originalChars = text.length;
   const originalLines = text ? text.split("\n").length : 0;
-  const droppedChars = session.droppedChars;
-  session.droppedChars = 0;
+  const droppedChars = context.droppedChars;
+  context.droppedChars = 0;
 
   if (!text) {
     return {
@@ -398,8 +398,8 @@ function consumeSessionOutputPage(
   }
 
   const { head, tail } = splitOutputPage(text, limits);
-  session.pendingOutput = tail;
-  touchSession(session);
+  context.pendingOutput = tail;
+  touchContext(context);
 
   return {
     output: head,
@@ -413,8 +413,8 @@ function consumeSessionOutputPage(
 /**
  * 等待会话信号（输出到达或进程退出）。
  */
-async function waitForSessionSignal(
-  session: ExecSession,
+async function waitForContextSignal(
+  context: ExecContext,
   timeoutMs: number,
 ): Promise<boolean> {
   if (timeoutMs <= 0) return false;
@@ -426,18 +426,18 @@ async function waitForSessionSignal(
       if (resolved) return;
       resolved = true;
       clearTimeout(timer);
-      session.waiters.delete(onSignal);
+      context.waiters.delete(onSignal);
       resolve(true);
     };
 
     const timer = setTimeout(() => {
       if (resolved) return;
       resolved = true;
-      session.waiters.delete(onSignal);
+      context.waiters.delete(onSignal);
       resolve(false);
     }, timeoutMs);
 
-    session.waiters.add(onSignal);
+    context.waiters.add(onSignal);
   });
 }
 
@@ -448,28 +448,28 @@ async function waitForSessionSignal(
  * - 若已经有输出，会再短等 30ms 抓取“紧随其后的块”，减少碎片化。
  */
 async function collectOutputUntilDeadline(
-  session: ExecSession,
+  context: ExecContext,
   yieldTimeMs: number,
 ): Promise<void> {
   const deadline = Date.now() + yieldTimeMs;
 
   while (Date.now() < deadline) {
-    if (session.pendingOutput.length > 0) {
+    if (context.pendingOutput.length > 0) {
       const remaining = deadline - Date.now();
       if (remaining <= 0) return;
-      const gotMore = await waitForSessionSignal(
-        session,
+      const gotMore = await waitForContextSignal(
+        context,
         Math.min(30, remaining),
       );
       if (!gotMore) return;
       continue;
     }
 
-    if (session.exited) return;
+    if (context.exited) return;
 
     const remaining = deadline - Date.now();
     if (remaining <= 0) return;
-    const signaled = await waitForSessionSignal(session, remaining);
+    const signaled = await waitForContextSignal(context, remaining);
     if (!signaled) return;
   }
 }
@@ -477,28 +477,28 @@ async function collectOutputUntilDeadline(
 /**
  * 获取会话，不存在则抛错。
  */
-function getSessionOrThrow(sessionId: number): ExecSession {
-  const session = execSessions.get(sessionId);
-  if (!session) {
-    throw new Error(`Unknown session_id: ${sessionId}`);
+function getContextOrThrow(contextId: number): ExecContext {
+  const context = execContexts.get(contextId);
+  if (!context) {
+    throw new Error(`Unknown context_id: ${contextId}`);
   }
-  return session;
+  return context;
 }
 
 /**
  * 向会话 stdin 写入输入。
  */
-async function writeSessionStdin(
-  session: ExecSession,
+async function writeContextStdin(
+  context: ExecContext,
   chars: string,
 ): Promise<void> {
   if (!chars) return;
-  if (session.exited) throw new Error(`Session ${session.id} already exited`);
-  if (!session.child.stdin.writable)
-    throw new Error(`Session ${session.id} stdin is closed`);
+  if (context.exited) throw new Error(`Context ${context.id} already exited`);
+  if (!context.child.stdin.writable)
+    throw new Error(`Context ${context.id} stdin is closed`);
 
   await new Promise<void>((resolve, reject) => {
-    session.child.stdin.write(chars, (err) => {
+    context.child.stdin.write(chars, (err) => {
       if (err) {
         reject(err);
         return;
@@ -507,7 +507,7 @@ async function writeSessionStdin(
     });
   });
 
-  touchSession(session);
+  touchContext(context);
 }
 
 /**
@@ -515,79 +515,79 @@ async function writeSessionStdin(
  *
  * 关键点（中文）
  * - 适合长驻命令在业务完成后主动释放资源
- * - 关闭后该 session_id 不可再用
+ * - 关闭后该 context_id 不可再用
  */
-function closeExecSession(
-  session: ExecSession,
+function closeExecContext(
+  context: ExecContext,
   force: boolean,
 ): {
-  sessionId: number;
+  contextId: number;
   wasRunning: boolean;
   pendingOutputChars: number;
   droppedChars: number;
   exitCode: number | null;
 } {
-  const wasRunning = !session.exited;
-  const pendingOutputChars = session.pendingOutput.length;
-  const droppedChars = session.droppedChars;
+  const wasRunning = !context.exited;
+  const pendingOutputChars = context.pendingOutput.length;
+  const droppedChars = context.droppedChars;
 
-  if (session.cleanupTimer) {
-    clearTimeout(session.cleanupTimer);
-    session.cleanupTimer = null;
+  if (context.cleanupTimer) {
+    clearTimeout(context.cleanupTimer);
+    context.cleanupTimer = null;
   }
 
   if (wasRunning) {
     try {
-      session.child.kill(force ? "SIGKILL" : "SIGTERM");
+      context.child.kill(force ? "SIGKILL" : "SIGTERM");
     } catch {
       // ignore
     }
-    session.exited = true;
-    if (session.exitCode == null) {
-      session.exitCode = force ? -9 : -15;
+    context.exited = true;
+    if (context.exitCode == null) {
+      context.exitCode = force ? -9 : -15;
     }
   }
 
-  session.pendingOutput = "";
-  session.droppedChars = 0;
-  touchSession(session);
-  notifySessionWaiters(session);
-  execSessions.delete(session.id);
+  context.pendingOutput = "";
+  context.droppedChars = 0;
+  touchContext(context);
+  notifyContextWaiters(context);
+  execContexts.delete(context.id);
 
   return {
-    sessionId: session.id,
+    contextId: context.id,
     wasRunning,
     pendingOutputChars,
     droppedChars,
-    exitCode: session.exitCode,
+    exitCode: context.exitCode,
   };
 }
 
 /**
  * 在“已退出且输出已读空”时自动回收会话。
  */
-function finalizeSessionIfDrainComplete(
-  session: ExecSession,
+function finalizeContextIfDrainComplete(
+  context: ExecContext,
   hasMoreOutput: boolean,
 ): number | null {
   const keepAlive =
-    !session.exited || hasMoreOutput || session.pendingOutput.length > 0;
-  if (keepAlive) return session.id;
+    !context.exited || hasMoreOutput || context.pendingOutput.length > 0;
+  if (keepAlive) return context.id;
 
-  if (session.cleanupTimer) {
-    clearTimeout(session.cleanupTimer);
-    session.cleanupTimer = null;
+  if (context.cleanupTimer) {
+    clearTimeout(context.cleanupTimer);
+    context.cleanupTimer = null;
   }
 
-  execSessions.delete(session.id);
+  execContexts.delete(context.id);
   return null;
 }
 
 /**
  * 统一格式化 exec/write 的响应结构。
  */
-function formatSessionResponse(input: {
-  session: ExecSession;
+function formatContextResponse(input: {
+  context: ExecContext;
   page: {
     output: string;
     hasMoreOutput: boolean;
@@ -597,8 +597,8 @@ function formatSessionResponse(input: {
   };
   startedAt: number;
 }): Record<string, unknown> {
-  const { session, page, startedAt } = input;
-  const processId = finalizeSessionIfDrainComplete(session, page.hasMoreOutput);
+  const { context, page, startedAt } = input;
+  const contextId = finalizeContextIfDrainComplete(context, page.hasMoreOutput);
 
   const notes: string[] = [];
   if (page.hasMoreOutput) {
@@ -608,7 +608,7 @@ function formatSessionResponse(input: {
   }
   if (page.droppedChars > 0) {
     notes.push(
-      `Dropped ${page.droppedChars} old chars due to session buffer cap (${MAX_SESSION_PENDING_CHARS}).`,
+      `Dropped ${page.droppedChars} old chars due to context buffer cap (${MAX_CONTEXT_PENDING_CHARS}).`,
     );
   }
 
@@ -617,8 +617,8 @@ function formatSessionResponse(input: {
     chunk_id: generateChunkId(),
     wall_time_seconds: Math.max(0, (Date.now() - startedAt) / 1000),
     output: page.output,
-    process_id: processId,
-    exit_code: session.exited ? session.exitCode : null,
+    context_id: contextId,
+    exit_code: context.exited ? context.exitCode : null,
     original_token_count: approxTokenCountFromChars(page.originalChars),
     original_chars: page.originalChars,
     original_lines: page.originalLines,
@@ -632,7 +632,7 @@ function formatSessionResponse(input: {
  */
 export const exec_command = tool({
   description:
-    "Start a shell command session. Returns process_id for follow-up polling/input via write_stdin.",
+    "Start a shell command context. Returns context_id for follow-up polling/input via write_stdin.",
   inputSchema: z.object({
     cmd: z.string().describe("Shell command to execute."),
     workdir: z
@@ -680,7 +680,7 @@ export const exec_command = tool({
     try {
       const runtime = getShipRuntimeContext();
       const cwd = resolveExecWorkdir(runtime.rootPath, workdir);
-      const session = createExecSession({
+      const context = createExecContext({
         command: cmd,
         cwd,
         shellPath: shell,
@@ -688,15 +688,15 @@ export const exec_command = tool({
       });
 
       await collectOutputUntilDeadline(
-        session,
+        context,
         clampYieldTimeMs(yield_time_ms, DEFAULT_EXEC_COMMAND_YIELD_MS),
       );
 
-      const page = consumeSessionOutputPage(
-        session,
+      const page = consumeContextOutputPage(
+        context,
         resolveOutputLimits(max_output_tokens),
       );
-      return formatSessionResponse({ session, page, startedAt });
+      return formatContextResponse({ context, page, startedAt });
     } catch (error) {
       return {
         success: false,
@@ -711,9 +711,9 @@ export const exec_command = tool({
  */
 export const write_stdin = tool({
   description:
-    "Write chars to an existing exec session and return next output chunk. Use empty chars to poll.",
+    "Write chars to an existing exec context and return next output chunk. Use empty chars to poll.",
   inputSchema: z.object({
-    session_id: z.number().describe("Identifier returned by exec_command."),
+    context_id: z.number().describe("Identifier returned by exec_command."),
     chars: z
       .string()
       .optional()
@@ -730,12 +730,12 @@ export const write_stdin = tool({
       .describe("Maximum output tokens per response chunk."),
   }),
   execute: async ({
-    session_id,
+    context_id,
     chars = "",
     yield_time_ms = DEFAULT_WRITE_STDIN_YIELD_MS,
     max_output_tokens,
   }: {
-    session_id: number;
+    context_id: number;
     chars?: string;
     yield_time_ms?: number;
     max_output_tokens?: number;
@@ -743,11 +743,11 @@ export const write_stdin = tool({
     const startedAt = Date.now();
 
     try {
-      const session = getSessionOrThrow(session_id);
+      const context = getContextOrThrow(context_id);
       const input = String(chars ?? "");
 
       if (input) {
-        await writeSessionStdin(session, input);
+        await writeContextStdin(context, input);
       }
 
       const effectiveYield = input
@@ -757,13 +757,13 @@ export const write_stdin = tool({
             clampYieldTimeMs(yield_time_ms, DEFAULT_WRITE_STDIN_YIELD_MS),
           );
 
-      await collectOutputUntilDeadline(session, effectiveYield);
+      await collectOutputUntilDeadline(context, effectiveYield);
 
-      const page = consumeSessionOutputPage(
-        session,
+      const page = consumeContextOutputPage(
+        context,
         resolveOutputLimits(max_output_tokens),
       );
-      return formatSessionResponse({ session, page, startedAt });
+      return formatContextResponse({ context, page, startedAt });
     } catch (error) {
       return {
         success: false,
@@ -774,35 +774,35 @@ export const write_stdin = tool({
 });
 
 /**
- * `close_session`：主动关闭并回收会话。
+ * `close_context`：主动关闭并回收会话。
  */
-export const close_session = tool({
+export const close_context = tool({
   description:
-    "Close an existing exec session and release resources. Use force=true to send SIGKILL.",
+    "Close an existing exec context and release resources. Use force=true to send SIGKILL.",
   inputSchema: z.object({
-    session_id: z.number().describe("Identifier returned by exec_command."),
+    context_id: z.number().describe("Identifier returned by exec_command."),
     force: z
       .boolean()
       .optional()
       .default(false)
       .describe(
-        "Whether to force-kill session process (SIGKILL). Default false uses SIGTERM.",
+        "Whether to force-kill context process (SIGKILL). Default false uses SIGTERM.",
       ),
   }),
   execute: async ({
-    session_id,
+    context_id,
     force = false,
   }: {
-    session_id: number;
+    context_id: number;
     force?: boolean;
   }) => {
     try {
-      const session = getSessionOrThrow(session_id);
-      const result = closeExecSession(session, force);
+      const context = getContextOrThrow(context_id);
+      const result = closeExecContext(context, force);
 
       return {
         success: true,
-        session_id: result.sessionId,
+        context_id: result.contextId,
         closed: true,
         was_running: result.wasRunning,
         exit_code: result.exitCode,
@@ -810,14 +810,14 @@ export const close_session = tool({
         dropped_chars: result.droppedChars,
         ...(result.pendingOutputChars > 0
           ? {
-              note: `Dropped ${result.pendingOutputChars} pending output chars while closing session.`,
+              note: `Dropped ${result.pendingOutputChars} pending output chars while closing context.`,
             }
           : {}),
       };
     } catch (error) {
       return {
         success: false,
-        error: `close_session failed: ${String(error)}`,
+        error: `close_context failed: ${String(error)}`,
       };
     }
   },
@@ -829,5 +829,5 @@ export const close_session = tool({
 export const execShellTools = {
   exec_command,
   write_stdin,
-  close_session,
+  close_context,
 };

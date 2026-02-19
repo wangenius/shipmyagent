@@ -1,8 +1,8 @@
 import type { ChatDispatchChannel } from "../runtime/chat-send-registry.js";
 import { registerChatSender } from "../runtime/chat-send-registry.js";
-import { getIntegrationSessionManager } from "../../../infra/integration-runtime-dependencies.js";
+import { getIntegrationContextManager } from "../../../infra/integration-runtime-dependencies.js";
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
-import type { IntegrationSessionManager } from "../../../infra/integration-runtime-ports.js";
+import type { IntegrationContextManager } from "../../../infra/integration-runtime-ports.js";
 import type {
   ChatDispatchAction,
   ChatDispatchSendActionParams,
@@ -35,13 +35,13 @@ export type AdapterSendActionParams = AdapterChatKeyParams & {
  * 平台适配器基类。
  *
  * 关键点（中文）
- * - 通过 context 显式注入 sessionManager
+ * - 通过 context 显式注入 contextManager
  * - 统一注册 dispatcher，暴露 sendText/sendAction 能力
  */
 export abstract class PlatformAdapter {
   readonly channel: ChatDispatchChannel;
   protected readonly context: IntegrationRuntimeDependencies;
-  protected readonly sessionManager: IntegrationSessionManager;
+  protected readonly contextManager: IntegrationContextManager;
 
   protected constructor(params: {
     channel: ChatDispatchChannel;
@@ -49,7 +49,7 @@ export abstract class PlatformAdapter {
   }) {
     this.channel = params.channel;
     this.context = params.context;
-    this.sessionManager = getIntegrationSessionManager(params.context);
+    this.contextManager = getIntegrationContextManager(params.context);
 
     // 统一把“平台发送能力”注册到 chat-send registry。
     // 后续 `chat_send` 等工具只依赖 channel，不耦合具体适配器实例。

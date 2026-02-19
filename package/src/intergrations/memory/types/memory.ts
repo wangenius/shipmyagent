@@ -23,12 +23,12 @@ export interface MemoryConfig {
 }
 
 export interface MemoryExtractParams {
-  sessionId: string;
+  contextId: string;
   entryRange: [number, number];
 }
 
 export interface MemoryCompressParams {
-  sessionId: string;
+  contextId: string;
   currentContent: string;
   targetChars: number;
 }

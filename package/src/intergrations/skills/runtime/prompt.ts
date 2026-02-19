@@ -58,7 +58,7 @@ export function renderClaudeSkillsPromptSection(
   lines.push("");
   lines.push("## Important Rules");
   lines.push("1. When a skill is loaded, you MUST follow its instructions strictly");
-  lines.push("2. If a skill defines `allowedTools`, you can ONLY use those tools (plus exec_command/write_stdin/close_session)");
+  lines.push("2. If a skill defines `allowedTools`, you can ONLY use those tools (plus exec_command/write_stdin/close_context)");
   lines.push("3. Skills take priority over general instructions when there's a conflict");
   lines.push("4. Load skills proactively when task matches skill description — don't wait to be asked");
   return lines.join("\n");

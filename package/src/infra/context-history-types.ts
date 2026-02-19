@@ -1,5 +1,5 @@
 /**
- * Session history 类型转发。
+ * Context history 类型转发。
  *
  * 关键点（中文）
  * - 源定义在 core/types
@@ -10,12 +10,12 @@
  */
 
 export type {
-  ShipSessionChannel,
+  ShipContextChannel,
   ShipHistoryKind,
   ShipHistorySource,
   ShipMessageSourceRangeV1,
-  ShipSessionMetadataV1,
-  ShipSessionMessageV1,
-} from "../core/types/session-history.js";
+  ShipContextMetadataV1,
+  ShipContextMessageV1,
+} from "../core/types/context-history.js";
 
-export type { ShipSessionMessagesMetaV1 } from "../core/types/session-messages-meta.js";
+export type { ShipContextMessagesMetaV1 } from "../core/types/context-messages-meta.js";

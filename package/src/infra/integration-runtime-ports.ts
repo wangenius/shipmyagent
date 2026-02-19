@@ -16,9 +16,9 @@ import type { ShipConfig } from "../utils.js";
  * 关键点（中文）
  * - 这是跨 integration 共享的最小上下文字段集合。
  */
-export type IntegrationSessionRequestContext = {
+export type IntegrationContextRequestContext = {
   channel?: "telegram" | "feishu" | "qq" | "cli" | "scheduler" | "api";
-  sessionId?: string;
+  contextId?: string;
   targetId?: string;
   targetType?: string;
   threadId?: number;
@@ -30,12 +30,12 @@ export type IntegrationSessionRequestContext = {
 /**
  * 请求上下文桥接端口。
  *
- * - `withSessionRequestContext` 用于在一次调用栈内绑定上下文。
+ * - `withContextRequestContext` 用于在一次调用栈内绑定上下文。
  */
-export type IntegrationSessionRequestContextBridge = {
-  getCurrentSessionRequestContext(): IntegrationSessionRequestContext | undefined;
-  withSessionRequestContext<T>(
-    ctx: IntegrationSessionRequestContext,
+export type IntegrationContextRequestContextBridge = {
+  getCurrentContextRequestContext(): IntegrationContextRequestContext | undefined;
+  withContextRequestContext<T>(
+    ctx: IntegrationContextRequestContext,
     fn: () => T,
   ): T;
 };
@@ -43,7 +43,7 @@ export type IntegrationSessionRequestContextBridge = {
 /**
  * 会话历史存储端口。
  */
-export type IntegrationSessionHistoryStore = {
+export type IntegrationContextHistoryStore = {
   loadAll(): Promise<any[]>;
   loadRange(startIndex: number, endIndex: number): Promise<any[]>;
   append(message: any): Promise<void>;
@@ -56,8 +56,8 @@ export type IntegrationSessionHistoryStore = {
 /**
  * 会话 Agent 端口。
  */
-export type IntegrationSessionAgent = {
-  run(params: { sessionId: string; query: string }): Promise<any>;
+export type IntegrationContextAgent = {
+  run(params: { contextId: string; query: string }): Promise<any>;
 };
 
 /**
@@ -66,14 +66,14 @@ export type IntegrationSessionAgent = {
  * 关键点（中文）
  * - 对 integration 暴露消息入队、历史访问、agent 获取等最小能力。
  */
-export type IntegrationSessionManager = {
-  getAgent(sessionId: string): IntegrationSessionAgent;
-  getHistoryStore(sessionId: string): IntegrationSessionHistoryStore;
-  clearAgent(sessionId?: string): void;
+export type IntegrationContextManager = {
+  getAgent(contextId: string): IntegrationContextAgent;
+  getHistoryStore(contextId: string): IntegrationContextHistoryStore;
+  clearAgent(contextId?: string): void;
   appendUserMessage(params: {
     channel: string;
     targetId: string;
-    sessionId: string;
+    contextId: string;
     text: string;
     actorId?: string;
     actorName?: string;
@@ -86,7 +86,7 @@ export type IntegrationSessionManager = {
   enqueue(params: {
     channel: string;
     targetId: string;
-    sessionId: string;
+    contextId: string;
     text: string;
     targetType?: string;
     threadId?: number;

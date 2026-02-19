@@ -1,5 +1,5 @@
 /**
- * SessionAgentRunner：单会话 Agent 执行器。
+ * ContextAgentRunner：单会话 Agent 执行器。
  *
  * 关键职责（中文）
  * - 组装 system prompt（运行时上下文 + providers）。
@@ -25,15 +25,15 @@ import {
 import { createModel } from "../llm/create-model.js";
 import type { AgentRunInput, AgentResult } from "../types/agent.js";
 import type { Logger } from "../../telemetry/index.js";
-import { sessionRequestContext } from "../session/request-context.js";
+import { contextRequestContext } from "../context/request-context.js";
 import { createAgentTools } from "../tools/agent-tools.js";
 import { openai } from "@ai-sdk/openai";
-import type { ShipSessionMetadataV1 } from "../types/session-history.js";
+import type { ShipContextMetadataV1 } from "../types/context-history.js";
 import {
   getShipRuntimeContext,
   getShipRuntimeContextBase,
 } from "../../server/ShipRuntimeContext.js";
-import type { SessionAgent } from "../types/session-agent.js";
+import type { ContextAgent } from "../types/context-agent.js";
 import { collectSystemPromptProviderResult } from "../prompts/index.js";
 import {
   extractTextFromUiMessage,
@@ -41,7 +41,7 @@ import {
 } from "./ui-message.js";
 import type { SystemPromptProviderResult } from "../types/system-prompt-provider.js";
 
-export class SessionAgentRunner implements SessionAgent {
+export class ContextAgentRunner implements ContextAgent {
   // 是否初始化
   private initialized: boolean = false;
   // 模型
@@ -49,13 +49,13 @@ export class SessionAgentRunner implements SessionAgent {
 
   private tools: Record<string, Tool> = {};
   /**
-   * sessionId 绑定检查。
+   * contextId 绑定检查。
    *
    * 关键点（中文）
-   * - 运行时策略是"一个 sessionId 一个 Agent 实例"（由 SessionManager 保证）
-   * - 本实例一旦首次 run 绑定到某个 sessionId，后续必须一致，避免上下文串线
+   * - 运行时策略是"一个 contextId 一个 Agent 实例"（由 ContextManager 保证）
+   * - 本实例一旦首次 run 绑定到某个 contextId，后续必须一致，避免上下文串线
    */
-  private boundSessionId: string | null = null;
+  private boundContextId: string | null = null;
 
   constructor() {}
 
@@ -100,20 +100,20 @@ export class SessionAgentRunner implements SessionAgent {
    * 3) 进入 tool-loop 主流程
    */
   async run(input: AgentRunInput): Promise<AgentResult> {
-    const { query, sessionId, drainLaneMerged } = input;
+    const { query, contextId, drainLaneMerged } = input;
     const startTime = Date.now();
     const requestId = generateId();
     const logger = this.getLogger();
 
-    await logger.log("debug", `SessionId: ${sessionId}`);
+    await logger.log("debug", `ContextId: ${contextId}`);
     await logger.log("info", "Agent request started", {
       requestId,
-      sessionId,
+      contextId,
       instructionsPreview: query?.slice(0, 200),
       rootPath: getShipRuntimeContext().rootPath,
     });
     if (this.initialized) {
-      return this.runWithToolLoopAgent(query, startTime, sessionId, {
+      return this.runWithToolLoopAgent(query, startTime, contextId, {
         requestId,
         drainLaneMerged,
       });
@@ -128,18 +128,18 @@ export class SessionAgentRunner implements SessionAgent {
   }
 
   /**
-   * 绑定 sessionId（单实例单会话约束）。
+   * 绑定 contextId（单实例单会话约束）。
    */
-  private bindSessionId(sessionId: string): string {
-    const key = String(sessionId || "").trim();
-    if (!key) throw new Error("Agent.run requires a non-empty sessionId");
-    if (this.boundSessionId && this.boundSessionId !== key) {
-      // 关键点（中文）：一个 Agent 实例只允许服务一个 sessionId，避免上下文串线。
+  private bindContextId(contextId: string): string {
+    const key = String(contextId || "").trim();
+    if (!key) throw new Error("Agent.run requires a non-empty contextId");
+    if (this.boundContextId && this.boundContextId !== key) {
+      // 关键点（中文）：一个 Agent 实例只允许服务一个 contextId，避免上下文串线。
       throw new Error(
-        `Agent is already bound to sessionId=${this.boundSessionId}, got sessionId=${key}`,
+        `Agent is already bound to contextId=${this.boundContextId}, got contextId=${key}`,
       );
     }
-    this.boundSessionId = key;
+    this.boundContextId = key;
     return key;
   }
 
@@ -147,7 +147,7 @@ export class SessionAgentRunner implements SessionAgent {
    * tool-loop 主执行流程。
    *
    * 算法步骤（中文）
-   * - 绑定 sessionId，防止一个实例跨会话串线。
+   * - 绑定 contextId，防止一个实例跨会话串线。
    * - 读取/补齐用户消息到 history（防止入口未写入）。
    * - 收集 system prompt providers，得到 activeTools 与附加系统消息。
    * - 执行模型调用；若超窗则按 compact policy 递进重试。
@@ -155,7 +155,7 @@ export class SessionAgentRunner implements SessionAgent {
   private async runWithToolLoopAgent(
     userText: string,
     startTime: number,
-    sessionId: string,
+    contextId: string,
     opts?: {
       retryAttempts?: number;
       drainLaneMerged?: AgentRunInput["drainLaneMerged"];
@@ -174,15 +174,15 @@ export class SessionAgentRunner implements SessionAgent {
     }
 
     try {
-      this.bindSessionId(sessionId);
+      this.bindContextId(contextId);
 
       const runtime = getShipRuntimeContext();
       // phase 0（中文）：装配 history 与 runtime/system prompt 基础上下文。
-      const historyStore = runtime.sessionManager.getHistoryStore(sessionId);
+      const historyStore = runtime.contextManager.getHistoryStore(contextId);
 
       const runtimeSystemMessages = this.buildRuntimeSystemMessages({
         projectRoot: runtime.rootPath,
-        sessionId,
+        contextId,
         requestId,
       });
 
@@ -190,14 +190,14 @@ export class SessionAgentRunner implements SessionAgent {
       await this.ensureCurrentUserRecorded({
         historyStore,
         userText,
-        sessionId,
+        contextId,
         requestId,
       });
 
       // phase 1（中文）：收集 provider 结果（附加系统消息 + activeTools）。
       const providerResult = await collectSystemPromptProviderResult({
         projectRoot: runtime.rootPath,
-        sessionId,
+        contextId,
         requestId,
         allToolNames: Object.keys(this.tools),
       });
@@ -231,7 +231,7 @@ export class SessionAgentRunner implements SessionAgent {
         // 关键点（中文）：compact 后重新聚合 provider，保证 prompt 与 activeTools 同步最新状态。
         currentProviderResult = await collectSystemPromptProviderResult({
           projectRoot: runtime.rootPath,
-          sessionId,
+          contextId,
           requestId,
           allToolNames: Object.keys(this.tools),
         });
@@ -250,7 +250,7 @@ export class SessionAgentRunner implements SessionAgent {
       }
 
       await logger.log("debug", "Context selected", {
-        sessionId,
+        contextId,
         historySource: "history_jsonl",
         modelMessages: baseModelMessages.length,
         keepLastMessages: compactPolicy.keepLastMessages,
@@ -288,7 +288,7 @@ export class SessionAgentRunner implements SessionAgent {
             "debug",
             "Lane merged messages detected; reloaded history for next step",
             {
-              sessionId,
+              contextId,
               requestId,
               trigger,
               drained,
@@ -322,7 +322,7 @@ export class SessionAgentRunner implements SessionAgent {
       }
 
       // phase 2（中文）：进入 tool-loop。
-      const result = await withLlmRequestContext({ sessionId, requestId }, () => {
+      const result = await withLlmRequestContext({ contextId, requestId }, () => {
         return streamText({
           model: this.model,
           system: currentBaseSystemMessages,
@@ -371,13 +371,13 @@ export class SessionAgentRunner implements SessionAgent {
       // 关键点（中文）：用 ai-sdk v6 的 UIMessage 流来生成最终 assistant UIMessage（包含 tool parts），避免手工拼装。
       let finalAssistantUiMessage: any = null;
       try {
-        const ctx = sessionRequestContext.getStore();
+        const ctx = contextRequestContext.getStore();
         const channel = (ctx?.channel as any) || "api";
-        const targetId = String(ctx?.targetId || sessionId);
-        const md: ShipSessionMetadataV1 = {
+        const targetId = String(ctx?.targetId || contextId);
+        const md: ShipContextMetadataV1 = {
           v: 1,
           ts: Date.now(),
-          sessionId,
+          contextId,
           channel,
           targetId,
           actorId: "bot",
@@ -395,7 +395,7 @@ export class SessionAgentRunner implements SessionAgent {
         const uiStream = (result as any).toUIMessageStream({
           sendReasoning: false,
           sendSources: false,
-          generateMessageId: () => `a:${sessionId}:${generateId()}`,
+          generateMessageId: () => `a:${contextId}:${generateId()}`,
           // 关键点（中文）：metadata 通过 ai-sdk 的 UIMessage 生成管线注入，避免我们手工改写最终 message。
           messageMetadata: () => md,
           onFinish: (e: any) => {
@@ -446,7 +446,7 @@ export class SessionAgentRunner implements SessionAgent {
         duration,
         toolCallsTotal: toolCalls.length,
       });
-      // 关键点（中文）：对话历史由 SessionManager 管理并写入 history（history.jsonl）
+      // 关键点（中文）：对话历史由 ContextManager 管理并写入 history（history.jsonl）
 
       let assistantText = finalAssistantUiMessage
         ? extractTextFromUiMessage(finalAssistantUiMessage)
@@ -484,7 +484,7 @@ export class SessionAgentRunner implements SessionAgent {
           "warn",
           "Context length exceeded, retry with history compaction",
           {
-            sessionId,
+            contextId,
             error: errorMsg,
             retryAttempts,
           },
@@ -498,7 +498,7 @@ export class SessionAgentRunner implements SessionAgent {
           };
         }
 
-        return this.runWithToolLoopAgent(userText, startTime, sessionId, {
+        return this.runWithToolLoopAgent(userText, startTime, contextId, {
           retryAttempts: retryAttempts + 1,
           requestId,
           drainLaneMerged,
@@ -520,31 +520,31 @@ export class SessionAgentRunner implements SessionAgent {
    * 构建运行时 system message。
    *
    * 关键点（中文）
-   * - 将 session request-context（channel/target/user）注入到 system prompt。
+   * - 将 context request-context（channel/target/user）注入到 system prompt。
    */
   private buildRuntimeSystemMessages(input: {
     projectRoot: string;
-    sessionId: string;
+    contextId: string;
     requestId: string;
   }): SystemModelMessage[] {
-    const sessionCtx = sessionRequestContext.getStore();
+    const contextCtx = contextRequestContext.getStore();
     const runtimeExtraContextLines: string[] = [];
 
-    if (sessionCtx?.channel)
-      runtimeExtraContextLines.push(`- Channel: ${sessionCtx.channel}`);
-    if (sessionCtx?.targetId)
-      runtimeExtraContextLines.push(`- TargetId: ${sessionCtx.targetId}`);
-    if (sessionCtx?.actorId)
-      runtimeExtraContextLines.push(`- UserId: ${sessionCtx.actorId}`);
-    if (sessionCtx?.actorName)
-      runtimeExtraContextLines.push(`- Username: ${sessionCtx.actorName}`);
+    if (contextCtx?.channel)
+      runtimeExtraContextLines.push(`- Channel: ${contextCtx.channel}`);
+    if (contextCtx?.targetId)
+      runtimeExtraContextLines.push(`- TargetId: ${contextCtx.targetId}`);
+    if (contextCtx?.actorId)
+      runtimeExtraContextLines.push(`- UserId: ${contextCtx.actorId}`);
+    if (contextCtx?.actorName)
+      runtimeExtraContextLines.push(`- Username: ${contextCtx.actorName}`);
 
     return [
       {
         role: "system",
         content: buildContextSystemPrompt({
           projectRoot: input.projectRoot,
-          sessionId: input.sessionId,
+          contextId: input.contextId,
           requestId: input.requestId,
           extraContextLines: runtimeExtraContextLines,
         }),
@@ -654,16 +654,16 @@ export class SessionAgentRunner implements SessionAgent {
    * - 通过“最后一条 user 文本相等”做幂等，避免重复写入。
    */
   private async ensureCurrentUserRecorded(params: {
-    historyStore: ReturnType<typeof getShipRuntimeContext>["sessionManager"] extends {
+    historyStore: ReturnType<typeof getShipRuntimeContext>["contextManager"] extends {
       getHistoryStore: (...args: any[]) => infer T;
     }
       ? T
       : any;
     userText: string;
-    sessionId: string;
+    contextId: string;
     requestId: string;
   }): Promise<void> {
-    const { historyStore, userText, sessionId, requestId } = params;
+    const { historyStore, userText, contextId, requestId } = params;
     try {
       const msgs = await historyStore.loadAll();
       const last = msgs.length > 0 ? msgs[msgs.length - 1] : null;
@@ -678,13 +678,13 @@ export class SessionAgentRunner implements SessionAgent {
       })();
       if (lastText && lastText === String(userText || "").trim()) return;
 
-      const ctx = sessionRequestContext.getStore();
+      const ctx = contextRequestContext.getStore();
       const channel = (ctx?.channel as any) || "api";
-      const targetId = String(ctx?.targetId || sessionId);
+      const targetId = String(ctx?.targetId || contextId);
       const msg = historyStore.createUserTextMessage({
         text: userText,
         metadata: {
-          sessionId,
+          contextId,
           channel,
           targetId,
           actorId: ctx?.actorId,

@@ -10,8 +10,8 @@ import fs from "fs-extra";
 import path from "node:path";
 import { discoverClaudeSkillsSync } from "./runtime/discovery.js";
 import {
-  getShipSessionHistoryMetaPath,
-  getShipSessionMessagesDirPath,
+  getShipContextHistoryMetaPath,
+  getShipContextMessagesDirPath,
   loadShipConfig,
 } from "../../utils.js";
 import type { ClaudeSkill } from "./types/claude-skill.js";
@@ -60,7 +60,7 @@ function findSkill(skills: ClaudeSkill[], name: string): ClaudeSkill | null {
 }
 
 async function readPinnedSkillIds(projectRoot: string, chatKey: string): Promise<string[]> {
-  const metaPath = getShipSessionHistoryMetaPath(projectRoot, chatKey);
+  const metaPath = getShipContextHistoryMetaPath(projectRoot, chatKey);
   try {
     const raw = (await fs.readJson(metaPath)) as any;
     if (!raw || typeof raw !== "object" || !Array.isArray(raw.pinnedSkillIds)) {
@@ -87,8 +87,8 @@ async function writePinnedSkillIds(params: {
   const { projectRoot, chatKey } = params;
   const pinnedSkillIds = Array.from(new Set(params.pinnedSkillIds.map((id) => id.trim()).filter(Boolean)));
 
-  const messagesDir = getShipSessionMessagesDirPath(projectRoot, chatKey);
-  const metaPath = getShipSessionHistoryMetaPath(projectRoot, chatKey);
+  const messagesDir = getShipContextMessagesDirPath(projectRoot, chatKey);
+  const metaPath = getShipContextHistoryMetaPath(projectRoot, chatKey);
   await fs.ensureDir(messagesDir);
 
   let prev: Record<string, unknown> = {};

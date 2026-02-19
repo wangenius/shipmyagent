@@ -19,7 +19,7 @@ export type SystemPromptProviderContext = {
   /** 项目根目录 */
   projectRoot: string;
   /** 当前会话 ID */
-  sessionId: string;
+  contextId: string;
   /** 本次请求 ID */
   requestId: string;
   /** 本次可用工具全集 */

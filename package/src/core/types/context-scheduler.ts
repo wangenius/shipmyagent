@@ -1,9 +1,9 @@
 /**
- * Session 调度器配置。
+ * Context 调度器配置。
  *
  * 关键点（中文）
- * - 同一 sessionId 串行
- * - 不同 sessionId 并发
+ * - 同一 contextId 串行
+ * - 不同 contextId 并发
  * - 保持简单、公平、可预测
  */
 

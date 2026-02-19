@@ -11,7 +11,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { logger as server_logger } from "../telemetry/index.js";
-import { withSessionRequestContext } from "../core/session/request-context.js";
+import { withContextRequestContext } from "../core/context/request-context.js";
 import http from "node:http";
 import fs from "fs-extra";
 import path from "path";
@@ -66,7 +66,7 @@ export class AgentServer {
    * 关键点（中文）
    * - 静态资源与 `.ship/public` 暴露路径分离。
    * - `registerAllModulesForServer` 是模块扩展主入口。
-   * - `/api/execute` 负责把请求转为 session 任务并执行。
+   * - `/api/execute` 负责把请求转为 context 任务并执行。
    */
   private setupRoutes(): void {
     // Static file service (frontend pages)
@@ -188,7 +188,7 @@ export class AgentServer {
     // Execute instruction
     // `/api/execute` 分段流程（中文）
     // 1) 请求解析与参数校验
-    // 2) session/request context 注入
+    // 2) context/request context 注入
     // 3) 执行结果提取与历史落盘
     // 4) 错误兜底与 HTTP 返回
     this.app.post("/api/execute", async (c) => {
@@ -244,33 +244,33 @@ export class AgentServer {
       }
 
       try {
-        // [阶段2] 上下文注入：构造 sessionId，并写入一条 user 消息到历史。
-        const sessionId = `api:chat:${chatId}`;
+        // [阶段2] 上下文注入：构造 contextId，并写入一条 user 消息到历史。
+        const contextId = `api:chat:${chatId}`;
         const runtime = getShipRuntimeContext();
         const messageId =
           typeof body?.messageId === "string" ? body.messageId : undefined;
-        await runtime.sessionManager.appendUserMessage({
+        await runtime.contextManager.appendUserMessage({
           channel: "api",
           targetId: chatId,
-          sessionId,
+          contextId,
           actorId: actorId,
           messageId,
           text: String(instructions),
         });
 
-        // [阶段2] 执行：在 withSessionRequestContext 下运行 agent，保证下游可读取会话上下文。
+        // [阶段2] 执行：在 withContextRequestContext 下运行 agent，保证下游可读取会话上下文。
         // API 也是一种 “chat”（有 chatKey + 可落盘 history），但它不是“平台消息回发”场景：
         // - 不提供 dispatcher 回发能力（响应通过 HTTP body 返回）
-        const result = await withSessionRequestContext(
+        const result = await withContextRequestContext(
           {
-            sessionId,
+            contextId,
             targetId: chatId,
             actorId: actorId,
             messageId,
           },
           () =>
-            runtime.sessionManager.getAgent(sessionId).run({
-              sessionId,
+            runtime.contextManager.getAgent(contextId).run({
+              contextId,
               query: instructions,
             }),
         );
@@ -281,17 +281,17 @@ export class AgentServer {
           String(result?.output || "");
         try {
           // [阶段3] 历史落盘：优先 append assistantMessage；缺失时生成文本消息兜底。
-          const store = runtime.sessionManager.getHistoryStore(sessionId);
+          const store = runtime.contextManager.getHistoryStore(contextId);
           const assistantMessage = (result as any)?.assistantMessage;
           if (assistantMessage && typeof assistantMessage === "object") {
             await store.append(assistantMessage as any);
-            void runtime.sessionManager.afterSessionHistoryUpdatedAsync(sessionId);
+            void runtime.contextManager.afterContextHistoryUpdatedAsync(contextId);
           } else if (userVisible && userVisible.trim()) {
             await store.append(
               store.createAssistantTextMessage({
                 text: userVisible,
                 metadata: {
-                  sessionId,
+                  contextId,
                   channel: "api",
                   targetId: chatId,
                   actorId: "bot",
@@ -302,7 +302,7 @@ export class AgentServer {
                 source: "egress",
               }),
             );
-            void runtime.sessionManager.afterSessionHistoryUpdatedAsync(sessionId);
+            void runtime.contextManager.afterContextHistoryUpdatedAsync(contextId);
           }
         } catch {
           // ignore

@@ -13,11 +13,11 @@ import path from "node:path";
 import {
   getIntegrationChatRuntimeBridge,
   getIntegrationRequestContextBridge,
-  getIntegrationSessionManager,
+  getIntegrationContextManager,
 } from "../../../infra/integration-runtime-dependencies.js";
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 import type { ShipTaskRunMetaV1, ShipTaskRunTriggerV1 } from "../types/task.js";
-import { createTaskRunSessionId, formatTaskRunTimestamp, getTaskRunDir } from "./paths.js";
+import { createTaskRunContextId, formatTaskRunTimestamp, getTaskRunDir } from "./paths.js";
 import { ensureRunDir, readTask } from "./store.js";
 
 /**
@@ -112,7 +112,7 @@ export async function runTaskNow(params: {
     "utf-8",
   );
 
-  const runSessionId = createTaskRunSessionId(task.taskId, timestamp);
+  const runContextId = createTaskRunContextId(task.taskId, timestamp);
 
   let ok = false;
   let status: "success" | "failure" | "skipped" = "failure";
@@ -122,20 +122,20 @@ export async function runTaskNow(params: {
   // phase 1：执行任务主体（agent run）
   // 失败容错（中文）：即使 agent 执行失败，仍会继续落盘 result/error 并尝试通知 chatKey。
   try {
-    const agent = getIntegrationSessionManager(context).getAgent(runSessionId);
+    const agent = getIntegrationContextManager(context).getAgent(runContextId);
 
     // 关键点（中文）：以 scheduler channel 运行，但使用 task-run chatKey 让 history 落盘到 runDir。
-    const result = await getIntegrationRequestContextBridge(context).withSessionRequestContext(
+    const result = await getIntegrationRequestContextBridge(context).withContextRequestContext(
       {
         channel: "scheduler",
         targetId: task.taskId,
-        sessionId: runSessionId,
+        contextId: runContextId,
         actorId: "scheduler",
         actorName: "scheduler",
       },
       () =>
         agent.run({
-          sessionId: runSessionId,
+          contextId: runContextId,
           query: task.body,
         }),
     );
@@ -144,7 +144,7 @@ export async function runTaskNow(params: {
 
     // 落盘 assistant UIMessage（包含 tool parts），以便 history.jsonl 可审计。
     try {
-      const store = getIntegrationSessionManager(context).getHistoryStore(runSessionId);
+      const store = getIntegrationContextManager(context).getHistoryStore(runContextId);
       const assistantMessage = (result as any)?.assistantMessage;
       if (assistantMessage && typeof assistantMessage === "object") {
         await store.append(assistantMessage as any);
@@ -158,7 +158,7 @@ export async function runTaskNow(params: {
             store.createAssistantTextMessage({
               text: userVisible,
               metadata: {
-                chatKey: runSessionId,
+                chatKey: runContextId,
                 channel: "scheduler",
                 targetId: task.taskId,
                 actorId: "bot",

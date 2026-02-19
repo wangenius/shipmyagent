@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
-import { getIntegrationSessionManager } from "../../../infra/integration-runtime-dependencies.js";
+import { getIntegrationContextManager } from "../../../infra/integration-runtime-dependencies.js";
 import type { LoadedSkillV1 } from "../types/loaded-skill.js";
 import type {
   SystemPromptProvider,
@@ -12,8 +12,8 @@ import { discoverClaudeSkillsSync } from "./discovery.js";
 import { renderClaudeSkillsPromptSection } from "./prompt.js";
 import { buildLoadedSkillsSystemText } from "./active-skills-prompt.js";
 import {
-  setSessionAvailableSkills,
-  setSessionLoadedSkills,
+  setContextAvailableSkills,
+  setContextLoadedSkills,
 } from "./store.js";
 
 /**
@@ -57,7 +57,7 @@ function toLoadedSkill(params: {
  * 构建 skills provider 输出。
  *
  * 算法流程（中文）
- * 1) 发现可用 skills 并写入 session 可见列表
+ * 1) 发现可用 skills 并写入 context 可见列表
  * 2) 读取 pinnedSkillIds，尝试装载 SKILL.md
  * 3) 清理失效 pin（不存在或内容不可读）
  * 4) 输出系统提示片段 + activeTools 收敛结果
@@ -67,11 +67,11 @@ async function buildSkillsProviderOutput(
   ctx: SystemPromptProviderContext,
 ): Promise<SystemPromptProviderOutput> {
   const runtime = getContext();
-  const historyStore = getIntegrationSessionManager(runtime).getHistoryStore(
-    ctx.sessionId,
+  const historyStore = getIntegrationContextManager(runtime).getHistoryStore(
+    ctx.contextId,
   );
   const discoveredSkills = discoverClaudeSkillsSync(runtime.rootPath, runtime.config);
-  setSessionAvailableSkills(ctx.sessionId, discoveredSkills);
+  setContextAvailableSkills(ctx.contextId, discoveredSkills);
 
   const messages: Array<{ role: "system"; content: string }> = [];
   const skillsOverview = renderClaudeSkillsPromptSection(
@@ -140,7 +140,7 @@ async function buildSkillsProviderOutput(
     // ignore
   } finally {
     // 关键点（中文）：core 只保存会话状态，skills 的发现和装载策略都在 integration。
-    setSessionLoadedSkills(ctx.sessionId, loadedSkillsById);
+    setContextLoadedSkills(ctx.contextId, loadedSkillsById);
   }
 
   // phase 2：没有已加载 skill 时，仅返回 overview

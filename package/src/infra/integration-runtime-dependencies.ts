@@ -1,7 +1,7 @@
 import type {
   IntegrationModelFactory,
-  IntegrationSessionManager,
-  IntegrationSessionRequestContextBridge,
+  IntegrationContextManager,
+  IntegrationContextRequestContextBridge,
 } from "./integration-runtime-ports.js";
 import type { IntegrationChatRuntimeBridge } from "./integration-chat-runtime-bridge.js";
 import type { IntegrationRuntimeDependencies } from "./integration-runtime-types.js";
@@ -27,17 +27,17 @@ export function getIntegrationRuntimeDependencies(
 }
 
 /**
- * 获取 sessionManager 端口。
+ * 获取 contextManager 端口。
  *
  * 失败语义（中文）
  * - 缺失时直接抛错，提示必须由 server 注入。
  */
-export function getIntegrationSessionManager(
+export function getIntegrationContextManager(
   context: IntegrationRuntimeDependencies,
-): IntegrationSessionManager {
-  if (context.sessionManager) return context.sessionManager;
+): IntegrationContextManager {
+  if (context.contextManager) return context.contextManager;
   throw new Error(
-    "Integration sessionManager is required but missing. Ensure server injects sessionManager before invoking this capability.",
+    "Integration contextManager is required but missing. Ensure server injects contextManager before invoking this capability.",
   );
 }
 
@@ -58,7 +58,7 @@ export function getIntegrationChatRuntimeBridge(
  */
 export function getIntegrationRequestContextBridge(
   context: IntegrationRuntimeDependencies,
-): IntegrationSessionRequestContextBridge {
+): IntegrationContextRequestContextBridge {
   if (context.requestContextBridge) return context.requestContextBridge;
   throw new Error(
     "Integration requestContextBridge is required but missing. Ensure server injects request context bridge before invoking this capability.",

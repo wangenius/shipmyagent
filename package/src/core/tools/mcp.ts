@@ -2,7 +2,7 @@
  * MCP tool adapter.
  *
  * Converts MCP server tool definitions into AI SDK `tool(...)` instances that
- * the agent can call. The actual transport/session management lives in the
+ * the agent can call. The actual transport/context management lives in the
  * runtime MCP manager.
  */
 
