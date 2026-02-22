@@ -1,2 +1,0 @@
-{"v":1,"ts":1770285927114,"channel":"telegram","chatId":"-1003761993516","chatKey":"telegram-chat--1003761993516-topic-20","userId":"8444574557","messageId":"21","role":"user","text":"这个是lucas","meta":{"chatType":"supergroup","messageThreadId":20,"username":"wangenius"}}
-{"v":1,"ts":1770285932590,"channel":"telegram","chatId":"-1003761993516","chatKey":"telegram-chat--1003761993516-topic-20","userId":"bot","role":"assistant","text":"收到。我是 Lucas，有什么想聊的？","meta":{"via":"tool","channel":"telegram"}}
