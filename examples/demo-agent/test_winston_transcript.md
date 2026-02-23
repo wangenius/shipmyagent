@@ -12,6 +12,7 @@
 
 the uh uniform code of military
 
+
 Justice specifies Court marshal for any officer who sends a soldier into battle
 
 without a weapon there ought to be a similar protection for students because students shouldn't go out into life without an ability to

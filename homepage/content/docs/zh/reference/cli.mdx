@@ -39,7 +39,7 @@ sma chat context
 ```
 
 说明：
-- `--chat-key` 可省略，CLI 会优先读取 `SMA_CTX_CHAT_KEY`
+- `--chat-key` 可省略。解析优先级：`--chat-key` > `SMA_CTX_CONTEXT_ID` > `SMA_CTX_CHAT_KEY` > 由 `SMA_CTX_CHANNEL + SMA_CTX_TARGET_ID`（以及可选 thread/type）派生
 - 典型场景：Agent 通过 `exec_command` 执行 `sma chat send` 回发消息
 
 ### `sma skill`

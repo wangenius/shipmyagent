@@ -106,12 +106,78 @@ export function resolveChatContextSnapshot(input?: {
 }
 
 /**
+ * 从上下文快照派生 chatKey（当上游未显式给 chatKey 时）。
+ *
+ * 规则（中文）
+ * - Telegram：`telegram-chat-<chatId>` / topic 场景 `telegram-chat-<chatId>-topic-<threadId>`
+ * - Feishu：`feishu-chat-<chatId>`
+ * - QQ：`qq-<chatType>-<chatId>`（chatType 缺失则无法派生）
+ */
+function deriveChatKeyFromSnapshot(snapshot: ChatContextSnapshot): string | undefined {
+  const channel = String(snapshot.channel || "").trim().toLowerCase();
+  const chatId = String(snapshot.chatId || "").trim();
+  if (!channel || !chatId) return undefined;
+
+  if (channel === "telegram") {
+    const threadId =
+      typeof snapshot.messageThreadId === "number" &&
+      Number.isFinite(snapshot.messageThreadId)
+        ? snapshot.messageThreadId
+        : undefined;
+    if (typeof threadId === "number" && threadId > 0) {
+      return `telegram-chat-${chatId}-topic-${threadId}`;
+    }
+    return `telegram-chat-${chatId}`;
+  }
+
+  if (channel === "feishu") {
+    return `feishu-chat-${chatId}`;
+  }
+
+  if (channel === "qq") {
+    const chatType = String(snapshot.chatType || "").trim();
+    if (!chatType) return undefined;
+    return `qq-${chatType}-${chatId}`;
+  }
+
+  return undefined;
+}
+
+/**
  * 提取最终 chatKey（用于发送路径）。
  */
 export function resolveChatKey(input?: { chatKey?: string }): string | undefined {
   const snapshot = resolveChatContextSnapshot({ chatKey: input?.chatKey });
-  const key = String(snapshot.chatKey || "").trim();
+  const key = String(snapshot.chatKey || "").trim() || deriveChatKeyFromSnapshot(snapshot) || "";
   return key ? key : undefined;
+}
+
+/**
+ * 规范化 `chat send` 文本。
+ *
+ * 关键点（中文）
+ * - 当文本只包含字面量转义（如 `\n`）且没有真实换行时，自动解码为真实控制字符。
+ * - 这样可兼容模型/脚本把多行文本写成 `\\n` 的场景，避免用户看到原样 `\n`。
+ */
+function normalizeChatSendText(raw: string): string {
+  const text = String(raw ?? "");
+  if (!text) return text;
+
+  const hasRealLineBreak = text.includes("\n") || text.includes("\r");
+  let normalized = text;
+
+  if (
+    !hasRealLineBreak &&
+    (text.includes("\\n") || text.includes("\\r") || text.includes("\\t"))
+  ) {
+    normalized = text
+      .replace(/\\r\\n/g, "\n")
+      .replace(/\\n/g, "\n")
+      .replace(/\\r/g, "\r")
+      .replace(/\\t/g, "\t");
+  }
+
+  return normalized;
 }
 
 /**
@@ -127,7 +193,7 @@ export async function sendChatTextByChatKey(params: {
   text: string;
 }): Promise<ChatSendResponse> {
   const chatKey = String(params.chatKey || "").trim();
-  const text = String(params.text ?? "");
+  const text = normalizeChatSendText(String(params.text ?? ""));
   if (!chatKey) {
     return {
       success: false,

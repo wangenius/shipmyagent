@@ -22,7 +22,17 @@ export interface AgentResult {
 export interface AgentRunInput {
   contextId: string;
   query: string;
-  drainLaneMerged?: () => Promise<{ drained: number } | null>;
+  drainLaneMerged?: () => Promise<{
+    drained: number;
+    messages: Array<{
+      text: string;
+      messageId?: string;
+      actorId?: string;
+      actorName?: string;
+      targetType?: string;
+      threadId?: number;
+    }>;
+  } | null>;
 }
 
 export interface ConversationMessage {

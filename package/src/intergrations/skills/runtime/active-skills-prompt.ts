@@ -53,7 +53,7 @@ export function buildLoadedSkillsSystemText(params: {
         unionAllowedTools.add(String(toolName));
       }
       lines.push(
-        `**Tool Restriction:** You can ONLY use these tools: ${skill.allowedTools.join(", ")} (plus exec_command/write_stdin/close_context for command workflow)`,
+        `**Tool Restriction:** You can ONLY use these tools: ${skill.allowedTools.join(", ")} (plus exec_command/write_stdin/close_shell for command workflow)`,
       );
     } else {
       lines.push("**Tool Restriction:** None (all tools available)");
@@ -81,7 +81,7 @@ export function buildLoadedSkillsSystemText(params: {
         new Set([
           "exec_command",
           "write_stdin",
-          "close_context",
+          "close_shell",
           ...Array.from(unionAllowedTools),
         ]),
       )

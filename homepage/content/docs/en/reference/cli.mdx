@@ -38,7 +38,7 @@ sma chat context
 ```
 
 Notes:
-- `--chat-key` is optional if `SMA_CTX_CHAT_KEY` is injected
+- `--chat-key` is optional. Resolution order: `--chat-key` > `SMA_CTX_CONTEXT_ID` > `SMA_CTX_CHAT_KEY` > derived from `SMA_CTX_CHANNEL + SMA_CTX_TARGET_ID` (plus thread/type when available)
 - Typical flow: the agent calls `sma chat send` via `exec_command`
 - `sma chat` calls local daemon API; start runtime first via `sma start` or `sma run`
 

@@ -158,6 +158,7 @@ export class ContextAgentRunner implements ContextAgent {
     contextId: string,
     opts?: {
       retryAttempts?: number;
+      laneMergeAttempts?: number;
       drainLaneMerged?: AgentRunInput["drainLaneMerged"];
       requestId?: string;
     },
@@ -166,6 +167,7 @@ export class ContextAgentRunner implements ContextAgent {
     let hadToolFailure = false;
     const toolFailureSummaries: string[] = [];
     const retryAttempts = opts?.retryAttempts ?? 0;
+    const laneMergeAttempts = opts?.laneMergeAttempts ?? 0;
     const drainLaneMerged = opts?.drainLaneMerged;
     const requestId = opts?.requestId || "";
     const logger = this.getLogger();
@@ -259,13 +261,36 @@ export class ContextAgentRunner implements ContextAgent {
 
       // 关键点（中文）
       // - AI SDK 的 tool-loop 会把 tool call / tool output 以 messages 的形式串起来（in-flight）。
-      // - lane merge 导致 history 更新时，我们需要“替换 messages 的前缀 history”，但必须保留后缀的 tool 链。
+      // - lane merge 到来时，我们需要把“新入队 user 消息”并入前缀，并保留后缀 tool 链。
       let lastAppliedBasePrefixLen = baseModelMessages.length;
-      let needsHistoryResync = false;
+      let needsLaneResync = false;
+
+      const appendMergedLaneMessages = (
+        messages: Array<{ text: string }> | undefined,
+      ): { added: number; latestUserText?: string } => {
+        if (!Array.isArray(messages) || messages.length === 0) return { added: 0 };
+        const toAppend: ModelMessage[] = [];
+        let latestUserText: string | undefined;
+        for (const m of messages) {
+          const text = String((m as any)?.text ?? "").trim();
+          if (!text) continue;
+          toAppend.push({ role: "user", content: text } as any);
+          latestUserText = text;
+        }
+        if (toAppend.length > 0) {
+          baseModelMessages = [...baseModelMessages, ...toAppend] as any;
+        }
+        return { added: toAppend.length, latestUserText };
+      };
 
       const reloadModelMessages = async (
         trigger: string,
-      ): Promise<{ reloaded: boolean; drained?: number }> => {
+      ): Promise<{
+        reloaded: boolean;
+        drained?: number;
+        added?: number;
+        latestUserText?: string;
+      }> => {
         if (typeof drainLaneMerged !== "function") return { reloaded: false };
         try {
           const r = await drainLaneMerged();
@@ -274,27 +299,30 @@ export class ContextAgentRunner implements ContextAgent {
               ? (r as any).drained
               : 0;
           if (drained <= 0) return { reloaded: false, drained: 0 };
-          baseModelMessages = (await historyStore.toModelMessages({
-            tools: this.tools,
-          })) as any;
-          if (
-            !Array.isArray(baseModelMessages) ||
-            baseModelMessages.length === 0
-          ) {
-            baseModelMessages = [{ role: "user", content: userText } as any];
-          }
-          needsHistoryResync = true;
+          const mergedMessages = Array.isArray((r as any)?.messages)
+            ? ((r as any).messages as Array<{ text: string }>)
+            : [];
+          const appended = appendMergedLaneMessages(mergedMessages);
+          needsLaneResync = true;
           void logger.log(
             "debug",
-            "Lane merged messages detected; reloaded history for next step",
+            "Lane merged messages detected; appended queued user messages for next step",
             {
               contextId,
               requestId,
               trigger,
               drained,
+              appended: appended.added,
             },
           );
-          return { reloaded: true, drained };
+          return {
+            reloaded: true,
+            drained,
+            added: appended.added,
+            ...(appended.latestUserText
+              ? { latestUserText: appended.latestUserText }
+              : {}),
+          };
         } catch {
           return { reloaded: false };
         }
@@ -314,7 +342,7 @@ export class ContextAgentRunner implements ContextAgent {
             try {
               return await exec.apply(tool, args);
             } finally {
-              // 关键点（中文）：工具结束后立即检查 lane 是否有新消息；若有则重载 history。
+              // 关键点（中文）：工具结束后立即检查 lane 是否有新消息；若有则并入消息前缀。
               await reloadModelMessages(`after_tool:${toolName}`);
             }
           },
@@ -335,15 +363,15 @@ export class ContextAgentRunner implements ContextAgent {
                 ? incomingMessages.slice(lastAppliedBasePrefixLen)
                 : [];
 
-            // 1) 在每个 step 前先检查 lane 是否有新消息；若有则重载 history。
+            // 1) 在每个 step 前先检查 lane 是否有新消息；若有则从队列并入 user 消息。
             await reloadModelMessages("before_step");
 
             // 2) messages：默认保留 tool-loop 的 in-flight messages（包含 tool call/output 链）。
-            // 若 history 已变化，则替换“前缀 history”，并保留后缀 tool 链。
+            // 若 lane 已变化，则替换“前缀 base”，并保留后缀 tool 链。
             let outMessages: ModelMessage[] | undefined;
-            if (needsHistoryResync) {
+            if (needsLaneResync) {
               outMessages = [...(baseModelMessages as any), ...suffix] as any;
-              needsHistoryResync = false;
+              needsLaneResync = false;
               lastAppliedBasePrefixLen = Array.isArray(baseModelMessages)
                 ? baseModelMessages.length
                 : 0;
@@ -414,6 +442,39 @@ export class ContextAgentRunner implements ContextAgent {
         toolCalls.push(...extractToolCallsFromUiMessage(finalAssistantUiMessage));
       }
 
+      // 关键点（中文）
+      // - 对“无工具调用的单轮 LLM”场景，若本轮结束时 lane 收到新消息，
+      //   当前结果通常已经过时；这里做一次轻量重跑（最多 2 轮）来吸收最新输入。
+      // - 仅在 toolCalls=0 时启用，避免重复执行工具带来副作用。
+      if (
+        toolCalls.length === 0 &&
+        laneMergeAttempts < 2 &&
+        typeof drainLaneMerged === "function"
+      ) {
+        const postRunMerge = await reloadModelMessages("after_llm_complete");
+        if (postRunMerge.reloaded) {
+          const latestUserText = String(
+            postRunMerge.latestUserText || userText || "",
+          );
+          await logger.log(
+            "info",
+            "Detected new lane messages right after LLM completion; rerunning once to absorb latest input",
+            {
+              contextId,
+              requestId,
+              drained: postRunMerge.drained || 0,
+              laneMergeAttempts,
+            },
+          );
+          return this.runWithToolLoopAgent(latestUserText, startTime, contextId, {
+            retryAttempts,
+            laneMergeAttempts: laneMergeAttempts + 1,
+            requestId,
+            drainLaneMerged,
+          });
+        }
+      }
+
       // 基于 toolCalls 统计失败摘要（保持旧行为）
       for (const tc of toolCalls) {
         const raw = String(tc.output || "").trim();
@@ -460,12 +521,7 @@ export class ContextAgentRunner implements ContextAgent {
       }
       return {
         success: !hadToolFailure,
-        output: [
-          assistantText || "Execution completed",
-          hadToolFailure
-            ? `\n\nTool errors:\n${toolFailureSummaries.map((s) => `- ${s}`).join("\n")}`
-            : "",
-        ].join(""),
+        output: assistantText || "Execution completed",
         toolCalls,
         ...(finalAssistantUiMessage
           ? { assistantMessage: finalAssistantUiMessage }
@@ -500,6 +556,7 @@ export class ContextAgentRunner implements ContextAgent {
 
         return this.runWithToolLoopAgent(userText, startTime, contextId, {
           retryAttempts: retryAttempts + 1,
+          laneMergeAttempts,
           requestId,
           drainLaneMerged,
         });

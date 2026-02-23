@@ -774,9 +774,9 @@ export const write_stdin = tool({
 });
 
 /**
- * `close_context`：主动关闭并回收会话。
+ * `close_shell`：主动关闭并回收会话。
  */
-export const close_context = tool({
+export const close_shell = tool({
   description:
     "Close an existing exec context and release resources. Use force=true to send SIGKILL.",
   inputSchema: z.object({
@@ -815,9 +815,23 @@ export const close_context = tool({
           : {}),
       };
     } catch (error) {
+      const err = String(error ?? "");
+      // 关键点（中文）：close 是“释放资源”语义，重复 close 应视为幂等成功而非失败。
+      if (err.includes("Unknown context_id")) {
+        return {
+          success: true,
+          context_id,
+          closed: false,
+          was_running: false,
+          exit_code: null,
+          pending_output_chars: 0,
+          dropped_chars: 0,
+          note: `Context ${context_id} already closed or expired.`,
+        };
+      }
       return {
         success: false,
-        error: `close_context failed: ${String(error)}`,
+        error: `close_shell failed: ${err}`,
       };
     }
   },
@@ -829,5 +843,5 @@ export const close_context = tool({
 export const execShellTools = {
   exec_command,
   write_stdin,
-  close_context,
+  close_shell,
 };

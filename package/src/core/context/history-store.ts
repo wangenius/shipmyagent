@@ -46,6 +46,7 @@ export class ContextHistoryStore {
   private readonly overrideMessagesFilePath?: string;
   private readonly overrideMetaFilePath?: string;
   private readonly overrideArchiveDirPath?: string;
+  private legacySessionMigrationChecked: boolean = false;
 
   constructor(
     contextId: string,
@@ -160,6 +161,97 @@ export class ContextHistoryStore {
     await fs.ensureDir(this.getMessagesDirPath());
     await fs.ensureDir(this.getArchiveDirPath());
     await fs.ensureFile(this.getMessagesFilePath());
+    await this.migrateLegacySessionHistoryIfNeeded();
+  }
+
+  /**
+   * 一次性迁移 legacy `.ship/session/.../messages/history.jsonl` 到 `.ship/context/...`。
+   *
+   * 背景（中文）
+   * - 历史事实源已统一为 `.ship/context/...`。
+   * - 旧版本可能把同一会话写在 `.ship/session/...`，导致“新登录后历史看起来丢失”。
+   *
+   * 迁移策略（中文）
+   * - 只在默认 context 布局下执行（task run 等 override 路径不参与）。
+   * - 使用 marker 文件保证每个 context 最多迁移一次。
+   * - 若当前 context history 非空：旧 session 历史前置，当前历史保留在后。
+   */
+  private async migrateLegacySessionHistoryIfNeeded(): Promise<void> {
+    if (this.legacySessionMigrationChecked) return;
+    this.legacySessionMigrationChecked = true;
+
+    if (
+      this.overrideMessagesDirPath ||
+      this.overrideMessagesFilePath ||
+      this.overrideMetaFilePath ||
+      this.overrideArchiveDirPath
+    ) {
+      return;
+    }
+
+    const messagesDir = this.getMessagesDirPath();
+    const markerPath = path.join(messagesDir, ".legacy-session-imported");
+    if (await fs.pathExists(markerPath)) return;
+
+    const legacyMessagesDir = path.join(
+      this.rootPath,
+      ".ship",
+      "session",
+      encodeURIComponent(this.contextId),
+      "messages",
+    );
+    const legacyHistoryPath = path.join(legacyMessagesDir, "history.jsonl");
+    const legacyMetaPath = path.join(legacyMessagesDir, "meta.json");
+    if (!(await fs.pathExists(legacyHistoryPath))) return;
+
+    try {
+      const logger = getLogger(this.rootPath, "info");
+      const currentHistoryPath = this.getMessagesFilePath();
+      const legacyRaw = await fs.readFile(legacyHistoryPath, "utf8");
+      const currentRaw = await fs.readFile(currentHistoryPath, "utf8");
+
+      const legacyTrimmed = String(legacyRaw || "").trim();
+      if (!legacyTrimmed) {
+        await fs.writeFile(markerPath, "legacy-empty\n", "utf8");
+        return;
+      }
+
+      const currentTrimmed = String(currentRaw || "").trim();
+      if (currentTrimmed.includes('"sessionId"')) {
+        // 已经是 legacy 格式内容，视为已迁移。
+        await fs.writeFile(markerPath, "already-migrated\n", "utf8");
+        return;
+      }
+
+      const legacyWithLf = legacyRaw.endsWith("\n") ? legacyRaw : `${legacyRaw}\n`;
+      const merged =
+        currentTrimmed.length > 0 ? `${legacyWithLf}${currentRaw}` : legacyWithLf;
+      await fs.writeFile(currentHistoryPath, merged, "utf8");
+
+      const currentMetaPath = this.getMetaFilePath();
+      const currentMetaExists = await fs.pathExists(currentMetaPath);
+      if (!currentMetaExists && (await fs.pathExists(legacyMetaPath))) {
+        await fs.copyFile(legacyMetaPath, currentMetaPath);
+      }
+
+      await fs.writeFile(markerPath, "ok\n", "utf8");
+      await logger.log("info", "Migrated legacy session history into context history", {
+        contextId: this.contextId,
+        legacyHistoryPath,
+        currentHistoryPath,
+      });
+    } catch (error) {
+      // best-effort：迁移失败不阻塞主流程
+      try {
+        const logger = getLogger(this.rootPath, "info");
+        await logger.log("warn", "Legacy session history migration failed (ignored)", {
+          contextId: this.contextId,
+          error: String(error),
+        });
+      } catch {
+        // ignore
+      }
+    }
   }
 
   /**

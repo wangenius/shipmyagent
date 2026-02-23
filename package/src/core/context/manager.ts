@@ -49,6 +49,10 @@ export class ContextManager {
       context: ContextRequestContext;
       result: AgentResult;
     }) => Promise<void>;
+    sendAction?: (params: {
+      context: ContextRequestContext;
+      action: "typing";
+    }) => Promise<void>;
     runMemoryMaintenance?: (contextId: string) => Promise<void>;
   }) {
     const base = getShipRuntimeContextBase();
@@ -60,6 +64,7 @@ export class ContextManager {
       getAgent: (contextId) => this.getAgent(contextId),
       getContextManager: () => this,
       deliverResult: params?.deliverResult,
+      sendAction: params?.sendAction,
     });
   }
 

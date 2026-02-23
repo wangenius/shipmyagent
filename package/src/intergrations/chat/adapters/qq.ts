@@ -231,10 +231,12 @@ export class QQBot extends BaseChatAdapter {
    * 调用 GET /gateway 接口获取
    */
   private async getGatewayUrl(): Promise<string> {
-    try {
-      const apiBase = this.getApiBase();
-      const authToken = await this.getAuthToken();
+    // 关键点（中文）：鉴权失败属于“不可恢复配置错误”，必须直接上抛，
+    // 不能回退到默认 gateway；否则会出现反复 WS 重连与误导性日志。
+    const apiBase = this.getApiBase();
+    const authToken = await this.getAuthToken();
 
+    try {
       this.logger.info(`正在获取 Gateway 地址... (API: ${apiBase})`);
 
       // 使用 GET /gateway 接口获取 gateway 地址

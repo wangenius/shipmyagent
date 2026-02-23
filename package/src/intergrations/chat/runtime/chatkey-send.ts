@@ -35,16 +35,23 @@ export function parseChatKeyForDispatch(chatKey: string): {
   if (!key) return null;
 
   // Telegram: telegram-chat-<id> 或 telegram-chat-<id>-topic-<thread>
-  const tgTopic = key.match(/^telegram-chat-([^-\s]+)-topic-(\d+)$/i);
+  // 关键点（中文）：chatId 可能是负数（例如 supergroup：-100...），因此不能排除 `-`。
+  const tgTopic = key.match(/^telegram-chat-(\S+)-topic-(\d+)$/i);
   if (tgTopic) {
+    const chatId = String(tgTopic[1] || "").trim();
+    if (!chatId) return null;
     return {
       channel: "telegram",
-      chatId: tgTopic[1],
+      chatId,
       messageThreadId: Number.parseInt(tgTopic[2], 10),
     };
   }
-  const tg = key.match(/^telegram-chat-([^-\s]+)$/i);
-  if (tg) return { channel: "telegram", chatId: tg[1] };
+  const tg = key.match(/^telegram-chat-(\S+)$/i);
+  if (tg) {
+    const chatId = String(tg[1] || "").trim();
+    if (!chatId) return null;
+    return { channel: "telegram", chatId };
+  }
 
   // Feishu: feishu-chat-<id>
   const fe = key.match(/^feishu-chat-(.+)$/i);

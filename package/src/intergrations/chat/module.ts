@@ -75,7 +75,7 @@ async function runChatSendCommand(options: ChatSendCliOptions): Promise<void> {
     printSendFailed({
       asJson: options.json,
       error:
-        "Missing chatKey. Provide --chat-key or ensure SMA_CTX_CHAT_KEY is injected in current shell context.",
+        "Missing chatKey. Provide --chat-key or ensure SMA_CTX_CONTEXT_ID (or SMA_CTX_CHANNEL + SMA_CTX_TARGET_ID) is injected in current shell context.",
     });
     return;
   }

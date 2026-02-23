@@ -1,0 +1,15 @@
+{
+  "pid": 92301,
+  "projectRoot": "/Users/wangenius/Documents/github/shipmyagent/examples/demo-agent",
+  "startedAt": "2026-02-23T03:27:55.169Z",
+  "command": "/opt/homebrew/Cellar/node/24.3.0/bin/node",
+  "args": [
+    "/Users/wangenius/Documents/github/shipmyagent/package/bin/cli.js",
+    "run",
+    "/Users/wangenius/Documents/github/shipmyagent/examples/demo-agent",
+    "--port",
+    "3000"
+  ],
+  "node": "v24.3.0",
+  "platform": "darwin"
+}

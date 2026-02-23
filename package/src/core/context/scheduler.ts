@@ -17,6 +17,8 @@ import type {
   SchedulerStats,
 } from "../types/context-scheduler.js";
 
+const TYPING_ACTION_INTERVAL_MS = 4_000;
+
 /**
  * 队列中的单条消息。
  *
@@ -106,6 +108,10 @@ export class Scheduler {
     context: ContextRequestContext;
     result: AgentResult;
   }) => Promise<void>;
+  private readonly sendAction?: (params: {
+    context: ContextRequestContext;
+    action: "typing";
+  }) => Promise<void>;
 
   private readonly lanes: Map<string, Lane> = new Map();
   private readonly runnable: string[] = [];
@@ -124,11 +130,48 @@ export class Scheduler {
       context: ContextRequestContext;
       result: AgentResult;
     }) => Promise<void>;
+    sendAction?: (params: {
+      context: ContextRequestContext;
+      action: "typing";
+    }) => Promise<void>;
   }) {
     this.config = normalizeConfig(params.config);
     this.getAgent = params.getAgent;
     this.getContextManager = params.getContextManager;
     this.deliverResult = params.deliverResult;
+    this.sendAction = params.sendAction;
+  }
+
+  /**
+   * 在一次执行期间维持“typing”心跳。
+   *
+   * 关键点（中文）
+   * - 立即发送一次，随后按固定间隔续发。
+   * - 回调错误不影响主执行流程（best-effort）。
+   */
+  private startTypingHeartbeat(
+    context: ContextRequestContext,
+  ): { stop: () => void } {
+    if (!this.sendAction) return { stop: () => {} };
+
+    const sendOnce = async () => {
+      try {
+        await this.sendAction?.({ context, action: "typing" });
+      } catch {
+        // ignore
+      }
+    };
+
+    void sendOnce();
+
+    const timer = setInterval(() => {
+      void sendOnce();
+    }, TYPING_ACTION_INTERVAL_MS);
+    if (typeof timer.unref === "function") timer.unref();
+
+    return {
+      stop: () => clearInterval(timer),
+    };
   }
 
   /**
@@ -310,7 +353,17 @@ export class Scheduler {
     // drain 规则（中文）
     // - 仅在配置开启且未超过 rounds 上限时生效。
     // - 每轮最多合并 `correctionMaxMergedMessages` 条后续消息。
-    const drainLaneMergedIfNeeded = async (): Promise<{ drained: number } | null> => {
+    const drainLaneMergedIfNeeded = async (): Promise<{
+      drained: number;
+      messages: Array<{
+        text: string;
+        messageId?: string;
+        actorId?: string;
+        actorName?: string;
+        targetType?: string;
+        threadId?: number;
+      }>;
+    } | null> => {
       if (!enableCorrection) return null;
       if (roundsUsed >= maxRounds) return null;
       if (lane.queue.length === 0) return null;
@@ -332,16 +385,40 @@ export class Scheduler {
       ctx.threadId = latest.threadId;
 
       roundsUsed += 1;
-      return { drained: extras.length };
+      return {
+        drained: extras.length,
+        messages: extras.map((m) => ({
+          text: String(m.text ?? ""),
+          ...(typeof m.messageId === "string" && m.messageId
+            ? { messageId: m.messageId }
+            : {}),
+          ...(typeof m.actorId === "string" && m.actorId
+            ? { actorId: m.actorId }
+            : {}),
+          ...(typeof m.actorName === "string" && m.actorName
+            ? { actorName: m.actorName }
+            : {}),
+          ...(typeof m.targetType === "string" && m.targetType
+            ? { targetType: m.targetType }
+            : {}),
+          ...(typeof m.threadId === "number" ? { threadId: m.threadId } : {}),
+        })),
+      };
     };
 
-    const result = await withContextRequestContext(ctx, () =>
-      agent.run({
-        contextId: first.contextId,
-        query: first.text,
-        drainLaneMerged: drainLaneMergedIfNeeded,
-      }),
-    );
+    const typing = this.startTypingHeartbeat(ctx);
+    let result: AgentResult;
+    try {
+      result = await withContextRequestContext(ctx, () =>
+        agent.run({
+          contextId: first.contextId,
+          query: first.text,
+          drainLaneMerged: drainLaneMergedIfNeeded,
+        }),
+      );
+    } finally {
+      typing.stop();
+    }
 
     try {
       const runtime = this.getContextManager();

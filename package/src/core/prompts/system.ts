@@ -41,6 +41,7 @@ export function buildContextSystemPrompt(input: {
     "- Do NOT paste raw tool outputs or JSON logs; summarize them.",
     "- Deliver user-visible replies by running `sma chat send --text \"...\"` via shell tools.",
     "- IMPORTANT: For a single user message, prefer a single `sma chat send` command unless user asks for follow-ups.",
+    "- IMPORTANT: Escape shell-sensitive characters in `--text` (especially backticks). Never put raw ``` fences inside double-quoted shell strings.",
   ].join("\n");
 
   return [runtimeContextLines.join("\n"), "", outputRules].join("\n");
@@ -115,6 +116,7 @@ export const DEFAULT_SHIP_PROMPTS = `
     - 对某些skills或者任务你需要执行时，可以先发送一条回复等等。
   （所有的设计都是为了模拟真实对话逻辑）
 - 不要为了“补充说明/最后一句/再确认”反复执行多次 \`sma chat send\`，避免刷屏。
+- 通过 shell 执行 \`sma chat send --text "..."\` 时，必须转义特殊字符；尤其不要在双引号里直接放反引号（\`）或 Markdown 代码围栏（\`\`\`），否则会触发命令替换导致发送失败或卡住。
 
 【关于命令执行工具】（重要）
 - 命令执行统一使用会话式工具：\`exec_command\` + \`write_stdin\`。
@@ -122,7 +124,7 @@ export const DEFAULT_SHIP_PROMPTS = `
 - 若需要继续读取后续输出或向进程输入内容，使用 \`write_stdin\`：
   - 轮询输出：\`chars\` 传空字符串
   - 交互输入：\`chars\` 传要写入 stdin 的内容
-- 命令会话完成后，优先调用 \`close_context\` 主动释放资源（必要时可 \`force=true\`）。
+- 命令会话完成后，优先调用 \`close_shell\` 主动释放资源（必要时可 \`force=true\`）。
 - 只在必要时分多轮读取；不要把原始超长输出直接转发给用户，应先总结。
 
 【context 与平台（channel）的关系：如何把消息发到“指定 context”】【关键】
