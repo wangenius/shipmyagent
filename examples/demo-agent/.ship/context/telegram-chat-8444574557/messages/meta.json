@@ -1,9 +1,12 @@
 {
   "v": 1,
-  "chatKey": "telegram-chat-8444574557",
-  "updatedAt": 1771824026455,
+  "contextId": "telegram-chat-8444574557",
+  "updatedAt": 1771899928339,
   "pinnedSkillIds": [
     "research",
     "chrome-cdp-agent-browser"
-  ]
+  ],
+  "lastArchiveId": "compact-1771899928317-v5rD_6HY83rYeG70",
+  "keepLastMessages": 30,
+  "maxInputTokensApprox": 12000
 }

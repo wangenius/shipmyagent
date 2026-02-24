@@ -1,0 +1,36 @@
+============================================================
+开始抓取百厨大战数据
+============================================================
+
+[1/4] 正在搜索百厨大战...
+  截图已保存: 01_search.png
+  页面标题: 验证码校验
+
+⚠️ 需要验证码，请在浏览器中手动完成
+完成后按Enter继续...
+Traceback (most recent call last):
+  File "/Users/wangenius/Documents/github/shipmyagent/examples/demo-agent/grab_danmu.py", line 63, in main
+    input()
+    ~~~~~^^
+EOFError: EOF when reading a line
+
+❌ 出错: EOF when reading a line
+
+按Enter关闭浏览器...
+Traceback (most recent call last):
+  File "/Users/wangenius/Documents/github/shipmyagent/examples/demo-agent/grab_danmu.py", line 206, in <module>
+    asyncio.run(main())
+    ~~~~~~~~~~~^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/runners.py", line 204, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/runners.py", line 127, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 719, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "/Users/wangenius/Documents/github/shipmyagent/examples/demo-agent/grab_danmu.py", line 201, in main
+    input()
+    ~~~~~^^
+EOFError: EOF when reading a line

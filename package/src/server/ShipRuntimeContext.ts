@@ -10,7 +10,6 @@ import { createModel } from "../core/llm/create-model.js";
 import { runContextMemoryMaintenance } from "../intergrations/memory/runtime/service.js";
 import { pickLastSuccessfulChatSendText } from "../intergrations/chat/runtime/user-visible-text.js";
 import { sendTextByChatKey } from "../intergrations/chat/runtime/chatkey-send.js";
-import { sendFinalOutputIfNeeded } from "../intergrations/chat/runtime/final-output.js";
 import { getChatSender } from "../intergrations/chat/runtime/chat-send-registry.js";
 import { registerIntegrationSystemPromptProviders } from "./system-prompt-providers.js";
 import type { IntegrationRuntimeDependencies } from "../infra/integration-runtime-types.js";
@@ -279,30 +278,6 @@ You are a helpful project assistant.`;
       await dispatcher.sendAction({
         chatId,
         action,
-        ...(typeof context.threadId === "number"
-          ? { messageThreadId: context.threadId }
-          : {}),
-        ...(typeof context.targetType === "string" && context.targetType
-          ? { chatType: context.targetType }
-          : {}),
-        ...(typeof context.messageId === "string" && context.messageId
-          ? { messageId: context.messageId }
-          : {}),
-      });
-    },
-    deliverResult: async ({ context, result }) => {
-      const channel = context.channel;
-      if (channel !== "telegram" && channel !== "feishu" && channel !== "qq") {
-        return;
-      }
-      const chatId = String(context.targetId || "").trim();
-      if (!chatId) return;
-
-      await sendFinalOutputIfNeeded({
-        channel,
-        chatId,
-        output: String(result?.output || ""),
-        toolCalls: Array.isArray(result?.toolCalls) ? (result.toolCalls as any) : [],
         ...(typeof context.threadId === "number"
           ? { messageThreadId: context.threadId }
           : {}),
