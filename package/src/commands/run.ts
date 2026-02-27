@@ -133,6 +133,14 @@ export async function runCommand(
   let qqBot = null;
   if (adapters.qq?.enabled) {
     logger.info("QQ adapter enabled");
+    const qqGroupAccess: "initiator_or_admin" | "anyone" | undefined =
+      (adapters.qq as any)?.groupAccess === "anyone"
+        ? "anyone"
+        : (adapters.qq as any)?.groupAccess === "initiator_or_admin"
+          ? "initiator_or_admin"
+          : (process.env.QQ_GROUP_ACCESS || "").toLowerCase() === "anyone"
+            ? "anyone"
+            : undefined;
 
     const qqConfig = {
       enabled: true,
@@ -152,6 +160,7 @@ export async function runCommand(
         typeof adapters.qq?.sandbox === "boolean"
           ? adapters.qq.sandbox
           : (process.env.QQ_SANDBOX || "").toLowerCase() === "true",
+      groupAccess: qqGroupAccess,
     };
 
     qqBot = await createQQBot(qqConfig, getShipIntegrationContext());

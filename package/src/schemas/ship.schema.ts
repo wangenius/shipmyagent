@@ -169,6 +169,7 @@ export const SHIP_JSON_SCHEMA: Record<string, unknown> = {
             appId: { type: "string" },
             appSecret: { type: "string" },
             sandbox: { type: "boolean" },
+            groupAccess: { type: "string", enum: ["initiator_or_admin", "anyone"] },
           },
         },
       },

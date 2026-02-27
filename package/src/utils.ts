@@ -247,6 +247,7 @@ export interface ShipConfig {
       appId?: string; // 机器人ID
       appSecret?: string; // 密钥
       sandbox?: boolean; // 是否使用沙箱环境
+      groupAccess?: "initiator_or_admin" | "anyone";
     };
   };
 }

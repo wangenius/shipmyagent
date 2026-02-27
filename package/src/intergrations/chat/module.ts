@@ -8,6 +8,7 @@
  */
 
 import path from "node:path";
+import fs from "node:fs/promises";
 import type { Command } from "commander";
 import {
   resolveChatContextSnapshot,
@@ -34,7 +35,9 @@ function parsePortOption(value: string): number {
 }
 
 type ChatSendCliOptions = {
-  text: string;
+  text?: string;
+  stdin?: boolean;
+  textFile?: string;
   chatKey?: string;
   path?: string;
   host?: string;
@@ -68,7 +71,51 @@ function printSendFailed(params: {
  */
 async function runChatSendCommand(options: ChatSendCliOptions): Promise<void> {
   const projectRoot = path.resolve(String(options.path || "."));
-  const text = String(options.text || "");
+  const explicitText = String(options.text || "");
+  const useStdin = Boolean(options.stdin);
+  const textFile = String(options.textFile || "").trim();
+  const inputSourcesCount =
+    (explicitText ? 1 : 0) + (useStdin ? 1 : 0) + (textFile ? 1 : 0);
+
+  if (inputSourcesCount !== 1) {
+    printSendFailed({
+      asJson: options.json,
+      error:
+        "Exactly one text source is required: use one of --text, --stdin, or --text-file.",
+    });
+    return;
+  }
+
+  let text = explicitText;
+  if (useStdin) {
+    const chunks: Buffer[] = [];
+    try {
+      for await (const chunk of process.stdin) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+      }
+    } catch (error) {
+      printSendFailed({
+        asJson: options.json,
+        error: `Failed to read stdin: ${String(error)}`,
+      });
+      return;
+    }
+    text = Buffer.concat(chunks).toString("utf8");
+  } else if (textFile) {
+    const filePath = path.isAbsolute(textFile)
+      ? textFile
+      : path.resolve(projectRoot, textFile);
+    try {
+      text = await fs.readFile(filePath, "utf8");
+    } catch (error) {
+      printSendFailed({
+        asJson: options.json,
+        error: `Failed to read --text-file: ${filePath}. ${String(error)}`,
+      });
+      return;
+    }
+  }
+
   const chatKey = resolveChatKey({ chatKey: options.chatKey });
 
   if (!chatKey) {
@@ -136,7 +183,9 @@ export const chatModule: SmaModule = {
     registry.group("chat", "Chat 服务命令（Bash-first）", (group) => {
       group.command("send", "发送消息到目标 chatKey", (command: Command) => {
         command
-          .requiredOption("--text <text>", "消息正文")
+          .option("--text <text>", "消息正文")
+          .option("--stdin", "从标准输入读取消息正文", false)
+          .option("--text-file <file>", "从文件读取消息正文（相对路径基于 --path）")
           .option("--chat-key <chatKey>", "目标 chatKey（不传则尝试读取 SMA_CTX_CHAT_KEY）")
           .option("--path <path>", "项目根目录（默认当前目录）", ".")
           .option("--host <host>", "Server host（覆盖自动解析）")

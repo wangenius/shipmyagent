@@ -23,6 +23,7 @@ interface QQConfig {
   appSecret: string;
   enabled: boolean;
   sandbox?: boolean; // 是否使用沙箱环境
+  groupAccess?: "initiator_or_admin" | "anyone";
 }
 
 // QQ 官方机器人 WebSocket 操作码
@@ -81,6 +82,8 @@ export class QQBot extends BaseChatAdapter {
 
   // 是否使用沙箱环境
   private useSandbox: boolean = false;
+  private readonly groupAccess: "initiator_or_admin" | "anyone";
+  private readonly groupInitiatorByChatKey: Map<string, string> = new Map();
   private msgSeqByMessageKey: Map<string, number> = new Map();
   private readonly qqEventCapture: QQEventCaptureConfig;
   /**
@@ -97,11 +100,14 @@ export class QQBot extends BaseChatAdapter {
     appId: string,
     appSecret: string,
     useSandbox: boolean = false,
+    groupAccess: QQConfig["groupAccess"] | undefined = undefined,
   ) {
     super({ channel: "qq", context });
     this.appId = appId;
     this.appSecret = appSecret;
     this.useSandbox = useSandbox;
+    this.groupAccess =
+      groupAccess === "anyone" ? "anyone" : "initiator_or_admin";
     this.qqEventCapture = getQqEventCaptureConfig(this.rootPath);
   }
 
@@ -648,6 +654,7 @@ export class QQBot extends BaseChatAdapter {
   private async handleGroupMessage(data: any): Promise<void> {
     const { id: messageId, group_openid: groupId, content, author } = data;
     const chatType = "group";
+    const chatKey = this.getChatKey({ chatId: groupId, chatType });
 
     // 提取纯文本内容（去除 @机器人 的部分）
     const userMessage = this.extractTextContent(content);
@@ -664,10 +671,48 @@ export class QQBot extends BaseChatAdapter {
 
     this.logger.info(`收到群聊消息 [${groupId}]: ${userMessage}`);
 
+    // 关键点（中文）：与 Telegram 对齐，纯 @ 空消息不触发执行。
+    if (!userMessage) return;
+
     // 检查是否是命令
     if (userMessage.startsWith("/")) {
+      const cmdName = (userMessage.trim().split(/\s+/)[0] || "")
+        .split("@")[0]
+        ?.toLowerCase();
+      const allowAny = cmdName === "/help" || cmdName === "/start";
+      if (
+        !allowAny &&
+        !this.isAllowedGroupActor({
+          chatKey,
+          actorId: actor.userId,
+          author,
+        })
+      ) {
+        await this.sendMessage(
+          groupId,
+          "group",
+          messageId,
+          "⛔️ 仅发起人或群管理员可以使用该命令。",
+        );
+        return;
+      }
       await this.handleCommand(groupId, "group", messageId, userMessage);
     } else {
+      if (
+        !this.isAllowedGroupActor({
+          chatKey,
+          actorId: actor.userId,
+          author,
+        })
+      ) {
+        await this.sendMessage(
+          groupId,
+          "group",
+          messageId,
+          "⛔️ 仅发起人或群管理员可以与我对话。",
+        );
+        return;
+      }
       await this.executeAndReply(
         groupId,
         "group",
@@ -805,6 +850,59 @@ export class QQBot extends BaseChatAdapter {
       .replace(/<@!\d+>/g, "")
       .replace(/<@\d+>/g, "")
       .trim();
+  }
+
+  /**
+   * QQ 群聊管理员判定（best-effort）。
+   *
+   * 关键点（中文）
+   * - QQ 事件字段在不同能力集/事件类型下差异较大，无法保证一定带角色字段。
+   * - 这里仅做“有字段则识别”的最小策略；识别失败时回退为非管理员。
+   */
+  private isLikelyGroupAdmin(author: any): boolean {
+    const roleCandidates = [
+      author?.member_role,
+      author?.role,
+      author?.permissions,
+      author?.permission,
+    ]
+      .map((v) => String(v || "").trim().toLowerCase())
+      .filter(Boolean);
+    if (roleCandidates.length === 0) return false;
+
+    return roleCandidates.some((role) =>
+      ["admin", "administrator", "owner", "creator"].some((kw) =>
+        role.includes(kw),
+      ),
+    );
+  }
+
+  /**
+   * QQ 群聊访问门禁（对齐 Telegram 默认策略）。
+   *
+   * 规则（中文）
+   * - `anyone`：任何成员都可触发。
+   * - `initiator_or_admin`：首个触发用户是发起人；后续仅发起人或管理员可触发。
+   */
+  private isAllowedGroupActor(params: {
+    chatKey: string;
+    actorId?: string;
+    author?: any;
+  }): boolean {
+    if (this.groupAccess === "anyone") return true;
+
+    const actorId = String(params.actorId || "").trim();
+    if (!actorId) return false;
+
+    if (this.isLikelyGroupAdmin(params.author)) return true;
+
+    const existing = this.groupInitiatorByChatKey.get(params.chatKey);
+    if (!existing) {
+      // 关键点（中文）：首次触发该群聊 lane 的用户自动成为发起人。
+      this.groupInitiatorByChatKey.set(params.chatKey, actorId);
+      return true;
+    }
+    return existing === actorId;
   }
 
   /**
@@ -985,7 +1083,13 @@ export async function createQQBot(
     return null;
   }
 
-  const bot = new QQBot(context, config.appId, config.appSecret, config.sandbox || false);
+  const bot = new QQBot(
+    context,
+    config.appId,
+    config.appSecret,
+    config.sandbox || false,
+    config.groupAccess,
+  );
   return bot;
 }
 

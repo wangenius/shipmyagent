@@ -114,11 +114,17 @@ Edit the `integrations.qq` section of `ship.json`:
     "qq": {
       "enabled": true,
       "appId": "your_app_id_here",
-      "appSecret": "your_app_secret_here"
+      "appSecret": "your_app_secret_here",
+      "groupAccess": "initiator_or_admin"
     }
   }
 }
 ```
+
+`groupAccess`:
+
+- `initiator_or_admin` (default): only the group initiator (first user who talks to the bot) or admins can keep triggering the bot
+- `anyone`: any group member can trigger the bot
 
 > 🔒 **Security Tip**: Keep your App Secret secure. Never commit it to version control. Consider using environment variables.
 

@@ -35,11 +35,17 @@ QQ_APP_SECRET=your_app_secret
       "enabled": true,
       "appId": "${QQ_APP_ID}",
       "appSecret": "${QQ_APP_SECRET}",
-      "sandbox": false
+      "sandbox": false,
+      "groupAccess": "initiator_or_admin"
     }
   }
 }
 ```
+
+`groupAccess` 说明：
+
+- `initiator_or_admin`（默认）：群里首个与机器人对话的人（发起人）或管理员可以继续触发机器人
+- `anyone`：群成员都可触发机器人
 
 ### 3）启动 ShipMyAgent
 

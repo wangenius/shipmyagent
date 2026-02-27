@@ -88,6 +88,26 @@ function normalizeOutputChunk(raw: string): string {
 }
 
 /**
+ * 对 `sma chat send` 命令做前置安全校验。
+ *
+ * 关键点（中文）
+ * - 历史上模型会把长文本直接拼进多行 shell 命令，导致后续行被 zsh 当作独立命令解析。
+ * - 这会出现“前面已发送，后面才报错”的副作用（用户看到重复/异常消息）。
+ * - 多行正文请通过 `--stdin`（here-doc/pipe）或 `--text-file` 传入，避免内容被 shell 当成命令语法。
+ */
+function validateChatSendCommand(cmd: string): string | null {
+  const source = String(cmd ?? "");
+  if (!/\bsma\s+chat\s+send\b/.test(source)) return null;
+  if (!/[\r\n]/.test(source)) return null;
+  if (/\bsma\s+chat\s+send\b[\s\S]*\s--stdin(?:\s|$)/.test(source)) return null;
+  if (/\bsma\s+chat\s+send\b[\s\S]*\s--text-file(?:\s|$)/.test(source)) return null;
+  return [
+    "Unsafe `sma chat send` command: real newlines are not allowed.",
+    "If your message is multi-line, use `sma chat send --stdin` (with heredoc/pipe) or `--text-file`.",
+  ].join(" ");
+}
+
+/**
  * 解析输出预算。
  *
  * 配置来源（中文）
@@ -678,6 +698,14 @@ export const exec_command = tool({
     const startedAt = Date.now();
 
     try {
+      const chatSendValidationError = validateChatSendCommand(cmd);
+      if (chatSendValidationError) {
+        return {
+          success: false,
+          error: `exec_command rejected: ${chatSendValidationError}`,
+        };
+      }
+
       const runtime = getShipRuntimeContext();
       const cwd = resolveExecWorkdir(runtime.rootPath, workdir);
       const context = createExecContext({
