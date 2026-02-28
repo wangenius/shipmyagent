@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
-import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
-import { getServiceContextManager } from "../../../infra/service-runtime-dependencies.js";
+import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
+import { getServiceContextManager } from "../../../process/runtime/service-runtime-dependencies.js";
 import type { LoadedSkillV1 } from "../types/loaded-skill.js";
 import type {
   SystemPromptProvider,

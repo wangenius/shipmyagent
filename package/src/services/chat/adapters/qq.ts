@@ -7,7 +7,7 @@ import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "./platform-adapter.js";
-import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
+import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
 
 /**
  * QQ official bot adapter (WebSocket gateway).

@@ -16,9 +16,9 @@ import {
   updateTaskDefinition,
   setTaskStatus,
 } from "./service.js";
-import { callDaemonJsonApi } from "../../infra/daemon-client.js";
-import { printResult } from "../../infra/cli-output.js";
-import { resolveChatKey } from "../../infra/chat-key.js";
+import { callDaemonJsonApi } from "../../process/daemon/client.js";
+import { printResult } from "../../process/utils/cli-output.js";
+import { resolveChatKey } from "../../process/runtime/chat-key.js";
 import type {
   TaskCreateRequest,
   TaskCreateResponse,
@@ -30,6 +30,11 @@ import type {
 } from "./types/task-command.js";
 import type { SmaService } from "../../core/services/types/service-registry.js";
 import type { ShipTaskStatus } from "./types/task.js";
+import {
+  restartTaskCronRuntime,
+  startTaskCronRuntime,
+  stopTaskCronRuntime,
+} from "./runtime/cron-runtime.js";
 
 function parsePortOption(value: string): number {
   const port = Number.parseInt(value, 10);
@@ -699,5 +704,36 @@ export const taskService: SmaService = {
   },
   registerServer(registry, context) {
     setupServer(registry, context);
+  },
+  lifecycle: {
+    async start(context) {
+      const result = await startTaskCronRuntime(context);
+      if (!result) return;
+      context.logger.info(
+        `Task cron trigger started (tasks=${result.tasksFound}, jobs=${result.jobsScheduled})`,
+      );
+    },
+    async stop(context) {
+      const stopped = await stopTaskCronRuntime();
+      if (!stopped) return;
+      context.logger.info("Task cron trigger stopped");
+    },
+    async command({ context, command }) {
+      if (command !== "reschedule" && command !== "reload") {
+        return {
+          success: false,
+          message: `Unknown task command: ${command}`,
+        };
+      }
+
+      const result = await restartTaskCronRuntime(context);
+      context.logger.info(
+        `Task cron trigger reloaded (tasks=${result.tasksFound}, jobs=${result.jobsScheduled})`,
+      );
+      return {
+        success: true,
+        message: "task scheduler reloaded",
+      };
+    },
   },
 };

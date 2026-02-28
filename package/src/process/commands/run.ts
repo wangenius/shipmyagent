@@ -19,7 +19,7 @@ import {
   initShipRuntimeContext,
 } from "../server/ShipRuntimeContext.js";
 import type { StartOptions } from "./types/start.js";
-import { logger } from "../../logger/logger.js";
+import { logger } from "../../utils/logger/logger.js";
 import { startAllServiceRuntimes, stopAllServiceRuntimes } from "../../core/services/registry.js";
 
 /**
@@ -36,7 +36,7 @@ export async function runCommand(
   cwd: string = ".",
   options: StartOptions,
 ): Promise<void> {
-  // 初始化加载（进程级单例上下文：root/config/logger/chat/mcp/agents 等）
+  // 初始化加载（进程级单例上下文：root/config/utils/logger/chat/mcp/agents 等）
   await initShipRuntimeContext(cwd);
   // 占位符判定（中文）：init 生成的模板值 `${...}` 不应被当作真实密钥。
   const isPlaceholder = (value?: string): boolean => value === "${}";

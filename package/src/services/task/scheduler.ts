@@ -6,8 +6,8 @@
  * - cron 调度执行器由 server 注入，service 不依赖具体实现。
  */
 
-import type { ServiceCronEngine } from "../../infra/service-runtime-ports.js";
-import type { ServiceRuntimeDependencies } from "../../infra/service-runtime-types.js";
+import type { ServiceCronEngine } from "../../process/runtime/types/service-runtime-ports.js";
+import type { ServiceRuntimeDependencies } from "../../process/runtime/types/service-runtime-types.js";
 import { listTasks, readTask } from "./runtime/store.js";
 import { runTaskNow } from "./runtime/runner.js";
 

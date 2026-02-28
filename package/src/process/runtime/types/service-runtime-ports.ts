@@ -1,5 +1,5 @@
 import type { LanguageModel } from "ai";
-import type { ShipConfig } from "./utils/config.js";
+import type { ShipConfig } from "../../types/ship-config.js";
 
 /**
  * Service 运行时端口类型。

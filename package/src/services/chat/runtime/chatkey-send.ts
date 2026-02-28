@@ -12,8 +12,8 @@
 import { getChatSender } from "./chat-send-registry.js";
 import type { ChatDispatchChannel } from "../types/chat-dispatcher.js";
 import type { ShipContextMessageV1 } from "../../../core/types/context-message.js";
-import { getServiceContextManager } from "../../../infra/service-runtime-dependencies.js";
-import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
+import { getServiceContextManager } from "../../../process/runtime/service-runtime-dependencies.js";
+import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
 
 type DispatchableChannel = "telegram" | "feishu" | "qq";
 

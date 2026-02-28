@@ -12,8 +12,8 @@ import { discoverClaudeSkillsSync } from "./runtime/discovery.js";
 import {
   getShipContextMessagesMetaPath,
   getShipContextMessagesDirPath,
-} from "../../infra/utils/paths.js";
-import { loadShipConfig } from "../../infra/utils/config.js";
+} from "../../process/project/paths.js";
+import { loadShipConfig } from "../../process/project/config.js";
 import type { ClaudeSkill } from "./types/claude-skill.js";
 import type {
   SkillListResponse,

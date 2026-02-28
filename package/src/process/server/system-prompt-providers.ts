@@ -2,7 +2,7 @@ import {
   clearSystemPromptProviders,
   registerSystemPromptProvider,
 } from "../../core/prompts/system-provider.js";
-import type { ServiceRuntimeDependencies } from "../../infra/service-runtime-types.js";
+import type { ServiceRuntimeDependencies } from "../runtime/types/service-runtime-types.js";
 import { memorySystemPromptProvider } from "../../services/memory/runtime/system-provider.js";
 import { createSkillsSystemPromptProvider } from "../../services/skills/runtime/system-provider.js";
 

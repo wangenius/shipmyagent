@@ -1,29 +1,26 @@
 /**
- * Cron trigger engine（内核级）。
+ * Task cron 触发引擎。
  *
  * 关键点（中文）
- * - core 仅提供“按 cron 表达式触发回调”的基础设施，不包含 task 业务语义。
- * - 具体业务（如 task）在 services 中注册 jobs 到该引擎。
+ * - 该模块仅服务于 task service，不放在 core/services。
+ * - 只提供 cron 注册与调度，不承载 task 业务语义。
  */
 
 import cron from "node-cron";
 import type { ScheduledTask } from "node-cron";
+import type {
+  ServiceCronEngine,
+  ServiceCronTriggerDefinition,
+} from "../../../process/runtime/types/service-runtime-ports.js";
 
-export type CronTriggerDefinition = {
-  id: string;
-  expression: string;
-  timezone?: string;
-  execute: () => Promise<void> | void;
-};
-
-export class CronTriggerEngine {
-  private readonly definitions: Map<string, CronTriggerDefinition> = new Map();
+export class TaskCronTriggerEngine implements ServiceCronEngine {
+  private readonly definitions: Map<string, ServiceCronTriggerDefinition> = new Map();
   private readonly scheduledJobs: Map<string, ScheduledTask> = new Map();
   private started = false;
 
-  register(definition: CronTriggerDefinition): void {
+  register(definition: ServiceCronTriggerDefinition): void {
     const id = String(definition.id || "").trim();
-    if (!id) throw new Error("CronTriggerDefinition.id is required");
+    if (!id) throw new Error("ServiceCronTriggerDefinition.id is required");
 
     const expression = String(definition.expression || "").trim();
     if (!expression) throw new Error(`Cron expression is required for job: ${id}`);
@@ -31,7 +28,7 @@ export class CronTriggerEngine {
       throw new Error(`Invalid cron expression for job ${id}: ${expression}`);
     }
 
-    const normalized: CronTriggerDefinition = {
+    const normalized: ServiceCronTriggerDefinition = {
       ...definition,
       id,
       expression,
@@ -61,10 +58,6 @@ export class CronTriggerEngine {
     }
   }
 
-  getJobIds(): string[] {
-    return Array.from(this.definitions.keys());
-  }
-
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
@@ -87,7 +80,7 @@ export class CronTriggerEngine {
     this.scheduledJobs.clear();
   }
 
-  private scheduleOne(definition: CronTriggerDefinition): void {
+  private scheduleOne(definition: ServiceCronTriggerDefinition): void {
     const previous = this.scheduledJobs.get(definition.id);
     if (previous) {
       try {

@@ -12,7 +12,7 @@
 import path from "path";
 import fs from "fs-extra";
 import { fileURLToPath } from "url";
-import { getAgentMdPath, getShipJsonPath } from "../../infra/utils/paths.js";
+import { getAgentMdPath, getShipJsonPath } from "../project/paths.js";
 import { startDaemonProcess } from "../server/daemon/manager.js";
 import { buildRunArgsFromOptions } from "../server/daemon/cli-args.js";
 import type { StartOptions } from "./types/start.js";

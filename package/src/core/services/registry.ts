@@ -8,7 +8,7 @@
 
 import type { Command } from "commander";
 import type { Hono } from "hono";
-import type { ServiceRuntimeDependencies } from "../../infra/service-runtime-types.js";
+import type { ServiceRuntimeDependencies } from "../../process/runtime/types/service-runtime-types.js";
 import type {
   ServerRouteRegistry,
   SmaService,
@@ -17,11 +17,9 @@ import type {
 } from "./types/service-registry.js";
 import { createCliCommandRegistry } from "./cli-registry.js";
 import { createServerRouteRegistry } from "./server-registry.js";
-import { CronTriggerEngine } from "./cron-trigger.js";
 import { chatService } from "../../services/chat/service-entry.js";
 import { skillsService } from "../../services/skills/service-entry.js";
 import { taskService } from "../../services/task/service-entry.js";
-import { registerTaskCronJobs } from "../../services/task/scheduler.js";
 
 /**
  * 服务清单（中文）
@@ -59,7 +57,6 @@ export type ServiceRuntimeControlResult = {
 };
 
 const serviceRuntimeRecords = new Map<string, ServiceRuntimeRecord>();
-let taskCronEngine: CronTriggerEngine | null = null;
 
 function nowMs(): number {
   return Date.now();
@@ -134,32 +131,6 @@ function markServiceCommand(record: ServiceRuntimeRecord, command: string): void
 }
 
 /**
- * task 服务内建生命周期（中文）
- * - 放在 core 注册层，避免 service 反向依赖 core。
- */
-async function startManagedTaskCronRuntime(context: ServiceRuntimeDependencies): Promise<void> {
-  if (taskCronEngine) return;
-  const engine = new CronTriggerEngine();
-  const registerResult = await registerTaskCronJobs({
-    context,
-    engine,
-  });
-  await engine.start();
-  taskCronEngine = engine;
-  context.logger.info(
-    `Task cron trigger started (tasks=${registerResult.tasksFound}, jobs=${registerResult.jobsScheduled})`,
-  );
-}
-
-async function stopManagedTaskCronRuntime(context: ServiceRuntimeDependencies): Promise<void> {
-  if (!taskCronEngine) return;
-  const previous = taskCronEngine;
-  taskCronEngine = null;
-  await previous.stop();
-  context.logger.info("Task cron trigger stopped");
-}
-
-/**
  * 获取服务只读快照。
  */
 export function getSmaServices(): SmaService[] {
@@ -207,19 +178,9 @@ async function startServiceRuntimeInternal(
       if (record.state === "running") return;
       markRuntimeState(record, "starting");
       try {
-        if (service.name === "task") {
-          await startManagedTaskCronRuntime(context);
-        }
         await service.lifecycle?.start?.(context);
         markRuntimeState(record, "running");
       } catch (error) {
-        if (service.name === "task") {
-          try {
-            await stopManagedTaskCronRuntime(context);
-          } catch {
-            // ignore
-          }
-        }
         markRuntimeState(record, "error", String(error));
         throw error;
       }
@@ -248,9 +209,6 @@ async function stopServiceRuntimeInternal(
       markRuntimeState(record, "stopping");
       try {
         await service.lifecycle?.stop?.(context);
-        if (service.name === "task") {
-          await stopManagedTaskCronRuntime(context);
-        }
         markRuntimeState(record, "stopped");
       } catch (error) {
         markRuntimeState(record, "error", String(error));
@@ -354,20 +312,6 @@ export async function runServiceCommand(params: {
     return {
       success: result.success,
       ...(result.service ? { service: result.service } : {}),
-      ...(result.error ? { message: result.error } : {}),
-    };
-  }
-
-  if (service.name === "task" && (command === "reschedule" || command === "reload")) {
-    const result = await controlServiceRuntime({
-      serviceName: service.name,
-      action: "restart",
-      context: params.context,
-    });
-    return {
-      success: result.success,
-      ...(result.service ? { service: result.service } : {}),
-      ...(result.success ? { message: "task scheduler reloaded" } : {}),
       ...(result.error ? { message: result.error } : {}),
     };
   }

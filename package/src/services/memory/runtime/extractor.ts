@@ -5,11 +5,11 @@ import type {
   MemoryExtractParams,
   MemoryCompressParams,
 } from "../types/memory.js";
-import { getLogger } from "../../../logger/logger.js";
+import { getLogger } from "../../../utils/logger/logger.js";
 import {
   getServiceContextManager,
-} from "../../../infra/service-runtime-dependencies.js";
-import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
+} from "../../../process/runtime/service-runtime-dependencies.js";
+import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
 
 /**
  * 从上下文消息中提取记忆摘要。

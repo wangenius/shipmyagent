@@ -1,9 +1,9 @@
 /**
- * Infra CLI 输出工具。
+ * CLI 输出工具。
  *
  * 关键点（中文）
- * - 统一支持 JSON / 文本输出
- * - 保持 shell 调用与 AI 调用都可稳定解析
+ * - 统一支持 JSON / 文本输出。
+ * - 保持 shell 调用与 AI 调用都可稳定解析。
  */
 
 /**
@@ -36,4 +36,3 @@ export function printResult(params: {
     console.log(`- ${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`);
   }
 }
-

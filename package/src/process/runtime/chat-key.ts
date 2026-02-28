@@ -2,8 +2,8 @@
  * chatKey 解析辅助。
  *
  * 关键点（中文）
- * - 这是 infra 公共语义，不属于单个 chat 模块
- * - 用于避免 skills/task module 反向依赖 chat/service
+ * - 这是共享语义，不属于单个 chat 模块。
+ * - 用于避免 skills/task 模块反向依赖 chat service。
  */
 
 /**

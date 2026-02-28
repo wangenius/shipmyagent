@@ -1,5 +1,5 @@
 import { DEFAULT_SHIP_PROMPTS } from "../../core/prompts/system.js";
-import { logger as defaultLogger, type Logger } from "../../logger/logger.js";
+import { logger as defaultLogger, type Logger } from "../../utils/logger/logger.js";
 import { McpManager } from "../../services/mcp/runtime/manager.js";
 import { ContextManager } from "../../core/context/manager.js";
 import {
@@ -12,7 +12,12 @@ import { pickLastSuccessfulChatSendText } from "../../services/chat/runtime/user
 import { sendTextByChatKey } from "../../services/chat/runtime/chatkey-send.js";
 import { getChatSender } from "../../services/chat/runtime/chat-send-registry.js";
 import { registerServiceSystemPromptProviders } from "./system-prompt-providers.js";
-import type { ServiceRuntimeDependencies } from "../../infra/service-runtime-types.js";
+import type { ServiceRuntimeDependencies } from "../runtime/types/service-runtime-types.js";
+import {
+  loadProjectDotenv,
+  loadShipConfig,
+  type ShipConfig,
+} from "../project/config.js";
 import {
   getAgentMdPath,
   getCacheDirPath,
@@ -26,12 +31,7 @@ import {
   getShipProfileDirPath,
   getShipPublicDirPath,
   getShipTasksDirPath,
-} from "../../infra/utils/paths.js";
-import {
-  loadProjectDotenv,
-  loadShipConfig,
-  type ShipConfig,
-} from "../../infra/utils/config.js";
+} from "../project/paths.js";
 import fs from "fs-extra";
 import path from "path";
 
@@ -39,7 +39,7 @@ import path from "path";
  * ShipRuntimeContext：ShipMyAgent 进程级运行时上下文（单例）。
  *
  * 设计目标（中文，关键节点）
- * - 单进程只服务一个 rootPath，因此把 rootPath/config/logger/systems 放到全局单例里读取
+ * - 单进程只服务一个 rootPath，因此把 rootPath/config/utils/logger/systems 放到全局单例里读取
  * - 业务模块不再通过参数层层透传上下文（极简）
  *
  * 初始化时序（关键节点）
@@ -229,7 +229,7 @@ export async function initShipRuntimeContext(cwd: string): Promise<void> {
 
   const config = loadShipConfig(rootPath);
 
-  // 关键点（中文）：先初始化 base context，保证底层模块可直接读取 rootPath/config/logger/systems。
+  // 关键点（中文）：先初始化 base context，保证底层模块可直接读取 rootPath/config/utils/logger/systems。
   setShipRuntimeContextBase({
     cwd: resolvedCwd,
     rootPath,

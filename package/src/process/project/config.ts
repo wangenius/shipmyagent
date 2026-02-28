@@ -9,7 +9,7 @@
 import dotenv from "dotenv";
 import fs from "fs-extra";
 import path from "path";
-import type { ShipConfig } from "../../process/server/types/config.js";
+import type { ShipConfig } from "../types/ship-config.js";
 import { getShipJsonPath } from "./paths.js";
 
 export type { ShipConfig };

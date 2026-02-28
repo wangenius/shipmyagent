@@ -9,8 +9,8 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import type { Logger } from "../../../logger/logger.js";
-import { getCacheDirPath } from "../../../infra/utils/paths.js";
+import type { Logger } from "../../../utils/logger/logger.js";
+import { getCacheDirPath } from "../../../process/project/paths.js";
 import type { QqInboundDedupeSnapshotV1 } from "../types/qq-inbound-dedupe.js";
 
 /**

@@ -1,7 +1,7 @@
 import { registerChatSender } from "../runtime/chat-send-registry.js";
-import { getServiceContextManager } from "../../../infra/service-runtime-dependencies.js";
-import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
-import type { ServiceContextManager } from "../../../infra/service-runtime-ports.js";
+import { getServiceContextManager } from "../../../process/runtime/service-runtime-dependencies.js";
+import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
+import type { ServiceContextManager } from "../../../process/runtime/types/service-runtime-ports.js";
 import type {
   ChatDispatchAction,
   ChatDispatchChannel,

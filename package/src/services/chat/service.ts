@@ -6,12 +6,12 @@
  * - 内部通过注入的 request context bridge 做映射读取
  */
 
-import type { ServiceRuntimeDependencies } from "../../infra/service-runtime-types.js";
+import type { ServiceRuntimeDependencies } from "../../process/runtime/types/service-runtime-types.js";
 import {
   getServiceRequestContextBridge,
-} from "../../infra/service-runtime-dependencies.js";
+} from "../../process/runtime/service-runtime-dependencies.js";
 import { sendTextByChatKey } from "./runtime/chatkey-send.js";
-import { llmRequestContext } from "../../logger/context.js";
+import { llmRequestContext } from "../../utils/logger/context.js";
 import type {
   ChatContextSnapshot,
   ChatSendResponse,

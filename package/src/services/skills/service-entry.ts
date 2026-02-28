@@ -16,9 +16,9 @@ import {
   loadSkill,
   unloadSkill,
 } from "./service.js";
-import { resolveChatKey } from "../../infra/chat-key.js";
-import { callDaemonJsonApi } from "../../infra/daemon-client.js";
-import { printResult } from "../../infra/cli-output.js";
+import { resolveChatKey } from "../../process/runtime/chat-key.js";
+import { callDaemonJsonApi } from "../../process/daemon/client.js";
+import { printResult } from "../../process/utils/cli-output.js";
 import type {
   SkillListResponse,
   SkillLoadResponse,

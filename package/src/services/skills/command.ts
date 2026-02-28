@@ -16,7 +16,7 @@ import { execa } from "execa";
 import os from "node:os";
 import { discoverClaudeSkillsSync } from "./runtime/discovery.js";
 import { getClaudeSkillSearchRoots } from "./runtime/paths.js";
-import { loadShipConfig } from "../../infra/utils/config.js";
+import { loadShipConfig } from "../../process/project/config.js";
 
 function getUserShipSkillsDir(): string {
   return path.join(os.homedir(), ".ship", "skills");

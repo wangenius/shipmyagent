@@ -1,3 +1,11 @@
+/**
+ * Ship 配置类型定义。
+ *
+ * 关键点（中文）
+ * - 作为全局共享类型，不再挂在 process/server 目录下。
+ * - 供 process/core/services/shared 多层复用，避免反向类型依赖。
+ */
+
 export interface ShipConfig {
   $schema?: string;
   name: string;

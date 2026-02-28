@@ -2,9 +2,9 @@ import type {
   ServiceModelFactory,
   ServiceContextManager,
   ServiceContextRequestContextBridge,
-} from "./service-runtime-ports.js";
-import type { ServiceChatRuntimeBridge } from "./service-chat-runtime-bridge.js";
-import type { ServiceRuntimeDependencies } from "./service-runtime-types.js";
+} from "./types/service-runtime-ports.js";
+import type { ServiceChatRuntimeBridge } from "./types/service-chat-runtime-bridge.js";
+import type { ServiceRuntimeDependencies } from "./types/service-runtime-types.js";
 
 /**
  * Service 运行时依赖 helper（显式 DI）。

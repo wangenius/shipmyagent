@@ -20,7 +20,7 @@ import {
   type TelegramUser,
 } from "./shared.js";
 import { TelegramStateStore } from "./state-store.js";
-import type { ServiceRuntimeDependencies } from "../../../../infra/service-runtime-types.js";
+import type { ServiceRuntimeDependencies } from "../../../../process/runtime/types/service-runtime-types.js";
 
 /**
  * Telegram 平台适配器。

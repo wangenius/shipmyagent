@@ -4,9 +4,9 @@ import {
   getShipContextMemoryBackupDirPath,
   getShipContextMemoryBackupPath,
   getShipContextMemoryMetaPath,
-} from "../../../infra/utils/paths.js";
+} from "../../../process/project/paths.js";
 import type { MemoryEntry } from "../types/memory.js";
-import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
+import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
 
 /**
  * MemoryManager：管理单个 context 的记忆文件（memory/Primary.md）。

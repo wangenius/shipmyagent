@@ -8,23 +8,22 @@
  */
 
 import {
-  generateText,
   streamText,
   stepCountIs,
   Tool,
   type LanguageModel,
   type ModelMessage,
-  type SystemModelMessage,
+  type SystemModelMessage
 } from "ai";
-import { withLlmRequestContext } from "../../logger/context.js";
-import { generateId } from "../../infra/utils/id.js";
+import { withLlmRequestContext } from "../../utils/logger/context.js";
+import { generateId } from "../../process/utils/id.js";
 import {
   buildContextSystemPrompt,
   transformPromptsIntoSystemMessages,
 } from "../prompts/system.js";
 import { createModel } from "../llm/create-model.js";
 import type { AgentRunInput, AgentResult } from "../types/agent.js";
-import type { Logger } from "../../logger/logger.js";
+import type { Logger } from "../../utils/logger/logger.js";
 import { contextRequestContext } from "../context/request-context.js";
 import { createAgentTools } from "../tools/agent-tools.js";
 import { openai } from "@ai-sdk/openai";
@@ -268,7 +267,8 @@ export class ContextAgentRunner implements ContextAgent {
       const appendMergedLaneMessages = (
         messages: Array<{ text: string }> | undefined,
       ): { added: number; latestUserText?: string } => {
-        if (!Array.isArray(messages) || messages.length === 0) return { added: 0 };
+        if (!Array.isArray(messages) || messages.length === 0)
+          return { added: 0 };
         const toAppend: ModelMessage[] = [];
         let latestUserText: string | undefined;
         for (const m of messages) {
@@ -350,50 +350,53 @@ export class ContextAgentRunner implements ContextAgent {
       }
 
       // phase 2（中文）：进入 tool-loop。
-      const result = await withLlmRequestContext({ contextId, requestId }, () => {
-        return streamText({
-          model: this.model,
-          system: currentBaseSystemMessages,
-          prepareStep: async ({ messages }) => {
-            const incomingMessages: ModelMessage[] = Array.isArray(messages)
-              ? (messages as any)
-              : [];
-            const suffix =
-              incomingMessages.length >= lastAppliedBasePrefixLen
-                ? incomingMessages.slice(lastAppliedBasePrefixLen)
+      const result = await withLlmRequestContext(
+        { contextId, requestId },
+        () => {
+          return streamText({
+            model: this.model,
+            system: currentBaseSystemMessages,
+            prepareStep: async ({ messages }) => {
+              const incomingMessages: ModelMessage[] = Array.isArray(messages)
+                ? (messages as any)
                 : [];
+              const suffix =
+                incomingMessages.length >= lastAppliedBasePrefixLen
+                  ? incomingMessages.slice(lastAppliedBasePrefixLen)
+                  : [];
 
-            // 1) 在每个 step 前先检查 lane 是否有新消息；若有则从队列并入 user 消息。
-            await reloadModelMessages("before_step");
+              // 1) 在每个 step 前先检查 lane 是否有新消息；若有则从队列并入 user 消息。
+              await reloadModelMessages("before_step");
 
-            // 2) messages：默认保留 tool-loop 的 in-flight messages（包含 tool call/output 链）。
-            // 若 lane 已变化，则替换“前缀 base”，并保留后缀 tool 链。
-            let outMessages: ModelMessage[] | undefined;
-            if (needsLaneResync) {
-              outMessages = [...(baseModelMessages as any), ...suffix] as any;
-              needsLaneResync = false;
-              lastAppliedBasePrefixLen = Array.isArray(baseModelMessages)
-                ? baseModelMessages.length
-                : 0;
-            }
+              // 2) messages：默认保留 tool-loop 的 in-flight messages（包含 tool call/output 链）。
+              // 若 lane 已变化，则替换“前缀 base”，并保留后缀 tool 链。
+              let outMessages: ModelMessage[] | undefined;
+              if (needsLaneResync) {
+                outMessages = [...(baseModelMessages as any), ...suffix] as any;
+                needsLaneResync = false;
+                lastAppliedBasePrefixLen = Array.isArray(baseModelMessages)
+                  ? baseModelMessages.length
+                  : 0;
+              }
 
-            const stepOverrides = this.buildStepOverrides({
-              providerResult: currentProviderResult,
-              baseSystemMessages: currentBaseSystemMessages,
-            });
+              const stepOverrides = this.buildStepOverrides({
+                providerResult: currentProviderResult,
+                baseSystemMessages: currentBaseSystemMessages,
+              });
 
-            return {
-              ...stepOverrides,
-              ...(Array.isArray(outMessages)
-                ? { messages: outMessages }
-                : {}),
-            };
-          },
-          messages: baseModelMessages,
-          tools: toolsWithLaneMerge,
-          stopWhen: [stepCountIs(30)],
-        });
-      });
+              return {
+                ...stepOverrides,
+                ...(Array.isArray(outMessages)
+                  ? { messages: outMessages }
+                  : {}),
+              };
+            },
+            messages: baseModelMessages,
+            tools: toolsWithLaneMerge,
+            stopWhen: [stepCountIs(30)],
+          });
+        },
+      );
 
       // phase 3（中文）：把 stream 结果固化为最终 assistant UIMessage。
       // 关键点（中文）：用 ai-sdk v6 的 UIMessage 流来生成最终 assistant UIMessage（包含 tool parts），避免手工拼装。
@@ -439,7 +442,9 @@ export class ContextAgentRunner implements ContextAgent {
       }
 
       if (finalAssistantUiMessage) {
-        toolCalls.push(...extractToolCallsFromUiMessage(finalAssistantUiMessage));
+        toolCalls.push(
+          ...extractToolCallsFromUiMessage(finalAssistantUiMessage),
+        );
       }
 
       // 关键点（中文）
@@ -466,12 +471,17 @@ export class ContextAgentRunner implements ContextAgent {
               laneMergeAttempts,
             },
           );
-          return this.runWithToolLoopAgent(latestUserText, startTime, contextId, {
-            retryAttempts,
-            laneMergeAttempts: laneMergeAttempts + 1,
-            requestId,
-            drainLaneMerged,
-          });
+          return this.runWithToolLoopAgent(
+            latestUserText,
+            startTime,
+            contextId,
+            {
+              retryAttempts,
+              laneMergeAttempts: laneMergeAttempts + 1,
+              requestId,
+              drainLaneMerged,
+            },
+          );
         }
       }
 
@@ -663,13 +673,15 @@ export class ContextAgentRunner implements ContextAgent {
             6,
             Math.min(
               5000,
-              Math.floor((runtime.config as any).context.messages.keepLastMessages),
+              Math.floor(
+                (runtime.config as any).context.messages.keepLastMessages,
+              ),
             ),
           )
         : 30;
     const baseMaxInputTokensApprox =
-      typeof (runtime.config as any)?.context?.messages?.maxInputTokensApprox ===
-      "number"
+      typeof (runtime.config as any)?.context?.messages
+        ?.maxInputTokensApprox === "number"
         ? Math.max(
             2000,
             Math.min(
@@ -711,7 +723,9 @@ export class ContextAgentRunner implements ContextAgent {
    * - 通过“最后一条 user 文本相等”做幂等，避免重复写入。
    */
   private async ensureCurrentUserRecorded(params: {
-    contextStore: ReturnType<typeof getShipRuntimeContext>["contextManager"] extends {
+    contextStore: ReturnType<
+      typeof getShipRuntimeContext
+    >["contextManager"] extends {
       getContextStore: (...args: any[]) => infer T;
     }
       ? T
@@ -726,7 +740,9 @@ export class ContextAgentRunner implements ContextAgent {
       const last = msgs.length > 0 ? msgs[msgs.length - 1] : null;
       const lastText = (() => {
         if (!last || last.role !== "user") return "";
-        const parts = Array.isArray((last as any).parts) ? (last as any).parts : [];
+        const parts = Array.isArray((last as any).parts)
+          ? (last as any).parts
+          : [];
         return parts
           .filter((p: any) => p && typeof p === "object" && p.type === "text")
           .map((p: any) => String(p.text ?? ""))
@@ -747,7 +763,8 @@ export class ContextAgentRunner implements ContextAgent {
           actorId: ctx?.actorId,
           actorName: ctx?.actorName,
           messageId: ctx?.messageId,
-          threadId: typeof ctx?.threadId === "number" ? ctx.threadId : undefined,
+          threadId:
+            typeof ctx?.threadId === "number" ? ctx.threadId : undefined,
           targetType: ctx?.targetType,
           requestId,
           extra: { note: "injected_by_agent_run" },

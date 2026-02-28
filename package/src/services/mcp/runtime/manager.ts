@@ -20,8 +20,8 @@ import type {
 } from "./types.js";
 import { HttpTransport } from "./http-transport.js";
 import { resolveEnvVar, resolveEnvVarsInRecord } from "./env.js";
-import { getShipMcpConfigPath } from "../../../infra/utils/paths.js";
-import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
+import { getShipMcpConfigPath } from "../../../process/project/paths.js";
+import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
 
 /**
  * MCP manager。

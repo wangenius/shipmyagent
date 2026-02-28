@@ -17,11 +17,11 @@ import {
   getShipContextMessagesMetaPath,
   getShipContextMessagesPath,
   getShipContextMessagesDirPath,
-} from "../../infra/utils/paths.js";
-import { generateId } from "../../infra/utils/id.js";
+} from "../../process/project/paths.js";
+import { generateId } from "../../process/utils/id.js";
 import type { ShipContextMetadataV1, ShipContextMessageV1 } from "../types/context-message.js";
 import type { ShipContextMessagesMetaV1 } from "../types/context-messages-meta.js";
-import { getLogger } from "../../logger/logger.js";
+import { getLogger } from "../../utils/logger/logger.js";
 import { getShipRuntimeContextBase } from "../../process/server/ShipRuntimeContext.js";
 
 /**

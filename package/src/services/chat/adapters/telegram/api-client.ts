@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs-extra";
-import { Logger } from "../../../../logger/logger.js";
-import { getCacheDirPath } from "../../../../infra/utils/paths.js";
+import { Logger } from "../../../../utils/logger/logger.js";
+import { getCacheDirPath } from "../../../../process/project/paths.js";
 import {
   guessMimeType,
   parseTelegramAttachments,

@@ -9,7 +9,7 @@
 import path from "node:path";
 import { nanoid } from "nanoid";
 import type { ShipTaskStatus } from "./types/task.js";
-import type { ServiceRuntimeDependencies } from "../../infra/service-runtime-types.js";
+import type { ServiceRuntimeDependencies } from "../../process/runtime/types/service-runtime-types.js";
 import {
   isValidTaskId,
   normalizeTaskId,

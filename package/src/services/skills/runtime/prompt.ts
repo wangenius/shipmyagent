@@ -6,7 +6,7 @@
  * - 仅做字符串渲染，不做文件 IO。
  */
 
-import type { ShipConfig } from "../../../infra/utils/config.js";
+import type { ShipConfig } from "../../../process/project/config.js";
 import { getClaudeSkillSearchRoots } from "./paths.js";
 import type { ClaudeSkill } from "../types/claude-skill.js";
 

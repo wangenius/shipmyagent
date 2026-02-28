@@ -1,8 +1,8 @@
 import { PlatformAdapter } from "./platform-adapter.js";
 import type { ChatDispatchChannel } from "../types/chat-dispatcher.js";
-import type { Logger } from "../../../logger/logger.js";
-import { getServiceContextManager } from "../../../infra/service-runtime-dependencies.js";
-import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
+import type { Logger } from "../../../utils/logger/logger.js";
+import { getServiceContextManager } from "../../../process/runtime/service-runtime-dependencies.js";
+import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
 
 /**
  * 入站消息统一结构（跨平台最小公共字段）。

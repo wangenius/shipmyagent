@@ -1,9 +1,9 @@
 /**
- * Infra Daemon API 客户端。
+ * Daemon API 客户端（process 子模块）。
  *
  * 关键点（中文）
- * - 业务模块统一通过 daemon API 与运行时通信
- * - 地址解析优先级：CLI 参数 > 环境变量 > ship.json.start > 默认值
+ * - 业务模块统一通过 daemon API 与运行时通信。
+ * - 地址解析优先级：CLI 参数 > 环境变量 > ship.json.start > 默认值。
  */
 
 import fs from "fs-extra";
@@ -11,9 +11,9 @@ import {
   type DaemonEndpoint,
   type DaemonJsonApiCallParams,
   type DaemonJsonApiCallResult,
-} from "./daemon-api.js";
-import { getShipJsonPath } from "./utils/paths.js";
-import { loadShipConfig } from "./utils/config.js";
+} from "./api.js";
+import { getShipJsonPath } from "../project/paths.js";
+import { loadShipConfig } from "../project/config.js";
 
 /**
  * 解析端口值。

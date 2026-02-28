@@ -8,7 +8,7 @@
 
 import type { Command } from "commander";
 import type { Handler, Hono } from "hono";
-import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
+import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
 
 /**
  * CLI 命令注册抽象。
