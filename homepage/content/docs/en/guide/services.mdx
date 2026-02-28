@@ -30,15 +30,19 @@ Currently, the most complete service is Telegram. Through Telegram, you can:
 
 3. **Configure ship.json**
 
-Edit the `services.telegram` section of `ship.json`:
+Edit `services.chat.adapters.telegram` in `ship.json`:
 
 ```json
 {
   "services": {
-    "telegram": {
-      "enabled": true,
-      "botToken": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
-      "chatId": "12345678" // Your User ID
+    "chat": {
+      "adapters": {
+        "telegram": {
+          "enabled": true,
+          "botToken": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
+          "chatId": "12345678"
+        }
+      }
     }
   }
 }
@@ -69,15 +73,19 @@ Feishu (Lark) is a popular enterprise collaboration platform. You can integrate 
 
 2. **Configure ship.json**
 
-Edit the `services.feishu` section of `ship.json`:
+Edit `services.chat.adapters.feishu` in `ship.json`:
 
 ```json
 {
   "services": {
-    "feishu": {
-      "enabled": true,
-      "appId": "cli_xxxxxxxxxxxxxxxx",
-      "appSecret": "your_app_secret_here"
+    "chat": {
+      "adapters": {
+        "feishu": {
+          "enabled": true,
+          "appId": "cli_xxxxxxxxxxxxxxxx",
+          "appSecret": "your_app_secret_here"
+        }
+      }
     }
   }
 }
@@ -106,16 +114,20 @@ QQ is one of the most popular instant messaging platforms in China. You can inte
 
 2. **Configure ship.json**
 
-Edit the `services.qq` section of `ship.json`:
+Edit `services.chat.adapters.qq` in `ship.json`:
 
 ```json
 {
   "services": {
-    "qq": {
-      "enabled": true,
-      "appId": "your_app_id_here",
-      "appSecret": "your_app_secret_here",
-      "groupAccess": "initiator_or_admin"
+    "chat": {
+      "adapters": {
+        "qq": {
+          "enabled": true,
+          "appId": "your_app_id_here",
+          "appSecret": "your_app_secret_here",
+          "groupAccess": "initiator_or_admin"
+        }
+      }
     }
   }
 }

@@ -15,7 +15,7 @@ ShipMyAgent 使用两个主要配置文件：
 your-project/
 ├── .env.example       # 环境变量模板（推荐提交）
 ├── .env               # 本地环境变量（不要提交）
-├── ship.json          # 主配置（LLM、adapters）
+├── ship.json          # 主配置（LLM、services）
 ├── Agent.md           # Agent 个性和行为
 └── .ship/             # 运行时数据（日志、缓存、任务）
 ```
@@ -206,7 +206,7 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 }
 ```
 
-**context.chatEgress** (object, 可选)
+**services.chat.egress** (object, 可选)
 
 用于控制出站消息发送的安全策略（tool-strict）：
 
@@ -215,19 +215,21 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 
 ```json
 {
-  "context": {
-    "chatEgress": {
-      "chatSendMaxCallsPerRun": 30,
-      "chatSendIdempotency": true
+  "services": {
+    "chat": {
+      "egress": {
+        "chatSendMaxCallsPerRun": 30,
+        "chatSendIdempotency": true
+      }
     }
   }
 }
 ```
 
-#### adapters (object)
+#### services.chat.adapters (object)
 
 消息平台适配器（Telegram / 飞书 / QQ ...）。  
-使用 `adapters` 配置消息平台适配器。
+使用 `services.chat.adapters` 配置消息平台适配器。
 
 外部服务连接。
 
@@ -235,13 +237,17 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 
 ```json
 {
-  "adapters": {
-    "telegram": {
-      "enabled": true,
-      "botToken": "${TELEGRAM_BOT_TOKEN}",
-      "chatId": "123456789",  // 安全所必需！
-      "followupWindowMs": 600000,
-      "groupAccess": "initiator_or_admin"
+  "services": {
+    "chat": {
+      "adapters": {
+        "telegram": {
+          "enabled": true,
+          "botToken": "${TELEGRAM_BOT_TOKEN}",
+          "chatId": "123456789",
+          "followupWindowMs": 600000,
+          "groupAccess": "initiator_or_admin"
+        }
+      }
     }
   }
 }
@@ -253,13 +259,17 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 
 ```json
 {
-  "adapters": {
-    "github": {
-      "enabled": true,
-      "token": "${GITHUB_TOKEN}",
-      "repository": "owner/repo",
-      "autoMerge": false,
-      "requiredReviews": 1
+  "services": {
+    "chat": {
+      "adapters": {
+        "github": {
+          "enabled": true,
+          "token": "${GITHUB_TOKEN}",
+          "repository": "owner/repo",
+          "autoMerge": false,
+          "requiredReviews": 1
+        }
+      }
     }
   }
 }
@@ -540,9 +550,13 @@ TELEGRAM_BOT_TOKEN=123456:...
   "llm": {
     "apiKey": "${ANTHROPIC_API_KEY}"  // 引用环境变量
   },
-  "adapters": {
-    "telegram": {
-      "botToken": "${TELEGRAM_BOT_TOKEN}"
+  "services": {
+    "chat": {
+      "adapters": {
+        "telegram": {
+          "botToken": "${TELEGRAM_BOT_TOKEN}"
+        }
+      }
     }
   }
 }

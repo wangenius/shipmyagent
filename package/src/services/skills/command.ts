@@ -18,7 +18,7 @@ import {
   discoverClaudeSkillsSync,
   getClaudeSkillSearchRoots,
 } from "./runtime/index.js";
-import { loadShipConfig } from "../../utils.js";
+import { loadShipConfig } from "../../infra/utils/index.js";
 
 function getUserShipSkillsDir(): string {
   return path.join(os.homedir(), ".ship", "skills");

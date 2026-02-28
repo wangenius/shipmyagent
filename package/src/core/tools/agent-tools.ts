@@ -11,8 +11,8 @@
  */
 
 import { Tool } from "ai";
-import { loadProjectDotenv } from "../../utils.js";
-import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
+import { loadProjectDotenv } from "../../infra/utils/index.js";
+import { getShipRuntimeContext } from "../../process/server/ShipRuntimeContext.js";
 import { execShellTools } from "./exec-shell.js";
 import { createMcpAiTool } from "./mcp.js";
 

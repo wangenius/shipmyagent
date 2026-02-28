@@ -1,18 +1,18 @@
-import { DEFAULT_SHIP_PROMPTS } from "../core/prompts/system.js";
-import { logger as defaultLogger, type Logger } from "../logger/index.js";
-import { McpManager } from "../services/mcp/runtime/manager.js";
-import { ContextManager } from "../core/context/manager.js";
+import { DEFAULT_SHIP_PROMPTS } from "../../core/prompts/system.js";
+import { logger as defaultLogger, type Logger } from "../../logger/index.js";
+import { McpManager } from "../../services/mcp/runtime/manager.js";
+import { ContextManager } from "../../core/context/manager.js";
 import {
   contextRequestContext,
   withContextRequestContext,
-} from "../core/context/request-context.js";
-import { createModel } from "../core/llm/create-model.js";
-import { runContextMemoryMaintenance } from "../services/memory/runtime/service.js";
-import { pickLastSuccessfulChatSendText } from "../services/chat/runtime/user-visible-text.js";
-import { sendTextByChatKey } from "../services/chat/runtime/chatkey-send.js";
-import { getChatSender } from "../services/chat/runtime/chat-send-registry.js";
+} from "../../core/context/request-context.js";
+import { createModel } from "../../core/llm/create-model.js";
+import { runContextMemoryMaintenance } from "../../services/memory/runtime/service.js";
+import { pickLastSuccessfulChatSendText } from "../../services/chat/runtime/user-visible-text.js";
+import { sendTextByChatKey } from "../../services/chat/runtime/chatkey-send.js";
+import { getChatSender } from "../../services/chat/runtime/chat-send-registry.js";
 import { registerServiceSystemPromptProviders } from "./system-prompt-providers.js";
-import type { ServiceRuntimeDependencies } from "../infra/service-runtime-types.js";
+import type { ServiceRuntimeDependencies } from "../../infra/service-runtime-types.js";
 import {
   getAgentMdPath,
   getCacheDirPath,
@@ -29,7 +29,7 @@ import {
   loadProjectDotenv,
   loadShipConfig,
   type ShipConfig,
-} from "../utils.js";
+} from "../../infra/utils/index.js";
 import fs from "fs-extra";
 import path from "path";
 

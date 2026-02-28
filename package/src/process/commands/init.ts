@@ -6,7 +6,7 @@
  * - 通过交互式问题收集必要配置（模型、Adapters 等）
  *
  * 设计要点
- * - Adapters 支持多选：仅写入用户选择的 adapters（未选择的不出现在 `ship.json`）
+ * - Chat adapters 支持多选：仅写入用户选择的 adapters（未选择的不出现在 `ship.json`）
  * - 避免写入无意义的默认值：能省则省，保持配置简洁
  */
 
@@ -36,13 +36,13 @@ import {
   getShipTasksDirPath,
   ensureDir,
   saveJson,
-  DEFAULT_SHIP_JSON,
-  MODEL_CONFIGS,
   ShipConfig,
-} from "../utils.js";
-import { SHIP_JSON_SCHEMA } from "../schemas/ship.schema.js";
-import { MCP_JSON_SCHEMA } from "../schemas/mcp.schema.js";
+} from "../../infra/utils/index.js";
+import { SHIP_JSON_SCHEMA } from "../../schemas/ship.schema.js";
+import { MCP_JSON_SCHEMA } from "../../schemas/mcp.schema.js";
 import type { AdapterKey, InitOptions } from "./types/init.js";
+import { MODEL_CONFIGS } from "./const/model.js";
+import { DEFAULT_SHIP_JSON } from "./const/ship.js";
 
 /**
  * 获取用户级 `.ship/skills` 目录。
@@ -56,7 +56,7 @@ function getUserShipSkillsDir(): string {
  */
 function getBuiltInSkillsDirFromBin(): string {
   // 关键点（中文）
-  // - 发布包中该文件在 `bin/commands/init.js`
+  // - 发布包中该文件在 `bin/process/commands/init.js`
   // - 内置 skills 会在 build 阶段复制到 `bin/services/skills/built-in`
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -190,10 +190,10 @@ export async function initCommand(
       initial: 0,
     },
     {
-      // 关键交互: Adapters 允许多选，未选择的就不写入 ship.json
+      // 关键交互: Chat adapters 允许多选，未选择的就不写入 ship.json
       type: "multiselect",
       name: "adapters",
-      message: "Select adapters (multi-select)",
+      message: "Select chat adapters (multi-select)",
       choices: [
         { title: "Telegram", value: "telegram" },
         { title: "Feishu", value: "feishu" },
@@ -257,7 +257,9 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   // Save ship.json
   // Build LLM configuration
   const selectedModel = response.model || "claude-sonnet-4-5";
-  const modelTemplate = MODEL_CONFIGS[selectedModel as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.custom;
+  const modelTemplate =
+    MODEL_CONFIGS[selectedModel as keyof typeof MODEL_CONFIGS] ||
+    MODEL_CONFIGS.custom;
 
   const llmConfig = {
     provider: modelTemplate.provider,
@@ -271,7 +273,9 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     Array.isArray(response.adapters) ? (response.adapters as AdapterKey[]) : [],
   );
 
-  const adaptersConfig: NonNullable<ShipConfig["adapters"]> = {};
+  const adaptersConfig: NonNullable<
+    NonNullable<NonNullable<ShipConfig["services"]>["chat"]>["adapters"]
+  > = {};
   if (selectedAdapters.has("telegram")) {
     adaptersConfig.telegram = {
       enabled: true,
@@ -308,9 +312,18 @@ Help users understand and work with their codebase by exploring, analyzing, and 
       interactivePort: 3001,
     },
     llm: llmConfig,
-    // 关键点（中文）：默认额外支持 `.claude/skills`（兼容社区/工具链习惯），同时仍保留 `.ship/skills` 作为默认 root
-    skills: { paths: [".claude/skills"] },
-    ...(Object.keys(adaptersConfig).length > 0 ? { adapters: adaptersConfig } : {}),
+    // 关键点（中文）：所有服务相关配置统一放入 `services`。
+    services: {
+      // 默认额外支持 `.claude/skills`（兼容社区/工具链习惯），同时仍保留 `.ship/skills` 作为默认 root
+      skills: { paths: [".claude/skills"] },
+      ...(Object.keys(adaptersConfig).length > 0
+        ? {
+            chat: {
+              adapters: adaptersConfig,
+            },
+          }
+        : {}),
+    },
   };
 
   await saveJson(shipJsonPath, shipConfig);
@@ -353,12 +366,7 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   }
 
   if (selectedAdapters.has("feishu")) {
-    envLines.push(
-      "",
-      "# Feishu",
-      "FEISHU_APP_ID=",
-      "FEISHU_APP_SECRET=",
-    );
+    envLines.push("", "# Feishu", "FEISHU_APP_ID=", "FEISHU_APP_SECRET=");
   }
 
   if (selectedAdapters.has("qq")) {
@@ -448,19 +456,28 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   await ensureDir(path.dirname(mcpSchemaPath));
   await ensureDir(path.dirname(mcpJsonPath));
   await saveJson(mcpSchemaPath, MCP_JSON_SCHEMA);
-  await saveJson(mcpJsonPath, { $schema: "../schema/mcp.schema.json", servers: {} });
+  await saveJson(mcpJsonPath, {
+    $schema: "../schema/mcp.schema.json",
+    servers: {},
+  });
   console.log(`✅ Created .ship/config/mcp.json (MCP configuration)`);
 
   // Install built-in skills to user directory (~/.ship/skills)
   await installBuiltInSkillsToUserDir();
 
   // Skills installation (optional)
-  const skillsToInstall: string[] = Array.isArray((response as any).skillsToInstall)
-    ? ((response as any).skillsToInstall as any[]).map((x) => String(x)).filter(Boolean)
+  const skillsToInstall: string[] = Array.isArray(
+    (response as any).skillsToInstall,
+  )
+    ? ((response as any).skillsToInstall as any[])
+        .map((x) => String(x))
+        .filter(Boolean)
     : [];
 
   if (skillsToInstall.length > 0) {
-    console.log("\n🧩 Installing skills via `npx skills` (global, claude-code) ...");
+    console.log(
+      "\n🧩 Installing skills via `npx skills` (global, claude-code) ...",
+    );
     for (const spec of skillsToInstall) {
       try {
         // 关键点（中文）
@@ -481,25 +498,39 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     await syncClaudeSkillsToUserShipSkills();
   }
 
-  console.log('\n🎉 Initialization complete!\n');
+  console.log("\n🎉 Initialization complete!\n");
   console.log(`📦 Current model: ${llmConfig.provider} / ${llmConfig.model}`);
   console.log(`🌐 API URL: ${llmConfig.baseUrl}\n`);
 
   if (selectedAdapters.has("feishu")) {
-    console.log("📱 Feishu adapter enabled");
-    console.log("   Please configure FEISHU_APP_ID and FEISHU_APP_SECRET in ship.json");
-    console.log("   or set environment variables: FEISHU_APP_ID and FEISHU_APP_SECRET\n");
+    console.log("📱 Feishu chat adapter enabled");
+    console.log(
+      "   Please configure FEISHU_APP_ID and FEISHU_APP_SECRET in ship.json (services.chat.adapters.feishu)",
+    );
+    console.log(
+      "   or set environment variables: FEISHU_APP_ID and FEISHU_APP_SECRET\n",
+    );
   }
   if (selectedAdapters.has("telegram")) {
-    console.log("📱 Telegram adapter enabled");
-    console.log("   Please configure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID (optional) in ship.json");
-    console.log("   or set environment variables: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID\n");
+    console.log("📱 Telegram chat adapter enabled");
+    console.log(
+      "   Please configure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID (optional) in ship.json (services.chat.adapters.telegram)",
+    );
+    console.log(
+      "   or set environment variables: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID\n",
+    );
   }
   if (selectedAdapters.has("qq")) {
-    console.log("📱 QQ adapter enabled");
-    console.log("   Please configure QQ_APP_ID and QQ_APP_SECRET in ship.json");
-    console.log("   or set environment variables: QQ_APP_ID and QQ_APP_SECRET\n");
-    console.log("   Optional: set QQ_SANDBOX=true to use sandbox environment\n");
+    console.log("📱 QQ chat adapter enabled");
+    console.log(
+      "   Please configure QQ_APP_ID and QQ_APP_SECRET in ship.json (services.chat.adapters.qq)",
+    );
+    console.log(
+      "   or set environment variables: QQ_APP_ID and QQ_APP_SECRET\n",
+    );
+    console.log(
+      "   Optional: set QQ_SANDBOX=true to use sandbox environment\n",
+    );
   }
 
   const nextSteps: string[] = [
@@ -509,13 +540,19 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   ];
 
   if (selectedAdapters.has("telegram")) {
-    nextSteps.push("Configure Telegram Bot Token and Chat ID (optional)");
+    nextSteps.push(
+      "Configure services.chat.adapters.telegram (Bot Token and optional Chat ID)",
+    );
   }
   if (selectedAdapters.has("feishu")) {
-    nextSteps.push("Configure Feishu App ID and App Secret");
+    nextSteps.push(
+      "Configure services.chat.adapters.feishu (App ID and App Secret)",
+    );
   }
   if (selectedAdapters.has("qq")) {
-    nextSteps.push("Configure QQ App ID and App Secret");
+    nextSteps.push(
+      "Configure services.chat.adapters.qq (App ID and App Secret)",
+    );
   }
   nextSteps.push('Run "shipmyagent start" to start the agent');
 
@@ -524,8 +561,14 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     console.log(`  ${idx + 1}. ${line}`);
   }
   console.log("");
-  console.log('💡 Tip: API Key is recommended to use environment variables (e.g. ${ANTHROPIC_API_KEY} or ${OPENAI_API_KEY})\n');
-  console.log("🔌 MCP Support: Configure MCP servers in .ship/config/mcp.json to connect to databases, APIs, and more");
+  console.log(
+    "💡 Tip: API Key is recommended to use environment variables (e.g. ${ANTHROPIC_API_KEY} or ${OPENAI_API_KEY})\n",
+  );
+  console.log(
+    "🔌 MCP Support: Configure MCP servers in .ship/config/mcp.json to connect to databases, APIs, and more",
+  );
   console.log("   Learn more: https://modelcontextprotocol.io\n");
-  console.log("To switch models or modify configuration, edit the llm field in ship.json directly.\n");
+  console.log(
+    "To switch models or modify configuration, edit the llm field in ship.json directly.\n",
+  );
 }

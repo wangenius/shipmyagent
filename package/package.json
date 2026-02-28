@@ -1,11 +1,11 @@
 {
   "name": "shipmyagent",
-  "version": "1.0.135",
+  "version": "1.0.136",
   "type": "module",
   "description": "把一个代码仓库，启动成一个可对话、可审计的 Agent Runtime",
   "bin": {
-    "shipmyagent": "./bin/cli.js",
-    "sma": "./bin/cli.js"
+    "shipmyagent": "./bin/process/commands/index.js",
+    "sma": "./bin/process/commands/index.js"
   },
   "scripts": {
     "build": "tsc && node scripts/copy-built-in-skills.mjs",

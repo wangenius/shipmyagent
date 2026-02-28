@@ -10,7 +10,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 import type { Logger } from "../../../logger/index.js";
-import { getCacheDirPath } from "../../../utils.js";
+import { getCacheDirPath } from "../../../infra/utils/index.js";
 import type { QqInboundDedupeSnapshotV1 } from "../types/qq-inbound-dedupe.js";
 
 /**

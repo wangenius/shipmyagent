@@ -17,7 +17,7 @@ import {
   type SystemModelMessage,
 } from "ai";
 import { withLlmRequestContext } from "../../logger/index.js";
-import { generateId } from "../../utils.js";
+import { generateId } from "../../infra/utils/index.js";
 import {
   buildContextSystemPrompt,
   transformPromptsIntoSystemMessages,
@@ -32,7 +32,7 @@ import type { ShipContextMetadataV1 } from "../types/context-message.js";
 import {
   getShipRuntimeContext,
   getShipRuntimeContextBase,
-} from "../../server/ShipRuntimeContext.js";
+} from "../../process/server/ShipRuntimeContext.js";
 import type { ContextAgent } from "../types/context-agent.js";
 import { collectSystemPromptProviderResult } from "../prompts/index.js";
 import {

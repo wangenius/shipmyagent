@@ -8,8 +8,8 @@
 
 import path from "node:path";
 import type { Command } from "commander";
-import { callDaemonJsonApi } from "../infra/daemon-client.js";
-import { printResult } from "../infra/cli-output.js";
+import { callDaemonJsonApi } from "../../infra/daemon-client.js";
+import { printResult } from "../../infra/cli-output.js";
 import type {
   ServiceCliBaseOptions,
   ServiceCommandResponse,

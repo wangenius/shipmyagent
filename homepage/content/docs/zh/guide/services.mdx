@@ -30,15 +30,19 @@ ShipMyAgent 支持集成即时通讯软件，让你随时随地与你的 Agent �
 
 3. **配置 ship.json**
 
-编辑 `ship.json` 的 `services.telegram` 部分：
+编辑 `ship.json` 的 `services.chat.adapters.telegram`：
 
 ```json
 {
   "services": {
-    "telegram": {
-      "enabled": true,
-      "botToken": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
-      "chatId": "12345678" // 你的 User ID
+    "chat": {
+      "adapters": {
+        "telegram": {
+          "enabled": true,
+          "botToken": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
+          "chatId": "12345678"
+        }
+      }
     }
   }
 }
@@ -72,15 +76,19 @@ ShipMyAgent 支持集成即时通讯软件，让你随时随地与你的 Agent �
 
 2. **配置 ship.json**
 
-编辑 `ship.json` 的 `services.feishu` 部分：
+编辑 `ship.json` 的 `services.chat.adapters.feishu`：
 
 ```json
 {
   "services": {
-    "feishu": {
-      "enabled": true,
-      "appId": "cli_xxxxxxxxxxxxxxxx",
-      "appSecret": "your_app_secret_here"
+    "chat": {
+      "adapters": {
+        "feishu": {
+          "enabled": true,
+          "appId": "cli_xxxxxxxxxxxxxxxx",
+          "appSecret": "your_app_secret_here"
+        }
+      }
     }
   }
 }
@@ -111,15 +119,19 @@ QQ 是中国最流行的即时通讯软件之一。你可以将 ShipMyAgent 与 
 
 2. **配置 ship.json**
 
-编辑 `ship.json` 的 `services.qq` 部分：
+编辑 `ship.json` 的 `services.chat.adapters.qq`：
 
 ```json
 {
   "services": {
-    "qq": {
-      "enabled": true,
-      "appId": "your_app_id_here",
-      "appSecret": "your_app_secret_here"
+    "chat": {
+      "adapters": {
+        "qq": {
+          "enabled": true,
+          "appId": "your_app_id_here",
+          "appSecret": "your_app_secret_here"
+        }
+      }
     }
   }
 }

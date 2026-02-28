@@ -1,59 +1,76 @@
 #!/usr/bin/env node
 
-import { Command } from "commander";
-import { initCommand } from "./commands/init.js";
-import { runCommand } from "./commands/run.js";
-import { startCommand } from "./commands/start.js";
-import { stopCommand } from "./commands/stop.js";
-import { restartCommand } from "./commands/restart.js";
-import { aliasCommand } from "./commands/alias.js";
-import { registerServicesCommand } from "./commands/services.js";
-import { registerAllServicesForCli, getServiceRootCommandNames } from "./core/services/registry.js";
+/**
+ * CLI 程序入口模块。
+ *
+ * 职责说明：
+ * 1. 组装所有一级命令（init/run/start/stop/restart/alias/services）。
+ * 2. 统一处理命令行参数解析规则（端口、布尔值）。
+ * 3. 处理默认命令回退：未指定已知一级命令时自动转发到 run。
+ */
 import { readFileSync } from "fs";
-import { join, dirname, basename } from "path";
+import { basename, dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { Command } from "commander";
+import { aliasCommand } from "./alias.js";
+import { initCommand } from "./init.js";
+import { restartCommand } from "./restart.js";
+import { runCommand } from "./run.js";
+import { registerServicesCommand } from "./services.js";
+import { startCommand } from "./start.js";
+import { stopCommand } from "./stop.js";
+import {
+  getServiceRootCommandNames,
+  registerAllServicesForCli,
+} from "../../core/services/registry.js";
 
 // 在 ES 模块中获取 __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// 动态读取版本号
-const packageJson = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf-8"));
+// 读取 package.json 版本号
+const packageJson = JSON.parse(
+  readFileSync(join(__dirname, "../../../package.json"), "utf-8"),
+) as { version: string };
 
 const program = new Command();
 
-const parsePort = (value: string): number => {
+function parsePort(value: string): number {
   const num = Number.parseInt(value, 10);
-  if (!Number.isFinite(num) || Number.isNaN(num) || !Number.isInteger(num) || num <= 0 || num > 65535) {
+  if (
+    !Number.isFinite(num) ||
+    Number.isNaN(num) ||
+    !Number.isInteger(num) ||
+    num <= 0 ||
+    num > 65535
+  ) {
     throw new Error(`Invalid port: ${value}`);
   }
   return num;
-};
+}
 
-const parseBoolean = (value: string | undefined): boolean => {
+function parseBoolean(value: string | undefined): boolean {
   if (value === undefined) return true;
   const s = String(value).trim().toLowerCase();
   if (["true", "1", "yes", "y", "on"].includes(s)) return true;
   if (["false", "0", "no", "n", "off"].includes(s)) return false;
   throw new Error(`Invalid boolean: ${value}`);
-};
+}
 
 program
   .name(basename(process.argv[1] || "shipmyagent"))
   .description("把一个代码仓库，启动为一个拥有自主意识和执行能力的 Agent")
   .version(packageJson.version, "-v, --version");
 
-// Avoid -h (reserved for host), use --help only.
+// 保留 -h 给 host 参数，帮助命令只使用 --help
 program.helpOption("--help", "display help for command");
 
-// Init command
 const init = program
   .command("init [path]")
   .description("初始化 ShipMyAgent 项目")
   .helpOption("--help", "display help for command")
   .action(initCommand);
 
-// Run command (foreground)
 const run = program
   .command("run [path]")
   .description("前台启动 Agent Runtime（当前终端运行）")
@@ -72,7 +89,6 @@ const run = program
   .helpOption("--help", "display help for command")
   .action(runCommand);
 
-// Start command (daemon)
 const start = program
   .command("start [path]")
   .description("后台启动 Agent Runtime（终端退出也保持运行）")
@@ -91,14 +107,12 @@ const start = program
   .helpOption("--help", "display help for command")
   .action(startCommand);
 
-// Stop command (daemon)
 const stop = program
   .command("stop [path]")
   .description("停止后台 Agent 服务器（daemon）")
   .helpOption("--help", "display help for command")
   .action(stopCommand);
 
-// Restart command (daemon)
 const restart = program
   .command("restart [path]")
   .description("重启后台 Agent 服务器（daemon）")
@@ -117,7 +131,7 @@ const restart = program
   .helpOption("--help", "display help for command")
   .action(restartCommand);
 
-const alias = program
+program
   .command("alias")
   .description("在 .zshrc / .bashrc 中写入 `alias sma=\"shipmyagent\"`")
   .option("--shell <shell>", "指定写入的 shell: zsh | bash | both", "both")
@@ -131,7 +145,7 @@ registerServicesCommand(program);
 // 服务命令统一注册（chat / skill / task / future services）
 registerAllServicesForCli(program);
 
-// Default: `shipmyagent` / `shipmyagent .` / `shipmyagent [run-options]` => `shipmyagent run [path]`
+// 默认行为：`shipmyagent` / `shipmyagent .` / `shipmyagent [run-options]` -> `shipmyagent run [path]`
 const firstArg = process.argv[2];
 const staticRootCommands = [
   init.name(),
@@ -139,7 +153,7 @@ const staticRootCommands = [
   start.name(),
   stop.name(),
   restart.name(),
-  alias.name(),
+  "alias",
   "services",
   "help",
 ];
@@ -148,7 +162,8 @@ const knownRootCommands = new Set([...staticRootCommands, ...serviceRootCommands
 
 if (
   !firstArg ||
-  (!knownRootCommands.has(firstArg) && !["--help", "-v", "--version"].includes(firstArg))
+  (!knownRootCommands.has(firstArg) &&
+    !["--help", "-v", "--version"].includes(firstArg))
 ) {
   process.argv.splice(2, 0, "run");
 }

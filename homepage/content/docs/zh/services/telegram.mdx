@@ -33,9 +33,13 @@ TELEGRAM_BOT_TOKEN=123456:abc...
 ```json
 {
   "services": {
-    "telegram": {
-      "enabled": true,
-      "botToken": "${TELEGRAM_BOT_TOKEN}"
+    "chat": {
+      "adapters": {
+        "telegram": {
+          "enabled": true,
+          "botToken": "${TELEGRAM_BOT_TOKEN}"
+        }
+      }
     }
   }
 }
@@ -52,10 +56,14 @@ TELEGRAM_BOT_TOKEN=123456:abc...
 ```json
 {
   "services": {
-    "telegram": {
-      "enabled": true,
-      "botToken": "${TELEGRAM_BOT_TOKEN}",
-      "groupAccess": "anyone"
+    "chat": {
+      "adapters": {
+        "telegram": {
+          "enabled": true,
+          "botToken": "${TELEGRAM_BOT_TOKEN}",
+          "groupAccess": "anyone"
+        }
+      }
     }
   }
 }

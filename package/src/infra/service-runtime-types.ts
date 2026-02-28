@@ -5,7 +5,7 @@ import type {
   ServiceContextRequestContextBridge,
 } from "./service-runtime-ports.js";
 import type { ServiceChatRuntimeBridge } from "./service-chat-runtime-bridge.js";
-import type { ShipConfig } from "../utils.js";
+import type { ShipConfig } from "./utils/index.js";
 
 /**
  * Service 统一运行时依赖。

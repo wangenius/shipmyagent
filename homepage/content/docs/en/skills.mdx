@@ -14,7 +14,7 @@ By default ShipMyAgent scans 2 skill root types:
 - Project: `<project>/.ship/skills`
 - Home (global): `~/.ship/skills`
 
-You can add extra roots via `ship.json.skills.paths`. By default `sma init` writes `skills.paths: [".claude/skills"]` and creates `./.claude/skills/` to stay compatible with common community layouts.
+You can add extra roots via `ship.json.services.skills.paths`. By default `sma init` writes `services.skills.paths: [".claude/skills"]` and creates `./.claude/skills/` to stay compatible with common community layouts.
 
 Project skills layout example (recommended under `.ship/skills`):
 
@@ -45,9 +45,11 @@ Configure skill roots in `ship.json`:
 
 ```json
 {
-  "skills": {
-    "paths": [".claude/skills", ".my/skills"],
-    "allowExternalPaths": false
+  "services": {
+    "skills": {
+      "paths": [".claude/skills", ".my/skills"],
+      "allowExternalPaths": false
+    }
   }
 }
 ```

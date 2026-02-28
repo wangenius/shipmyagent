@@ -10,23 +10,23 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { logger as server_logger } from "../logger/index.js";
-import { withContextRequestContext } from "../core/context/request-context.js";
+import { logger as server_logger } from "../../logger/index.js";
+import { withContextRequestContext } from "../../core/context/request-context.js";
 import http from "node:http";
 import fs from "fs-extra";
 import path from "path";
-import { getShipPublicDirPath } from "../utils.js";
+import { getShipPublicDirPath } from "../../infra/utils/index.js";
 import {
   getShipServiceContext,
   getShipRuntimeContext,
-} from "../server/ShipRuntimeContext.js";
-import { pickLastSuccessfulChatSendText } from "../services/chat/runtime/user-visible-text.js";
+} from "./ShipRuntimeContext.js";
+import { pickLastSuccessfulChatSendText } from "../../services/chat/runtime/user-visible-text.js";
 import {
   controlServiceRuntime,
   listServiceRuntimes,
   registerAllServicesForServer,
   runServiceCommand,
-} from "../core/services/registry.js";
+} from "../../core/services/registry.js";
 
 /**
  * 启动参数。

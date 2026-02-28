@@ -29,30 +29,38 @@ description: Deep dive into ship.json and Agent.md configuration
     "apiKey": "${LLM_API_KEY}",
     "temperature": 0.7
   },
-  "adapters": {
-    "telegram": {
-      "enabled": true,
-      "botToken": "${TELEGRAM_BOT_TOKEN}",
-      "chatId": "${TELEGRAM_CHAT_ID}",
-      "followupWindowMs": 600000,
-      "groupAccess": "initiator_or_admin"
+  "services": {
+    "skills": {
+      "paths": [".claude/skills"]
     },
-    "feishu": {
-      "enabled": true,
-      "appId": "${FEISHU_APP_ID}",
-      "appSecret": "${FEISHU_APP_SECRET}",
-      "domain": "https://open.feishu.cn",
-      "adminUserIds": ["ou_xxx", "ou_yyy"]
-    },
-    "qq": {
-      "enabled": false,
-      "appId": "${QQ_APP_ID}",
-      "appSecret": "${QQ_APP_SECRET}",
-      "sandbox": false
+    "chat": {
+      "egress": {
+        "chatSendMaxCallsPerRun": 30,
+        "chatSendIdempotency": true
+      },
+      "adapters": {
+        "telegram": {
+          "enabled": true,
+          "botToken": "${TELEGRAM_BOT_TOKEN}",
+          "chatId": "${TELEGRAM_CHAT_ID}",
+          "followupWindowMs": 600000,
+          "groupAccess": "initiator_or_admin"
+        },
+        "feishu": {
+          "enabled": true,
+          "appId": "${FEISHU_APP_ID}",
+          "appSecret": "${FEISHU_APP_SECRET}",
+          "domain": "https://open.feishu.cn",
+          "adminUserIds": ["ou_xxx", "ou_yyy"]
+        },
+        "qq": {
+          "enabled": false,
+          "appId": "${QQ_APP_ID}",
+          "appSecret": "${QQ_APP_SECRET}",
+          "sandbox": false
+        }
+      }
     }
-  },
-  "skills": {
-    "paths": [".claude/skills"]
   }
 }
 ```
@@ -85,9 +93,9 @@ Controls the Agent service startup parameters:
 - **apiKey**: API key, **strongly recommended** to use `${ENV_VAR}` to reference environment variables to avoid leakage.
 - **temperature**: Temperature parameter, controls generation randomness (between 0-1, default `0.7`).
 
-#### `adapters` (Adapters)
+#### `services.chat.adapters` (Chat Adapters)
 
-Configure service adapters for various platforms to deploy your Agent on different chat platforms:
+Configure chat adapters for various platforms to deploy your Agent on different chat platforms:
 
 **telegram** (Telegram Bot)
 - **enabled**: Whether to enable the adapter
@@ -113,7 +121,7 @@ Configure service adapters for various platforms to deploy your Agent on differe
 
 > For detailed configuration and service guides, please refer to [Service Guide](/en/docs/guide/services).
 
-#### `skills` (Skills)
+#### `services.skills` (Skills)
 
 Configure available skill plugins for the Agent:
 
@@ -122,6 +130,11 @@ Configure available skill plugins for the Agent:
   - Supports mixing built-in skills and custom skills.
 
 > For detailed skill development guide, please refer to [Skill System](/en/docs/guide/skills).
+
+#### `services.chat.egress` (Chat Egress)
+
+- **chatSendMaxCallsPerRun**: Maximum `chat_send` calls in a single run.
+- **chatSendIdempotency**: Enable best-effort idempotency dedupe for `chat_send`.
 
 #### `context` (Context)
 

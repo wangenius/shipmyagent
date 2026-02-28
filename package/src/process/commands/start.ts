@@ -3,7 +3,7 @@
  *
  * 行为
  * - 在 `.ship/debug/` 写入 pid/log/meta 文件
- * - 通过 `node <cli.js> run ...` 启动真正的前台逻辑，但以 detached 方式在后台运行
+ * - 通过 `node <commands/index.js> run ...` 启动真正的前台逻辑，但以 detached 方式在后台运行
  *
  * 注意
  * - `shipmyagent .` / `shipmyagent run` 才是“当前终端前台启动”。
@@ -12,7 +12,7 @@
 import path from "path";
 import fs from "fs-extra";
 import { fileURLToPath } from "url";
-import { getAgentMdPath, getShipJsonPath } from "../utils.js";
+import { getAgentMdPath, getShipJsonPath } from "../../infra/utils/index.js";
 import { startDaemonProcess } from "../server/daemon/manager.js";
 import { buildRunArgsFromOptions } from "../server/daemon/cli-args.js";
 import type { StartOptions } from "./types/start.js";
@@ -41,10 +41,10 @@ export async function startCommand(
     process.exit(1);
   }
 
-  // 计算当前 CLI 的入口路径（编译后是 `bin/cli.js`）。
+  // 计算当前 CLI 的入口路径（编译后是 `bin/process/commands/index.js`）。
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
-  const cliPath = path.resolve(__dirname, "../cli.js");
+  const cliPath = path.resolve(__dirname, "./index.js");
 
   const args = buildRunArgsFromOptions(projectRoot, options || {});
 

@@ -12,7 +12,7 @@ import { randomBytes } from "crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import { z } from "zod";
 import { tool } from "ai";
-import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
+import { getShipRuntimeContext } from "../../process/server/ShipRuntimeContext.js";
 import { contextRequestContext } from "../context/request-context.js";
 import { llmRequestContext } from "../../logger/index.js";
 

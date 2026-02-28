@@ -20,7 +20,7 @@ import type {
 } from "./types.js";
 import { HttpTransport } from "./http-transport.js";
 import { resolveEnvVar, resolveEnvVarsInRecord } from "./env.js";
-import { getShipMcpConfigPath } from "../../../utils.js";
+import { getShipMcpConfigPath } from "../../../infra/utils/index.js";
 import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
 
 /**

@@ -12,7 +12,7 @@ import {
   getShipProfileOtherPath,
   getShipProfilePrimaryPath,
   getShipContextMemoryPrimaryPath,
-} from "../../../utils.js";
+} from "../../../infra/utils/index.js";
 
 async function readOptionalMarkdown(filePath: string): Promise<string> {
   try {

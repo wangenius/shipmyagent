@@ -23,12 +23,80 @@ export const SHIP_JSON_SCHEMA: Record<string, unknown> = {
         interactivePort: { type: "integer", minimum: 1, maximum: 65535 },
       },
     },
-    skills: {
+    services: {
       type: "object",
       additionalProperties: true,
       properties: {
-        paths: { type: "array", items: { type: "string" } },
-        allowExternalPaths: { type: "boolean" },
+        skills: {
+          type: "object",
+          additionalProperties: true,
+          properties: {
+            paths: { type: "array", items: { type: "string" } },
+            allowExternalPaths: { type: "boolean" },
+          },
+        },
+        chat: {
+          type: "object",
+          additionalProperties: true,
+          properties: {
+            egress: {
+              type: "object",
+              additionalProperties: true,
+              properties: {
+                chatSendMaxCallsPerRun: { type: "integer", minimum: 1, maximum: 500 },
+                chatSendIdempotency: { type: "boolean" },
+              },
+            },
+            adapters: {
+              type: "object",
+              additionalProperties: true,
+              description:
+                "Chat platform adapters (Telegram / Feishu / QQ...).",
+              properties: {
+                telegram: {
+                  type: "object",
+                  additionalProperties: true,
+                  properties: {
+                    enabled: { type: "boolean" },
+                    botToken: { type: "string" },
+                    chatId: { type: "string" },
+                    followupWindowMs: { type: "number" },
+                    groupAccess: { type: "string", enum: ["initiator_or_admin", "anyone"] },
+                  },
+                },
+                discord: {
+                  type: "object",
+                  additionalProperties: true,
+                  properties: {
+                    enabled: { type: "boolean" },
+                    botToken: { type: "string" },
+                  },
+                },
+                feishu: {
+                  type: "object",
+                  additionalProperties: true,
+                  properties: {
+                    enabled: { type: "boolean" },
+                    appId: { type: "string" },
+                    appSecret: { type: "string" },
+                    domain: { type: "string" },
+                  },
+                },
+                qq: {
+                  type: "object",
+                  additionalProperties: true,
+                  properties: {
+                    enabled: { type: "boolean" },
+                    appId: { type: "string" },
+                    appSecret: { type: "string" },
+                    sandbox: { type: "boolean" },
+                    groupAccess: { type: "string", enum: ["initiator_or_admin", "anyone"] },
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     },
     llm: {
@@ -124,54 +192,6 @@ export const SHIP_JSON_SCHEMA: Record<string, unknown> = {
         },
         open_pr: { type: "boolean" },
         merge: { type: "boolean" },
-      },
-    },
-    adapters: {
-      type: "object",
-      additionalProperties: true,
-      description:
-        "Messaging platform adapters (Telegram / Feishu / QQ...).",
-      properties: {
-        telegram: {
-          type: "object",
-          additionalProperties: true,
-          properties: {
-            enabled: { type: "boolean" },
-            botToken: { type: "string" },
-            chatId: { type: "string" },
-            followupWindowMs: { type: "number" },
-            groupAccess: { type: "string", enum: ["initiator_or_admin", "anyone"] },
-          },
-        },
-        discord: {
-          type: "object",
-          additionalProperties: true,
-          properties: {
-            enabled: { type: "boolean" },
-            botToken: { type: "string" },
-          },
-        },
-        feishu: {
-          type: "object",
-          additionalProperties: true,
-          properties: {
-            enabled: { type: "boolean" },
-            appId: { type: "string" },
-            appSecret: { type: "string" },
-            domain: { type: "string" },
-          },
-        },
-        qq: {
-          type: "object",
-          additionalProperties: true,
-          properties: {
-            enabled: { type: "boolean" },
-            appId: { type: "string" },
-            appSecret: { type: "string" },
-            sandbox: { type: "boolean" },
-            groupAccess: { type: "string", enum: ["initiator_or_admin", "anyone"] },
-          },
-        },
       },
     },
   },

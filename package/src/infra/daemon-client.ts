@@ -12,7 +12,7 @@ import {
   type DaemonJsonApiCallParams,
   type DaemonJsonApiCallResult,
 } from "./daemon-api.js";
-import { getShipJsonPath, loadShipConfig } from "../utils.js";
+import { getShipJsonPath, loadShipConfig } from "./utils/index.js";
 
 /**
  * 解析端口值。

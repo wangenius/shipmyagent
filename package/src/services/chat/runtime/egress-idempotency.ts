@@ -8,7 +8,7 @@
 
 import path from "path";
 import fs from "fs-extra";
-import { getCacheDirPath } from "../../../utils.js";
+import { getCacheDirPath } from "../../../infra/utils/index.js";
 import type { ChatDispatchChannel } from "./chat-send-registry.js";
 import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
 

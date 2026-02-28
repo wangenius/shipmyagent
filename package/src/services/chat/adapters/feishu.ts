@@ -1,7 +1,7 @@
 import * as Lark from "@larksuiteoapi/node-sdk";
 import fs from "fs-extra";
 import path from "path";
-import { getCacheDirPath } from "../../../utils.js";
+import { getCacheDirPath } from "../../../infra/utils/index.js";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
 import type {
   AdapterChatKeyParams,

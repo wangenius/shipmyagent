@@ -16,7 +16,7 @@
 import fs from "fs-extra";
 import path from "path";
 import { spawn } from "child_process";
-import { getShipDebugDirPath } from "../../utils.js";
+import { getShipDebugDirPath } from "../../../infra/utils/index.js";
 import {
   DAEMON_LOG_FILENAME,
   DAEMON_META_FILENAME,
@@ -210,4 +210,3 @@ export const stopDaemonProcess = async (params: {
 
   return { stopped: true, pid };
 };
-

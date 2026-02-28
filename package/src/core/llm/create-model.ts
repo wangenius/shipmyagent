@@ -11,7 +11,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { type LanguageModel } from "ai";
 import { createLlmLoggingFetch, getLogger } from "../../logger/index.js";
-import type { ShipConfig } from "../../utils.js";
+import type { ShipConfig } from "../../infra/utils/index.js";
 
 /**
  * 创建 LanguageModel 实例。

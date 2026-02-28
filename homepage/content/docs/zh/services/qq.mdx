@@ -31,12 +31,16 @@ QQ_APP_SECRET=your_app_secret
 ```json
 {
   "services": {
-    "qq": {
-      "enabled": true,
-      "appId": "${QQ_APP_ID}",
-      "appSecret": "${QQ_APP_SECRET}",
-      "sandbox": false,
-      "groupAccess": "initiator_or_admin"
+    "chat": {
+      "adapters": {
+        "qq": {
+          "enabled": true,
+          "appId": "${QQ_APP_ID}",
+          "appSecret": "${QQ_APP_SECRET}",
+          "sandbox": false,
+          "groupAccess": "initiator_or_admin"
+        }
+      }
     }
   }
 }

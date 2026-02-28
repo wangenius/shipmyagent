@@ -1,10 +1,10 @@
 import {
   clearSystemPromptProviders,
   registerSystemPromptProvider,
-} from "../core/prompts/system-provider.js";
-import type { ServiceRuntimeDependencies } from "../infra/service-runtime-types.js";
-import { memorySystemPromptProvider } from "../services/memory/runtime/system-provider.js";
-import { createSkillsSystemPromptProvider } from "../services/skills/runtime/system-provider.js";
+} from "../../core/prompts/system-provider.js";
+import type { ServiceRuntimeDependencies } from "../../infra/service-runtime-types.js";
+import { memorySystemPromptProvider } from "../../services/memory/runtime/system-provider.js";
+import { createSkillsSystemPromptProvider } from "../../services/skills/runtime/system-provider.js";
 
 /**
  * 注册 services 的 system prompt providers。

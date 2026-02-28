@@ -13,7 +13,7 @@ import {
   getShipContextMessagesMetaPath,
   getShipContextMessagesDirPath,
   loadShipConfig,
-} from "../../utils.js";
+} from "../../infra/utils/index.js";
 import type { ClaudeSkill } from "./types/claude-skill.js";
 import type {
   SkillListResponse,

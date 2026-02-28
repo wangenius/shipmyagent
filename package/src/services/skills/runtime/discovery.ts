@@ -10,7 +10,7 @@ import fs from "fs-extra";
 import yaml from "js-yaml";
 import path from "path";
 import type { Dirent, Stats } from "node:fs";
-import type { ShipConfig } from "../../../utils.js";
+import type { ShipConfig } from "../../../infra/utils/index.js";
 import { parseFrontMatter } from "./frontmatter.js";
 import { getClaudeSkillSearchRoots } from "./paths.js";
 import { isSubpath } from "./utils.js";
@@ -36,7 +36,7 @@ export function discoverClaudeSkillsSync(
 ): ClaudeSkill[] {
   const root = String(projectRoot || "").trim();
   if (!root) return [];
-  const allowExternal = Boolean(config.skills?.allowExternalPaths);
+  const allowExternal = Boolean(config.services?.skills?.allowExternalPaths);
   const roots = getClaudeSkillSearchRoots(root, config);
 
   const outById = new Map<string, ClaudeSkill>();

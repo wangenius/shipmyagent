@@ -33,9 +33,13 @@ Enable Telegram in `ship.json`:
 ```json
 {
   "services": {
-    "telegram": {
-      "enabled": true,
-      "botToken": "${TELEGRAM_BOT_TOKEN}"
+    "chat": {
+      "adapters": {
+        "telegram": {
+          "enabled": true,
+          "botToken": "${TELEGRAM_BOT_TOKEN}"
+        }
+      }
     }
   }
 }
@@ -52,10 +56,14 @@ To allow **any group member** to talk to the bot (when they mention it / reply t
 ```json
 {
   "services": {
-    "telegram": {
-      "enabled": true,
-      "botToken": "${TELEGRAM_BOT_TOKEN}",
-      "groupAccess": "anyone"
+    "chat": {
+      "adapters": {
+        "telegram": {
+          "enabled": true,
+          "botToken": "${TELEGRAM_BOT_TOKEN}",
+          "groupAccess": "anyone"
+        }
+      }
     }
   }
 }

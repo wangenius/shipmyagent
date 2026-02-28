@@ -10,17 +10,17 @@
 
 import { AgentServer } from "../server/index.js";
 import { createInteractiveServer } from "../server/interactive.js";
-import { createTelegramBot } from "../services/chat/adapters/telegram.js";
-import { createFeishuBot } from "../services/chat/adapters/feishu.js";
-import { createQQBot } from "../services/chat/adapters/qq.js";
+import { createTelegramBot } from "../../services/chat/adapters/telegram.js";
+import { createFeishuBot } from "../../services/chat/adapters/feishu.js";
+import { createQQBot } from "../../services/chat/adapters/qq.js";
 import {
   getShipServiceContext,
   getShipRuntimeContext,
   initShipRuntimeContext,
 } from "../server/ShipRuntimeContext.js";
 import type { StartOptions } from "./types/start.js";
-import { logger } from "../logger/index.js";
-import { startAllServiceRuntimes, stopAllServiceRuntimes } from "../core/services/registry.js";
+import { logger } from "../../logger/index.js";
+import { startAllServiceRuntimes, stopAllServiceRuntimes } from "../../core/services/registry.js";
 
 /**
  * `shipmyagent run` 命令入口。
@@ -90,7 +90,7 @@ export async function runCommand(
   // Create and start server
   const server = new AgentServer();
 
-  const adapters = shipConfig.adapters || {};
+  const adapters = shipConfig.services?.chat?.adapters || {};
 
   // Create Telegram Adapter (if enabled)
   let telegramBot = null;

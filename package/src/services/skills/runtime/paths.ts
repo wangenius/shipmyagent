@@ -9,7 +9,7 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import type { ShipConfig } from "../../../utils.js";
+import type { ShipConfig } from "../../../infra/utils/index.js";
 import type { SkillRoot } from "../types/skill-root.js";
 import { expandHome, uniqStrings } from "./utils.js";
 
@@ -39,8 +39,8 @@ export function getClaudeSkillSearchRoots(
   projectRoot: string,
   config: ShipConfig,
 ): SkillRoot[] {
-  const configured = Array.isArray(config.skills?.paths)
-    ? config.skills!.paths!.map((x) => String(x))
+  const configured = Array.isArray(config.services?.skills?.paths)
+    ? config.services.skills.paths.map((x) => String(x))
     : [];
 
   const defaultsProject = [".ship/skills"];

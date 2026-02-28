@@ -6,7 +6,7 @@
  * - 仅做字符串渲染，不做文件 IO。
  */
 
-import type { ShipConfig } from "../../../utils.js";
+import type { ShipConfig } from "../../../infra/utils/index.js";
 import { getClaudeSkillSearchRoots } from "./paths.js";
 import type { ClaudeSkill } from "../types/claude-skill.js";
 
@@ -23,7 +23,7 @@ export function renderClaudeSkillsPromptSection(
   skills: ClaudeSkill[],
 ): string {
   const roots = getClaudeSkillSearchRoots(projectRoot, config);
-  const allowExternal = Boolean(config.skills?.allowExternalPaths);
+  const allowExternal = Boolean(config.services?.skills?.allowExternalPaths);
 
   const lines: string[] = [];
   lines.push("# Skills System");

@@ -15,7 +15,7 @@ ShipMyAgent uses two main configuration files:
 your-project/
 ├── .env.example       # Environment variables template (recommended)
 ├── .env               # Local environment variables (do not commit)
-├── ship.json          # Main configuration (LLM, adapters)
+├── ship.json          # Main configuration (LLM, services)
 ├── Agent.md           # Agent personality and behavior
 └── .ship/             # Runtime data (logs, cache, tasks)
 ```
@@ -205,7 +205,7 @@ Controls how much prior chat transcript is injected into each agent run:
 }
 ```
 
-**context.chatEgress** (object, optional)
+**services.chat.egress** (object, optional)
 
 Controls outbound chat delivery safety (tool-strict):
 
@@ -214,19 +214,21 @@ Controls outbound chat delivery safety (tool-strict):
 
 ```json
 {
-  "context": {
-    "chatEgress": {
-      "chatSendMaxCallsPerRun": 30,
-      "chatSendIdempotency": true
+  "services": {
+    "chat": {
+      "egress": {
+        "chatSendMaxCallsPerRun": 30,
+        "chatSendIdempotency": true
+      }
     }
   }
 }
 ```
 
-#### adapters (object)
+#### services.chat.adapters (object)
 
 Messaging platform adapters (Telegram / Feishu / QQ...).  
-Use `adapters` to configure messaging platform adapters.
+Use `services.chat.adapters` to configure messaging platform adapters.
 
 External service connections.
 
@@ -234,13 +236,17 @@ External service connections.
 
 ```json
 {
-  "adapters": {
-    "telegram": {
-      "enabled": true,
-      "botToken": "${TELEGRAM_BOT_TOKEN}",
-      "chatId": "123456789",  // Required for security!
-      "followupWindowMs": 600000,
-      "groupAccess": "initiator_or_admin"
+  "services": {
+    "chat": {
+      "adapters": {
+        "telegram": {
+          "enabled": true,
+          "botToken": "${TELEGRAM_BOT_TOKEN}",
+          "chatId": "123456789",
+          "followupWindowMs": 600000,
+          "groupAccess": "initiator_or_admin"
+        }
+      }
     }
   }
 }
@@ -252,13 +258,17 @@ Note: messages received while the server was offline are appended to chat histor
 
 ```json
 {
-  "adapters": {
-    "github": {
-      "enabled": true,
-      "token": "${GITHUB_TOKEN}",
-      "repository": "owner/repo",
-      "autoMerge": false,
-      "requiredReviews": 1
+  "services": {
+    "chat": {
+      "adapters": {
+        "github": {
+          "enabled": true,
+          "token": "${GITHUB_TOKEN}",
+          "repository": "owner/repo",
+          "autoMerge": false,
+          "requiredReviews": 1
+        }
+      }
     }
   }
 }
@@ -268,11 +278,15 @@ Note: messages received while the server was offline are appended to chat histor
 
 ```json
 {
-  "adapters": {
-    "slack": {
-      "enabled": true,
-      "webhook": "${SLACK_WEBHOOK_URL}",
-      "channel": "#engineering"
+  "services": {
+    "chat": {
+      "adapters": {
+        "slack": {
+          "enabled": true,
+          "webhook": "${SLACK_WEBHOOK_URL}",
+          "channel": "#engineering"
+        }
+      }
     }
   }
 }
@@ -554,9 +568,13 @@ System Properties → Environment Variables
   "llm": {
     "apiKey": "${ANTHROPIC_API_KEY}"  // References environment variable
   },
-  "adapters": {
-    "telegram": {
-      "botToken": "${TELEGRAM_BOT_TOKEN}"
+  "services": {
+    "chat": {
+      "adapters": {
+        "telegram": {
+          "botToken": "${TELEGRAM_BOT_TOKEN}"
+        }
+      }
     }
   }
 }

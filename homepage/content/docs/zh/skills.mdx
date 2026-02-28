@@ -14,7 +14,7 @@ ShipMyAgent 当前支持 **Claude Code-compatible skills**。本页解释：skil
 - 项目内：`<project>/.ship/skills`
 - 用户目录：`~/.ship/skills`
 
-此外，你还可以通过 `ship.json.skills.paths` 增加额外 roots。`sma init` 会默认在 `ship.json` 写入 `skills.paths: [".claude/skills"]`，并创建 `./.claude/skills/` 目录，用于兼容社区常见布局。
+此外，你还可以通过 `ship.json.services.skills.paths` 增加额外 roots。`sma init` 会默认在 `ship.json` 写入 `services.skills.paths: [".claude/skills"]`，并创建 `./.claude/skills/` 目录，用于兼容社区常见布局。
 
 项目内 skills 目录结构示例（推荐放在项目根目录下的 `.ship/skills`）：
 
@@ -41,13 +41,15 @@ ShipMyAgent 当前支持 **Claude Code-compatible skills**。本页解释：skil
 
 ## skills roots 的解析规则
 
-可以在 `ship.json` 配置 `skills`：
+可以在 `ship.json` 配置 `services.skills`：
 
 ```json
 {
-  "skills": {
-    "paths": [".claude/skills", ".my/skills"],
-    "allowExternalPaths": false
+  "services": {
+    "skills": {
+      "paths": [".claude/skills", ".my/skills"],
+      "allowExternalPaths": false
+    }
   }
 }
 ```

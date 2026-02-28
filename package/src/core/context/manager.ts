@@ -15,7 +15,7 @@ import { ContextStore } from "./context-store.js";
 import type { ShipContextMetadataV1 } from "../types/context-message.js";
 import type { AgentResult } from "../types/agent.js";
 import type { ContextRequestContext } from "./request-context.js";
-import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
+import { getShipRuntimeContextBase } from "../../process/server/ShipRuntimeContext.js";
 import path from "node:path";
 import {
   parseTaskRunContextId,

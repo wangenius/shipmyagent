@@ -8,7 +8,7 @@
 
 import fs from "fs-extra";
 import path from "path";
-import { getLogsDirPath, getTimestamp } from "../utils.js";
+import { getLogsDirPath, getTimestamp } from "../infra/utils/index.js";
 
 /**
  * Unified runtime logger for ShipMyAgent.

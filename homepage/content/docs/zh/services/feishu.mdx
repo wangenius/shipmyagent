@@ -35,11 +35,15 @@ FEISHU_APP_SECRET=your_app_secret
 ```json
 {
   "services": {
-    "feishu": {
-      "enabled": true,
-      "appId": "${FEISHU_APP_ID}",
-      "appSecret": "${FEISHU_APP_SECRET}",
-      "domain": "${FEISHU_DOMAIN}"
+    "chat": {
+      "adapters": {
+        "feishu": {
+          "enabled": true,
+          "appId": "${FEISHU_APP_ID}",
+          "appSecret": "${FEISHU_APP_SECRET}",
+          "domain": "${FEISHU_DOMAIN}"
+        }
+      }
     }
   }
 }
@@ -50,11 +54,15 @@ FEISHU_APP_SECRET=your_app_secret
 ```json
 {
   "services": {
-    "feishu": {
-      "enabled": true,
-      "appId": "${FEISHU_APP_ID}",
-      "appSecret": "${FEISHU_APP_SECRET}",
-      "adminUserIds": ["ou_xxx", "ou_yyy"]
+    "chat": {
+      "adapters": {
+        "feishu": {
+          "enabled": true,
+          "appId": "${FEISHU_APP_ID}",
+          "appSecret": "${FEISHU_APP_SECRET}",
+          "adminUserIds": ["ou_xxx", "ou_yyy"]
+        }
+      }
     }
   }
 }
@@ -88,4 +96,4 @@ shipmyagent start
 
 - **启动后完全没反应**：确认 `FEISHU_APP_ID` / `FEISHU_APP_SECRET` 正确；查看 `.ship/logs/` 下当天日志文件。
 - **群里不回应**：确认你在群里 `@机器人`；并检查开放平台是否已为应用开通消息接收相关权限/事件订阅。
-- **国际版 Lark 无法连接**：在 `ship.json` 把 `services.feishu.domain` 设为 `https://open.larksuite.com`（或通过 `FEISHU_DOMAIN` 环境变量注入）。
+- **国际版 Lark 无法连接**：在 `ship.json` 把 `services.chat.adapters.feishu.domain` 设为 `https://open.larksuite.com`（或通过 `FEISHU_DOMAIN` 环境变量注入）。
