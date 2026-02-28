@@ -20,6 +20,8 @@ Tasks live under `.ship/task/` (note: `task`, not `tasks`):
       input.md
       output.md
       result.md
+      dialogue.md
+      dialogue.json
       error.md        (optional)
       run.json
       *.md            (optional, extra audit/process files)
@@ -40,6 +42,14 @@ Tasks live under `.ship/task/` (note: `task`, not `tasks`):
 
 If you want a manual-only task, use `cron: "@manual"` (the field still exists, but the scheduler won’t register it).
 
+Optional result-check fields:
+
+- `requiredArtifacts`: string array; files that must exist in the current run directory (relative paths)
+- `minOutputChars`: minimum output length in characters (default `1`; set `0` to allow empty output)
+- `maxDialogueRounds`: max rounds for executor agent and user-simulator agent (default `3`)
+
+`requiredArtifacts` can include standard runner artifacts such as `input.md`, `output.md`, `result.md`, and `run.json`.
+
 ### Example
 
 ```markdown
@@ -50,6 +60,11 @@ description: Run checks and post a short summary
 chatKey: telegram-chat-123456789
 status: enabled
 timezone: Asia/Shanghai
+requiredArtifacts:
+  - result.md
+  - output.md
+minOutputChars: 50
+maxDialogueRounds: 4
 ---
 
 Run the following checks and write the final result to `result.md` in the run directory:
@@ -61,6 +76,22 @@ Run the following checks and write the final result to `result.md` in the run di
 Constraints:
 - Keep outputs auditable: write key artifacts as Markdown files under the run directory.
 ```
+
+## Result validation model
+
+ShipMyAgent runs tasks with a **two-agent dialogue loop**:
+
+1. **Executor agent** produces/updates the task output.
+2. **User-simulator agent** replies as a demanding user and decides whether it is satisfied.
+3. The loop continues until satisfied, or `maxDialogueRounds` is reached.
+
+Each run records three statuses in `run.json`:
+
+- `executionStatus`: whether agent execution itself succeeded
+- `resultStatus`: whether output/artifacts satisfied task constraints
+- `status`: final combined status (`success`/`failure`/`skipped`)
+
+By default, ShipMyAgent enforces `minOutputChars >= 1`. If your task intentionally writes only files and no text output, set `minOutputChars: 0`.
 
 ### `status` values
 
@@ -99,6 +130,9 @@ The Task System is primarily driven via **built-in tools** (so the Agent can cre
 - `create_task`: create `.ship/task/<task_id>/task.md` from inputs
 - `run_task`: run once immediately (creates a new run folder and notifies `chatKey`)
 
+For CLI control, you can also use `sma task update <taskId> ...` to modify task config without editing `task.md` manually.  
+Use `--clear-*` flags (for example `--clear-required-artifacts`) when you need to unset optional fields.
+
 ### Scheduler
 
 The cron scheduler runs when your runtime is running (for example, when you launch `shipmyagent run` or `shipmyagent start` and keep the process alive). Only tasks with:
@@ -122,4 +156,3 @@ ShipMyAgent ships a built-in skill (Claude Code compatible) named **“Task Syst
 3. `run_task`
 
 Use `skills_list` / `skills_load` to find and load it.
-

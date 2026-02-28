@@ -45,6 +45,37 @@ export interface ServerRouteRegistry {
 }
 
 /**
+ * 模块运行状态。
+ */
+export type SmaModuleRuntimeState = "running" | "stopped" | "starting" | "stopping" | "error";
+
+/**
+ * 模块命令执行结果。
+ */
+export type SmaModuleCommandResult = {
+  success: boolean;
+  message?: string;
+  data?: unknown;
+};
+
+/**
+ * 模块生命周期扩展能力。
+ *
+ * 关键点（中文）
+ * - 所有 integration 都默认支持 `start/stop/restart/status`（由 registry 层统一提供）。
+ * - 业务模块可选实现 lifecycle hook，注入自己的启动/停止/命令语义。
+ */
+export interface SmaModuleLifecycle {
+  start?(context: IntegrationRuntimeDependencies): Promise<void> | void;
+  stop?(context: IntegrationRuntimeDependencies): Promise<void> | void;
+  command?(params: {
+    context: IntegrationRuntimeDependencies;
+    command: string;
+    payload?: unknown;
+  }): Promise<SmaModuleCommandResult> | SmaModuleCommandResult;
+}
+
+/**
  * SmaModule：模块统一契约。
  *
  * - `name`：模块根命令名/命名空间。
@@ -58,4 +89,5 @@ export interface SmaModule {
     registry: ServerRouteRegistry,
     context: IntegrationRuntimeDependencies,
   ): void;
+  lifecycle?: SmaModuleLifecycle;
 }

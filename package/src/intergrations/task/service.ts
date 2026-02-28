@@ -14,7 +14,12 @@ import {
   isValidTaskId,
   normalizeTaskId,
 } from "./runtime/paths.js";
-import { normalizeTaskStatus } from "./runtime/model.js";
+import {
+  normalizeMaxDialogueRounds,
+  normalizeMinOutputChars,
+  normalizeRequiredArtifacts,
+  normalizeTaskStatus,
+} from "./runtime/model.js";
 import { listTasks, readTask, writeTask } from "./runtime/store.js";
 import { runTaskNow } from "./runtime/runner.js";
 import type {
@@ -23,6 +28,8 @@ import type {
   TaskListResponse,
   TaskRunRequest,
   TaskRunResponse,
+  TaskUpdateRequest,
+  TaskUpdateResponse,
   TaskSetStatusRequest,
   TaskSetStatusResponse,
 } from "./types/task-command.js";
@@ -67,6 +74,11 @@ export async function listTaskDefinitions(params: {
       status: task.status,
       chatKey: task.chatKey,
       ...(task.timezone ? { timezone: task.timezone } : {}),
+      ...(Array.isArray(task.requiredArtifacts) && task.requiredArtifacts.length > 0
+        ? { requiredArtifacts: task.requiredArtifacts }
+        : {}),
+      ...(typeof task.minOutputChars === "number" ? { minOutputChars: task.minOutputChars } : {}),
+      ...(typeof task.maxDialogueRounds === "number" ? { maxDialogueRounds: task.maxDialogueRounds } : {}),
       taskMdPath: task.taskMdPath,
       ...(task.lastRunTimestamp ? { lastRunTimestamp: task.lastRunTimestamp } : {}),
     })),
@@ -97,6 +109,12 @@ export async function createTaskDefinition(params: {
   const status = resolveTaskStatus(req.status, "paused");
   const timezone = typeof req.timezone === "string" ? req.timezone.trim() : "";
   const body = typeof req.body === "string" && req.body.trim() ? req.body.trim() : buildDefaultTaskBody();
+  const requiredArtifactsNormalized = normalizeRequiredArtifacts(req.requiredArtifacts);
+  if (!requiredArtifactsNormalized.ok) return { success: false, error: requiredArtifactsNormalized.error };
+  const minOutputCharsNormalized = normalizeMinOutputChars(req.minOutputChars);
+  if (!minOutputCharsNormalized.ok) return { success: false, error: minOutputCharsNormalized.error };
+  const maxDialogueRoundsNormalized = normalizeMaxDialogueRounds(req.maxDialogueRounds);
+  if (!maxDialogueRoundsNormalized.ok) return { success: false, error: maxDialogueRoundsNormalized.error };
 
   try {
     const written = await writeTask({
@@ -110,6 +128,163 @@ export async function createTaskDefinition(params: {
         chatKey,
         status,
         ...(timezone ? { timezone } : {}),
+        ...(requiredArtifactsNormalized.value.length > 0
+          ? { requiredArtifacts: requiredArtifactsNormalized.value }
+          : {}),
+        ...(typeof minOutputCharsNormalized.value === "number"
+          ? { minOutputChars: minOutputCharsNormalized.value }
+          : {}),
+        ...(typeof maxDialogueRoundsNormalized.value === "number"
+          ? { maxDialogueRounds: maxDialogueRoundsNormalized.value }
+          : {}),
+      },
+      body,
+    });
+
+    return {
+      success: true,
+      taskId: written.taskId,
+      taskMdPath: written.taskMdPath,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: String(error),
+    };
+  }
+}
+
+export async function updateTaskDefinition(params: {
+  projectRoot: string;
+  request: TaskUpdateRequest;
+}): Promise<TaskUpdateResponse> {
+  const root = path.resolve(params.projectRoot);
+  const req = params.request;
+  const taskId = normalizeTaskId(String(req.taskId || "").trim());
+
+  // 关键点（中文）：API 层也做一次互斥校验，避免非 CLI 调用写入歧义状态。
+  if (req.timezone !== undefined && req.clearTimezone) {
+    return { success: false, error: "`timezone` conflicts with `clearTimezone`" };
+  }
+  if (req.requiredArtifacts !== undefined && req.clearRequiredArtifacts) {
+    return { success: false, error: "`requiredArtifacts` conflicts with `clearRequiredArtifacts`" };
+  }
+  if (req.minOutputChars !== undefined && req.clearMinOutputChars) {
+    return { success: false, error: "`minOutputChars` conflicts with `clearMinOutputChars`" };
+  }
+  if (req.maxDialogueRounds !== undefined && req.clearMaxDialogueRounds) {
+    return { success: false, error: "`maxDialogueRounds` conflicts with `clearMaxDialogueRounds`" };
+  }
+  if (req.body !== undefined && req.clearBody) {
+    return { success: false, error: "`body` conflicts with `clearBody`" };
+  }
+
+  try {
+    const current = await readTask({
+      projectRoot: root,
+      taskId,
+    });
+
+    const title =
+      typeof req.title === "string" ? req.title.trim() : current.frontmatter.title;
+    if (!title) return { success: false, error: "title cannot be empty" };
+
+    const description =
+      typeof req.description === "string"
+        ? req.description.trim()
+        : current.frontmatter.description;
+    if (!description) return { success: false, error: "description cannot be empty" };
+
+    const cron =
+      typeof req.cron === "string" ? req.cron.trim() : current.frontmatter.cron;
+    if (!cron) return { success: false, error: "cron cannot be empty" };
+
+    const chatKey =
+      typeof req.chatKey === "string" ? req.chatKey.trim() : current.frontmatter.chatKey;
+    if (!chatKey) return { success: false, error: "chatKey cannot be empty" };
+
+    const status =
+      req.status === undefined
+        ? current.frontmatter.status
+        : normalizeTaskStatus(req.status);
+    if (!status) {
+      return {
+        success: false,
+        error: `Invalid status: ${String(req.status)}`,
+      };
+    }
+
+    let timezone: string | undefined;
+    if (req.clearTimezone) {
+      timezone = undefined;
+    } else if (typeof req.timezone === "string") {
+      const t = req.timezone.trim();
+      if (!t) {
+        return {
+          success: false,
+          error: "timezone cannot be empty (use clearTimezone to unset)",
+        };
+      }
+      timezone = t;
+    } else {
+      timezone = current.frontmatter.timezone;
+    }
+
+    let requiredArtifacts: string[] = [];
+    if (req.clearRequiredArtifacts) {
+      requiredArtifacts = [];
+    } else if (req.requiredArtifacts !== undefined) {
+      const normalized = normalizeRequiredArtifacts(req.requiredArtifacts);
+      if (!normalized.ok) return { success: false, error: normalized.error };
+      requiredArtifacts = normalized.value;
+    } else {
+      requiredArtifacts = Array.isArray(current.frontmatter.requiredArtifacts)
+        ? current.frontmatter.requiredArtifacts
+        : [];
+    }
+
+    let minOutputChars: number | undefined;
+    if (req.clearMinOutputChars) {
+      minOutputChars = undefined;
+    } else if (req.minOutputChars !== undefined) {
+      const normalized = normalizeMinOutputChars(req.minOutputChars);
+      if (!normalized.ok) return { success: false, error: normalized.error };
+      minOutputChars = normalized.value;
+    } else {
+      minOutputChars = current.frontmatter.minOutputChars;
+    }
+
+    let maxDialogueRounds: number | undefined;
+    if (req.clearMaxDialogueRounds) {
+      maxDialogueRounds = undefined;
+    } else if (req.maxDialogueRounds !== undefined) {
+      const normalized = normalizeMaxDialogueRounds(req.maxDialogueRounds);
+      if (!normalized.ok) return { success: false, error: normalized.error };
+      maxDialogueRounds = normalized.value;
+    } else {
+      maxDialogueRounds = current.frontmatter.maxDialogueRounds;
+    }
+
+    const body = req.clearBody
+      ? ""
+      : typeof req.body === "string"
+        ? req.body.trim()
+        : current.body;
+
+    const written = await writeTask({
+      projectRoot: root,
+      taskId,
+      overwrite: true,
+      frontmatter: {
+        title,
+        description,
+        cron,
+        chatKey,
+        status,
+        ...(timezone ? { timezone } : {}),
+        ...(requiredArtifacts.length > 0 ? { requiredArtifacts } : {}),
+        ...(typeof minOutputChars === "number" ? { minOutputChars } : {}),
+        ...(typeof maxDialogueRounds === "number" ? { maxDialogueRounds } : {}),
       },
       body,
     });
@@ -150,6 +325,16 @@ export async function runTaskDefinition(params: {
     return {
       success: result.ok,
       status: result.status,
+      executionStatus: result.executionStatus,
+      resultStatus: result.resultStatus,
+      resultErrors: result.resultErrors,
+      dialogueRounds: result.dialogueRounds,
+      userSimulatorSatisfied: result.userSimulatorSatisfied,
+      ...(result.userSimulatorReply ? { userSimulatorReply: result.userSimulatorReply } : {}),
+      ...(result.userSimulatorReason ? { userSimulatorReason: result.userSimulatorReason } : {}),
+      ...(typeof result.userSimulatorScore === "number"
+        ? { userSimulatorScore: result.userSimulatorScore }
+        : {}),
       taskId: result.taskId,
       timestamp: result.timestamp,
       runDir: result.runDir,

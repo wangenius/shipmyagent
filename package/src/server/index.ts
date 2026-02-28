@@ -21,7 +21,12 @@ import {
   getShipRuntimeContext,
 } from "../server/ShipRuntimeContext.js";
 import { pickLastSuccessfulChatSendText } from "../intergrations/chat/runtime/user-visible-text.js";
-import { registerAllModulesForServer } from "../core/intergration/registry.js";
+import {
+  controlModuleRuntime,
+  listModuleRuntimes,
+  registerAllModulesForServer,
+  runModuleCommand,
+} from "../core/intergration/registry.js";
 
 /**
  * 启动参数。
@@ -180,6 +185,67 @@ export class AgentServer {
         status: "running",
         timestamp: new Date().toISOString(),
       });
+    });
+
+    // integration runtime list
+    this.app.get("/api/integration/list", (c) => {
+      return c.json({
+        success: true,
+        modules: listModuleRuntimes(),
+      });
+    });
+
+    // integration runtime control
+    this.app.post("/api/integration/control", async (c) => {
+      let body: any = null;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json({ success: false, error: "Invalid JSON body" }, 400);
+      }
+
+      const moduleName = String(body?.moduleName || "").trim();
+      const action = String(body?.action || "").trim().toLowerCase();
+      if (!moduleName) {
+        return c.json({ success: false, error: "moduleName is required" }, 400);
+      }
+      if (!["start", "stop", "restart", "status"].includes(action)) {
+        return c.json({ success: false, error: `Invalid action: ${action}` }, 400);
+      }
+
+      const result = await controlModuleRuntime({
+        moduleName,
+        action: action as "start" | "stop" | "restart" | "status",
+        context: getShipIntegrationContext(),
+      });
+      return c.json(result, result.success ? 200 : 400);
+    });
+
+    // integration command bridge
+    this.app.post("/api/integration/command", async (c) => {
+      let body: any = null;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json({ success: false, error: "Invalid JSON body" }, 400);
+      }
+
+      const moduleName = String(body?.moduleName || "").trim();
+      const command = String(body?.command || "").trim();
+      if (!moduleName) {
+        return c.json({ success: false, error: "moduleName is required" }, 400);
+      }
+      if (!command) {
+        return c.json({ success: false, error: "command is required" }, 400);
+      }
+
+      const result = await runModuleCommand({
+        moduleName,
+        command,
+        payload: body?.payload,
+        context: getShipIntegrationContext(),
+      });
+      return c.json(result, result.success ? 200 : 400);
     });
 
     // 统一注册模块路由（chat / skill / task / future）

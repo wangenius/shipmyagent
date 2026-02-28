@@ -6,7 +6,12 @@
  * - 统一给 CLI / Server / service 复用
  */
 
-import type { ShipTaskStatus } from "./task.js";
+import type {
+  ShipTaskRunExecutionStatusV1,
+  ShipTaskRunResultStatusV1,
+  ShipTaskRunStatusV1,
+  ShipTaskStatus,
+} from "./task.js";
 
 export type TaskCreateRequest = {
   taskId?: string;
@@ -16,11 +21,40 @@ export type TaskCreateRequest = {
   chatKey: string;
   status?: ShipTaskStatus;
   timezone?: string;
+  requiredArtifacts?: string[];
+  minOutputChars?: number;
+  maxDialogueRounds?: number;
   body?: string;
   overwrite?: boolean;
 };
 
 export type TaskCreateResponse = {
+  success: boolean;
+  taskId?: string;
+  taskMdPath?: string;
+  error?: string;
+};
+
+export type TaskUpdateRequest = {
+  taskId: string;
+  title?: string;
+  cron?: string;
+  description?: string;
+  chatKey?: string;
+  status?: ShipTaskStatus;
+  timezone?: string;
+  clearTimezone?: boolean;
+  requiredArtifacts?: string[];
+  clearRequiredArtifacts?: boolean;
+  minOutputChars?: number;
+  clearMinOutputChars?: boolean;
+  maxDialogueRounds?: number;
+  clearMaxDialogueRounds?: boolean;
+  body?: string;
+  clearBody?: boolean;
+};
+
+export type TaskUpdateResponse = {
   success: boolean;
   taskId?: string;
   taskMdPath?: string;
@@ -35,6 +69,9 @@ export type TaskListItemView = {
   status: string;
   chatKey: string;
   timezone?: string;
+  requiredArtifacts?: string[];
+  minOutputChars?: number;
+  maxDialogueRounds?: number;
   taskMdPath: string;
   lastRunTimestamp?: string;
 };
@@ -51,7 +88,15 @@ export type TaskRunRequest = {
 
 export type TaskRunResponse = {
   success: boolean;
-  status?: "success" | "failure" | "skipped";
+  status?: ShipTaskRunStatusV1;
+  executionStatus?: ShipTaskRunExecutionStatusV1;
+  resultStatus?: ShipTaskRunResultStatusV1;
+  resultErrors?: string[];
+  dialogueRounds?: number;
+  userSimulatorSatisfied?: boolean;
+  userSimulatorReply?: string;
+  userSimulatorReason?: string;
+  userSimulatorScore?: number;
   taskId?: string;
   timestamp?: string;
   runDir?: string;

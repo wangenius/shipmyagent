@@ -38,6 +38,14 @@ Task 存放在项目目录：
 
 如果你需要“仅手动执行”的任务：建议 `cron: "@manual"`。
 
+可选的结果约束字段：
+
+- `requiredArtifacts`：字符串数组，要求本次 run 目录必须存在的文件（相对路径）
+- `minOutputChars`：最小输出字符数（默认 `1`；设为 `0` 可允许空输出）
+- `maxDialogueRounds`：执行 agent 与模拟用户 agent 最大对话轮数（默认 `3`）
+
+`requiredArtifacts` 可包含系统固定产物：`input.md` / `output.md` / `result.md` / `run.json`。
+
 ## 常用工作流（Bash-first）
 
 ### 1) 列出任务
@@ -52,6 +60,10 @@ Task 存放在项目目录：
 
 - `sma task create --title "..." --description "..." --chat-key "..." --cron "@manual" --status paused --json`
 
+如需修改已有任务（而不是手改 `task.md`）：
+
+- `sma task update <task_id> --description "..." --max-dialogue-rounds 5 --json`
+
 建议：
 
 - `status` 初始设为 `paused`，确认正文无误后再启用
@@ -65,7 +77,7 @@ Task 存放在项目目录：
 
 执行完成后：
 
-- 在 `./.ship/task/<task_id>/<timestamp>/` 查看 `result.md` / `output.md` / `input.md` / `messages.jsonl`
+- 在 `./.ship/task/<task_id>/<timestamp>/` 查看 `result.md` / `output.md` / `input.md` / `dialogue.md` / `messages.jsonl`
 - 系统会向 `chatKey` 发送执行结果
 
 ## 编写任务正文建议

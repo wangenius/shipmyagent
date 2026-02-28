@@ -24,6 +24,9 @@ export type TaskListItem = {
   status: string;
   chatKey: string;
   timezone?: string;
+  requiredArtifacts?: string[];
+  minOutputChars?: number;
+  maxDialogueRounds?: number;
   taskMdPath: string;
   lastRunTimestamp?: string;
 };
@@ -105,6 +108,16 @@ export async function listTasks(projectRoot: string): Promise<TaskListItem[]> {
       status: parsed.task.frontmatter.status,
       chatKey: parsed.task.frontmatter.chatKey,
       ...(parsed.task.frontmatter.timezone ? { timezone: parsed.task.frontmatter.timezone } : {}),
+      ...(Array.isArray(parsed.task.frontmatter.requiredArtifacts) &&
+      parsed.task.frontmatter.requiredArtifacts.length > 0
+        ? { requiredArtifacts: parsed.task.frontmatter.requiredArtifacts }
+        : {}),
+      ...(typeof parsed.task.frontmatter.minOutputChars === "number"
+        ? { minOutputChars: parsed.task.frontmatter.minOutputChars }
+        : {}),
+      ...(typeof parsed.task.frontmatter.maxDialogueRounds === "number"
+        ? { maxDialogueRounds: parsed.task.frontmatter.maxDialogueRounds }
+        : {}),
       taskMdPath: parsed.task.taskMdPath,
       ...(lastRunTimestamp ? { lastRunTimestamp } : {}),
     });
@@ -187,4 +200,3 @@ export async function ensureRunDir(params: {
     runDirRel: path.relative(root, runDir).split(path.sep).join("/"),
   };
 }
-

@@ -12,5 +12,8 @@
 export type {
   CliCommandRegistry,
   ServerRouteRegistry,
+  SmaModuleCommandResult,
+  SmaModuleLifecycle,
+  SmaModuleRuntimeState,
   SmaModule,
 } from "../core/intergration/types/module-registry.js";

@@ -61,6 +61,13 @@ Notes:
 ```bash
 sma task list [--status enabled|paused|disabled]
 sma task create --title "..." --description "..." [--chat-key <chatKey>]
+  [--required-artifact <path>] [--min-output-chars <n>] [--max-dialogue-rounds <n>]
+sma task update <taskId> [--title ...] [--description ...] [--cron ...]
+  [--chat-key ...] [--status enabled|paused|disabled] [--timezone ...|--clear-timezone]
+  [--required-artifact <path>|--clear-required-artifacts]
+  [--min-output-chars <n>|--clear-min-output-chars]
+  [--max-dialogue-rounds <n>|--clear-max-dialogue-rounds]
+  [--body ...|--clear-body]
 sma task run <taskId>
 sma task enable <taskId>
 sma task disable <taskId>
@@ -68,6 +75,11 @@ sma task disable <taskId>
 
 Notes:
 - `sma task` is daemon-only and requires an active local runtime (`sma start` or `sma run`)
+- `--required-artifact` can be repeated to require output files in each run directory
+- `--min-output-chars` defaults to `1`; set `0` if empty output is intentional
+- `--max-dialogue-rounds` controls the executor/user-simulator iteration limit (default `3`)
+- `sma task update` lets you control task config by command instead of editing `task.md` manually
+- In `sma task update`, each `set` option conflicts with its `clear-*` counterpart
 
 ---
 

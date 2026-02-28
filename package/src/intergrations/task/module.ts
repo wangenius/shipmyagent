@@ -2,7 +2,7 @@
  * Task module.
  *
  * 关键点（中文）
- * - CLI：`sma task list/create/run/enable/disable`
+ * - CLI：`sma task list/create/update/run/enable/disable`
  * - Server：`/api/task/*`
  * - 任务执行（run）优先走 server（保证复用同一 runtime + dispatcher）
  */
@@ -13,6 +13,7 @@ import {
   createTaskDefinition,
   listTaskDefinitions,
   runTaskDefinition,
+  updateTaskDefinition,
   setTaskStatus,
 } from "./service.js";
 import { callDaemonJsonApi } from "../../infra/daemon-client.js";
@@ -23,6 +24,8 @@ import type {
   TaskCreateResponse,
   TaskListResponse,
   TaskRunResponse,
+  TaskUpdateRequest,
+  TaskUpdateResponse,
   TaskSetStatusResponse,
 } from "./types/task-command.js";
 import type { SmaModule } from "../../infra/module-registry-types.js";
@@ -34,6 +37,30 @@ function parsePortOption(value: string): number {
     throw new Error(`Invalid port: ${value}`);
   }
   return port;
+}
+
+function parseNonNegativeIntOption(value: string): number {
+  const s = String(value || "").trim();
+  if (!/^\d+$/.test(s)) {
+    throw new Error(`Invalid non-negative integer: ${value}`);
+  }
+  const n = Number(s);
+  if (!Number.isFinite(n) || Number.isNaN(n) || !Number.isInteger(n) || n < 0) {
+    throw new Error(`Invalid non-negative integer: ${value}`);
+  }
+  return n;
+}
+
+function parsePositiveIntOption(value: string): number {
+  const n = parseNonNegativeIntOption(value);
+  if (n < 1) throw new Error(`Invalid positive integer: ${value}`);
+  return n;
+}
+
+function collectStringOption(value: string, previous: string[] = []): string[] {
+  const item = String(value || "").trim();
+  if (!item) return previous;
+  return [...previous, item];
 }
 
 type BaseTaskCliOptions = {
@@ -55,8 +82,29 @@ type TaskCreateCliOptions = BaseTaskCliOptions & {
   chatKey?: string;
   status?: ShipTaskStatus;
   timezone?: string;
+  requiredArtifact?: string[];
+  minOutputChars?: number;
+  maxDialogueRounds?: number;
   body?: string;
   overwrite?: boolean;
+};
+
+type TaskUpdateCliOptions = BaseTaskCliOptions & {
+  title?: string;
+  cron?: string;
+  description?: string;
+  chatKey?: string;
+  status?: ShipTaskStatus;
+  timezone?: string;
+  clearTimezone?: boolean;
+  requiredArtifact?: string[];
+  clearRequiredArtifacts?: boolean;
+  minOutputChars?: number;
+  clearMinOutputChars?: boolean;
+  maxDialogueRounds?: number;
+  clearMaxDialogueRounds?: boolean;
+  body?: string;
+  clearBody?: boolean;
 };
 
 function resolveProjectRoot(pathInput?: string): string {
@@ -110,6 +158,13 @@ async function runTaskCreateCommand(options: TaskCreateCliOptions): Promise<void
     chatKey: String(chatKey || "").trim(),
     status: options.status,
     ...(options.timezone ? { timezone: options.timezone } : {}),
+    ...(Array.isArray(options.requiredArtifact) && options.requiredArtifact.length > 0
+      ? { requiredArtifacts: options.requiredArtifact }
+      : {}),
+    ...(typeof options.minOutputChars === "number" ? { minOutputChars: options.minOutputChars } : {}),
+    ...(typeof options.maxDialogueRounds === "number"
+      ? { maxDialogueRounds: options.maxDialogueRounds }
+      : {}),
     ...(typeof options.body === "string" ? { body: options.body } : {}),
     overwrite: Boolean(options.overwrite),
   };
@@ -177,6 +232,18 @@ async function runTaskRunCommand(params: {
       title: data.success ? "task run completed" : "task run failed",
       payload: {
         ...(data.status ? { status: data.status } : {}),
+        ...(data.executionStatus ? { executionStatus: data.executionStatus } : {}),
+        ...(data.resultStatus ? { resultStatus: data.resultStatus } : {}),
+        ...(Array.isArray(data.resultErrors) ? { resultErrors: data.resultErrors } : {}),
+        ...(typeof data.dialogueRounds === "number" ? { dialogueRounds: data.dialogueRounds } : {}),
+        ...(typeof data.userSimulatorSatisfied === "boolean"
+          ? { userSimulatorSatisfied: data.userSimulatorSatisfied }
+          : {}),
+        ...(data.userSimulatorReply ? { userSimulatorReply: data.userSimulatorReply } : {}),
+        ...(data.userSimulatorReason ? { userSimulatorReason: data.userSimulatorReason } : {}),
+        ...(typeof data.userSimulatorScore === "number"
+          ? { userSimulatorScore: data.userSimulatorScore }
+          : {}),
         ...(data.taskId ? { taskId: data.taskId } : {}),
         ...(data.timestamp ? { timestamp: data.timestamp } : {}),
         ...(data.runDirRel ? { runDirRel: data.runDirRel } : {}),
@@ -196,6 +263,135 @@ async function runTaskRunCommand(params: {
       error:
         remote.error ||
         "Task run requires an active Agent server runtime. Start via `sma start` or `sma run` first.",
+    },
+  });
+}
+
+async function runTaskUpdateCommand(params: {
+  taskId: string;
+  options: TaskUpdateCliOptions;
+}): Promise<void> {
+  const projectRoot = resolveProjectRoot(params.options.path);
+  const opts = params.options;
+
+  // 关键点（中文）：set 与 clear 选项互斥，提前在 CLI 层给出可读错误。
+  const conflicts: string[] = [];
+  if (typeof opts.timezone === "string" && opts.clearTimezone) {
+    conflicts.push("`--timezone` conflicts with `--clear-timezone`");
+  }
+  if (
+    Array.isArray(opts.requiredArtifact) &&
+    opts.requiredArtifact.length > 0 &&
+    opts.clearRequiredArtifacts
+  ) {
+    conflicts.push("`--required-artifact` conflicts with `--clear-required-artifacts`");
+  }
+  if (typeof opts.minOutputChars === "number" && opts.clearMinOutputChars) {
+    conflicts.push("`--min-output-chars` conflicts with `--clear-min-output-chars`");
+  }
+  if (typeof opts.maxDialogueRounds === "number" && opts.clearMaxDialogueRounds) {
+    conflicts.push("`--max-dialogue-rounds` conflicts with `--clear-max-dialogue-rounds`");
+  }
+  if (typeof opts.body === "string" && opts.clearBody) {
+    conflicts.push("`--body` conflicts with `--clear-body`");
+  }
+  if (conflicts.length > 0) {
+    printResult({
+      asJson: opts.json,
+      success: false,
+      title: "task update failed",
+      payload: {
+        error: conflicts.join("; "),
+      },
+    });
+    return;
+  }
+
+  const hasUpdate =
+    typeof opts.title === "string" ||
+    typeof opts.cron === "string" ||
+    typeof opts.description === "string" ||
+    typeof opts.chatKey === "string" ||
+    typeof opts.status === "string" ||
+    typeof opts.timezone === "string" ||
+    Boolean(opts.clearTimezone) ||
+    (Array.isArray(opts.requiredArtifact) && opts.requiredArtifact.length > 0) ||
+    Boolean(opts.clearRequiredArtifacts) ||
+    typeof opts.minOutputChars === "number" ||
+    Boolean(opts.clearMinOutputChars) ||
+    typeof opts.maxDialogueRounds === "number" ||
+    Boolean(opts.clearMaxDialogueRounds) ||
+    typeof opts.body === "string" ||
+    Boolean(opts.clearBody);
+  if (!hasUpdate) {
+    printResult({
+      asJson: opts.json,
+      success: false,
+      title: "task update failed",
+      payload: {
+        error: "No update fields provided",
+      },
+    });
+    return;
+  }
+
+  const request: TaskUpdateRequest = {
+    taskId: params.taskId,
+    ...(typeof opts.title === "string" ? { title: opts.title } : {}),
+    ...(typeof opts.cron === "string" ? { cron: opts.cron } : {}),
+    ...(typeof opts.description === "string"
+      ? { description: opts.description }
+      : {}),
+    ...(typeof opts.chatKey === "string" ? { chatKey: String(opts.chatKey || "").trim() } : {}),
+    ...(typeof opts.status === "string" ? { status: opts.status } : {}),
+    ...(typeof opts.timezone === "string" ? { timezone: opts.timezone } : {}),
+    ...(opts.clearTimezone ? { clearTimezone: true } : {}),
+    ...(Array.isArray(opts.requiredArtifact) ? { requiredArtifacts: opts.requiredArtifact } : {}),
+    ...(opts.clearRequiredArtifacts ? { clearRequiredArtifacts: true } : {}),
+    ...(typeof opts.minOutputChars === "number"
+      ? { minOutputChars: opts.minOutputChars }
+      : {}),
+    ...(opts.clearMinOutputChars ? { clearMinOutputChars: true } : {}),
+    ...(typeof opts.maxDialogueRounds === "number"
+      ? { maxDialogueRounds: opts.maxDialogueRounds }
+      : {}),
+    ...(opts.clearMaxDialogueRounds ? { clearMaxDialogueRounds: true } : {}),
+    ...(typeof opts.body === "string" ? { body: opts.body } : {}),
+    ...(opts.clearBody ? { clearBody: true } : {}),
+  };
+
+  const remote = await callDaemonJsonApi<TaskUpdateResponse>({
+    projectRoot,
+    path: "/api/task/update",
+    method: "PUT",
+    host: opts.host,
+    port: opts.port,
+    body: request,
+  });
+
+  if (remote.success && remote.data) {
+    const data = remote.data;
+    printResult({
+      asJson: opts.json,
+      success: Boolean(data.success),
+      title: data.success ? "task updated" : "task update failed",
+      payload: {
+        ...(data.taskId ? { taskId: data.taskId } : {}),
+        ...(data.taskMdPath ? { taskMdPath: data.taskMdPath } : {}),
+        ...(data.error ? { error: data.error } : {}),
+      },
+    });
+    return;
+  }
+
+  printResult({
+    asJson: opts.json,
+    success: false,
+    title: "task update failed",
+    payload: {
+      error:
+        remote.error ||
+        "Task update requires an active Agent server runtime. Start via `sma start` or `sma run` first.",
     },
   });
 }
@@ -269,6 +465,18 @@ function setupCli(registry: Parameters<SmaModule["registerCli"]>[0]): void {
         .option("--chat-key <chatKey>", "通知目标 chatKey（不传尝试使用 SMA_CTX_CHAT_KEY）")
         .option("--status <status>", "状态（enabled|paused|disabled）", "paused")
         .option("--timezone <timezone>", "IANA 时区")
+        .option(
+          "--required-artifact <path>",
+          "要求 run 目录必须产出的相对路径文件（可重复）",
+          collectStringOption,
+          [],
+        )
+        .option("--min-output-chars <n>", "最小输出字符数（默认 1）", parseNonNegativeIntOption)
+        .option(
+          "--max-dialogue-rounds <n>",
+          "执行 agent 与模拟用户 agent 最大对话轮数（默认 3）",
+          parsePositiveIntOption,
+        )
         .option("--body <body>", "任务正文")
         .option("--overwrite", "覆盖已有 task.md", false)
         .option("--path <path>", "项目根目录（默认当前目录）", ".")
@@ -291,6 +499,39 @@ function setupCli(registry: Parameters<SmaModule["registerCli"]>[0]): void {
           await runTaskRunCommand({
             taskId,
             reason: opts.reason,
+            options: opts,
+          });
+        });
+    });
+
+    group.command("update <taskId>", "更新任务定义", (command: Command) => {
+      command
+        .option("--title <title>", "任务标题")
+        .option("--description <description>", "任务描述")
+        .option("--cron <cron>", "cron 表达式")
+        .option("--chat-key <chatKey>", "通知目标 chatKey")
+        .option("--status <status>", "状态（enabled|paused|disabled）")
+        .option("--timezone <timezone>", "IANA 时区")
+        .option("--clear-timezone", "清空 timezone", false)
+        .option(
+          "--required-artifact <path>",
+          "设置 requiredArtifacts（可重复；与 --clear-required-artifacts 互斥）",
+          collectStringOption,
+        )
+        .option("--clear-required-artifacts", "清空 requiredArtifacts", false)
+        .option("--min-output-chars <n>", "设置最小输出字符数", parseNonNegativeIntOption)
+        .option("--clear-min-output-chars", "清空 minOutputChars", false)
+        .option("--max-dialogue-rounds <n>", "设置最大对话轮数", parsePositiveIntOption)
+        .option("--clear-max-dialogue-rounds", "清空 maxDialogueRounds", false)
+        .option("--body <body>", "设置任务正文")
+        .option("--clear-body", "清空任务正文", false)
+        .option("--path <path>", "项目根目录（默认当前目录）", ".")
+        .option("--host <host>", "Server host（覆盖自动解析）")
+        .option("--port <port>", "Server port（覆盖自动解析）", parsePortOption)
+        .option("--json [enabled]", "以 JSON 输出", true)
+        .action(async (taskId: string, opts: TaskUpdateCliOptions) => {
+          await runTaskUpdateCommand({
+            taskId,
             options: opts,
           });
         });
@@ -366,6 +607,9 @@ function setupServer(
         status: body?.status,
         timezone: body?.timezone,
         body: body?.body,
+        requiredArtifacts: body?.requiredArtifacts,
+        minOutputChars: body?.minOutputChars,
+        maxDialogueRounds: body?.maxDialogueRounds,
         overwrite: Boolean(body?.overwrite),
       },
     });
@@ -387,6 +631,41 @@ function setupServer(
       request: {
         taskId: String(body?.taskId || ""),
         ...(typeof body?.reason === "string" ? { reason: body.reason } : {}),
+      },
+    });
+
+    return c.json(result, result.success ? 200 : 400);
+  });
+
+  registry.put("/api/task/update", async (c) => {
+    let body: any = null;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ success: false, error: "Invalid JSON body" }, 400);
+    }
+
+    const result = await updateTaskDefinition({
+      projectRoot: context.rootPath,
+      request: {
+        taskId: String(body?.taskId || ""),
+        ...(typeof body?.title === "string" ? { title: body.title } : {}),
+        ...(typeof body?.description === "string" ? { description: body.description } : {}),
+        ...(typeof body?.cron === "string" ? { cron: body.cron } : {}),
+        ...(typeof body?.chatKey === "string" ? { chatKey: body.chatKey } : {}),
+        ...(typeof body?.status === "string" ? { status: body.status } : {}),
+        ...(typeof body?.timezone === "string" ? { timezone: body.timezone } : {}),
+        ...(Boolean(body?.clearTimezone) ? { clearTimezone: true } : {}),
+        ...(Array.isArray(body?.requiredArtifacts)
+          ? { requiredArtifacts: body.requiredArtifacts }
+          : {}),
+        ...(Boolean(body?.clearRequiredArtifacts) ? { clearRequiredArtifacts: true } : {}),
+        ...(body?.minOutputChars !== undefined ? { minOutputChars: body.minOutputChars } : {}),
+        ...(Boolean(body?.clearMinOutputChars) ? { clearMinOutputChars: true } : {}),
+        ...(body?.maxDialogueRounds !== undefined ? { maxDialogueRounds: body.maxDialogueRounds } : {}),
+        ...(Boolean(body?.clearMaxDialogueRounds) ? { clearMaxDialogueRounds: true } : {}),
+        ...(typeof body?.body === "string" ? { body: body.body } : {}),
+        ...(Boolean(body?.clearBody) ? { clearBody: true } : {}),
       },
     });
 

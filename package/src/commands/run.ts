@@ -20,8 +20,7 @@ import {
 } from "../server/ShipRuntimeContext.js";
 import type { StartOptions } from "./types/start.js";
 import { logger } from "../telemetry/index.js";
-import { CronTriggerEngine } from "../core/intergration/cron-trigger.js";
-import { registerTaskCronJobs } from "../intergrations/task/scheduler.js";
+import { startAllModuleRuntimes, stopAllModuleRuntimes } from "../core/intergration/registry.js";
 
 /**
  * `shipmyagent run` 命令入口。
@@ -176,22 +175,19 @@ export async function runCommand(
   }
 
   // 处理进程信号
-  // 停机顺序（中文）：cron -> adapters -> interactive server -> API server -> flush logs。
+  // 停机顺序（中文）：integrations -> adapters -> interactive server -> API server -> flush logs。
   let isShuttingDown = false;
-  let cronTriggerEngine: CronTriggerEngine | null = null;
   const shutdown = async (signal: string) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
 
     logger.info(`Received ${signal} signal, shutting down...`);
 
-    // Stop cron trigger engine
-    if (cronTriggerEngine) {
-      try {
-        await cronTriggerEngine.stop();
-      } catch {
-        // ignore
-      }
+    // Stop integration runtimes
+    try {
+      await stopAllModuleRuntimes(getShipIntegrationContext());
+    } catch {
+      // ignore
     }
 
     // Stop Telegram Bot
@@ -256,20 +252,16 @@ export async function runCommand(
     await qqBot.start();
   }
 
-  // Start task cron jobs via core cron engine
-  // 调度策略（中文）：注册失败仅记日志，不阻断主服务启动。
+  // 启动 integration runtimes（含 task cron 等模块内生命周期逻辑）
+  // 调度策略（中文）：单模块失败不阻断主服务启动，仅记录日志。
   try {
-    cronTriggerEngine = new CronTriggerEngine();
-    const registerResult = await registerTaskCronJobs({
-      context: getShipIntegrationContext(),
-      engine: cronTriggerEngine,
-    });
-    await cronTriggerEngine.start();
-    logger.info(
-      `Task cron trigger started (tasks=${registerResult.tasksFound}, jobs=${registerResult.jobsScheduled})`,
-    );
+    const lifecycle = await startAllModuleRuntimes(getShipIntegrationContext());
+    for (const item of lifecycle.results) {
+      if (item.success) continue;
+      logger.error(`Integration runtime start failed: ${item.module?.name || "unknown"} - ${item.error || "unknown error"}`);
+    }
   } catch (e) {
-    logger.error(`Task cron trigger failed to start: ${String(e)}`);
+    logger.error(`Integration runtime bootstrap failed: ${String(e)}`);
   }
 
   logger.info("=== ShipMyAgent Started ===");

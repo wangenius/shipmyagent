@@ -38,6 +38,107 @@ export function normalizeTaskStatus(input: unknown): ShipTaskStatus | null {
 }
 
 /**
+ * 归一化 requiredArtifacts 配置。
+ *
+ * 关键点（中文）
+ * - 仅允许 run 目录内的相对路径（禁止绝对路径/`.`/`..`）
+ * - 输出统一为 posix 风格，便于跨平台审计
+ */
+export function normalizeRequiredArtifacts(
+  input: unknown,
+): { ok: true; value: string[] } | { ok: false; error: string } {
+  if (input === undefined || input === null) return { ok: true, value: [] };
+  if (!Array.isArray(input)) {
+    return { ok: false, error: "Invalid requiredArtifacts: expected string[]" };
+  }
+
+  const out: string[] = [];
+  for (const item of input) {
+    const raw = String(item ?? "").trim();
+    if (!raw) {
+      return { ok: false, error: "Invalid requiredArtifacts: path must be non-empty string" };
+    }
+
+    const normalized = raw.replace(/\\/g, "/");
+    if (normalized.startsWith("/") || /^[a-zA-Z]:\//.test(normalized)) {
+      return { ok: false, error: `Invalid requiredArtifacts path (must be relative): "${raw}"` };
+    }
+
+    const segments = normalized.split("/").filter(Boolean);
+    if (segments.length === 0) {
+      return { ok: false, error: `Invalid requiredArtifacts path: "${raw}"` };
+    }
+    if (segments.some((seg) => seg === "." || seg === "..")) {
+      return { ok: false, error: `Invalid requiredArtifacts path (dot segments not allowed): "${raw}"` };
+    }
+
+    out.push(segments.join("/"));
+  }
+
+  return { ok: true, value: Array.from(new Set(out)) };
+}
+
+/**
+ * 归一化 minOutputChars 配置。
+ *
+ * 关键点（中文）
+ * - 允许 number 或数字字符串
+ * - 必须为 >= 0 的整数
+ */
+export function normalizeMinOutputChars(
+  input: unknown,
+): { ok: true; value?: number } | { ok: false; error: string } {
+  if (input === undefined || input === null || input === "") return { ok: true, value: undefined };
+
+  let raw = Number.NaN;
+  if (typeof input === "number") {
+    raw = input;
+  } else if (typeof input === "string") {
+    const s = input.trim();
+    if (!/^\d+$/.test(s)) {
+      return { ok: false, error: `Invalid minOutputChars: "${String(input)}" (expected integer >= 0)` };
+    }
+    raw = Number(s);
+  }
+
+  if (!Number.isInteger(raw) || Number.isNaN(raw) || raw < 0) {
+    return { ok: false, error: `Invalid minOutputChars: "${String(input)}" (expected integer >= 0)` };
+  }
+
+  return { ok: true, value: raw };
+}
+
+/**
+ * 归一化 maxDialogueRounds 配置。
+ *
+ * 关键点（中文）
+ * - 允许 number 或数字字符串
+ * - 必须为 >=1 的整数，并限制上限防止过长循环
+ */
+export function normalizeMaxDialogueRounds(
+  input: unknown,
+): { ok: true; value?: number } | { ok: false; error: string } {
+  if (input === undefined || input === null || input === "") return { ok: true, value: undefined };
+
+  let raw = Number.NaN;
+  if (typeof input === "number") {
+    raw = input;
+  } else if (typeof input === "string") {
+    const s = input.trim();
+    if (!/^\d+$/.test(s)) {
+      return { ok: false, error: `Invalid maxDialogueRounds: "${String(input)}" (expected integer >= 1)` };
+    }
+    raw = Number(s);
+  }
+
+  if (!Number.isInteger(raw) || Number.isNaN(raw) || raw < 1 || raw > 20) {
+    return { ok: false, error: `Invalid maxDialogueRounds: "${String(input)}" (expected integer in [1, 20])` };
+  }
+
+  return { ok: true, value: raw };
+}
+
+/**
  * 解析 task.md 为结构化定义。
  *
  * 算法（中文）
@@ -88,6 +189,20 @@ export function parseTaskMarkdown(params: {
     };
   }
 
+  const requiredArtifactsNormalized = normalizeRequiredArtifacts(meta.requiredArtifacts);
+  if (!requiredArtifactsNormalized.ok) {
+    return { ok: false, error: requiredArtifactsNormalized.error };
+  }
+
+  const minOutputCharsNormalized = normalizeMinOutputChars(meta.minOutputChars);
+  if (!minOutputCharsNormalized.ok) {
+    return { ok: false, error: minOutputCharsNormalized.error };
+  }
+  const maxDialogueRoundsNormalized = normalizeMaxDialogueRounds(meta.maxDialogueRounds);
+  if (!maxDialogueRoundsNormalized.ok) {
+    return { ok: false, error: maxDialogueRoundsNormalized.error };
+  }
+
   const fm: ShipTaskFrontmatterV1 = {
     title: String(meta.title).trim(),
     cron: String(meta.cron).trim(),
@@ -96,6 +211,15 @@ export function parseTaskMarkdown(params: {
     status,
     ...(typeof meta.timezone === "string" && meta.timezone.trim()
       ? { timezone: meta.timezone.trim() }
+      : {}),
+    ...(requiredArtifactsNormalized.value.length > 0
+      ? { requiredArtifacts: requiredArtifactsNormalized.value }
+      : {}),
+    ...(typeof minOutputCharsNormalized.value === "number"
+      ? { minOutputChars: minOutputCharsNormalized.value }
+      : {}),
+    ...(typeof maxDialogueRoundsNormalized.value === "number"
+      ? { maxDialogueRounds: maxDialogueRoundsNormalized.value }
       : {}),
   };
 
@@ -127,6 +251,19 @@ export function buildTaskMarkdown(params: {
   body: string;
 }): string {
   const { frontmatter, body } = params;
+  const requiredArtifactsNormalized = normalizeRequiredArtifacts(frontmatter.requiredArtifacts);
+  if (!requiredArtifactsNormalized.ok) {
+    throw new Error(requiredArtifactsNormalized.error);
+  }
+  const minOutputCharsNormalized = normalizeMinOutputChars(frontmatter.minOutputChars);
+  if (!minOutputCharsNormalized.ok) {
+    throw new Error(minOutputCharsNormalized.error);
+  }
+  const maxDialogueRoundsNormalized = normalizeMaxDialogueRounds(frontmatter.maxDialogueRounds);
+  if (!maxDialogueRoundsNormalized.ok) {
+    throw new Error(maxDialogueRoundsNormalized.error);
+  }
+
   const meta = {
     title: String(frontmatter.title || "").trim(),
     cron: String(frontmatter.cron || "").trim(),
@@ -135,6 +272,15 @@ export function buildTaskMarkdown(params: {
     status: String(frontmatter.status || "").trim(),
     ...(typeof frontmatter.timezone === "string" && frontmatter.timezone.trim()
       ? { timezone: frontmatter.timezone.trim() }
+      : {}),
+    ...(requiredArtifactsNormalized.value.length > 0
+      ? { requiredArtifacts: requiredArtifactsNormalized.value }
+      : {}),
+    ...(typeof minOutputCharsNormalized.value === "number"
+      ? { minOutputChars: minOutputCharsNormalized.value }
+      : {}),
+    ...(typeof maxDialogueRoundsNormalized.value === "number"
+      ? { maxDialogueRounds: maxDialogueRoundsNormalized.value }
       : {}),
   };
 
@@ -147,4 +293,3 @@ export function buildTaskMarkdown(params: {
   const bodyText = String(body ?? "").trim() ? String(body ?? "").trim() + "\n" : "";
   return `---\n${yamlText}---\n\n${bodyText}`;
 }
-
