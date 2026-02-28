@@ -679,7 +679,7 @@ export class ContextAgentRunner implements ContextAgent {
               ),
             ),
           )
-        : 12000;
+        : 16000;
 
     // 关键点（中文）：当 provider 报错超窗时，会进入 retry；此时需要更激进的 compact。
     const retryFactor = Math.max(1, Math.pow(2, retryAttempts));

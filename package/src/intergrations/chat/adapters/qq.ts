@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
+import { QqInboundDedupeStore } from "./qq-inbound-dedupe.js";
 import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
@@ -86,6 +87,7 @@ export class QQBot extends BaseChatAdapter {
   private readonly groupInitiatorByChatKey: Map<string, string> = new Map();
   private msgSeqByMessageKey: Map<string, number> = new Map();
   private readonly qqEventCapture: QQEventCaptureConfig;
+  private readonly inboundDedupeStore: QqInboundDedupeStore;
   /**
    * 机器人自身的 userId（从 READY 事件里捕获）。
    *
@@ -109,6 +111,10 @@ export class QQBot extends BaseChatAdapter {
     this.groupAccess =
       groupAccess === "anyone" ? "anyone" : "initiator_or_admin";
     this.qqEventCapture = getQqEventCaptureConfig(this.rootPath);
+    this.inboundDedupeStore = new QqInboundDedupeStore({
+      rootPath: this.rootPath,
+      logger: this.logger,
+    });
   }
 
   protected getChatKey(params: AdapterChatKeyParams): string {
@@ -320,6 +326,9 @@ export class QQBot extends BaseChatAdapter {
     this.logger.info(`   沙箱模式: ${this.useSandbox ? "是" : "否"}`);
 
     try {
+      // 关键点（中文）：先加载本地去重快照，避免重启后重复消费历史消息。
+      await this.inboundDedupeStore.load();
+
       // 获取 Gateway 地址
       const gatewayUrl = await this.getGatewayUrl();
 
@@ -655,6 +664,14 @@ export class QQBot extends BaseChatAdapter {
     const { id: messageId, group_openid: groupId, content, author } = data;
     const chatType = "group";
     const chatKey = this.getChatKey({ chatId: groupId, chatType });
+    if (
+      await this.shouldSkipDuplicatedInboundMessage(
+        EventType.GROUP_AT_MESSAGE_CREATE,
+        messageId,
+      )
+    ) {
+      return;
+    }
 
     // 提取纯文本内容（去除 @机器人 的部分）
     const userMessage = this.extractTextContent(content);
@@ -728,6 +745,14 @@ export class QQBot extends BaseChatAdapter {
    */
   private async handleC2CMessage(data: any): Promise<void> {
     const { id: messageId, author, content } = data;
+    if (
+      await this.shouldSkipDuplicatedInboundMessage(
+        EventType.C2C_MESSAGE_CREATE,
+        messageId,
+      )
+    ) {
+      return;
+    }
     const actor = this.extractAuthorIdentity(author);
     const chatType = "c2c";
     const chatId = actor.userId || "";
@@ -771,6 +796,14 @@ export class QQBot extends BaseChatAdapter {
   private async handleChannelMessage(data: any): Promise<void> {
     const { id: messageId, channel_id: channelId, content, author } = data;
     const chatType = "channel";
+    if (
+      await this.shouldSkipDuplicatedInboundMessage(
+        EventType.AT_MESSAGE_CREATE,
+        messageId,
+      )
+    ) {
+      return;
+    }
 
     const userMessage = this.extractTextContent(content);
     const actor = this.extractAuthorIdentity(author);
@@ -797,6 +830,32 @@ export class QQBot extends BaseChatAdapter {
         actor,
       );
     }
+  }
+
+  /**
+   * 入站消息去重检查。
+   *
+   * 关键点（中文）
+   * - QQ 网关在重连/重启后可能重放历史消息。
+   * - 若不去重，会导致同一 messageId 被重复入队执行，间接触发“无新消息也触发 compact/压缩”。
+   */
+  private async shouldSkipDuplicatedInboundMessage(
+    eventType: string,
+    messageId: unknown,
+  ): Promise<boolean> {
+    const id = typeof messageId === "string" ? messageId.trim() : "";
+    if (!id) return false;
+    const duplicated = await this.inboundDedupeStore.markAndCheckDuplicate({
+      eventType,
+      messageId: id,
+    });
+    if (!duplicated) return false;
+
+    this.logger.info("忽略重复入站消息", {
+      eventType,
+      messageId: id,
+    });
+    return true;
   }
 
   /**

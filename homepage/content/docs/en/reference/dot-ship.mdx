@@ -73,7 +73,7 @@ Single line example from `history.jsonl` (fields vary slightly by platform/scena
 
 - **Trigger conditions**:
   - History messages exceed `keepLastMessages` (default 30)
-  - Estimated tokens exceed `maxInputTokensApprox` (default 12000)
+  - Estimated tokens exceed `maxInputTokensApprox` (default 16000)
 
 - **Process**:
   1. Two-phase locking: snapshot first, then generate summary (reduces lock hold time)
@@ -91,7 +91,7 @@ Single line example from `history.jsonl` (fields vary slightly by platform/scena
   "pinnedSkillIds": [],
   "lastArchiveId": "compact-1770557540197-On1wNXqOXK3oJRz9",
   "keepLastMessages": 30,
-  "maxInputTokensApprox": 12000
+  "maxInputTokensApprox": 16000
 }
 ```
 

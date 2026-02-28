@@ -77,7 +77,7 @@ export interface ShipConfig {
        * - 这里是近似值，用于在调用 provider 前提前触发 compact
        * - 实际超窗仍会被 provider 拒绝并进入 retry（更激进 compact）
        *
-       * 默认：12000
+       * 默认：16000
        */
       maxInputTokensApprox?: number;
       /**
@@ -320,7 +320,7 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
   context: {
     history: {
       keepLastMessages: 30,
-      maxInputTokensApprox: 12000,
+      maxInputTokensApprox: 16000,
       archiveOnCompact: true,
     },
     contextQueue: {

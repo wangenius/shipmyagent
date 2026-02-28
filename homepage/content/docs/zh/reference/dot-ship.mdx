@@ -73,7 +73,7 @@ description: ShipMyAgent 运行时目录结构与文件格式参考
 
 - **触发条件**：
   - 历史消息超过 `keepLastMessages`（默认 30）
-  - 预估 token 超过 `maxInputTokensApprox`（默认 12000）
+  - 预估 token 超过 `maxInputTokensApprox`（默认 16000）
 
 - **处理流程**：
   1. 两阶段锁：先 snapshot，再生成摘要（降低锁持有时间）
@@ -91,7 +91,7 @@ description: ShipMyAgent 运行时目录结构与文件格式参考
   "pinnedSkillIds": [],
   "lastArchiveId": "compact-1770557540197-On1wNXqOXK3oJRz9",
   "keepLastMessages": 30,
-  "maxInputTokensApprox": 12000
+  "maxInputTokensApprox": 16000
 }
 ```
 
