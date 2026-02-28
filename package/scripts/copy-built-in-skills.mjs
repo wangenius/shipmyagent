@@ -7,15 +7,15 @@ import { fileURLToPath } from "node:url";
  *
  * 关键点（中文）
  * - `tsc` 只编译 .ts/.js，不会复制 `SKILL.md`/assets，所以需要额外 copy
- * - 运行时 built-in roots 是基于 `paths.js` 的 `import.meta.url` 解析出来的 `bin/intergrations/skills/built-in`
+ * - 运行时 built-in roots 是基于 `paths.js` 的 `import.meta.url` 解析出来的 `bin/services/skills/built-in`
  */
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const packageRoot = path.resolve(__dirname, "..");
-const srcRoot = path.join(packageRoot, "src", "intergrations", "skills", "built-in");
-const dstRoot = path.join(packageRoot, "bin", "intergrations", "skills", "built-in");
+const srcRoot = path.join(packageRoot, "src", "services", "skills", "built-in");
+const dstRoot = path.join(packageRoot, "bin", "services", "skills", "built-in");
 
 if (!(await fs.pathExists(srcRoot))) {
   console.log("[copy-built-in-skills] skip: no src built-in skills");

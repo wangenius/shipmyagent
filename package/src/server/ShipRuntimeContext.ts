@@ -1,18 +1,18 @@
 import { DEFAULT_SHIP_PROMPTS } from "../core/prompts/system.js";
 import { logger as defaultLogger, type Logger } from "../telemetry/index.js";
-import { McpManager } from "../intergrations/mcp/runtime/manager.js";
+import { McpManager } from "../services/mcp/runtime/manager.js";
 import { ContextManager } from "../core/context/manager.js";
 import {
   contextRequestContext,
   withContextRequestContext,
 } from "../core/context/request-context.js";
 import { createModel } from "../core/llm/create-model.js";
-import { runContextMemoryMaintenance } from "../intergrations/memory/runtime/service.js";
-import { pickLastSuccessfulChatSendText } from "../intergrations/chat/runtime/user-visible-text.js";
-import { sendTextByChatKey } from "../intergrations/chat/runtime/chatkey-send.js";
-import { getChatSender } from "../intergrations/chat/runtime/chat-send-registry.js";
-import { registerIntegrationSystemPromptProviders } from "./system-prompt-providers.js";
-import type { IntegrationRuntimeDependencies } from "../infra/integration-runtime-types.js";
+import { runContextMemoryMaintenance } from "../services/memory/runtime/service.js";
+import { pickLastSuccessfulChatSendText } from "../services/chat/runtime/user-visible-text.js";
+import { sendTextByChatKey } from "../services/chat/runtime/chatkey-send.js";
+import { getChatSender } from "../services/chat/runtime/chat-send-registry.js";
+import { registerServiceSystemPromptProviders } from "./system-prompt-providers.js";
+import type { ServiceRuntimeDependencies } from "../infra/service-runtime-types.js";
 import {
   getAgentMdPath,
   getCacheDirPath,
@@ -69,84 +69,84 @@ let base: ShipRuntimeContextBase | null = null;
 let ready: ShipRuntimeContext | null = null;
 
 /**
- * integration 请求上下文桥接实现。
+ * service 请求上下文桥接实现。
  *
  * 关键点（中文）
  * - server 负责把 core 的 request-context 能力适配为 infra 端口。
  */
-const integrationRequestContextBridge = {
+const serviceRequestContextBridge = {
   getCurrentContextRequestContext: () => contextRequestContext.getStore(),
   withContextRequestContext,
 };
 
 /**
- * integration 模型工厂桥接实现。
+ * service 模型工厂桥接实现。
  */
-const integrationModelFactory = {
+const serviceModelFactory = {
   createModel,
 };
 
 /**
- * integration chat 运行时桥接实现。
+ * service chat 运行时桥接实现。
  *
  * 关键点（中文）
- * - 通过 `getShipIntegrationContext()` 延迟获取依赖，确保拿到最新 contextManager。
+ * - 通过 `getShipServiceContext()` 延迟获取依赖，确保拿到最新 contextManager。
  */
-const integrationChatRuntimeBridge = {
+const serviceChatRuntimeBridge = {
   pickLastSuccessfulChatSendText,
   sendTextByChatKey: (params: { chatKey: string; text: string }) =>
     sendTextByChatKey({
-      context: getShipIntegrationContext(),
+      context: getShipServiceContext(),
       chatKey: params.chatKey,
       text: params.text,
     }),
 };
 
 /**
- * 构建基础 integration context（不含 contextManager）。
+ * 构建基础 service context（不含 contextManager）。
  *
  * 场景（中文）
  * - runtime 尚未 ready（例如 MCP 初始化阶段）也可安全使用。
  */
-function buildIntegrationContextBase(
+function buildServiceContextBase(
   input: ShipRuntimeContextBase,
-): IntegrationRuntimeDependencies {
+): ServiceRuntimeDependencies {
   return {
     cwd: input.cwd,
     rootPath: input.rootPath,
     logger: input.logger,
     config: input.config,
     systems: input.systems,
-    chatRuntimeBridge: integrationChatRuntimeBridge,
-    requestContextBridge: integrationRequestContextBridge,
-    modelFactory: integrationModelFactory,
+    chatRuntimeBridge: serviceChatRuntimeBridge,
+    requestContextBridge: serviceRequestContextBridge,
+    modelFactory: serviceModelFactory,
   };
 }
 
 /**
- * 构建 ready integration context（含 contextManager）。
+ * 构建 ready service context（含 contextManager）。
  */
-function buildIntegrationContextReady(
+function buildServiceContextReady(
   input: ShipRuntimeContext,
-): IntegrationRuntimeDependencies {
+): ServiceRuntimeDependencies {
   return {
-    ...buildIntegrationContextBase(input),
+    ...buildServiceContextBase(input),
     contextManager: input.contextManager,
   };
 }
 
 /**
- * 获取基础 integration context。
+ * 获取基础 service context。
  */
-export function getShipIntegrationContextBase(): IntegrationRuntimeDependencies {
-  return buildIntegrationContextBase(getShipRuntimeContextBase());
+export function getShipServiceContextBase(): ServiceRuntimeDependencies {
+  return buildServiceContextBase(getShipRuntimeContextBase());
 }
 
 /**
- * 获取完整 integration context。
+ * 获取完整 service context。
  */
-export function getShipIntegrationContext(): IntegrationRuntimeDependencies {
-  return buildIntegrationContextReady(getShipRuntimeContext());
+export function getShipServiceContext(): ServiceRuntimeDependencies {
+  return buildServiceContextReady(getShipRuntimeContext());
 }
 
 /**
@@ -208,7 +208,7 @@ export function getShipRuntimeContext(): ShipRuntimeContext {
  * 2) 校验关键文件并确保 `.ship` 目录结构
  * 3) 加载 dotenv + ship.json，建立 base context
  * 4) 初始化 MCP / ContextManager，建立 ready context
- * 5) 注册 integration system prompt providers
+ * 5) 注册 service system prompt providers
  */
 
 export async function initShipRuntimeContext(cwd: string): Promise<void> {
@@ -258,7 +258,7 @@ You are a helpful project assistant.`;
   });
 
   const mcpManager = new McpManager({
-    context: getShipIntegrationContextBase(),
+    context: getShipServiceContextBase(),
   });
   await mcpManager.initialize();
 
@@ -291,7 +291,7 @@ You are a helpful project assistant.`;
     },
     runMemoryMaintenance: async (contextId) =>
       runContextMemoryMaintenance({
-        context: getShipIntegrationContext(),
+        context: getShipServiceContext(),
         contextId,
         getContextStore: (id) => contextManager.getContextStore(id),
       }),
@@ -307,8 +307,8 @@ You are a helpful project assistant.`;
     contextManager,
   });
 
-  registerIntegrationSystemPromptProviders({
-    getContext: () => getShipIntegrationContext(),
+  registerServiceSystemPromptProviders({
+    getContext: () => getShipServiceContext(),
   });
 }
 

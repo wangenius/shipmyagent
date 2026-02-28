@@ -17,18 +17,19 @@ Complete reference for all ShipMyAgent CLI commands.
 | `shipmyagent alias` | Install shell alias `sma` |
 | `shipmyagent stop` | Stop the background agent server |
 | `shipmyagent restart` | Restart the background agent server |
+| `shipmyagent services` | Manage service runtimes |
 | `shipmyagent chat` | Send a message to the agent |
 | `shipmyagent validate` | Validate configuration |
 | `shipmyagent doctor` | Run health diagnostics |
 | `shipmyagent logs` | View agent logs |
-| `shipmyagent test` | Test connections and integrations |
+| `shipmyagent test` | Test connections and services |
 
 ---
 
 
-## Bash-first Module Commands
+## Bash-first Service Commands
 
-Starting from this version, `chat / skill / task` are registered as module commands and are designed to be invoked directly from shell tools.
+Starting from this version, `chat / skill / task` are registered as service commands and are designed to be invoked directly from shell tools.
 
 ### `sma chat`
 
@@ -81,6 +82,22 @@ Notes:
 - `sma task update` lets you control task config by command instead of editing `task.md` manually
 - In `sma task update`, each `set` option conflicts with its `clear-*` counterpart
 
+### `sma services`
+
+```bash
+sma services list
+sma services status <serviceName>
+sma services start <serviceName>
+sma services stop <serviceName>
+sma services restart <serviceName>
+sma services command <serviceName> <command> [--payload <json>]
+```
+
+Notes:
+- `sma services` is daemon-only and requires an active local runtime (`sma start` or `sma run`)
+- Built-in command bridge supports `status|start|stop|restart` for every service
+- Service-specific command handling is optional; unsupported commands return a structured error
+
 ---
 
 ## Core Commands
@@ -107,7 +124,7 @@ Generates (at project root):
 | `--name <name>` | `-n` | Agent name |
 | `--provider <provider>` | `-p` | LLM provider (anthropic, openai, deepseek) |
 | `--model <model>` | `-m` | LLM model name |
-| `--telegram` | `-t` | Enable Telegram integration |
+| `--telegram` | `-t` | Enable Telegram service |
 | `--no-git` | | Skip Git repository check |
 | `--force` | `-f` | Overwrite existing configuration |
 
@@ -454,7 +471,7 @@ shipmyagent test [target] [options]
 | Target | Description |
 |--------|-------------|
 | `llm` | Test LLM connection |
-| `integration` | Test specific integration |
+| `service` | Test specific service |
 | `permissions` | Test permission configuration |
 | `all` | Run all tests (default) |
 
@@ -463,7 +480,7 @@ shipmyagent test [target] [options]
 | Option | Alias | Description |
 |--------|-------|-------------|
 | `--verbose` | `-v` | Detailed output |
-| `--integration <name>` | `-i` | Test specific integration |
+| `--service <name>` | `-i` | Test specific service |
 
 **Examples**:
 
@@ -477,8 +494,8 @@ shipmyagent test llm
 # Test LLM with details
 shipmyagent test llm --verbose
 
-# Test Telegram integration
-shipmyagent test --integration telegram
+# Test Telegram service
+shipmyagent test --service telegram
 
 # Test permissions
 shipmyagent test permissions

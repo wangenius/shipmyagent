@@ -67,7 +67,7 @@ function normalizeProviderOutput(output: unknown): SystemPromptProviderOutput {
  *
  * 关键点（中文）
  * - core 只维护 provider 容器，不实现业务能力
- * - 业务能力由 integrations 调用该函数注入
+ * - 业务能力由 services 调用该函数注入
  */
 /**
  * 注册一个 provider。

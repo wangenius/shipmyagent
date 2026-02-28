@@ -4,7 +4,7 @@
   "defaultPlatforms": {
     "telegram": {
       "name": "Telegram",
-      "description": "Powerful bot integration with command support and interactive menus."
+      "description": "Powerful bot service with command support and interactive menus."
     },
     "feishu": {
       "name": "Feishu / Lark",

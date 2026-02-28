@@ -72,7 +72,7 @@
       },
       "serverAgent": {
         "title": "Server Agent",
-        "description": "Complete server-side Agent with task scheduling and webhook integration",
+        "description": "Complete server-side Agent with task scheduling and webhook service",
         "features": {
           "cron": "Automated tasks with cron",
           "webhooks": "Webhook endpoints",
@@ -169,7 +169,7 @@
       },
       "mcpMarket": {
         "title": "MCP Market",
-        "description": "A marketplace for MCP servers and integrations"
+        "description": "A marketplace for MCP servers and services"
       },
       "mcpServers": {
         "title": "MCP Servers",

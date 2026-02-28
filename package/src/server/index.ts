@@ -2,8 +2,8 @@
  * AgentServer：主 HTTP 服务入口。
  *
  * 分层约束（中文）
- * - server 负责编排与依赖注入，可调用 core / integrations。
- * - 不把 server 状态反向泄露给 core/integrations。
+ * - server 负责编排与依赖注入，可调用 core / services。
+ * - 不把 server 状态反向泄露给 core/services。
  * - 路由层只做协议适配，业务逻辑下沉到模块注册与调度器。
  */
 
@@ -17,16 +17,16 @@ import fs from "fs-extra";
 import path from "path";
 import { getShipPublicDirPath } from "../utils.js";
 import {
-  getShipIntegrationContext,
+  getShipServiceContext,
   getShipRuntimeContext,
 } from "../server/ShipRuntimeContext.js";
-import { pickLastSuccessfulChatSendText } from "../intergrations/chat/runtime/user-visible-text.js";
+import { pickLastSuccessfulChatSendText } from "../services/chat/runtime/user-visible-text.js";
 import {
-  controlModuleRuntime,
-  listModuleRuntimes,
-  registerAllModulesForServer,
-  runModuleCommand,
-} from "../core/intergration/registry.js";
+  controlServiceRuntime,
+  listServiceRuntimes,
+  registerAllServicesForServer,
+  runServiceCommand,
+} from "../core/services/registry.js";
 
 /**
  * 启动参数。
@@ -41,7 +41,7 @@ export interface StartOptions {
  *
  * 关键职责（中文）
  * - 注册公共中间件与基础路由。
- * - 注册 integrations 暴露的统一模块路由。
+ * - 注册 services 暴露的统一路由。
  * - 处理 `/api/execute` 的请求解析、上下文装配与调度调用。
  */
 export class AgentServer {
@@ -70,7 +70,7 @@ export class AgentServer {
    *
    * 关键点（中文）
    * - 静态资源与 `.ship/public` 暴露路径分离。
-   * - `registerAllModulesForServer` 是模块扩展主入口。
+   * - `registerAllServicesForServer` 是模块扩展主入口。
    * - `/api/execute` 负责把请求转为 context 任务并执行。
    */
   private setupRoutes(): void {
@@ -187,16 +187,16 @@ export class AgentServer {
       });
     });
 
-    // integration runtime list
-    this.app.get("/api/integration/list", (c) => {
+    // service runtime list
+    this.app.get("/api/services/list", (c) => {
       return c.json({
         success: true,
-        modules: listModuleRuntimes(),
+        services: listServiceRuntimes(),
       });
     });
 
-    // integration runtime control
-    this.app.post("/api/integration/control", async (c) => {
+    // service runtime control
+    this.app.post("/api/services/control", async (c) => {
       let body: any = null;
       try {
         body = await c.req.json();
@@ -204,25 +204,25 @@ export class AgentServer {
         return c.json({ success: false, error: "Invalid JSON body" }, 400);
       }
 
-      const moduleName = String(body?.moduleName || "").trim();
+      const serviceName = String(body?.serviceName || "").trim();
       const action = String(body?.action || "").trim().toLowerCase();
-      if (!moduleName) {
-        return c.json({ success: false, error: "moduleName is required" }, 400);
+      if (!serviceName) {
+        return c.json({ success: false, error: "serviceName is required" }, 400);
       }
       if (!["start", "stop", "restart", "status"].includes(action)) {
         return c.json({ success: false, error: `Invalid action: ${action}` }, 400);
       }
 
-      const result = await controlModuleRuntime({
-        moduleName,
+      const result = await controlServiceRuntime({
+        serviceName,
         action: action as "start" | "stop" | "restart" | "status",
-        context: getShipIntegrationContext(),
+        context: getShipServiceContext(),
       });
       return c.json(result, result.success ? 200 : 400);
     });
 
-    // integration command bridge
-    this.app.post("/api/integration/command", async (c) => {
+    // service command bridge
+    this.app.post("/api/services/command", async (c) => {
       let body: any = null;
       try {
         body = await c.req.json();
@@ -230,26 +230,26 @@ export class AgentServer {
         return c.json({ success: false, error: "Invalid JSON body" }, 400);
       }
 
-      const moduleName = String(body?.moduleName || "").trim();
+      const serviceName = String(body?.serviceName || "").trim();
       const command = String(body?.command || "").trim();
-      if (!moduleName) {
-        return c.json({ success: false, error: "moduleName is required" }, 400);
+      if (!serviceName) {
+        return c.json({ success: false, error: "serviceName is required" }, 400);
       }
       if (!command) {
         return c.json({ success: false, error: "command is required" }, 400);
       }
 
-      const result = await runModuleCommand({
-        moduleName,
+      const result = await runServiceCommand({
+        serviceName,
         command,
         payload: body?.payload,
-        context: getShipIntegrationContext(),
+        context: getShipServiceContext(),
       });
       return c.json(result, result.success ? 200 : 400);
     });
 
-    // 统一注册模块路由（chat / skill / task / future）
-    registerAllModulesForServer(this.app, getShipIntegrationContext());
+    // 统一注册服务路由（chat / skill / task / future）
+    registerAllServicesForServer(this.app, getShipServiceContext());
 
     // Execute instruction
     // `/api/execute` 分段流程（中文）
@@ -431,6 +431,9 @@ export class AgentServer {
         server_logger.info("Available APIs:");
         server_logger.info("  GET  /health - Health check");
         server_logger.info("  GET  /api/status - Agent status");
+        server_logger.info("  GET  /api/services/list - Service runtime list");
+        server_logger.info("  POST /api/services/control - Service runtime control");
+        server_logger.info("  POST /api/services/command - Service command bridge");
         server_logger.info("  POST /api/execute - Execute instruction");
         server_logger.info("  POST /api/chat/send - Chat service");
         server_logger.info("  POST /api/skill/load - Skill service");

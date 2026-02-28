@@ -1,0 +1,108 @@
+---
+title: Telegram
+description: Chat with your agent and receive notifications on Telegram
+---
+
+# Telegram service
+
+> ⚠️ **Simplified mode (2026-02-03)**: the current `shipmyagent` package disables approvals (full-permission execution). Mentions of “approval prompts” in older docs may be outdated.
+
+Use Telegram to chat with ShipMyAgent (DM or group mention).
+
+> Want the internal flow? See: [/docs/services/telegram-message-flow](/docs/services/telegram-message-flow)
+
+## Setup
+
+### 1) Create a Telegram bot
+
+1. Open Telegram and find `@BotFather`
+2. Send `/newbot`
+3. Follow the prompts
+4. Copy the **HTTP API Token**
+
+### 2) Configure your project
+
+Add the token to your project `.env` (same directory as `ship.json`):
+
+```bash
+TELEGRAM_BOT_TOKEN=123456:abc...
+```
+
+Enable Telegram in `ship.json`:
+
+```json
+{
+  "services": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}"
+    }
+  }
+}
+```
+
+> ShipMyAgent uses a tool-strict chat mode: the agent should use the `chat_send` tool to decide when/how to send replies (multiple/staged messages are allowed).
+
+### Optional: allow anyone in a group
+
+By default, group chats are restricted to the initiator (the first person who talks to the bot in that chat/topic) or group admins.
+
+To allow **any group member** to talk to the bot (when they mention it / reply to it), set:
+
+```json
+{
+  "services": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "groupAccess": "anyone"
+    }
+  }
+}
+```
+
+### 3) Start ShipMyAgent
+
+```bash
+shipmyagent start
+```
+
+In logs you should see:
+
+- `Starting Telegram Bot...`
+- `Bot username: @...`
+- `Telegram Bot started`
+
+## How to use
+
+### Direct message (DM)
+
+Send `/start` (or any message) to your bot.
+
+### Send files (PDF / images / audio)
+
+You can send a file directly to the bot (document/photo/voice/audio).
+
+- If you add text while sending the file, Telegram treats it as a **caption** — ShipMyAgent will read that caption as your instruction.
+- ShipMyAgent saves the file under `.ship/.cache/telegram/` and passes it to the agent as an `@attach ...` line.
+
+Example: send a PDF with caption: `Summarize this PDF and list action items.`
+
+### Group / supergroup
+
+- Add the bot to the group
+- Talk to it by mentioning: `@your_bot ...`
+- After you mention (or reply to the bot), you can send follow-up messages for a short time without mentioning again.
+
+Notes:
+- If your group uses **Topics**, replies are sent back to the same topic.
+- In groups, ShipMyAgent may restrict who can talk to the bot (e.g. initiator/admin), depending on the runtime’s policy.
+- For file messages in groups, the mention (if needed) must be in the **caption**, or send the file as a reply to the bot.
+- While the agent is running, Telegram shows a periodic **typing** indicator (`sendChatAction`) until the result is sent.
+
+## Troubleshooting
+
+- **No response at all**: confirm the process is running and check `.ship/logs/<YYYY-MM-DD>.jsonl` (search for `TELEGRAM`, `telegram`, or errors).
+- **Bot doesn’t receive group messages**: in BotFather run `/setprivacy` and set it to `Disable`, then make sure you’re mentioning the bot in the group.
+- **Polling doesn’t work**: if you previously set a webhook, polling (`getUpdates`) will conflict. ShipMyAgent clears webhook on startup; check logs for webhook-related errors.
+- **Bot can’t speak in the group**: check group permissions (the bot may be muted / not allowed to send messages).

@@ -24,7 +24,7 @@
 
 1. **会话隔离**：以 `contextId` 为最小隔离单元（调度、历史、记忆都按 context 维度）。
 2. **单一事实源**：`messages.jsonl`（UIMessage）是对话历史唯一来源。
-3. **分层清晰**：`core` 做运行内核，`intergrations` 做业务能力，`server` 做编排与注入。
+3. **分层清晰**：`core` 做运行内核，`services` 做业务能力，`server` 做编排与注入。
 4. **可扩展**：通过模块注册、Prompt Provider、MCP、Skills 等机制扩展能力。
 5. **可审计**：关键状态与产物落盘到 `.ship/`，支持回放与排障。
 
@@ -40,7 +40,7 @@ package/src
 ├─ commands/
 ├─ core/
 ├─ infra/
-├─ intergrations/
+├─ services/
 ├─ schemas/
 ├─ server/
 ├─ telemetry/
@@ -58,8 +58,8 @@ package/src
 3. `core/`
    - 核心运行内核：Agent、Context、History、Prompt、Tools、LLM 工厂。
 4. `infra/`
-   - 依赖注入端口（ports/types/bridges），让 `intergrations` 仅依赖抽象。
-5. `intergrations/`
+   - 依赖注入端口（ports/types/bridges），让 `services` 仅依赖抽象。
+5. `services/`
    - 业务能力模块：chat / skills / task / memory / mcp。
 6. `schemas/`
    - `ship.json` 和 `mcp.json` 的 JSON Schema。
@@ -74,12 +74,12 @@ package/src
 
 ```text
 package/src/core
-├─ intergration/
+├─ service/
 │  ├─ registry.ts
 │  ├─ cli-registry.ts
 │  ├─ server-registry.ts
 │  ├─ cron-trigger.ts
-│  └─ types/module-registry.ts
+│  └─ types/service-registry.ts
 ├─ llm/
 │  └─ create-model.ts
 ├─ prompts/
@@ -108,22 +108,22 @@ package/src/core
 ```
 
 ```text
-package/src/intergrations
+package/src/services
 ├─ chat/
-│  ├─ module.ts
+│  ├─ service.ts
 │  ├─ service.ts
 │  ├─ adapters/
 │  ├─ runtime/
 │  └─ types/
 ├─ skills/
-│  ├─ module.ts
+│  ├─ service.ts
 │  ├─ service.ts
 │  ├─ command.ts
 │  ├─ runtime/
 │  ├─ types/
 │  └─ built-in/
 ├─ task/
-│  ├─ module.ts
+│  ├─ service.ts
 │  ├─ service.ts
 │  ├─ scheduler.ts
 │  ├─ runtime/
@@ -200,7 +200,7 @@ package/src/intergrations
 2. 读取 `Agent.md` + `DEFAULT_SHIP_PROMPTS` 形成 `systems`。
 3. 初始化 `McpManager`。
 4. 初始化 `ContextManager`（并注入 memory maintenance 回调）。
-5. 注册 integration 的 system prompt providers（skills + memory）。
+5. 注册 service 的 system prompt providers（skills + memory）。
 6. 启动 HTTP Server、可选平台适配器、可选任务 cron。
 
 关键文件：
@@ -345,7 +345,7 @@ package/src/intergrations
 
 ## 8. 记忆系统（Memory）
 
-记忆系统属于 `intergrations/memory`，不是 core 内核。
+记忆系统属于 `services/memory`，不是 core 内核。
 
 ## 8.1 触发与流程
 
@@ -364,10 +364,10 @@ package/src/intergrations
 
 文件：
 
-1. `package/src/intergrations/memory/runtime/service.ts`
-2. `package/src/intergrations/memory/runtime/extractor.ts`
-3. `package/src/intergrations/memory/runtime/manager.ts`
-4. `package/src/intergrations/memory/types/memory.ts`
+1. `package/src/services/memory/runtime/service.ts`
+2. `package/src/services/memory/runtime/extractor.ts`
+3. `package/src/services/memory/runtime/manager.ts`
+4. `package/src/services/memory/types/memory.ts`
 
 ## 8.2 注入模型上下文
 
@@ -378,7 +378,7 @@ memory 不直接改 Agent 代码，而是通过 system prompt provider 注入：
 3. 读取 `.ship/context/<id>/memory/Primary.md`
 4. 转为 `system` messages 追加到 provider 输出
 
-文件：`package/src/intergrations/memory/runtime/system-provider.ts`
+文件：`package/src/services/memory/runtime/system-provider.ts`
 
 ---
 
@@ -398,15 +398,15 @@ memory 不直接改 Agent 代码，而是通过 system prompt provider 注入：
 
 1. `MODULES = [chatModule, skillsModule, taskModule]`
 2. CLI 通过 `registerAllModulesForCli()` 注入命令
-3. Server 通过 `registerAllModulesForServer()` 注入路由
+3. Server 通过 `registerAllServicesForServer()` 注入路由
 
 文件：
 
-1. `package/src/core/intergration/registry.ts`
-2. `package/src/core/intergration/types/module-registry.ts`
-3. `package/src/core/intergration/cli-registry.ts`
-4. `package/src/core/intergration/server-registry.ts`
-5. `package/src/intergrations/*/module.ts`
+1. `package/src/core/service/registry.ts`
+2. `package/src/core/service/types/service-registry.ts`
+3. `package/src/core/service/cli-registry.ts`
+4. `package/src/core/service/server-registry.ts`
+5. `package/src/services/*/service.ts`
 
 ## 9.2 Prompt 插件（System Prompt Provider）
 
@@ -441,7 +441,7 @@ Server 启动时注册：
 
 1. 同 id 技能先到先得（按 roots 优先级）
 
-文件：`package/src/intergrations/skills/runtime/discovery.ts`
+文件：`package/src/services/skills/runtime/discovery.ts`
 
 ### 9.3.2 技能加载与 pin
 
@@ -453,8 +453,8 @@ Server 启动时注册：
 
 文件：
 
-1. `package/src/intergrations/skills/service.ts`
-2. `package/src/intergrations/skills/runtime/system-provider.ts`
+1. `package/src/services/skills/service.ts`
+2. `package/src/services/skills/runtime/system-provider.ts`
 
 ### 9.3.3 工具白名单收敛
 
@@ -465,7 +465,7 @@ Server 启动时注册：
 3. 与当前真实可用工具求交集
 4. 交给 Agent step 覆盖，限制可调用工具
 
-文件：`package/src/intergrations/skills/runtime/active-skills-prompt.ts`
+文件：`package/src/services/skills/runtime/active-skills-prompt.ts`
 
 ## 9.4 MCP 能力插件系统
 
@@ -483,9 +483,9 @@ MCP 生命周期：
 
 关键文件：
 
-1. `package/src/intergrations/mcp/runtime/manager.ts`
-2. `package/src/intergrations/mcp/runtime/types.ts`
-3. `package/src/intergrations/mcp/runtime/http-transport.ts`
+1. `package/src/services/mcp/runtime/manager.ts`
+2. `package/src/services/mcp/runtime/types.ts`
+3. `package/src/services/mcp/runtime/http-transport.ts`
 4. `package/src/core/tools/mcp.ts`
 5. `package/src/schemas/mcp.schema.ts`
 
@@ -499,9 +499,9 @@ MCP 生命周期：
 
 文件：
 
-1. `package/src/intergrations/chat/adapters/platform-adapter.ts`
-2. `package/src/intergrations/chat/runtime/chat-send-registry.ts`
-3. `package/src/intergrations/chat/runtime/chatkey-send.ts`
+1. `package/src/services/chat/adapters/platform-adapter.ts`
+2. `package/src/services/chat/runtime/chat-send-registry.ts`
+3. `package/src/services/chat/runtime/chatkey-send.ts`
 
 ---
 
@@ -538,12 +538,12 @@ Task 是独立的业务子系统（非 core 内核）：
 
 关键文件：
 
-1. `package/src/intergrations/task/service.ts`
-2. `package/src/intergrations/task/runtime/runner.ts`
-3. `package/src/intergrations/task/runtime/store.ts`
-4. `package/src/intergrations/task/runtime/paths.ts`
-5. `package/src/intergrations/task/scheduler.ts`
-6. `package/src/core/intergration/cron-trigger.ts`
+1. `package/src/services/task/service.ts`
+2. `package/src/services/task/runtime/runner.ts`
+3. `package/src/services/task/runtime/store.ts`
+4. `package/src/services/task/runtime/paths.ts`
+5. `package/src/services/task/scheduler.ts`
+6. `package/src/core/service/cron-trigger.ts`
 
 ---
 
@@ -577,7 +577,7 @@ Task 是独立的业务子系统（非 core 内核）：
 文件：
 
 1. `package/src/schemas/mcp.schema.ts`
-2. `package/src/intergrations/mcp/runtime/manager.ts`
+2. `package/src/services/mcp/runtime/manager.ts`
 
 ## 12.3 env 解析
 
@@ -626,8 +626,8 @@ Task 是独立的业务子系统（非 core 内核）：
 ## 15.1 新增业务模块（类似 chat/skills/task）
 
 1. 实现 `SmaModule`（CLI + Server 注册）
-2. 放到 `intergrations/<module>/module.ts`
-3. 在 `core/intergration/registry.ts` 的 `MODULES` 中注册
+2. 放到 `services/<service>/service.ts`
+3. 在 `core/service/registry.ts` 的 `MODULES` 中注册
 
 ## 15.2 新增 Prompt Provider
 
@@ -701,21 +701,21 @@ Prompt/Tools：
 4. `package/src/core/tools/exec-shell.ts`
 5. `package/src/core/tools/mcp.ts`
 
-Integrations：
+Services：
 
-1. `package/src/intergrations/chat/*`
-2. `package/src/intergrations/skills/*`
-3. `package/src/intergrations/task/*`
-4. `package/src/intergrations/memory/*`
-5. `package/src/intergrations/mcp/runtime/*`
+1. `package/src/services/chat/*`
+2. `package/src/services/skills/*`
+3. `package/src/services/task/*`
+4. `package/src/services/memory/*`
+5. `package/src/services/mcp/runtime/*`
 
 Server/Infra：
 
 1. `package/src/server/ShipRuntimeContext.ts`
 2. `package/src/server/index.ts`
 3. `package/src/server/system-prompt-providers.ts`
-4. `package/src/infra/integration-runtime-ports.ts`
-5. `package/src/infra/integration-runtime-types.ts`
+4. `package/src/infra/service-runtime-ports.ts`
+5. `package/src/infra/service-runtime-types.ts`
 
 配置/初始化：
 
@@ -728,4 +728,4 @@ Server/Infra：
 
 ## 18. 一句话总结
 
-当前 Package 的实现是一个“**Context 驱动、History 为中心、Provider 可扩展、模块化集成**”的 Agent Runtime：`core` 保持稳定内核，`intergrations` 承载业务能力，`server` 做统一编排和注入，所有关键状态都可在 `.ship/` 下追踪与审计。
+当前 Package 的实现是一个“**Context 驱动、History 为中心、Provider 可扩展、模块化集成**”的 Agent Runtime：`core` 保持稳定内核，`services` 承载业务能力，`server` 做统一编排和注入，所有关键状态都可在 `.ship/` 下追踪与审计。

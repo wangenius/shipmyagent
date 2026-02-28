@@ -1,8 +1,8 @@
-# Skill Integration 设计与实现说明
+# Skill Service 设计与实现说明
 
 ## 1. 文档目标
 
-这份文档说明当前 `package` 中 **skill integration** 的完整实现逻辑，覆盖：
+这份文档说明当前 `package` 中 **skill service** 的完整实现逻辑，覆盖：
 
 - 模块接入方式（CLI / Server）
 - 技能发现与加载机制
@@ -15,7 +15,7 @@
 
 ## 2. 架构总览
 
-当前 skill integration 不是“独立插件进程”，而是走统一模块化架构：
+当前 skill service 不是“独立插件进程”，而是走统一模块化架构：
 
 1. `skillsModule` 作为标准 `SmaModule` 接入核心 registry。
 2. `sma skill ...` 命令和 `/api/skill/*` 路由由同一模块对外暴露。
@@ -31,10 +31,10 @@
 
 ### 3.1 注册入口
 
-- `package/src/core/intergration/registry.ts`
+- `package/src/core/service/registry.ts`
   - `MODULES` 中包含 `skillsModule`
   - `registerAllModulesForCli(...)` 统一注册模块命令
-  - `registerAllModulesForServer(...)` 统一注册模块路由
+  - `registerAllServicesForServer(...)` 统一注册模块路由
 
 ### 3.2 CLI 挂载入口
 
@@ -45,12 +45,12 @@
 ### 3.3 Server 挂载入口
 
 - `package/src/server/index.ts`
-  - 调用 `registerAllModulesForServer(this.app, getShipIntegrationContext())`
+  - 调用 `registerAllServicesForServer(this.app, getShipServiceContext())`
   - 因此 `skillsModule.registerServer(...)` 暴露的 API 自动生效
 
 ### 3.4 skillsModule 命令与路由
 
-- `package/src/intergrations/skills/module.ts`
+- `package/src/services/skills/service.ts`
   - CLI 子命令：
     - `skill find`
     - `skill add`
@@ -70,7 +70,7 @@
 
 ## 4.1 本地命令（不依赖 runtime server）
 
-- 实现文件：`package/src/intergrations/skills/command.ts`
+- 实现文件：`package/src/services/skills/command.ts`
 - 命令：
   - `skill find` / `skill add`
     - 复用 `npx skills`
@@ -99,7 +99,7 @@ skill 的加载状态以 context 为粒度持久化：
 
 相关实现：
 
-- 读写入口：`package/src/intergrations/skills/service.ts`
+- 读写入口：`package/src/services/skills/service.ts`
   - `readPinnedSkillIds(...)`
   - `writePinnedSkillIds(...)`
   - `loadSkill(...)` / `unloadSkill(...)`
@@ -116,7 +116,7 @@ skill 的加载状态以 context 为粒度持久化：
 
 ## 6. Skill 发现机制（Discovery）
 
-实现文件：`package/src/intergrations/skills/runtime/discovery.ts`
+实现文件：`package/src/services/skills/runtime/discovery.ts`
 
 发现流程：
 
@@ -133,7 +133,7 @@ skill 的加载状态以 context 为粒度持久化：
 
 路径决策逻辑在：
 
-- `package/src/intergrations/skills/runtime/paths.ts`
+- `package/src/services/skills/runtime/paths.ts`
 
 ---
 
@@ -142,7 +142,7 @@ skill 的加载状态以 context 为粒度持久化：
 ## 7.1 provider 注册时机
 
 - `package/src/server/ShipRuntimeContext.ts`
-  - `initShipRuntimeContext(...)` 最后调用 `registerIntegrationSystemPromptProviders(...)`
+  - `initShipRuntimeContext(...)` 最后调用 `registerServiceSystemPromptProviders(...)`
 - `package/src/server/system-prompt-providers.ts`
   - 注册 `createSkillsSystemPromptProvider(...)`
 
@@ -155,7 +155,7 @@ skill 的加载状态以 context 为粒度持久化：
 
 ## 7.3 skills provider 内部流程
 
-实现文件：`package/src/intergrations/skills/runtime/system-provider.ts`
+实现文件：`package/src/services/skills/runtime/system-provider.ts`
 
 每次调用 `provide(ctx)` 的步骤：
 
@@ -171,7 +171,7 @@ skill 的加载状态以 context 为粒度持久化：
 
 ## 8. 工具权限收敛（allowedTools -> activeTools）
 
-实现文件：`package/src/intergrations/skills/runtime/active-skills-prompt.ts`
+实现文件：`package/src/services/skills/runtime/active-skills-prompt.ts`
 
 规则：
 
@@ -190,9 +190,9 @@ skill 的加载状态以 context 为粒度持久化：
 
 ---
 
-## 9. Context 级状态缓存（integration 内部）
+## 9. Context 级状态缓存（service 内部）
 
-实现文件：`package/src/intergrations/skills/runtime/store.ts`
+实现文件：`package/src/services/skills/runtime/store.ts`
 
 用途：
 
@@ -211,7 +211,7 @@ skill 的加载状态以 context 为粒度持久化：
 
 ## 10.1 `sma skill load playwright`
 
-1. CLI 命令进入 `skills/module.ts`
+1. CLI 命令进入 `skills/service.ts`
 2. 解析 chatKey/contextId（优先显式参数，再环境变量）
 3. 调用 `/api/skill/load`
 4. server 进入 `skills/service.ts::loadSkill`
@@ -232,29 +232,29 @@ skill 的加载状态以 context 为粒度持久化：
 ## 11. 关键文件索引
 
 - 模块注册
-  - `package/src/core/intergration/registry.ts`
+  - `package/src/core/service/registry.ts`
   - `package/src/cli.ts`
   - `package/src/server/index.ts`
 - skills 模块入口
-  - `package/src/intergrations/skills/module.ts`
-  - `package/src/intergrations/skills/types/skill-command.ts`
+  - `package/src/services/skills/service.ts`
+  - `package/src/services/skills/types/skill-command.ts`
 - 命令实现
-  - `package/src/intergrations/skills/command.ts`
+  - `package/src/services/skills/command.ts`
 - 服务与持久化
-  - `package/src/intergrations/skills/service.ts`
+  - `package/src/services/skills/service.ts`
   - `package/src/utils.ts`
   - `package/src/core/context/history-store.ts`
 - runtime 生效
   - `package/src/server/system-prompt-providers.ts`
-  - `package/src/intergrations/skills/runtime/system-provider.ts`
-  - `package/src/intergrations/skills/runtime/active-skills-prompt.ts`
+  - `package/src/services/skills/runtime/system-provider.ts`
+  - `package/src/services/skills/runtime/active-skills-prompt.ts`
   - `package/src/core/prompts/system-provider.ts`
   - `package/src/core/runtime/agent-runner.ts`
 - 扫描与模型
-  - `package/src/intergrations/skills/runtime/paths.ts`
-  - `package/src/intergrations/skills/runtime/discovery.ts`
-  - `package/src/intergrations/skills/types/claude-skill.ts`
-  - `package/src/intergrations/skills/types/loaded-skill.ts`
+  - `package/src/services/skills/runtime/paths.ts`
+  - `package/src/services/skills/runtime/discovery.ts`
+  - `package/src/services/skills/types/claude-skill.ts`
+  - `package/src/services/skills/types/loaded-skill.ts`
 
 ---
 

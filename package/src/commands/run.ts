@@ -10,26 +10,26 @@
 
 import { AgentServer } from "../server/index.js";
 import { createInteractiveServer } from "../server/interactive.js";
-import { createTelegramBot } from "../intergrations/chat/adapters/telegram.js";
-import { createFeishuBot } from "../intergrations/chat/adapters/feishu.js";
-import { createQQBot } from "../intergrations/chat/adapters/qq.js";
+import { createTelegramBot } from "../services/chat/adapters/telegram.js";
+import { createFeishuBot } from "../services/chat/adapters/feishu.js";
+import { createQQBot } from "../services/chat/adapters/qq.js";
 import {
-  getShipIntegrationContext,
+  getShipServiceContext,
   getShipRuntimeContext,
   initShipRuntimeContext,
 } from "../server/ShipRuntimeContext.js";
 import type { StartOptions } from "./types/start.js";
 import { logger } from "../telemetry/index.js";
-import { startAllModuleRuntimes, stopAllModuleRuntimes } from "../core/intergration/registry.js";
+import { startAllServiceRuntimes, stopAllServiceRuntimes } from "../core/services/registry.js";
 
 /**
  * `shipmyagent run` 命令入口。
  *
  * 职责（中文）
- * - 初始化 runtime 上下文（配置、日志、integration 依赖）
+ * - 初始化 runtime 上下文（配置、日志、services 依赖）
  * - 解析并合并启动参数（CLI > ship.json > 默认值）
  * - 启动主 HTTP 服务、可选交互式 Web、各聊天适配器
- * - 注册并启动任务 cron 触发器
+ * - 启动 service runtimes（例如 task cron）
  * - 统一处理进程信号并优雅停机
  */
 export async function runCommand(
@@ -96,7 +96,7 @@ export async function runCommand(
   let telegramBot = null;
   if (adapters.telegram?.enabled) {
     logger.info("Telegram adapter enabled");
-    telegramBot = createTelegramBot(adapters.telegram, getShipIntegrationContext());
+    telegramBot = createTelegramBot(adapters.telegram, getShipServiceContext());
   }
 
   // Create Feishu Adapter (if enabled)
@@ -125,7 +125,7 @@ export async function runCommand(
         : undefined,
     };
 
-    feishuBot = await createFeishuBot(feishuConfig, getShipIntegrationContext());
+    feishuBot = await createFeishuBot(feishuConfig, getShipServiceContext());
   }
 
   // Create QQ Adapter (if enabled)
@@ -162,7 +162,7 @@ export async function runCommand(
       groupAccess: qqGroupAccess,
     };
 
-    qqBot = await createQQBot(qqConfig, getShipIntegrationContext());
+    qqBot = await createQQBot(qqConfig, getShipServiceContext());
   }
 
   // 创建交互式 Web 服务器（如果已启用）
@@ -175,7 +175,7 @@ export async function runCommand(
   }
 
   // 处理进程信号
-  // 停机顺序（中文）：integrations -> adapters -> interactive server -> API server -> flush logs。
+  // 停机顺序（中文）：services -> adapters -> interactive server -> API server -> flush logs。
   let isShuttingDown = false;
   const shutdown = async (signal: string) => {
     if (isShuttingDown) return;
@@ -183,9 +183,9 @@ export async function runCommand(
 
     logger.info(`Received ${signal} signal, shutting down...`);
 
-    // Stop integration runtimes
+    // Stop service runtimes
     try {
-      await stopAllModuleRuntimes(getShipIntegrationContext());
+      await stopAllServiceRuntimes(getShipServiceContext());
     } catch {
       // ignore
     }
@@ -223,6 +223,18 @@ export async function runCommand(
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
 
+  // 启动 service runtimes（含 task cron 等模块内生命周期逻辑）
+  // 调度策略（中文）：单服务失败不阻断主服务启动，仅记录日志。
+  try {
+    const lifecycle = await startAllServiceRuntimes(getShipServiceContext());
+    for (const item of lifecycle.results) {
+      if (item.success) continue;
+      logger.error(`Service runtime start failed: ${item.service?.name || "unknown"} - ${item.error || "unknown error"}`);
+    }
+  } catch (e) {
+    logger.error(`Service runtime bootstrap failed: ${String(e)}`);
+  }
+
   // Start server
   await server.start({
     port,
@@ -250,18 +262,6 @@ export async function runCommand(
   // Start QQ Bot
   if (qqBot) {
     await qqBot.start();
-  }
-
-  // 启动 integration runtimes（含 task cron 等模块内生命周期逻辑）
-  // 调度策略（中文）：单模块失败不阻断主服务启动，仅记录日志。
-  try {
-    const lifecycle = await startAllModuleRuntimes(getShipIntegrationContext());
-    for (const item of lifecycle.results) {
-      if (item.success) continue;
-      logger.error(`Integration runtime start failed: ${item.module?.name || "unknown"} - ${item.error || "unknown error"}`);
-    }
-  } catch (e) {
-    logger.error(`Integration runtime bootstrap failed: ${String(e)}`);
   }
 
   logger.info("=== ShipMyAgent Started ===");

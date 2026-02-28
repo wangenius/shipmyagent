@@ -1,0 +1,141 @@
+---
+title: 集成配置
+description: 连接 Telegram 等外部服务
+---
+
+# 集成配置
+
+ShipMyAgent 支持集成即时通讯软件，让你随时随地与你的 Agent 保持联系。
+
+## Telegram Bot
+
+目前最完善的集成是 Telegram。通过 Telegram，你可以：
+
+- 随时向 Agent 提问。
+- 接收任务执行结果的通知。
+- 审批敏感操作（如文件写入）。
+
+### 设置步骤
+
+1. **创建 Bot**
+   - 在 Telegram 中搜索 `@BotFather`。
+   - 发送 `/newbot` 命令。
+   - 按照提示设置 Bot 的名称和用户名。
+   - 获取 **HTTP API Token**。
+
+2. **获取 Chat ID**
+   - 在 Telegram 中搜索 `@userinfobot` (或类似的 ID 获取 Bot)。
+   - 发送任意消息，获取你的数字 User ID。
+   - 或者，如果你想在群组中使用，将 Bot 拉入群组，然后获取群组 ID。
+
+3. **配置 ship.json**
+
+编辑 `ship.json` 的 `services.telegram` 部分：
+
+```json
+{
+  "services": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
+      "chatId": "12345678" // 你的 User ID
+    }
+  }
+}
+```
+
+> 🔒 **安全提示**：配置 `chatId` 非常重要。如果不配置，任何知道你 Bot 用户名的人都可以与你的本地代码库交互！配置特定的 `chatId` 后，Bot 将只响应来自该 ID 的消息。
+
+4. **重启服务**
+   运行 `shipmyagent start` 重启服务。
+
+### 使用方法
+
+- **直接对话**：发送消息即可与 Agent 对话。
+- **快速补充/纠正**：如果你在 Agent 回复前连续发了多条消息，Agent 会把这些新消息作为“补充信息”合并处理，再给出最终回复（减少来回）。
+- **命令**：
+  - `/status`: 查看 Agent 当前状态。
+  - `/tasks`: 查看已计划的任务。
+
+## 飞书机器人
+
+飞书是一款流行的企业协作平台。你可以将 ShipMyAgent 与飞书集成，通过飞书与你的 Agent 交互。
+
+> 更完整的接入文档见：[/docs/services/feishu](/docs/services/feishu)
+
+### 设置步骤
+
+1. **创建飞书机器人**
+   - 访问 [飞书开放平台](https://open.feishu.cn/document/develop-an-echo-bot/introduction)
+   - 按照指南创建一个新的机器人应用
+   - 获取你的 **App ID** 和 **App Secret**
+
+2. **配置 ship.json**
+
+编辑 `ship.json` 的 `services.feishu` 部分：
+
+```json
+{
+  "services": {
+    "feishu": {
+      "enabled": true,
+      "appId": "cli_xxxxxxxxxxxxxxxx",
+      "appSecret": "your_app_secret_here"
+    }
+  }
+}
+```
+
+> 🔒 **安全提示**：请妥善保管你的 App Secret。不要将其提交到版本控制系统。建议使用环境变量。
+
+3. **重启服务**
+   运行 `shipmyagent start` 重启服务。
+
+### 使用方法
+
+- **直接对话**：在飞书中发送消息即可与 Agent 对话。
+- **群聊**：将机器人添加到群组中，实现团队协作。
+
+## QQ 机器人
+
+QQ 是中国最流行的即时通讯软件之一。你可以将 ShipMyAgent 与 QQ 机器人集成，通过 QQ 与你的 Agent 交互。
+
+> 更完整的接入文档见：[/docs/services/qq](/docs/services/qq)
+
+### 设置步骤
+
+1. **创建 QQ 机器人**
+   - 访问 [QQ 开放平台](https://bot.q.qq.com/wiki)
+   - 按照指南创建一个新的机器人应用
+   - 获取你的 **App ID** 和 **App Secret**
+
+2. **配置 ship.json**
+
+编辑 `ship.json` 的 `services.qq` 部分：
+
+```json
+{
+  "services": {
+    "qq": {
+      "enabled": true,
+      "appId": "your_app_id_here",
+      "appSecret": "your_app_secret_here"
+    }
+  }
+}
+```
+
+> 🔒 **安全提示**：请妥善保管你的 App Secret。不要将其提交到版本控制系统。建议使用环境变量。
+
+3. **重启服务**
+   运行 `shipmyagent start` 重启服务。
+
+### 使用方法
+
+- **直接对话**：在 QQ 中发送消息即可与 Agent 对话。
+- **快速补充/纠正**：如果你在 Agent 回复前连续发了多条消息，Agent 会把这些新消息作为“补充信息”合并处理，再给出最终回复（减少来回）。
+- **群聊**：将机器人添加到群组中，实现团队协作。
+
+## 即将推出的集成
+
+- **Slack**: 计划中。

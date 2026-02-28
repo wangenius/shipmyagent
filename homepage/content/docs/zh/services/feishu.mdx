@@ -1,0 +1,91 @@
+---
+title: 飞书机器人
+description: 通过飞书群聊/私聊与 Agent 对话，并接收审批提示与任务结果
+---
+
+# 飞书机器人集成
+
+使用飞书（Feishu）把 ShipMyAgent 接入到飞书聊天：支持 **私聊** 与 **群聊 @ 机器人**，并在需要人工确认时推送审批提示。
+
+## 配置步骤
+
+### 1）在飞书开放平台创建应用并启用机器人
+
+1. 进入飞书开放平台，创建应用
+2. 在应用能力中启用「机器人」
+3. 配置消息接收（ShipMyAgent 使用 **长连接 / WebSocket** 模式接收消息）
+4. 按需开通 IM 相关权限，并发布/上线到可用环境（测试/正式）
+
+> 不同应用类型（企业自建 / 商店应用）在权限与发布流程上略有差异；以飞书控制台提示为准。
+
+### 2）写入项目配置
+
+把凭证放到项目根目录的 `.env`（与 `ship.json` 同目录）：
+
+```bash
+FEISHU_APP_ID=cli_xxxxxxxxxxxxxxxx
+FEISHU_APP_SECRET=your_app_secret
+
+# 可选：如果你用的是 Lark（国际版），设置域名
+# FEISHU_DOMAIN=https://open.larksuite.com
+```
+
+在 `ship.json` 启用飞书集成：
+
+```json
+{
+  "services": {
+    "feishu": {
+      "enabled": true,
+      "appId": "${FEISHU_APP_ID}",
+      "appSecret": "${FEISHU_APP_SECRET}",
+      "domain": "${FEISHU_DOMAIN}"
+    }
+  }
+}
+```
+
+可选：配置群聊管理员白名单（允许这些用户在群里与机器人对话/审批，避免被滥用）：
+
+```json
+{
+  "services": {
+    "feishu": {
+      "enabled": true,
+      "appId": "${FEISHU_APP_ID}",
+      "appSecret": "${FEISHU_APP_SECRET}",
+      "adminUserIds": ["ou_xxx", "ou_yyy"]
+    }
+  }
+}
+```
+
+### 3）启动 ShipMyAgent
+
+```bash
+shipmyagent start
+```
+
+启动成功时，你会在日志中看到类似输出：
+
+- `Feishu service enabled`
+- `🤖 Starting Feishu Bot...`
+- `Feishu Bot started, using long connection mode`
+
+## 使用方式
+
+### 私聊
+
+直接给机器人发送消息即可开始对话。
+
+### 群聊
+
+在群里需要 **@机器人** 才会触发对话（避免机器人误触发）。
+
+默认情况下，群聊会限制为「发起人（该群里第一个与机器人对话的人）」或你在 `adminUserIds` 里配置的管理员，才能继续对话/处理审批。
+
+## 常见问题排查
+
+- **启动后完全没反应**：确认 `FEISHU_APP_ID` / `FEISHU_APP_SECRET` 正确；查看 `.ship/logs/` 下当天日志文件。
+- **群里不回应**：确认你在群里 `@机器人`；并检查开放平台是否已为应用开通消息接收相关权限/事件订阅。
+- **国际版 Lark 无法连接**：在 `ship.json` 把 `services.feishu.domain` 设为 `https://open.larksuite.com`（或通过 `FEISHU_DOMAIN` 环境变量注入）。

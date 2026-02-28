@@ -285,7 +285,7 @@ Enable compression for large payloads:
 }
 ```
 
-### 5. Integration Optimization
+### 5. Service Optimization
 
 #### Telegram Optimization
 
@@ -293,7 +293,7 @@ Reduce unnecessary Telegram updates:
 
 ```json
 {
-  "integrations": {
+  "services": {
     "telegram": {
       "enabled": true,
       "botToken": "${TELEGRAM_BOT_TOKEN}",
@@ -314,7 +314,7 @@ Optimize webhook delivery:
 
 ```json
 {
-  "integrations": {
+  "services": {
     "webhook": {
       "enabled": true,
       "url": "https://your-server.com/webhook",

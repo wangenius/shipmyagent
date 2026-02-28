@@ -520,7 +520,7 @@ shipmyagent test [目标] [选项]
 | 目标 | 描述 |
 |------|------|
 | `llm` | 测试 LLM 连接 |
-| `integration` | 测试特定集成 |
+| `service` | 测试特定集成 |
 | `permissions` | 测试权限配置 |
 | `all` | 运行所有测试（默认）|
 
@@ -529,7 +529,7 @@ shipmyagent test [目标] [选项]
 | 选项 | 简写 | 描述 |
 |------|------|------|
 | `--verbose` | `-v` | 详细输出 |
-| `--integration <name>` | `-i` | 测试特定集成 |
+| `--service <name>` | `-i` | 测试特定集成 |
 
 **示例**：
 
@@ -544,7 +544,7 @@ shipmyagent test llm
 shipmyagent test llm --verbose
 
 # 测试 Telegram 集成
-shipmyagent test --integration telegram
+shipmyagent test --service telegram
 
 # 测试权限
 shipmyagent test permissions

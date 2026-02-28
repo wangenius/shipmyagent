@@ -4,7 +4,7 @@ import type { SystemModelMessage } from "ai";
  * System Prompt Provider 上下文。
  *
  * 关键点（中文）
- * - 这是 core 传给 integrations 的最小上下文
+ * - 这是 core 传给 services 的最小上下文
  * - provider 只负责产出 prompt 片段，不参与执行调度
  */
 export type SystemPromptLoadedSkill = {

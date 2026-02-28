@@ -7,7 +7,8 @@ import { startCommand } from "./commands/start.js";
 import { stopCommand } from "./commands/stop.js";
 import { restartCommand } from "./commands/restart.js";
 import { aliasCommand } from "./commands/alias.js";
-import { registerAllModulesForCli, getModuleRootCommandNames } from "./core/intergration/registry.js";
+import { registerServicesCommand } from "./commands/services.js";
+import { registerAllServicesForCli, getServiceRootCommandNames } from "./core/services/registry.js";
 import { readFileSync } from "fs";
 import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
@@ -125,8 +126,10 @@ const alias = program
   .helpOption("--help", "display help for command")
   .action(aliasCommand);
 
-// 模块命令统一注册（chat / skill / task / future modules）
-registerAllModulesForCli(program);
+registerServicesCommand(program);
+
+// 服务命令统一注册（chat / skill / task / future services）
+registerAllServicesForCli(program);
 
 // Default: `shipmyagent` / `shipmyagent .` / `shipmyagent [run-options]` => `shipmyagent run [path]`
 const firstArg = process.argv[2];
@@ -137,10 +140,11 @@ const staticRootCommands = [
   stop.name(),
   restart.name(),
   alias.name(),
+  "services",
   "help",
 ];
-const moduleRootCommands = getModuleRootCommandNames();
-const knownRootCommands = new Set([...staticRootCommands, ...moduleRootCommands]);
+const serviceRootCommands = getServiceRootCommandNames();
+const knownRootCommands = new Set([...staticRootCommands, ...serviceRootCommands]);
 
 if (
   !firstArg ||

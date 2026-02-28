@@ -301,7 +301,7 @@ EOF
 4. **确保配置了 chatId**：
    ```json
    {
-     "integrations": {
+     "services": {
        "telegram": {
          "enabled": true,
          "botToken": "${TELEGRAM_BOT_TOKEN}",
@@ -318,7 +318,7 @@ EOF
 **解决方案**：
 ```json
 {
-  "integrations": {
+  "services": {
     "webhook": {
       "timeout": 30000,  // 增加超时时间（毫秒）
       "retryAttempts": 3

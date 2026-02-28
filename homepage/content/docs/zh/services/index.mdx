@@ -1,0 +1,578 @@
+---
+title: 集成
+description: 将 ShipMyAgent 与外部服务和工具连接
+---
+
+# 集成
+
+通过集成 GitHub、Slack 和自定义 webhook 等外部服务来扩展 ShipMyAgent。
+
+## 概述
+
+集成允许 ShipMyAgent：
+- 接收通知和命令
+- 发送自动更新
+- 与外部 API 交互
+- 触发其他工具中的工作流程
+
+## 可用集成
+
+- [Web 界面](#web-界面) - 交互式浏览器控制台
+- [Telegram](/docs/services/telegram) - 聊天和通知
+- [飞书机器人](/docs/services/feishu) - 群聊/私聊对话与通知
+- [QQ 机器人](/docs/services/qq) - 群聊/私聊对话与通知
+- [GitHub](#github) - PR 自动化和 issue 管理
+- [Slack](#slack) - 团队通知
+- [Webhook](#webhook) - 自定义集成
+
+---
+
+## Web 界面
+
+ShipMyAgent 内置了一个交互式 Web 界面，让你在浏览器中轻松管理和监控 Agent。
+
+### 功能特性
+
+- 💬 **Agent 对话** - 通过 Web 界面与 Agent 进行自然语言对话
+- 📋 **审批管理** - 查看和处理 Agent 的待审批操作（批准/拒绝）
+- 📊 **系统状态** - 实时查看 Agent 运行状态、任务数量、待审批数量
+- 📝 **日志查看** - 查看最近的运行日志
+
+### 快速开始
+
+#### 基本用法
+
+```bash
+# 启动交互式 Web 界面（默认 3001 端口）
+shipmyagent start --interactive-web
+```
+
+也可以把启动参数写进 `ship.json` 的 `start` 字段，然后直接运行 `shipmyagent .` / `shipmyagent start`：
+
+```json
+{
+  "start": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "interactiveWeb": true,
+    "interactivePort": 3001
+  }
+}
+```
+
+这将启动两个服务：
+- **主 API 服务器**：`http://localhost:3000`
+- **交互式 Web 界面**：`http://localhost:3001`
+
+#### 自定义端口
+
+```bash
+# 自定义 Web 界面端口
+shipmyagent start --interactive-web --interactive-port 9001
+
+# 同时自定义两个端口
+shipmyagent start -p 8080 --interactive-web --interactive-port 8081
+```
+
+#### 自定义主机
+
+```bash
+# 监听所有网络接口（团队访问）
+shipmyagent start -h 0.0.0.0 --interactive-web
+
+# 只监听本地（开发环境）
+shipmyagent start -h 127.0.0.1 --interactive-web
+```
+
+### 架构说明
+
+交互式 Web 界面采用了**代理架构**：
+
+```
+┌─────────────────┐
+│  Browser        │
+│  (Web UI)       │
+└────────┬────────┘
+         │ HTTP
+         ▼
+┌─────────────────────────────┐
+│  Interactive Web Server     │
+│  Port: 3001                 │
+│  - 提供静态文件 (HTML/CSS/JS)│
+│  - 代理 API 请求             │
+└────────┬────────────────────┘
+         │ 代理
+         ▼
+┌─────────────────────────────┐
+│  Main API Server            │
+│  Port: 3000                 │
+│  - 核心业务逻辑              │
+│  - Agent Runtime            │
+│  - 权限引擎                 │
+└─────────────────────────────┘
+```
+
+这种架构的优势：
+- ✅ **隔离性** - Web UI 和 API 服务分离，互不影响
+- ✅ **安全性** - 可以单独控制 Web UI 的访问权限
+- ✅ **灵活性** - 可以选择性地启用/禁用 Web UI
+
+### 生产环境部署
+
+#### 使用反向代理
+
+在生产环境中，建议使用 Nginx 或 Caddy 作为反向代理：
+
+```nginx
+# Nginx 配置示例
+server {
+    listen 80;
+    server_name agent.example.com;
+
+    # Web UI
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # API
+    location /api/ {
+        proxy_pass http://localhost:3000/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+#### 使用 PM2 管理进程
+
+```bash
+# 使用 PM2 启动
+pm2 start "shipmyagent start --interactive-web" --name shipmyagent
+
+# 查看状态
+pm2 status
+
+# 查看日志
+pm2 logs shipmyagent
+
+# 设置开机自启
+pm2 startup
+pm2 save
+```
+
+#### Systemd 服务
+
+创建服务文件 `/etc/systemd/system/shipmyagent.service`：
+
+```ini
+[Unit]
+Description=ShipMyAgent Runtime
+After=network.target
+
+[Service]
+Type=simple
+User=youruser
+WorkingDirectory=/path/to/your/project
+ExecStart=/usr/local/bin/shipmyagent start --interactive-web
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+启动服务：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable shipmyagent
+sudo systemctl start shipmyagent
+sudo systemctl status shipmyagent
+```
+
+### 故障排查
+
+#### Web 界面无法访问
+
+1. **检查端口是否被占用**
+   ```bash
+   lsof -i :3001
+   ```
+
+2. **检查防火墙设置**
+   ```bash
+   # Ubuntu/Debian
+   sudo ufw allow 3001
+
+   # CentOS/RHEL
+   sudo firewall-cmd --add-port=3001/tcp --permanent
+   sudo firewall-cmd --reload
+   ```
+
+3. **查看应用日志**
+   ```bash
+   tail -f .ship/logs/$(date +%F).jsonl
+   ```
+
+#### API 请求失败
+
+如果 Web 界面显示"代理请求失败"：
+
+1. 确认主 API 服务器正在运行
+   ```bash
+   curl http://localhost:3000/health
+   ```
+
+2. 检查 Web UI 配置的 API 地址是否正确
+   - 默认配置为 `http://localhost:3000`
+   - 如果修改了主服务器端口，需要在启动时指定正确的地址
+
+### 与其他集成方式对比
+
+| 特性 | Telegram Bot | 飞书 Bot | **交互式 Web** |
+|------|------------|---------|---------------|
+| 访问方式 | 移动端/桌面 | 移动端/桌面 | **浏览器** |
+| 设置难度 | 需要 Bot Token | 需要应用凭证 | **开箱即用** |
+| 文件上传 | ❌ | ❌ | ✅ |
+| 实时通知 | ✅ | ✅ | ❌ (需刷新) |
+| 团队协作 | 困难 | 困难 | **容易** |
+| 权限控制 | 有限 | 有限 | **灵活** |
+
+---
+
+## Telegram
+
+在 Telegram 上与您的 agent 聊天并接收通知。
+
+### 设置
+
+#### 1. 创建 Bot
+
+1. 打开 Telegram 并搜索 [@BotFather](https://t.me/BotFather)
+2. 发送 `/newbot` 命令
+3. 按照提示设置名称和用户名
+4. 复制 **HTTP API Token**
+
+#### 2. 获取您的 Chat ID
+
+1. 在 Telegram 上搜索 [@userinfobot](https://t.me/userinfobot)
+2. 发送任何消息
+3. 复制您的数字 **User ID**
+
+对于群组：
+1. 将您的 bot 添加到群组
+2. 在群组中发送消息
+3. 访问：`https://api.telegram.org/bot<BOT_TOKEN>/getUpdates`
+4. 找到 `chat.id` 值
+
+#### 3. 在 ship.json 中配置
+
+```json
+{
+  "services": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
+    }
+  }
+}
+```
+
+### 功能
+
+#### 聊天命令
+
+```
+/start - 开始交互
+/status - 检查 agent 状态
+/tasks - 列出定时任务
+/help - 显示可用命令
+```
+
+#### 批准工作流程
+
+当 agent 需要对敏感操作的批准时：
+
+```
+🔔 需要批准
+
+操作：写入 src/config.js
+更改：+5 行，-2 行
+
+回复：
+✅ approve - 允许操作
+❌ reject - 拒绝操作
+📝 modify - 建议更改
+```
+
+---
+
+## GitHub
+
+自动化拉取请求、问题和仓库管理。
+
+### 设置
+
+#### 1. 创建个人访问令牌
+
+1. 转到 GitHub 设置 → 开发者设置 → 个人访问令牌 → 令牌（经典）
+2. 生成新令牌（经典）
+3. 选择范围：
+   - `repo`（完全控制私有仓库）
+   - `public_repo`（访问公共仓库）
+4. 复制令牌
+
+#### 2. 在 ship.json 中配置
+
+```json
+{
+  "services": {
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo"
+    }
+  }
+}
+```
+
+### 功能
+
+#### 自动化 PR 审查
+
+```markdown
+---
+id: pr-review
+name: PR 审查 Bot
+cron: "*/30 * * * *"
+notify: ["telegram", "github"]
+---
+
+审查所有开放的拉取请求并发布评论。
+```
+
+#### Issue 分类
+
+```markdown
+---
+id: issue-triage
+name: Issue 分类
+cron: "0 */2 * * *"
+---
+
+对新问题进行分类并应用标签。
+```
+
+### GitHub Actions 集成
+
+创建工作流文件：`.github/workflows/agent-review.yml`
+
+```yaml
+name: Agent 审查
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  agent-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: 运行 Agent 审查
+        run: shipmyagent tasks run pr-review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+---
+
+## Slack
+
+向您的 Slack 工作区发送通知和更新。
+
+### 设置
+
+#### 1. 创建传入 Webhook
+
+1. 转到 https://api.slack.com/apps
+2. 创建新应用 → "从零开始"
+3. 启用"传入 Webhooks"
+4. 点击"添加新 Webhook 到工作区"
+5. 选择频道并复制 **Webhook URL**
+
+#### 2. 在 ship.json 中配置
+
+```json
+{
+  "services": {
+    "slack": {
+      "enabled": true,
+      "webhook": "${SLACK_WEBHOOK_URL}",
+      "channel": "#engineering",
+      "username": "ShipMyAgent",
+      "icon": ":robot_face:"
+    }
+  }
+}
+```
+
+---
+
+## Webhook
+
+用于自定义集成的通用 webhook 支持。
+
+### 配置
+
+```json
+{
+  "services": {
+    "webhook": {
+      "enabled": true,
+      "url": "https://your-server.com/webhook",
+      "method": "POST",
+      "headers": {
+        "Authorization": "Bearer ${WEBHOOK_TOKEN}",
+        "Content-Type": "application/json"
+      },
+      "timeout": 5000,
+      "retryAttempts": 3,
+      "retryDelay": 1000
+    }
+  }
+}
+```
+
+### Webhook 负载
+
+ShipMyAgent 发送 JSON 负载：
+
+```json
+{
+  "event": "task.completed",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "task": {
+    "id": "daily-report",
+    "name": "每日报告"
+  },
+  "result": {
+    "status": "success",
+    "output": "任务成功完成...",
+    "duration": 45000
+  }
+}
+```
+
+### 事件类型
+
+| 事件 | 描述 |
+|------|------|
+| `task.started` | 任务开始执行 |
+| `task.completed` | 任务成功完成 |
+| `task.failed` | 任务失败 |
+| `approval.requested` | 需要批准 |
+| `approval.granted` | 批准已授予 |
+| `approval.denied` | 批准被拒绝 |
+
+---
+
+## 多个集成
+
+一起使用多个集成：
+
+```json
+{
+  "services": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "chatId": "${TELEGRAM_CHAT_ID}"
+    },
+    "github": {
+      "enabled": true,
+      "token": "${GITHUB_TOKEN}",
+      "repository": "owner/repo"
+    },
+    "slack": {
+      "enabled": true,
+      "webhook": "${SLACK_WEBHOOK_URL}",
+      "channel": "#alerts"
+    }
+  }
+}
+```
+
+---
+
+## 测试集成
+
+测试每个集成：
+
+```bash
+# 测试 Telegram
+shipmyagent test --service telegram
+
+# 测试 GitHub
+shipmyagent test --service github
+
+# 测试所有集成
+shipmyagent test --service all
+```
+
+---
+
+## 故障排查
+
+### Telegram 无响应
+
+1. **验证 bot token**
+2. **检查 chat ID**
+3. **重启 agent**
+
+### GitHub 集成问题
+
+1. **Token 范围**：确保令牌具有所需范围
+2. **仓库访问**：令牌必须有权访问仓库
+3. **速率限制**：GitHub 有 API 速率限制
+
+### Webhook 失败
+
+1. **检查 URL 可访问性**
+2. **验证身份验证**
+3. **查看日志**
+
+---
+
+## 安全考虑
+
+### 保护 API Key
+
+```bash
+# ✅ 良好 - 环境变量
+export GITHUB_TOKEN="ghp_..."
+export TELEGRAM_BOT_TOKEN="123456:..."
+
+# ❌ 不好 - 硬编码
+{
+  "token": "ghp_1234567890"
+}
+```
+
+### 限制 Bot 权限
+
+- 仅授予必要的权限
+- 为 Telegram 使用特定的 `chatId`
+- 使用有范围的 GitHub 令牌
+- 设置 webhook 密钥
+
+---
+
+## 下一步
+
+- [配置](/docs/configuration) - 集成设置详细信息
+- [任务](/docs/tasks) - 使用集成自动化
+- [最佳实践](/docs/best-practices) - 安全指南

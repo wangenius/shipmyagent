@@ -22,7 +22,7 @@
       "deployment": "部署",
       "general": "通用",
       "features": "功能",
-      "integration": "集成"
+      "service": "集成"
     },
     "items": {
       "modify-code": {
@@ -55,10 +55,10 @@
         "answer": "可以。你可以为不同项目或不同目的运行多个 Agent。每个 Agent 都有独立的配置、权限与沟通渠道。v3 将引入多 Agent 协作能力。",
         "category": "features"
       },
-      "custom-integrations": {
+      "custom-services": {
         "question": "可以添加自定义集成吗？",
         "answer": "当然可以。ShipMyAgent 设计上就是可扩展的。你可以添加自定义 Webhook、集成现有工具，或构建自定义技能。Webhook API 让你能轻松连接任何服务。",
-        "category": "integration"
+        "category": "service"
       },
       "pricing": {
         "question": "收费模式是什么？",

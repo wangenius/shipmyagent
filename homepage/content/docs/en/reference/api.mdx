@@ -179,8 +179,8 @@ interface ShipConfig {
   // LLM Configuration
   llm: LLMConfig;
 
-  // Integrations
-  integrations: {
+  // Services
+  services: {
     telegram?: TelegramConfig;
     github?: GitHubConfig;
     slack?: SlackConfig;
@@ -273,7 +273,7 @@ interface TaskFrontmatter {
 | `E004` | `LLM_ERROR` | LLM API call failed | Check API key and quota |
 | `E005` | `TOOL_EXECUTION_FAILED` | Tool execution error | Check tool parameters |
 | `E006` | `TASK_FAILED` | Task execution failed | Review task logs |
-| `E007` | `INTEGRATION_ERROR` | Integration connection failed | Verify integration config |
+| `E007` | `INTEGRATION_ERROR` | Service connection failed | Verify service config |
 | `E008` | `TIMEOUT` | Operation timeout | Increase timeout or optimize |
 
 ### Error Response Format
@@ -445,7 +445,7 @@ describe('MyCustomTool', () => {
   });
 });
 
-describe('Agent Integration', () => {
+describe('Agent Service', () => {
   it('should process chat command', async () => {
     const agent = new Agent({
       llm: new MockLLMProvider(),

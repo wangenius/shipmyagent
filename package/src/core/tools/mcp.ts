@@ -8,7 +8,7 @@
 
 import { z } from "zod";
 import { tool } from "ai";
-import type { McpToolDefinition } from "../../intergrations/mcp/runtime/index.js";
+import type { McpToolDefinition } from "../../services/mcp/runtime/index.js";
 import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
 
 /**

@@ -22,7 +22,7 @@
       "deployment": "Deployment",
       "general": "General",
       "features": "Features",
-      "integration": "Integration"
+      "service": "Service"
     },
     "items": {
       "modify-code": {
@@ -55,10 +55,10 @@
         "answer": "Yes. You can run multiple Agents for different projects or purposes. Each Agent has its own configuration, permissions, and communication channels. v3 will introduce multi-agent collaboration features.",
         "category": "features"
       },
-      "custom-integrations": {
-        "question": "Can I add custom integrations?",
+      "custom-services": {
+        "question": "Can I add custom services?",
         "answer": "Absolutely. ShipMyAgent is designed to be extensible. You can add custom webhooks, integrate with your existing tools, and build custom skills. The webhook API makes it easy to connect with any service.",
-        "category": "integration"
+        "category": "service"
       },
       "pricing": {
         "question": "What's the pricing model?",
@@ -93,7 +93,7 @@
             "desc": "Behavior rules & guidelines"
           },
           "telegram": {
-            "name": "Telegram Integration",
+            "name": "Telegram Service",
             "desc": "Chat interface"
           },
           "tasks": {
@@ -108,10 +108,10 @@
       },
       "v2": {
         "title": "Team Collaboration",
-        "description": "Enhanced integrations for team workflows and multi-agent scenarios.",
+        "description": "Enhanced services for team workflows and multi-agent scenarios.",
         "features": {
           "slack": {
-            "name": "Slack Integration",
+            "name": "Slack Service",
             "desc": "Enterprise chat"
           },
           "snapshot": {
@@ -120,7 +120,7 @@
           },
           "githubApp": {
             "name": "GitHub App",
-            "desc": "Native integration"
+            "desc": "Native service"
           },
           "multiAgent": {
             "name": "Multi-Agent",
@@ -145,7 +145,7 @@
             "desc": "Managed service"
           },
           "webIde": {
-            "name": "Web IDE Integration",
+            "name": "Web IDE Service",
             "desc": "Browser-based dev"
           },
           "sso": {

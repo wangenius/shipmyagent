@@ -52,7 +52,7 @@ my-blog/
     "maxTokens": 2048,
     "apiKey": "${ANTHROPIC_API_KEY}"
   },
-  "integrations": {
+  "services": {
     "telegram": {
       "enabled": true,
       "botToken": "${TELEGRAM_BOT_TOKEN}",
@@ -229,7 +229,7 @@ open-source-project/
     "temperature": 0.3,
     "apiKey": "${ANTHROPIC_API_KEY}"
   },
-  "integrations": {
+  "services": {
     "github": {
       "enabled": true,
       "token": "${GITHUB_TOKEN}",
@@ -439,7 +439,7 @@ startup-mvp/
     "maxTokens": 4096,
     "apiKey": "${ANTHROPIC_API_KEY}"
   },
-  "integrations": {
+  "services": {
     "github": {
       "enabled": true,
       "token": "${GITHUB_TOKEN}",
@@ -681,7 +681,7 @@ monorepo/
       }
     ]
   },
-  "integrations": {
+  "services": {
     "github": {
       "enabled": true,
       "token": "${GITHUB_TOKEN}",
@@ -841,7 +841,7 @@ Generate report for:
 ---
 title: API Contract Validation
 cron: "0 12 * * 1-5"
-description: Validate API contracts across backend/frontend/integration
+description: Validate API contracts across backend/frontend/service
 chatKey: telegram-chat-123456789
 status: enabled
 ---
@@ -858,7 +858,7 @@ Validate API contracts:
    - Error handling proper
    - Deprecated endpoints removed
 
-3. **Integration**
+3. **Service**
    - Contract tests passing
    - Mock data aligned
    - Documentation synced

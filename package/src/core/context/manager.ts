@@ -20,7 +20,7 @@ import path from "node:path";
 import {
   parseTaskRunContextId,
   getTaskRunDir,
-} from "../../intergrations/task/runtime/paths.js";
+} from "../../services/task/runtime/paths.js";
 
 /**
  * ContextManager：统一会话运行管理容器。
@@ -42,7 +42,7 @@ export class ContextManager {
    *
    * 关键点（中文）
    * - `deliverResult` 用于平台侧异步回包。
-   * - `runMemoryMaintenance` 由 integration 注入，core 只负责触发。
+   * - `runMemoryMaintenance` 由 service 注入，core 只负责触发。
    */
   constructor(params?: {
     deliverResult?: (params: {
@@ -166,7 +166,7 @@ export class ContextManager {
    *
    * 关键点（中文）
    * - core 只负责触发，不承载 memory 提取/压缩细节
-   * - 具体策略由 integration 通过 runMemoryMaintenance 注入
+   * - 具体策略由 service 通过 runMemoryMaintenance 注入
    */
   async afterContextUpdatedAsync(contextId: string): Promise<void> {
     const key = String(contextId || "").trim();

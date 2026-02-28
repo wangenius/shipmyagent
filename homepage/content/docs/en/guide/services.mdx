@@ -1,0 +1,144 @@
+---
+title: Services
+description: Connect external services like Telegram
+---
+
+# Services
+
+ShipMyAgent supports service with instant messaging software, allowing you to stay in touch with your Agent anytime, anywhere.
+
+## Telegram Bot
+
+Currently, the most complete service is Telegram. Through Telegram, you can:
+
+- Ask the Agent questions at any time.
+- Receive notifications of task execution results.
+- Approve sensitive operations (such as file writing).
+
+### Setup Steps
+
+1. **Create Bot**
+   - Search for `@BotFather` in Telegram.
+   - Send the `/newbot` command.
+   - Set the Bot's name and username as prompted.
+   - Get the **HTTP API Token**.
+
+2. **Get Chat ID**
+   - Search for `@userinfobot` (or similar ID fetching Bot) in Telegram.
+   - Send any message to get your numeric User ID.
+   - Alternatively, if you want to use it in a group, pull the Bot into the group and get the group ID.
+
+3. **Configure ship.json**
+
+Edit the `services.telegram` section of `ship.json`:
+
+```json
+{
+  "services": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
+      "chatId": "12345678" // Your User ID
+    }
+  }
+}
+```
+
+> 🔒 **Security Tip**: Configuring `chatId` is very important. If not configured, anyone who knows your Bot username can interact with your local codebase! After configuring a specific `chatId`, the Bot will only respond to messages from that ID.
+
+4. **Restart Service**
+   Run `shipmyagent start` to restart the service.
+
+### Usage
+
+- **Direct Chat**: Send a message to chat with the Agent.
+- **Commands**:
+  - `/status`: View Agent current status.
+  - `/tasks`: View scheduled tasks.
+
+## Feishu/Lark Bot
+
+Feishu (Lark) is a popular enterprise collaboration platform. You can integrate ShipMyAgent with Feishu to interact with your Agent.
+
+### Setup Steps
+
+1. **Create Feishu Bot**
+   - Visit [Feishu Open Platform](https://open.feishu.cn/document/develop-an-echo-bot/introduction)
+   - Follow the guide to create a new bot application
+   - Get your **App ID** and **App Secret**
+
+2. **Configure ship.json**
+
+Edit the `services.feishu` section of `ship.json`:
+
+```json
+{
+  "services": {
+    "feishu": {
+      "enabled": true,
+      "appId": "cli_xxxxxxxxxxxxxxxx",
+      "appSecret": "your_app_secret_here"
+    }
+  }
+}
+```
+
+> 🔒 **Security Tip**: Keep your App Secret secure. Never commit it to version control. Consider using environment variables.
+
+3. **Restart Service**
+   Run `shipmyagent start` to restart the service.
+
+### Usage
+
+- **Direct Chat**: Send a message to chat with the Agent in Feishu.
+- **Group Chat**: Add the bot to a group to enable team collaboration.
+
+## QQ Bot
+
+QQ is one of the most popular instant messaging platforms in China. You can integrate ShipMyAgent with QQ Bot to interact with your Agent.
+
+### Setup Steps
+
+1. **Create QQ Bot**
+   - Visit [QQ Open Platform](https://bot.q.qq.com/wiki)
+   - Follow the guide to create a new bot application
+   - Get your **App ID** and **App Secret**
+
+2. **Configure ship.json**
+
+Edit the `services.qq` section of `ship.json`:
+
+```json
+{
+  "services": {
+    "qq": {
+      "enabled": true,
+      "appId": "your_app_id_here",
+      "appSecret": "your_app_secret_here",
+      "groupAccess": "initiator_or_admin"
+    }
+  }
+}
+```
+
+`groupAccess`:
+
+- `initiator_or_admin` (default): only the group initiator (first user who talks to the bot) or admins can keep triggering the bot
+- `anyone`: any group member can trigger the bot
+
+> 🔒 **Security Tip**: Keep your App Secret secure. Never commit it to version control. Consider using environment variables.
+
+3. **Restart Service**
+   Run `shipmyagent start` to restart the service.
+
+### Usage
+
+- **Direct Chat**: Send a message to chat with the Agent in QQ.
+- **Group Chat**: Add the bot to a group to enable team collaboration.
+- **Debug (raw events)**: If you want to see what fields QQ actually sends (e.g. sender nickname/username), enable raw gateway event capture:
+  - `SHIP_QQ_CAPTURE_EVENTS=dispatch` (business events only) or `SHIP_QQ_CAPTURE_EVENTS=all` (includes heartbeats/handshakes)
+  - Optional: `SHIP_QQ_CAPTURE_DIR=...` (defaults to `<projectRoot>/.ship/.debug/qq-events/`)
+
+## Upcoming Services
+
+- **Slack**: Planned.

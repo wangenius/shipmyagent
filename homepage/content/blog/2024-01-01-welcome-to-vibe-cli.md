@@ -120,7 +120,7 @@ npm run dev
 
 - [📚 查看文档](/docs/introduction)
 - [🚀 快速开始](/docs/guide/getting-started)
-- [🔧 集成指南](/docs/integrations)
+- [🔧 集成指南](/docs/services)
 - [🐙 GitHub 仓库](https://github.com/vibe-cli/vibe)
 
 ---

@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 统一描述 CLI → daemon 的远程调用契约
- * - integrations 仅依赖协议类型，不依赖 core 运行时实现
+ * - services 仅依赖协议类型，不依赖 core 运行时实现
  */
 
 /**

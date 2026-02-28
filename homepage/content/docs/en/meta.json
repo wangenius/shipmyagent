@@ -10,7 +10,7 @@
     "logging",
     "mcp",
     "tasks",
-    "integrations",
+    "services",
     "architecture",
     "best-practices",
     "examples",

@@ -274,7 +274,7 @@ EOF
    cron: "0 9 * * 1-5"
    ```
 
-## Integration Issues
+## Service Issues
 
 ### "Telegram bot not responding"
 
@@ -303,7 +303,7 @@ EOF
 4. **Ensure chatId is configured**:
    ```json
    {
-     "integrations": {
+     "services": {
        "telegram": {
          "enabled": true,
          "botToken": "${TELEGRAM_BOT_TOKEN}",
@@ -320,7 +320,7 @@ EOF
 **Solution**:
 ```json
 {
-  "integrations": {
+  "services": {
     "webhook": {
       "timeout": 30000,  // Increase timeout (ms)
       "retryAttempts": 3

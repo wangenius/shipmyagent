@@ -34,7 +34,7 @@ Automate pull request reviews with consistent, thorough feedback.
 
 ```json
 {
-  "integrations": {
+  "services": {
     "github": {
       "enabled": true,
       "token": "${GITHUB_TOKEN}",
@@ -505,8 +505,8 @@ Post to #contributors channel.
 └─────────────────────────────────────────────────┘
                     ↓
 ┌─────────────────────────────────────────────────┐
-│ 4. Integration Phase                            │
-│ - Agent verifies integration                    │
+│ 4. Service Phase                            │
+│ - Agent verifies service                    │
 │ - Runs full test suite                         │
 │ - Checks documentation                          │
 └─────────────────────────────────────────────────┘
@@ -563,7 +563,7 @@ Interact with your codebase using plain language.
 
 ```json
 {
-  "integrations": {
+  "services": {
     "telegram": {
       "enabled": true,
       "botToken": "${TELEGRAM_BOT_TOKEN}",
@@ -978,7 +978,7 @@ ls .ship/task/pr-review
 
 ## Next Steps
 
-- [Configuration](/docs/configuration) - Set up your integrations
+- [Configuration](/docs/configuration) - Set up your services
 - [Tasks](/docs/tasks) - Create scheduled automation
 - [Examples](/docs/examples) - Real-world configurations
 - [Best Practices](/docs/best-practices) - Proven patterns

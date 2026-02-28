@@ -6,9 +6,9 @@ import { fileURLToPath } from "node:url";
  * Import 边界检查。
  *
  * 关键点（中文）
- * - 限制 integrations 层对 core/server 的反向依赖
- * - 限制 integration module 入口对 core/server 的直接依赖
- * - 限制 integrations 之间的横向直接依赖（全部禁止）
+ * - 限制 services 层对 core/server 的反向依赖
+ * - 限制 service module 入口对 core/server 的直接依赖
+ * - 限制 services 之间的横向直接依赖（全部禁止）
  * - 以脚本方式落地，避免引入额外 lint 工具链
  */
 
@@ -17,7 +17,7 @@ const __dirname = path.dirname(__filename);
 
 const packageRoot = path.resolve(__dirname, "..");
 const srcRoot = path.join(packageRoot, "src");
-const integrationsRoot = path.join(srcRoot, "intergrations");
+const servicesRoot = path.join(srcRoot, "services");
 
 const IMPORT_RE =
   /(?:import\s+[^"'`]*?from\s*|export\s+[^"'`]*?from\s*|import\s*\()\s*["']([^"']+)["']/g;
@@ -36,15 +36,15 @@ function resolveToSrcRelative(filePath, specifier) {
   return toPosix(relative);
 }
 
-function isIntegrationModuleEntry(srcRelativePath) {
-  if (!srcRelativePath.startsWith("intergrations/")) return false;
+function isServiceEntry(srcRelativePath) {
+  if (!srcRelativePath.startsWith("services/")) return false;
   const seg = srcRelativePath.split("/");
-  return seg.length === 3 && seg[2] === "module.ts";
+  return seg.length === 3 && seg[2] === "service-entry.ts";
 }
 
-function getIntegrationName(srcRelativePath) {
+function getServiceName(srcRelativePath) {
   const seg = srcRelativePath.split("/");
-  if (seg.length < 2 || seg[0] !== "intergrations") return "";
+  if (seg.length < 2 || seg[0] !== "services") return "";
   return seg[1] || "";
 }
 
@@ -64,14 +64,14 @@ async function collectTsFiles(dirPath) {
 }
 
 async function run() {
-  const files = await collectTsFiles(integrationsRoot);
+  const files = await collectTsFiles(servicesRoot);
   const violations = [];
 
   for (const filePath of files) {
     const source = await fs.readFile(filePath, "utf-8");
     const srcRelativeFilePath = toPosix(path.relative(srcRoot, filePath));
-    const isModuleEntry = isIntegrationModuleEntry(srcRelativeFilePath);
-    const currentIntegrationName = getIntegrationName(srcRelativeFilePath);
+    const isServiceEntryFile = isServiceEntry(srcRelativeFilePath);
+    const currentServiceName = getServiceName(srcRelativeFilePath);
 
     for (const match of source.matchAll(IMPORT_RE)) {
       const specifier = String(match[1] || "").trim();
@@ -79,44 +79,43 @@ async function run() {
 
       const target = resolveToSrcRelative(filePath, specifier);
 
-      // 规则 1（中文）：integration 全量禁止反向依赖 server。
+      // 规则 1（中文）：service 全量禁止反向依赖 server。
       if (target.startsWith("server/")) {
         violations.push({
           file: srcRelativeFilePath,
           specifier,
-          reason: "intergrations 层禁止直接依赖 server/*，请通过依赖注入访问运行时能力",
+          reason: "services 层禁止直接依赖 server/*，请通过依赖注入访问运行时能力",
         });
       }
 
-      // 规则 1.1（中文）：integration 全量禁止直接依赖 core。
+      // 规则 1.1（中文）：service 全量禁止直接依赖 core。
       if (target.startsWith("core/")) {
         violations.push({
           file: srcRelativeFilePath,
           specifier,
-          reason: "intergrations 层禁止直接依赖 core/*，请通过 server 注入端口能力",
+          reason: "services 层禁止直接依赖 core/*，请通过 server 注入端口能力",
         });
       }
 
-      // 规则 2（中文）：integration module 入口禁止直接依赖 core/server。
-      if (isModuleEntry && (target.startsWith("core/") || target.startsWith("server/"))) {
+      // 规则 2（中文）：service 入口文件禁止直接依赖 core/server。
+      if (isServiceEntryFile && (target.startsWith("core/") || target.startsWith("server/"))) {
         violations.push({
           file: srcRelativeFilePath,
           specifier,
-          reason: "intergrations/*/module.ts 禁止直接依赖 core/* 或 server/*",
+          reason: "services/*/service-entry.ts 禁止直接依赖 core/* 或 server/*",
         });
       }
 
-      // 规则 3（中文）：integration 全量禁止跨 integration 直接依赖（无例外）。
-      if (target.startsWith("intergrations/")) {
-        const targetIntegrationName = getIntegrationName(target);
-        const isSameIntegration =
-          currentIntegrationName && targetIntegrationName === currentIntegrationName;
-        if (!isSameIntegration) {
+      // 规则 3（中文）：service 全量禁止跨 service 直接依赖（无例外）。
+      if (target.startsWith("services/")) {
+        const targetServiceName = getServiceName(target);
+        const isSameService = currentServiceName && targetServiceName === currentServiceName;
+        if (!isSameService) {
           violations.push({
             file: srcRelativeFilePath,
             specifier,
             reason:
-              "intergrations/* 禁止直接依赖其他 integration 模块，请通过 infra 抽象能力或 server 注入解耦",
+              "services/* 禁止直接依赖其他 service 模块，请通过 infra 抽象能力或 server 注入解耦",
           });
         }
       }
