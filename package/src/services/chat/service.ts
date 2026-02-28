@@ -11,7 +11,7 @@ import {
   getServiceRequestContextBridge,
 } from "../../infra/service-runtime-dependencies.js";
 import { sendTextByChatKey } from "./runtime/chatkey-send.js";
-import { llmRequestContext } from "../../telemetry/index.js";
+import { llmRequestContext } from "../../logger/index.js";
 import type {
   ChatContextSnapshot,
   ChatSendResponse,

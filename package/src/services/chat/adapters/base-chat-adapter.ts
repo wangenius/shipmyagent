@@ -1,6 +1,6 @@
 import { PlatformAdapter } from "./platform-adapter.js";
 import type { ChatDispatchChannel } from "../runtime/chat-send-registry.js";
-import type { Logger } from "../../../telemetry/index.js";
+import type { Logger } from "../../../logger/index.js";
 import { getServiceContextManager } from "../../../infra/service-runtime-dependencies.js";
 import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
 

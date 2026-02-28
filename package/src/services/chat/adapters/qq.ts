@@ -62,7 +62,7 @@ const EventType = {
 export class QQBot extends BaseChatAdapter {
   private appId: string;
   private appSecret: string;
-  private ws: any | null = null;
+  private ws: WebSocket | null = null;
   private isRunning: boolean = false;
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private wsContextId: string = "";
@@ -354,7 +354,7 @@ export class QQBot extends BaseChatAdapter {
     this.logger.info(`正在连接 WebSocket: ${gatewayUrl}`);
 
     return new Promise((resolve, reject) => {
-      const ws: any = new (WebSocket as any)(gatewayUrl);
+      const ws = new WebSocket(gatewayUrl);
       this.ws = ws;
 
       ws.on("open", () => {
@@ -585,7 +585,7 @@ export class QQBot extends BaseChatAdapter {
 
     this.heartbeatInterval = setInterval(() => {
       const ws = this.ws;
-      if (ws && ws.readyState === (WebSocket as any).OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         const heartbeatPayload = {
           op: OpCode.Heartbeat,
           d: this.lastSeq || null,
@@ -773,20 +773,9 @@ export class QQBot extends BaseChatAdapter {
 
     // 检查是否是命令
     if (userMessage.startsWith("/")) {
-      await this.handleCommand(
-        chatId,
-        "c2c",
-        messageId,
-        userMessage,
-      );
+      await this.handleCommand(chatId, "c2c", messageId, userMessage);
     } else {
-      await this.executeAndReply(
-        chatId,
-        "c2c",
-        messageId,
-        userMessage,
-        actor,
-      );
+      await this.executeAndReply(chatId, "c2c", messageId, userMessage, actor);
     }
   }
 
@@ -925,7 +914,11 @@ export class QQBot extends BaseChatAdapter {
       author?.permissions,
       author?.permission,
     ]
-      .map((v) => String(v || "").trim().toLowerCase())
+      .map((v) =>
+        String(v || "")
+          .trim()
+          .toLowerCase(),
+      )
       .filter(Boolean);
     if (roleCandidates.length === 0) return false;
 
@@ -1099,7 +1092,9 @@ export class QQBot extends BaseChatAdapter {
       const responseText = await response.text();
       if (!response.ok) {
         this.logger.error(`发送消息失败: ${response.status} - ${responseText}`);
-        throw new Error(`QQ send failed: HTTP ${response.status}: ${responseText}`);
+        throw new Error(
+          `QQ send failed: HTTP ${response.status}: ${responseText}`,
+        );
       }
 
       // 成功也保留一点响应内容，便于排查“返回成功但用户侧不可见”的边界情况

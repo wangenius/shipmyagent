@@ -19,7 +19,7 @@ import {
   initShipRuntimeContext,
 } from "../server/ShipRuntimeContext.js";
 import type { StartOptions } from "./types/start.js";
-import { logger } from "../telemetry/index.js";
+import { logger } from "../logger/index.js";
 import { startAllServiceRuntimes, stopAllServiceRuntimes } from "../core/services/registry.js";
 
 /**

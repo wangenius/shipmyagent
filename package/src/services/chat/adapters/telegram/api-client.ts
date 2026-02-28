@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs-extra";
-import { Logger } from "../../../../telemetry/index.js";
+import { Logger } from "../../../../logger/index.js";
 import { getCacheDirPath } from "../../../../utils.js";
 import {
   guessMimeType,

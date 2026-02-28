@@ -5,7 +5,7 @@ import type {
   MemoryExtractParams,
   MemoryCompressParams,
 } from "../types/memory.js";
-import { getLogger } from "../../../telemetry/index.js";
+import { getLogger } from "../../../logger/index.js";
 import {
   getServiceContextManager,
 } from "../../../infra/service-runtime-dependencies.js";

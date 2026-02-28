@@ -16,7 +16,7 @@ import {
   type ModelMessage,
   type SystemModelMessage,
 } from "ai";
-import { withLlmRequestContext } from "../../telemetry/index.js";
+import { withLlmRequestContext } from "../../logger/index.js";
 import { generateId } from "../../utils.js";
 import {
   buildContextSystemPrompt,
@@ -24,7 +24,7 @@ import {
 } from "../prompts/system.js";
 import { createModel } from "../llm/create-model.js";
 import type { AgentRunInput, AgentResult } from "../types/agent.js";
-import type { Logger } from "../../telemetry/index.js";
+import type { Logger } from "../../logger/index.js";
 import { contextRequestContext } from "../context/request-context.js";
 import { createAgentTools } from "../tools/agent-tools.js";
 import { openai } from "@ai-sdk/openai";

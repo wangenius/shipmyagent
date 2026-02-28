@@ -1,5 +1,5 @@
 import { DEFAULT_SHIP_PROMPTS } from "../core/prompts/system.js";
-import { logger as defaultLogger, type Logger } from "../telemetry/index.js";
+import { logger as defaultLogger, type Logger } from "../logger/index.js";
 import { McpManager } from "../services/mcp/runtime/manager.js";
 import { ContextManager } from "../core/context/manager.js";
 import {

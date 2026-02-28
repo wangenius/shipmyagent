@@ -10,7 +10,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { type LanguageModel } from "ai";
-import { createLlmLoggingFetch, getLogger } from "../../telemetry/index.js";
+import { createLlmLoggingFetch, getLogger } from "../../logger/index.js";
 import type { ShipConfig } from "../../utils.js";
 
 /**

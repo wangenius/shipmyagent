@@ -21,7 +21,7 @@ import {
 } from "../../utils.js";
 import type { ShipContextMetadataV1, ShipContextMessageV1 } from "../types/context-message.js";
 import type { ShipContextMessagesMetaV1 } from "../types/context-messages-meta.js";
-import { getLogger } from "../../telemetry/index.js";
+import { getLogger } from "../../logger/index.js";
 import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 
 /**

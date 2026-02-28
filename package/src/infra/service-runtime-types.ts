@@ -1,4 +1,4 @@
-import type { Logger } from "../telemetry/index.js";
+import type { Logger } from "../logger/index.js";
 import type {
   ServiceModelFactory,
   ServiceContextManager,

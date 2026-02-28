@@ -14,7 +14,7 @@ import { z } from "zod";
 import { tool } from "ai";
 import { getShipRuntimeContext } from "../../server/ShipRuntimeContext.js";
 import { contextRequestContext } from "../context/request-context.js";
-import { llmRequestContext } from "../../telemetry/index.js";
+import { llmRequestContext } from "../../logger/index.js";
 
 const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
 const DEFAULT_MAX_OUTPUT_LINES = 200;
