@@ -3,7 +3,7 @@
  *
  * 关键职责（中文）
  * - 组装 system prompt（运行时上下文 + providers）。
- * - 执行 tool-loop，并把 assistant/tool 调用结果回写 history。
+ * - 执行 tool-loop，并把 assistant/tool 调用结果回写 context 消息。
  * - 在上下文超窗时按策略逐步收紧 compact 参数并重试。
  */
 
@@ -28,7 +28,7 @@ import type { Logger } from "../../telemetry/index.js";
 import { contextRequestContext } from "../context/request-context.js";
 import { createAgentTools } from "../tools/agent-tools.js";
 import { openai } from "@ai-sdk/openai";
-import type { ShipContextMetadataV1 } from "../types/context-history.js";
+import type { ShipContextMetadataV1 } from "../types/context-message.js";
 import {
   getShipRuntimeContext,
   getShipRuntimeContextBase,
@@ -148,7 +148,7 @@ export class ContextAgentRunner implements ContextAgent {
    *
    * 算法步骤（中文）
    * - 绑定 contextId，防止一个实例跨会话串线。
-   * - 读取/补齐用户消息到 history（防止入口未写入）。
+   * - 读取/补齐用户消息到 context store（防止入口未写入）。
    * - 收集 system prompt providers，得到 activeTools 与附加系统消息。
    * - 执行模型调用；若超窗则按 compact policy 递进重试。
    */
@@ -179,8 +179,8 @@ export class ContextAgentRunner implements ContextAgent {
       this.bindContextId(contextId);
 
       const runtime = getShipRuntimeContext();
-      // phase 0（中文）：装配 history 与 runtime/system prompt 基础上下文。
-      const historyStore = runtime.contextManager.getHistoryStore(contextId);
+      // phase 0（中文）：装配 context store 与 runtime/system prompt 基础上下文。
+      const contextStore = runtime.contextManager.getContextStore(contextId);
 
       const runtimeSystemMessages = this.buildRuntimeSystemMessages({
         projectRoot: runtime.rootPath,
@@ -188,9 +188,9 @@ export class ContextAgentRunner implements ContextAgent {
         requestId,
       });
 
-      // 先确保本轮 user 已写入 history（best-effort）
+      // 先确保本轮 user 已写入 context store（best-effort）
       await this.ensureCurrentUserRecorded({
-        historyStore,
+        contextStore,
         userText,
         contextId,
         requestId,
@@ -216,7 +216,7 @@ export class ContextAgentRunner implements ContextAgent {
       const compactPolicy = this.resolveCompactPolicy(retryAttempts);
       let compacted = false;
       try {
-        const compactResult = await historyStore.compactIfNeeded({
+        const compactResult = await contextStore.compactIfNeeded({
           model: this.model,
           system: baseSystemMessages,
           keepLastMessages: compactPolicy.keepLastMessages,
@@ -225,7 +225,7 @@ export class ContextAgentRunner implements ContextAgent {
         });
         compacted = Boolean((compactResult as any)?.compacted);
       } catch {
-        // ignore compact failure; fallback to un-compacted history
+        // ignore compact failure; fallback to un-compacted context messages
       }
 
       let currentProviderResult = providerResult;
@@ -246,14 +246,14 @@ export class ContextAgentRunner implements ContextAgent {
       ];
 
       let baseModelMessages: ModelMessage[] =
-        (await historyStore.toModelMessages({ tools: this.tools })) as any;
+        (await contextStore.toModelMessages({ tools: this.tools })) as any;
       if (!Array.isArray(baseModelMessages) || baseModelMessages.length === 0) {
         baseModelMessages = [{ role: "user", content: userText } as any];
       }
 
       await logger.log("debug", "Context selected", {
         contextId,
-        historySource: "history_jsonl",
+        historySource: "messages_jsonl",
         modelMessages: baseModelMessages.length,
         keepLastMessages: compactPolicy.keepLastMessages,
         maxInputTokensApprox: compactPolicy.maxInputTokensApprox,
@@ -507,7 +507,7 @@ export class ContextAgentRunner implements ContextAgent {
         duration,
         toolCallsTotal: toolCalls.length,
       });
-      // 关键点（中文）：对话历史由 ContextManager 管理并写入 history（history.jsonl）
+      // 关键点（中文）：对话消息由 ContextManager 管理并写入 messages（messages.jsonl）
 
       let assistantText = finalAssistantUiMessage
         ? extractTextFromUiMessage(finalAssistantUiMessage)
@@ -538,7 +538,7 @@ export class ContextAgentRunner implements ContextAgent {
       ) {
         await logger.log(
           "warn",
-          "Context length exceeded, retry with history compaction",
+          "Context length exceeded, retry with messages compaction",
           {
             contextId,
             error: errorMsg,
@@ -549,7 +549,7 @@ export class ContextAgentRunner implements ContextAgent {
           return {
             success: false,
             output:
-              "Context length exceeded and retries failed. Please resend your question (or tune context.history.* compaction settings).",
+              "Context length exceeded and retries failed. Please resend your question (or tune context.messages.* compaction settings).",
             toolCalls,
           };
         }
@@ -657,25 +657,25 @@ export class ContextAgentRunner implements ContextAgent {
     const runtime = getShipRuntimeContext();
 
     const baseKeepLastMessages =
-      typeof (runtime.config as any)?.context?.history?.keepLastMessages ===
+      typeof (runtime.config as any)?.context?.messages?.keepLastMessages ===
       "number"
         ? Math.max(
             6,
             Math.min(
               5000,
-              Math.floor((runtime.config as any).context.history.keepLastMessages),
+              Math.floor((runtime.config as any).context.messages.keepLastMessages),
             ),
           )
         : 30;
     const baseMaxInputTokensApprox =
-      typeof (runtime.config as any)?.context?.history?.maxInputTokensApprox ===
+      typeof (runtime.config as any)?.context?.messages?.maxInputTokensApprox ===
       "number"
         ? Math.max(
             2000,
             Math.min(
               200_000,
               Math.floor(
-                (runtime.config as any).context.history.maxInputTokensApprox,
+                (runtime.config as any).context.messages.maxInputTokensApprox,
               ),
             ),
           )
@@ -692,9 +692,9 @@ export class ContextAgentRunner implements ContextAgent {
       Math.floor(baseMaxInputTokensApprox / retryFactor),
     );
     const archiveOnCompact =
-      (runtime.config as any)?.context?.history?.archiveOnCompact === undefined
+      (runtime.config as any)?.context?.messages?.archiveOnCompact === undefined
         ? true
-        : Boolean((runtime.config as any).context.history.archiveOnCompact);
+        : Boolean((runtime.config as any).context.messages.archiveOnCompact);
 
     return {
       keepLastMessages,
@@ -711,8 +711,8 @@ export class ContextAgentRunner implements ContextAgent {
    * - 通过“最后一条 user 文本相等”做幂等，避免重复写入。
    */
   private async ensureCurrentUserRecorded(params: {
-    historyStore: ReturnType<typeof getShipRuntimeContext>["contextManager"] extends {
-      getHistoryStore: (...args: any[]) => infer T;
+    contextStore: ReturnType<typeof getShipRuntimeContext>["contextManager"] extends {
+      getContextStore: (...args: any[]) => infer T;
     }
       ? T
       : any;
@@ -720,9 +720,9 @@ export class ContextAgentRunner implements ContextAgent {
     contextId: string;
     requestId: string;
   }): Promise<void> {
-    const { historyStore, userText, contextId, requestId } = params;
+    const { contextStore, userText, contextId, requestId } = params;
     try {
-      const msgs = await historyStore.loadAll();
+      const msgs = await contextStore.loadAll();
       const last = msgs.length > 0 ? msgs[msgs.length - 1] : null;
       const lastText = (() => {
         if (!last || last.role !== "user") return "";
@@ -738,7 +738,7 @@ export class ContextAgentRunner implements ContextAgent {
       const ctx = contextRequestContext.getStore();
       const channel = (ctx?.channel as any) || "api";
       const targetId = String(ctx?.targetId || contextId);
-      const msg = historyStore.createUserTextMessage({
+      const msg = contextStore.createUserTextMessage({
         text: userText,
         metadata: {
           contextId,
@@ -753,7 +753,7 @@ export class ContextAgentRunner implements ContextAgent {
           extra: { note: "injected_by_agent_run" },
         } as any,
       });
-      await historyStore.append(msg);
+      await contextStore.append(msg);
     } catch {
       // ignore
     }

@@ -5,9 +5,9 @@
  * - task root: `./.ship/task/`
  * - definition: `./.ship/task/<taskId>/task.md`
  * - run dir: `./.ship/task/<taskId>/<timestamp>/`
- * - run history: `./.ship/task/<taskId>/<timestamp>/history.jsonl`
+ * - run messages: `./.ship/task/<taskId>/<timestamp>/messages.jsonl`
  *
- * 同时定义“task run contextId”格式，用于把 Agent 的 historyStore 映射到 run 目录：
+ * 同时定义“task run contextId”格式，用于把 Agent 的 contextStore 映射到 run 目录：
  * - `task-run:<taskId>:<timestamp>`
  */
 
@@ -83,4 +83,3 @@ export function parseTaskRunContextId(contextId: string): { taskId: string; time
   if (!isValidTaskId(taskId)) return null;
   return { taskId, timestamp };
 }
-

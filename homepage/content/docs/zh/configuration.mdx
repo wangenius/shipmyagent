@@ -165,11 +165,11 @@ ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录�
 
 运行时行为配置。
 
-**context.history** (object, 可选)
+**context.messages** (object, 可选)
 
 用于控制对话历史（UIMessage[]）的自动 compact：
 
-- 历史以 JSONL 持久化在 `.ship/chat/<encodedChatKey>/messages/history.jsonl`（每行一条 `UIMessage`）
+- 历史以 JSONL 持久化在 `.ship/chat/<encodedChatKey>/messages/messages.jsonl`（每行一条 `UIMessage`）
 - 每次请求直接把这份 history 转成 `messages` 送给模型（无需“加载历史”工具）
 - 当历史接近上下文窗口时自动 compact：更早段压缩为 1 条摘要消息，并保留最近窗口
 

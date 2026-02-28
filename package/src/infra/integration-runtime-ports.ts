@@ -41,9 +41,9 @@ export type IntegrationContextRequestContextBridge = {
 };
 
 /**
- * 会话历史存储端口。
+ * 会话上下文存储端口。
  */
-export type IntegrationContextHistoryStore = {
+export type IntegrationContextStore = {
   loadAll(): Promise<any[]>;
   loadRange(startIndex: number, endIndex: number): Promise<any[]>;
   append(message: any): Promise<void>;
@@ -64,11 +64,11 @@ export type IntegrationContextAgent = {
  * 会话管理端口。
  *
  * 关键点（中文）
- * - 对 integration 暴露消息入队、历史访问、agent 获取等最小能力。
+ * - 对 integration 暴露消息入队、上下文访问、agent 获取等最小能力。
  */
 export type IntegrationContextManager = {
   getAgent(contextId: string): IntegrationContextAgent;
-  getHistoryStore(contextId: string): IntegrationContextHistoryStore;
+  getContextStore(contextId: string): IntegrationContextStore;
   clearAgent(contextId?: string): void;
   appendUserMessage(params: {
     channel: string;

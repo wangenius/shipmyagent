@@ -1,9 +1,9 @@
-import type { IntegrationContextHistoryStore } from "../../../infra/integration-runtime-ports.js";
+import type { IntegrationContextStore } from "../../../infra/integration-runtime-ports.js";
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 import { getLogger } from "../../../telemetry/index.js";
 import { getIntegrationModelFactory } from "../../../infra/integration-runtime-dependencies.js";
 import { MemoryManager } from "./manager.js";
-import { compressMemory, extractMemoryFromHistory } from "./extractor.js";
+import { compressMemory, extractMemoryFromContextMessages } from "./extractor.js";
 
 const memoryManagers: Map<string, MemoryManager> = new Map();
 
@@ -33,7 +33,7 @@ function getMemoryManager(
 export async function runContextMemoryMaintenance(params: {
   context: IntegrationRuntimeDependencies;
   contextId: string;
-  getHistoryStore: (contextId: string) => IntegrationContextHistoryStore;
+  getContextStore: (contextId: string) => IntegrationContextStore;
 }): Promise<void> {
   const contextId = String(params.contextId || "").trim();
   if (!contextId) return;
@@ -46,7 +46,7 @@ export async function runContextMemoryMaintenance(params: {
   const extractMinEntries = config?.extractMinEntries ?? 40;
 
   try {
-    const store = params.getHistoryStore(contextId);
+    const store = params.getContextStore(contextId);
     const totalEntries = await store.getTotalMessageCount();
 
     const memoryManager = getMemoryManager(context, contextId);
@@ -86,7 +86,7 @@ async function extractAndSaveMemory(params: {
       config: context.config,
     });
 
-    const memoryEntry = await extractMemoryFromHistory({
+    const memoryEntry = await extractMemoryFromContextMessages({
       context,
       contextId,
       entryRange: [startIndex, endIndex],

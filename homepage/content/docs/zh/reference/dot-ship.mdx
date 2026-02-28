@@ -26,7 +26,7 @@ description: ShipMyAgent 运行时目录结构与文件格式参考
   chat/
     <encodedChatKey>/
       messages/                  # 对话历史（UIMessage JSONL，唯一事实源）
-        history.jsonl
+        messages.jsonl
         meta.json                # (可选，compact 元数据 + pinned skills)
         archive/                 # (可选，compact 归档段)
       memory/                    # chat 级持久化记忆（面对不同 chat 的默认逻辑）
@@ -59,11 +59,11 @@ description: ShipMyAgent 运行时目录结构与文件格式参考
 
 路径规则：
 
-- `.ship/chat/<encodedChatKey>/messages/history.jsonl`
+- `.ship/chat/<encodedChatKey>/messages/messages.jsonl`
 - `.ship/chat/<encodedChatKey>/messages/meta.json`（可选；包含 compact 元数据与 `pinnedSkillIds`）
 - `.ship/chat/<encodedChatKey>/messages/archive/*.json`（可选，compact 时归档被折叠的原始段）
 
-`history.jsonl` 单行示例（字段会随平台/场景不同而略有差异）：
+`messages.jsonl` 单行示例（字段会随平台/场景不同而略有差异）：
 
 ```json
 {"id":"u:telegram-chat-123:456","role":"user","parts":[{"type":"text","text":"..."}],"metadata":{"v":1,"ts":1730000000000,"channel":"telegram","chatId":"123","chatKey":"telegram-chat-123","userId":"123","messageId":"456","chatType":"private","username":"alice"}}
@@ -263,7 +263,7 @@ description: ShipMyAgent 运行时目录结构与文件格式参考
 ├── <taskId>/
 │   ├── task.md                 # 任务定义
 │   └── <timestamp>/            # 任务运行目录
-│       ├── history.jsonl       # 该次运行的历史
+│       ├── messages.jsonl       # 该次运行的历史
 │       └── meta.json
 ```
 

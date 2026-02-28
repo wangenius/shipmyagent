@@ -26,7 +26,7 @@ Different integrations/features generate different subdirectories; here's a typi
   chat/
     <encodedChatKey>/
       messages/                  # Conversation history (UIMessage JSONL, single source of truth)
-        history.jsonl
+        messages.jsonl
         meta.json                # (optional, compact metadata + pinned skills)
         archive/                 # (optional, compact archived segments)
       memory/                    # Chat-level persistent memory (default logic for different chats)
@@ -59,11 +59,11 @@ Notes:
 
 **Path rules**:
 
-- `.ship/chat/<encodedChatKey>/messages/history.jsonl`
+- `.ship/chat/<encodedChatKey>/messages/messages.jsonl`
 - `.ship/chat/<encodedChatKey>/messages/meta.json` (optional; contains compact metadata and `pinnedSkillIds`)
 - `.ship/chat/<encodedChatKey>/messages/archive/*.json` (optional, archives original segments collapsed during compact)
 
-Single line example from `history.jsonl` (fields vary slightly by platform/scenario):
+Single line example from `messages.jsonl` (fields vary slightly by platform/scenario):
 
 ```json
 {"id":"u:telegram-chat-123:456","role":"user","parts":[{"type":"text","text":"..."}],"metadata":{"v":1,"ts":1730000000000,"channel":"telegram","chatId":"123","chatKey":"telegram-chat-123","userId":"123","messageId":"456","chatType":"private","username":"alice"}}
@@ -264,7 +264,7 @@ Default `mcp.json` structure:
 ├── <taskId>/
 │   ├── task.md                 # Task definition
 │   └── <timestamp>/            # Task run directory
-│       ├── history.jsonl       # History for this run
+│       ├── messages.jsonl       # History for this run
 │       └── meta.json
 ```
 

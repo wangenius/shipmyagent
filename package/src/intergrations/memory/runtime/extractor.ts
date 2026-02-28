@@ -12,13 +12,13 @@ import {
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
 /**
- * 从历史对话中提取记忆摘要。
+ * 从上下文消息中提取记忆摘要。
  *
  * 关键点（中文）
  * - LLM 处理较重，建议异步触发
- * - context/history 通过 context 显式注入
+ * - context/messages 通过 context 显式注入
  */
-export async function extractMemoryFromHistory(
+export async function extractMemoryFromContextMessages(
   params: MemoryExtractParams & {
     context: IntegrationRuntimeDependencies;
     model: LanguageModel;
@@ -29,12 +29,12 @@ export async function extractMemoryFromHistory(
   const logger = getLogger(context.rootPath, "info");
 
   try {
-    const historyStore = getIntegrationContextManager(context).getHistoryStore(
+    const contextStore = getIntegrationContextManager(context).getContextStore(
       contextId,
     );
-    const messages = await historyStore.loadRange(startIndex, endIndex);
+    const messages = await contextStore.loadRange(startIndex, endIndex);
 
-    const historyText = (() => {
+    const messagesText = (() => {
       const lines: string[] = [];
       for (const message of messages) {
         if (!message || typeof message !== "object") continue;
@@ -59,7 +59,7 @@ export async function extractMemoryFromHistory(
       return lines.join("\n\n");
     })();
 
-    if (!historyText || !historyText.trim()) {
+    if (!messagesText || !messagesText.trim()) {
       return {
         timestamp: Date.now(),
         roundRange: entryRange,
@@ -112,7 +112,7 @@ export async function extractMemoryFromHistory(
       ],
       prompt: `请从以下对话历史中提取摘要和关键事实：
 
-${historyText}
+${messagesText}
 
 ---
 
@@ -159,7 +159,7 @@ ${historyText}
       keyFacts,
     };
   } catch (error) {
-    await logger.log("error", "Failed to extract memory from history", {
+    await logger.log("error", "Failed to extract memory from context messages", {
       contextId,
       entryRange,
       error: String(error),

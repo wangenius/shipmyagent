@@ -3,14 +3,14 @@
  *
  * 设计动机（中文）
  * - Task runner / scheduler 需要在“非当前对话上下文”向指定 chatKey 投递消息
- * - 复用现有 dispatcher 与 chat history（尤其 QQ 的被动回复依赖 messageId）
+ * - 复用现有 dispatcher 与 chat context 消息（尤其 QQ 的被动回复依赖 messageId）
  *
  * 注意
  * - 这里是运行时内部能力（不是 tool）；tool `chat_contact_send` 也会复用本实现
  */
 
 import { getChatSender, type ChatDispatchChannel } from "./chat-send-registry.js";
-import type { ShipContextMessageV1 } from "../../../infra/context-history-types.js";
+import type { ShipContextMessageV1 } from "../../../infra/context-message-types.js";
 import { getIntegrationContextManager } from "../../../infra/integration-runtime-dependencies.js";
 import type { IntegrationRuntimeDependencies } from "../../../infra/integration-runtime-types.js";
 
@@ -110,7 +110,7 @@ function pickLatestUserMetaFromMessages(messages: ShipContextMessageV1[]): {
  *
  * 流程（中文）
  * 1) 解析 chatKey 并定位 channel dispatcher
- * 2) 从 context history 回填 chatType/threadId/messageId
+ * 2) 从 context 消息回填 chatType/threadId/messageId
  * 3) 合并参数后调用 dispatcher 发送
  */
 export async function sendTextByChatKey(params: {
@@ -138,11 +138,11 @@ export async function sendTextByChatKey(params: {
     return { success: false, error: `No dispatcher registered for channel: ${channel}` };
   }
 
-  // 关键点（中文）：尽量从 history 的最近 user message 拿到 chatType/messageThreadId/messageId（尤其 QQ 需要）。
-  const historyStore = getIntegrationContextManager(context).getHistoryStore(chatKey);
+  // 关键点（中文）：尽量从 context 的最近 user message 拿到 chatType/messageThreadId/messageId（尤其 QQ 需要）。
+  const contextStore = getIntegrationContextManager(context).getContextStore(chatKey);
   let messages: ShipContextMessageV1[] = [];
   try {
-    messages = await historyStore.loadAll();
+    messages = await contextStore.loadAll();
   } catch {
     messages = [];
   }
@@ -167,7 +167,7 @@ export async function sendTextByChatKey(params: {
       return {
         success: false,
         error:
-          "QQ requires chatType + messageId to send a reply. Ask the target user to send a message first so ShipMyAgent can record the latest messageId in history.",
+          "QQ requires chatType + messageId to send a reply. Ask the target user to send a message first so ShipMyAgent can record the latest messageId in context messages.",
       };
     }
   }

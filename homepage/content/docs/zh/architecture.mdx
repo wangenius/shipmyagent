@@ -115,7 +115,7 @@ interface Tool {
 
 - 每次请求拼一个 **system**：`Agent.md + DefaultPrompt`
 - **user** 消息保持原文（不加前缀）
-- 每个 `chatKey` 都有一份持续增长的 history（`UIMessage[]`，落盘在 `.ship/chat/<encodedChatKey>/messages/history.jsonl`）
+- 每个 `chatKey` 都有一份持续增长的 history（`UIMessage[]`，落盘在 `.ship/chat/<encodedChatKey>/messages/messages.jsonl`）
 - 每次请求直接把该 history 转成 `messages` 送给模型（不再把历史折叠成字符串块，也不需要“加载历史”工具）
 - 当 history 接近上下文窗口时会自动 compact：更早段压缩为摘要消息，并保留最近窗口
 

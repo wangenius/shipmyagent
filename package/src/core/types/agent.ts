@@ -6,7 +6,7 @@
  * - 不包含具体实现细节
  */
 
-import type { ShipContextMessageV1 } from "./context-history.js";
+import type { ShipContextMessageV1 } from "./context-message.js";
 
 export interface AgentResult {
   success: boolean;

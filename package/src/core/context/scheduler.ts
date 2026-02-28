@@ -422,12 +422,12 @@ export class Scheduler {
 
     try {
       const runtime = this.getContextManager();
-      const store = runtime.getHistoryStore(first.contextId);
+      const store = runtime.getContextStore(first.contextId);
       const assistantMessage = (result as any)?.assistantMessage;
 
       if (assistantMessage && typeof assistantMessage === "object") {
         await store.append(assistantMessage as any);
-        void runtime.afterContextHistoryUpdatedAsync(first.contextId);
+        void runtime.afterContextUpdatedAsync(first.contextId);
       } else {
         const userVisible = String((result as any)?.output || "");
         if (userVisible.trim()) {
@@ -452,7 +452,7 @@ export class Scheduler {
               source: "egress",
             }),
           );
-          void runtime.afterContextHistoryUpdatedAsync(first.contextId);
+          void runtime.afterContextUpdatedAsync(first.contextId);
         }
       }
     } catch {

@@ -2,17 +2,17 @@
  * ContextManager：会话生命周期编排器。
  *
  * 关键职责（中文）
- * - 管理 contextId -> Agent/HistoryStore 缓存
+ * - 管理 contextId -> Agent/ContextStore 缓存
  * - 负责消息入库与调度入队
- * - 在历史更新后触发 memory 维护钩子
+ * - 在上下文更新后触发 memory 维护钩子
  */
 
 import type { ContextAgent } from "../types/context-agent.js";
 import type { SchedulerEnqueueResult } from "../types/context-scheduler.js";
 import { Scheduler } from "./scheduler.js";
 import { createContextAgent } from "../runtime/agent.js";
-import { ContextHistoryStore } from "./history-store.js";
-import type { ShipContextMetadataV1 } from "../types/context-history.js";
+import { ContextStore } from "./context-store.js";
+import type { ShipContextMetadataV1 } from "../types/context-message.js";
 import type { AgentResult } from "../types/agent.js";
 import type { ContextRequestContext } from "./request-context.js";
 import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
@@ -26,12 +26,12 @@ import {
  * ContextManager：统一会话运行管理容器。
  *
  * 关键点（中文）
- * - 一个 contextId 对应一个 Agent 实例与一个 HistoryStore 实例。
+ * - 一个 contextId 对应一个 Agent 实例与一个 ContextStore 实例。
  * - scheduler 只处理执行时序；ContextManager 负责上下文对象组装。
  */
 export class ContextManager {
   private readonly agentsByContextId: Map<string, ContextAgent> = new Map();
-  private readonly historyStoresByContextId: Map<string, ContextHistoryStore> =
+  private readonly contextStoresByContextId: Map<string, ContextStore> =
     new Map();
 
   private readonly scheduler: Scheduler;
@@ -88,21 +88,21 @@ export class ContextManager {
   }
 
   /**
-   * 获取（或创建）HistoryStore。
+   * 获取（或创建）ContextStore。
    *
    * 算法说明（中文）
    * - 常规 context：使用默认 `.ship/context/.../messages/*` 路径。
    * - task run context：重定向到 `.ship/task/<taskId>/<timestamp>/`，实现任务执行审计隔离。
    */
-  getHistoryStore(contextId: string): ContextHistoryStore {
+  getContextStore(contextId: string): ContextStore {
     const key = String(contextId || "").trim();
     if (!key) {
       throw new Error(
-        "ContextManager.getHistoryStore requires a non-empty contextId",
+        "ContextManager.getContextStore requires a non-empty contextId",
       );
     }
 
-    const existing = this.historyStoresByContextId.get(key);
+    const existing = this.contextStoresByContextId.get(key);
     if (existing) return existing;
 
     const parsedRun = parseTaskRunContextId(key);
@@ -113,17 +113,17 @@ export class ContextManager {
             parsedRun.taskId,
             parsedRun.timestamp,
           );
-          return new ContextHistoryStore(key, {
+          return new ContextStore(key, {
             contextDirPath: runDir,
             messagesDirPath: runDir,
-            messagesFilePath: path.join(runDir, "history.jsonl"),
+            messagesFilePath: path.join(runDir, "messages.jsonl"),
             metaFilePath: path.join(runDir, "meta.json"),
             archiveDirPath: path.join(runDir, "archive"),
           });
         })()
-      : new ContextHistoryStore(key);
+      : new ContextStore(key);
 
-    this.historyStoresByContextId.set(key, created);
+    this.contextStoresByContextId.set(key, created);
     return created;
   }
 
@@ -168,7 +168,7 @@ export class ContextManager {
    * - core 只负责触发，不承载 memory 提取/压缩细节
    * - 具体策略由 integration 通过 runMemoryMaintenance 注入
    */
-  async afterContextHistoryUpdatedAsync(contextId: string): Promise<void> {
+  async afterContextUpdatedAsync(contextId: string): Promise<void> {
     const key = String(contextId || "").trim();
     if (!key) return;
     if (!this.runMemoryMaintenance) return;
@@ -180,7 +180,7 @@ export class ContextManager {
   }
 
   /**
-   * 追加一条 user 消息到历史。
+   * 追加一条 user 消息到上下文消息流。
    *
    * 关键点（中文）
    * - 入队前先落盘，确保 scheduler 执行时可读取到完整上下文。
@@ -202,7 +202,7 @@ export class ContextManager {
     const contextId = String(params.contextId || "").trim();
     if (!contextId) return;
     try {
-      const store = this.getHistoryStore(contextId);
+      const store = this.getContextStore(contextId);
       const msg = store.createUserTextMessage({
         text: params.text,
         metadata: {
@@ -219,7 +219,7 @@ export class ContextManager {
         } as Omit<ShipContextMetadataV1, "v" | "ts">,
       });
       await store.append(msg);
-      void this.afterContextHistoryUpdatedAsync(contextId);
+      void this.afterContextUpdatedAsync(contextId);
     } catch {
       // ignore
     }
@@ -233,7 +233,7 @@ export class ContextManager {
    * 2) 交给 scheduler 按 context lane 串行调度
    *
    * 一致性（中文）
-   * - 先写 history 再入 scheduler，保证执行时上下文可回放。
+   * - 先写上下文消息再入 scheduler，保证执行时上下文可回放。
    */
   async enqueue(params: {
     channel: string;

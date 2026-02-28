@@ -1,10 +1,10 @@
 /**
- * Context history 存储模块。
+ * Context 存储模块。
  *
  * 关键点（中文）
  * - 基于 JSONL 持久化 UIMessage。
  * - 通过文件锁协调 append 与 compact 的并发写入。
- * - 提供 meta/archive 以支持可审计的历史压缩。
+ * - 提供 meta/archive 以支持可审计的上下文压缩。
  */
 
 import fs from "fs-extra";
@@ -14,19 +14,18 @@ import { convertToModelMessages, generateText, type LanguageModel, type SystemMo
 import {
   generateId,
   getShipContextDirPath,
-  getShipContextHistoryArchiveDirPath,
-  getShipContextHistoryArchivePath,
-  getShipContextHistoryMetaPath,
-  getShipContextHistoryPath,
+  getShipContextMessagesArchiveDirPath,
+  getShipContextMessagesMetaPath,
+  getShipContextMessagesPath,
   getShipContextMessagesDirPath,
 } from "../../utils.js";
-import type { ShipContextMetadataV1, ShipContextMessageV1 } from "../types/context-history.js";
+import type { ShipContextMetadataV1, ShipContextMessageV1 } from "../types/context-message.js";
 import type { ShipContextMessagesMetaV1 } from "../types/context-messages-meta.js";
 import { getLogger } from "../../telemetry/index.js";
 import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
 
 /**
- * ContextHistoryStore：基于 UIMessage 的对话历史存储（per contextId）。
+ * ContextStore：基于 UIMessage 的会话上下文存储（per contextId）。
  *
  * 设计目标（中文）
  * - 单一事实源：UI 展示 + 模型 messages 使用同一份 UIMessage[] 数据
@@ -34,11 +33,11 @@ import { getShipRuntimeContextBase } from "../../server/ShipRuntimeContext.js";
  * - 可审计：compact 前的原始段写入 archive（可选，但推荐默认开启）
  *
  * 落盘结构
- * - `.ship/context/<encodedContextId>/messages/history.jsonl`：每行一个 UIMessage（append + compact 时 rewrite）
+ * - `.ship/context/<encodedContextId>/messages/messages.jsonl`：每行一个 UIMessage（append + compact 时 rewrite）
  * - `.ship/context/<encodedContextId>/messages/meta.json`：compact 元数据
  * - `.ship/context/<encodedContextId>/messages/archive/<archiveId>.json`：compact 归档段
  */
-export class ContextHistoryStore {
+export class ContextStore {
   readonly rootPath: string;
   readonly contextId: string;
   private readonly overrideContextDirPath?: string;
@@ -46,7 +45,6 @@ export class ContextHistoryStore {
   private readonly overrideMessagesFilePath?: string;
   private readonly overrideMetaFilePath?: string;
   private readonly overrideArchiveDirPath?: string;
-  private legacySessionMigrationChecked: boolean = false;
 
   constructor(
     contextId: string,
@@ -56,11 +54,11 @@ export class ContextHistoryStore {
        */
       contextDirPath?: string;
       /**
-       * override: directory containing history/meta/archive (e.g. a task run directory)
+       * override: directory containing messages/meta/archive (e.g. a task run directory)
        */
       messagesDirPath?: string;
       /**
-       * override: history.jsonl file path
+       * override: messages.jsonl file path
        */
       messagesFilePath?: string;
       /**
@@ -74,9 +72,9 @@ export class ContextHistoryStore {
     },
   ) {
     const rootPath = String(getShipRuntimeContextBase().rootPath || "").trim();
-    if (!rootPath) throw new Error("ContextHistoryStore requires a non-empty rootPath");
+    if (!rootPath) throw new Error("ContextStore requires a non-empty rootPath");
     const key = String(contextId || "").trim();
-    if (!key) throw new Error("ContextHistoryStore requires a non-empty contextId");
+    if (!key) throw new Error("ContextStore requires a non-empty contextId");
     this.rootPath = rootPath;
     this.contextId = key;
     this.overrideContextDirPath =
@@ -118,15 +116,15 @@ export class ContextHistoryStore {
   }
 
   /**
-   * 获取 history.jsonl 路径。
+   * 获取 messages.jsonl 路径。
    */
   getMessagesFilePath(): string {
     if (this.overrideMessagesFilePath) return this.overrideMessagesFilePath;
     if (this.overrideMessagesDirPath) {
-      // 关键点（中文）：task run 等自定义 layout 默认也遵循 `history.jsonl` 命名。
-      return path.join(this.overrideMessagesDirPath, "history.jsonl");
+      // 关键点（中文）：task run 等自定义 layout 默认也遵循 `messages.jsonl` 命名。
+      return path.join(this.overrideMessagesDirPath, "messages.jsonl");
     }
-    return getShipContextHistoryPath(this.rootPath, this.contextId);
+    return getShipContextMessagesPath(this.rootPath, this.contextId);
   }
 
   /**
@@ -135,7 +133,7 @@ export class ContextHistoryStore {
   getMetaFilePath(): string {
     if (this.overrideMetaFilePath) return this.overrideMetaFilePath;
     if (this.overrideMessagesDirPath) return path.join(this.overrideMessagesDirPath, "meta.json");
-    return getShipContextHistoryMetaPath(this.rootPath, this.contextId);
+    return getShipContextMessagesMetaPath(this.rootPath, this.contextId);
   }
 
   /**
@@ -144,14 +142,14 @@ export class ContextHistoryStore {
   getArchiveDirPath(): string {
     if (this.overrideArchiveDirPath) return this.overrideArchiveDirPath;
     if (this.overrideMessagesDirPath) return path.join(this.overrideMessagesDirPath, "archive");
-    return getShipContextHistoryArchiveDirPath(this.rootPath, this.contextId);
+    return getShipContextMessagesArchiveDirPath(this.rootPath, this.contextId);
   }
 
   /**
-   * 获取 history 写锁文件路径。
+   * 获取 context 写锁文件路径。
    */
   private getLockFilePath(): string {
-    return path.join(this.getMessagesDirPath(), ".history.lock");
+    return path.join(this.getMessagesDirPath(), ".context.lock");
   }
 
   /**
@@ -161,97 +159,6 @@ export class ContextHistoryStore {
     await fs.ensureDir(this.getMessagesDirPath());
     await fs.ensureDir(this.getArchiveDirPath());
     await fs.ensureFile(this.getMessagesFilePath());
-    await this.migrateLegacySessionHistoryIfNeeded();
-  }
-
-  /**
-   * 一次性迁移 legacy `.ship/session/.../messages/history.jsonl` 到 `.ship/context/...`。
-   *
-   * 背景（中文）
-   * - 历史事实源已统一为 `.ship/context/...`。
-   * - 旧版本可能把同一会话写在 `.ship/session/...`，导致“新登录后历史看起来丢失”。
-   *
-   * 迁移策略（中文）
-   * - 只在默认 context 布局下执行（task run 等 override 路径不参与）。
-   * - 使用 marker 文件保证每个 context 最多迁移一次。
-   * - 若当前 context history 非空：旧 session 历史前置，当前历史保留在后。
-   */
-  private async migrateLegacySessionHistoryIfNeeded(): Promise<void> {
-    if (this.legacySessionMigrationChecked) return;
-    this.legacySessionMigrationChecked = true;
-
-    if (
-      this.overrideMessagesDirPath ||
-      this.overrideMessagesFilePath ||
-      this.overrideMetaFilePath ||
-      this.overrideArchiveDirPath
-    ) {
-      return;
-    }
-
-    const messagesDir = this.getMessagesDirPath();
-    const markerPath = path.join(messagesDir, ".legacy-session-imported");
-    if (await fs.pathExists(markerPath)) return;
-
-    const legacyMessagesDir = path.join(
-      this.rootPath,
-      ".ship",
-      "session",
-      encodeURIComponent(this.contextId),
-      "messages",
-    );
-    const legacyHistoryPath = path.join(legacyMessagesDir, "history.jsonl");
-    const legacyMetaPath = path.join(legacyMessagesDir, "meta.json");
-    if (!(await fs.pathExists(legacyHistoryPath))) return;
-
-    try {
-      const logger = getLogger(this.rootPath, "info");
-      const currentHistoryPath = this.getMessagesFilePath();
-      const legacyRaw = await fs.readFile(legacyHistoryPath, "utf8");
-      const currentRaw = await fs.readFile(currentHistoryPath, "utf8");
-
-      const legacyTrimmed = String(legacyRaw || "").trim();
-      if (!legacyTrimmed) {
-        await fs.writeFile(markerPath, "legacy-empty\n", "utf8");
-        return;
-      }
-
-      const currentTrimmed = String(currentRaw || "").trim();
-      if (currentTrimmed.includes('"sessionId"')) {
-        // 已经是 legacy 格式内容，视为已迁移。
-        await fs.writeFile(markerPath, "already-migrated\n", "utf8");
-        return;
-      }
-
-      const legacyWithLf = legacyRaw.endsWith("\n") ? legacyRaw : `${legacyRaw}\n`;
-      const merged =
-        currentTrimmed.length > 0 ? `${legacyWithLf}${currentRaw}` : legacyWithLf;
-      await fs.writeFile(currentHistoryPath, merged, "utf8");
-
-      const currentMetaPath = this.getMetaFilePath();
-      const currentMetaExists = await fs.pathExists(currentMetaPath);
-      if (!currentMetaExists && (await fs.pathExists(legacyMetaPath))) {
-        await fs.copyFile(legacyMetaPath, currentMetaPath);
-      }
-
-      await fs.writeFile(markerPath, "ok\n", "utf8");
-      await logger.log("info", "Migrated legacy session history into context history", {
-        contextId: this.contextId,
-        legacyHistoryPath,
-        currentHistoryPath,
-      });
-    } catch (error) {
-      // best-effort：迁移失败不阻塞主流程
-      try {
-        const logger = getLogger(this.rootPath, "info");
-        await logger.log("warn", "Legacy session history migration failed (ignored)", {
-          contextId: this.contextId,
-          error: String(error),
-        });
-      } catch {
-        // ignore
-      }
-    }
   }
 
   /**
@@ -411,7 +318,7 @@ export class ContextHistoryStore {
           const age = Date.now() - stat.mtimeMs;
           if (age > staleMs) {
             await fs.remove(lockPath);
-            await logger.log("warn", "Removed stale history lock", {
+            await logger.log("warn", "Removed stale context lock", {
               contextId: this.contextId,
               lockPath,
               ageMs: age,
@@ -422,7 +329,7 @@ export class ContextHistoryStore {
           // ignore
         }
         if (Date.now() - start > staleMs * 2) {
-          throw new Error(`History lock timeout: ${lockPath}`);
+          throw new Error(`Context lock timeout: ${lockPath}`);
         }
         await new Promise((r) => setTimeout(r, 60));
       }
@@ -443,7 +350,7 @@ export class ContextHistoryStore {
   }
 
   /**
-   * 追加一条 UIMessage 到 history.jsonl。
+   * 追加一条 UIMessage 到 messages.jsonl。
    *
    * 关键点（中文）
    * - append 看起来是简单写入，但仍需与 compact 共享同一把锁。
@@ -595,10 +502,10 @@ export class ContextHistoryStore {
   }
 
   /**
-   * 对当前 history 做一次 best-effort compact（必要时）。
+   * 对当前 context messages 做一次 best-effort compact（必要时）。
    *
    * 注意（中文）
-   * - compact 会 rewrite `history.jsonl`（不是纯 append-only），因此必须防并发覆盖
+   * - compact 会 rewrite `messages.jsonl`（不是纯 append-only），因此必须防并发覆盖
    * - 这里做两阶段锁：先 snapshot 再生成摘要，最后再锁定写入，降低锁持有时间
    */
   async compactIfNeeded(params: {
@@ -621,19 +528,19 @@ export class ContextHistoryStore {
       snapshotTailId = snapshot.length > 0 ? String(snapshot[snapshot.length - 1].id || "") : "";
     });
 
-    if (snapshot.length <= params.keepLastMessages + 2) return { compacted: false, reason: "small_history" };
+    if (snapshot.length <= params.keepLastMessages + 2) return { compacted: false, reason: "small_messages" };
 
     const systemText = (params.system || [])
       .map((m) => String((m as any)?.content ?? ""))
       .join("\n\n");
-    // 关键点（中文）：history 现在可能包含 tool parts/output，必须把它们计入预算估算，否则会低估 token。
-    let historyJson = "";
+    // 关键点（中文）：context messages 现在可能包含 tool parts/output，必须把它们计入预算估算，否则会低估 token。
+    let messagesJson = "";
     try {
-      historyJson = JSON.stringify(snapshot);
+      messagesJson = JSON.stringify(snapshot);
     } catch {
-      historyJson = "";
+      messagesJson = "";
     }
-    const est = this.estimateTokensApproxFromText(systemText + "\n\n" + historyJson);
+    const est = this.estimateTokensApproxFromText(systemText + "\n\n" + messagesJson);
     if (est <= params.maxInputTokensApprox) return { compacted: false, reason: "under_budget" };
 
     const keepLast = Math.max(6, Math.min(2000, Math.floor(params.keepLastMessages)));
@@ -670,7 +577,7 @@ export class ContextHistoryStore {
       });
       summary = String(r.text || "").trim();
     } catch (e) {
-      await logger.log("warn", "History compact summary failed, fallback to lossy truncation", {
+      await logger.log("warn", "Context messages compact summary failed, fallback to lossy truncation", {
         contextId: this.contextId,
         error: String(e),
       });
@@ -694,7 +601,7 @@ export class ContextHistoryStore {
     const archiveId = `compact-${Date.now()}-${generateId()}`;
 
     // phase 2：写入（短锁，且避免覆盖新追加）
-    // - 以“当前最新 history”为准重算 currentOlder/currentKept，避免覆盖并发新消息。
+    // - 以“当前最新 context messages”为准重算 currentOlder/currentKept，避免覆盖并发新消息。
     await this.withWriteLock(async () => {
       const current = await this.loadAll();
       if (!current.length) return;
@@ -708,8 +615,12 @@ export class ContextHistoryStore {
       if (currentOlder.length === 0) return;
 
       if (params.archiveOnCompact) {
+        const archivePath = path.join(
+          this.getArchiveDirPath(),
+          `${encodeURIComponent(String(archiveId || "").trim())}.json`,
+        );
         await fs.writeJson(
-          getShipContextHistoryArchivePath(this.rootPath, this.contextId, archiveId),
+          archivePath,
           { v: 1, contextId: this.contextId, archivedAt: Date.now(), messages: currentOlder },
           { spaces: 2 },
         );

@@ -23,7 +23,7 @@
 当前架构的核心原则：
 
 1. **会话隔离**：以 `contextId` 为最小隔离单元（调度、历史、记忆都按 context 维度）。
-2. **单一事实源**：`history.jsonl`（UIMessage）是对话历史唯一来源。
+2. **单一事实源**：`messages.jsonl`（UIMessage）是对话历史唯一来源。
 3. **分层清晰**：`core` 做运行内核，`intergrations` 做业务能力，`server` 做编排与注入。
 4. **可扩展**：通过模块注册、Prompt Provider、MCP、Skills 等机制扩展能力。
 5. **可审计**：关键状态与产物落盘到 `.ship/`，支持回放与排障。
@@ -164,7 +164,7 @@ package/src/intergrations
 ├─ context/
 │  └─ <encodedContextId>/
 │     ├─ messages/
-│     │  ├─ history.jsonl
+│     │  ├─ messages.jsonl
 │     │  ├─ meta.json
 │     │  └─ archive/*.json
 │     └─ memory/
@@ -175,7 +175,7 @@ package/src/intergrations
 │  └─ <taskId>/
 │     ├─ task.md
 │     └─ <timestamp>/
-│        ├─ history.jsonl
+│        ├─ messages.jsonl
 │        ├─ input.md
 │        ├─ output.md
 │        ├─ result.md
@@ -186,7 +186,7 @@ package/src/intergrations
 
 关键说明：
 
-1. 历史唯一事实源是 `messages/history.jsonl`。
+1. 历史唯一事实源是 `messages/messages.jsonl`。
 2. `messages/meta.json` 还承载 `pinnedSkillIds`。
 3. Task run 目录是完整审计单元，执行过程和结果都写入。
 
@@ -310,7 +310,7 @@ package/src/intergrations
 
 1. 历史条目是 `UIMessage<ShipContextMetadataV1>`
 2. 默认仅存 `role=user|assistant`
-3. 历史落盘：`history.jsonl` 每行一条 JSON
+3. 历史落盘：`messages.jsonl` 每行一条 JSON
 
 文件：
 
@@ -556,7 +556,7 @@ Task 是独立的业务子系统（非 core 内核）：
 1. `start.*`：服务启动参数
 2. `llm.*`：模型配置（支持 `${ENV}` 占位符）
 3. `skills.*`：技能扫描根与外部路径策略
-4. `context.history.*`：history compact 策略
+4. `context.messages.*`：history compact 策略
 5. `context.contextQueue.*`：调度参数（注意实现中存在 `contextQueue` 读取差异）
 6. `context.memory.*`：记忆提取/压缩策略
 7. `permissions.*`：执行权限与输出预算

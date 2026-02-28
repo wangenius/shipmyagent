@@ -10,8 +10,7 @@ export {
 
 export { ContextManager } from "./context/manager.js";
 export { Scheduler } from "./context/scheduler.js";
-export { ContextHistoryStore } from "./context/history-store.js";
+export { ContextStore } from "./context/context-store.js";
 
 export type { ContextAgent } from "./types/context-agent.js";
 export { createContextAgent } from "./runtime/agent.js";
-

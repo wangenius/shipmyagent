@@ -244,7 +244,7 @@ export class AgentServer {
       }
 
       try {
-        // [阶段2] 上下文注入：构造 contextId，并写入一条 user 消息到历史。
+        // [阶段2] 上下文注入：构造 contextId，并写入一条 user 消息到上下文消息。
         const contextId = `api:chat:${chatId}`;
         const runtime = getShipRuntimeContext();
         const messageId =
@@ -259,7 +259,7 @@ export class AgentServer {
         });
 
         // [阶段2] 执行：在 withContextRequestContext 下运行 agent，保证下游可读取会话上下文。
-        // API 也是一种 “chat”（有 chatKey + 可落盘 history），但它不是“平台消息回发”场景：
+        // API 也是一种 “chat”（有 chatKey + 可落盘 context messages），但它不是“平台消息回发”场景：
         // - 不提供 dispatcher 回发能力（响应通过 HTTP body 返回）
         const result = await withContextRequestContext(
           {
@@ -280,12 +280,12 @@ export class AgentServer {
           pickLastSuccessfulChatSendText((result as any)?.toolCalls || []) ||
           String(result?.output || "");
         try {
-          // [阶段3] 历史落盘：优先 append assistantMessage；缺失时生成文本消息兜底。
-          const store = runtime.contextManager.getHistoryStore(contextId);
+          // [阶段3] 上下文消息落盘：优先 append assistantMessage；缺失时生成文本消息兜底。
+          const store = runtime.contextManager.getContextStore(contextId);
           const assistantMessage = (result as any)?.assistantMessage;
           if (assistantMessage && typeof assistantMessage === "object") {
             await store.append(assistantMessage as any);
-            void runtime.contextManager.afterContextHistoryUpdatedAsync(contextId);
+            void runtime.contextManager.afterContextUpdatedAsync(contextId);
           } else if (userVisible && userVisible.trim()) {
             await store.append(
               store.createAssistantTextMessage({
@@ -302,7 +302,7 @@ export class AgentServer {
                 source: "egress",
               }),
             );
-            void runtime.contextManager.afterContextHistoryUpdatedAsync(contextId);
+            void runtime.contextManager.afterContextUpdatedAsync(contextId);
           }
         } catch {
           // ignore

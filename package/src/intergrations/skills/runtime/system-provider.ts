@@ -67,7 +67,7 @@ async function buildSkillsProviderOutput(
   ctx: SystemPromptProviderContext,
 ): Promise<SystemPromptProviderOutput> {
   const runtime = getContext();
-  const historyStore = getIntegrationContextManager(runtime).getHistoryStore(
+  const contextStore = getIntegrationContextManager(runtime).getContextStore(
     ctx.contextId,
   );
   const discoveredSkills = discoverClaudeSkillsSync(runtime.rootPath, runtime.config);
@@ -90,7 +90,7 @@ async function buildSkillsProviderOutput(
 
   // phase 1：读取并装载 pinned skills
   try {
-    const meta = await historyStore.loadMeta();
+    const meta = await contextStore.loadMeta();
     const pinnedSkillIds = Array.isArray(meta.pinnedSkillIds)
       ? meta.pinnedSkillIds
       : [];
@@ -133,7 +133,7 @@ async function buildSkillsProviderOutput(
       );
       const normalizedLoaded = Array.from(new Set(loadedIds));
       if (normalizedInput.length !== normalizedLoaded.length) {
-        await historyStore.setPinnedSkillIds(normalizedLoaded);
+        await contextStore.setPinnedSkillIds(normalizedLoaded);
       }
     }
   } catch {

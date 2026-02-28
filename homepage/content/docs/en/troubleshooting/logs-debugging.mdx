@@ -152,7 +152,7 @@ Common things to look for in `.ship/logs/<YYYY-MM-DD>.jsonl`:
 ls -la .ship/chat
 
 # Inspect the most recent chat log entries (replace with your chatKey)
-tail -50 .ship/chat/<encode(chatKey)>/conversations/history.jsonl
+tail -50 .ship/chat/<encode(chatKey)>/conversations/messages.jsonl
 
 # Check today's unified logs for runtime errors
 tail -200 .ship/logs/$(date +%F).jsonl

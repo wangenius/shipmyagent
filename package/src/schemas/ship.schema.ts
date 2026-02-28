@@ -52,7 +52,7 @@ export const SHIP_JSON_SCHEMA: Record<string, unknown> = {
       type: "object",
       additionalProperties: true,
       properties: {
-        history: {
+        messages: {
           type: "object",
           additionalProperties: true,
           properties: {

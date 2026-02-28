@@ -27,7 +27,7 @@ ShipMyAgent 使用 lane scheduler 按 `chatKey` 隔离调度：
 - `Agent.md`：项目/仓库的长期指令（人类写给 agent 的规则与偏好）
 - `DefaultPrompt`：运行时上下文 + 输出规则（包括要求用 `chat_send` 回发；不允许给 user 文本加前缀）
 
-历史上下文来自该 `chatKey` 的 history（`UIMessage[]`，落盘在 `.ship/chat/<encodedChatKey>/messages/history.jsonl`），并在接近上下文窗口时自动 compact。
+历史上下文来自该 `chatKey` 的 history（`UIMessage[]`，落盘在 `.ship/chat/<encodedChatKey>/messages/messages.jsonl`），并在接近上下文窗口时自动 compact。
 
 ## 1) 平台消息进入 adapter
 
@@ -67,7 +67,7 @@ export type IncomingChatMessage = {
 
 ## 3) history 落盘（可审计）
 
-用户消息会被 append 到 `.ship/chat/<encodedChatKey>/messages/history.jsonl`（JSONL，一行一条 `UIMessage`）。示例：
+用户消息会被 append 到 `.ship/chat/<encodedChatKey>/messages/messages.jsonl`（JSONL，一行一条 `UIMessage`）。示例：
 
 ```json
 {"id":"u:telegram-chat-123:456","role":"user","parts":[{"type":"text","text":"..."}],"metadata":{"v":1,"ts":1730000000000,"channel":"telegram","chatId":"123","chatKey":"telegram-chat-123","userId":"123","messageId":"456"}}

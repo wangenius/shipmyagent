@@ -53,18 +53,18 @@ export interface ShipConfig {
     anthropicVersion?: string;
   };
   /**
-   * 上下文与历史管理（工程向配置）。
+   * 上下文管理（工程向配置）。
    *
    * 说明
-   * - 历史以 UIMessage[] 为唯一事实源（.ship/context/<contextId>/messages/history.jsonl）。
+   * - 对话消息以 UIMessage[] 为唯一事实源（.ship/context/<contextId>/messages/messages.jsonl）。
    * - Agent 每次执行直接把 UIMessage[] 转成 ModelMessage[] 作为 messages 输入。
    * - 超出上下文窗口时会自动 compact（更早段压缩为摘要 + 保留最近窗口）。
    */
   context?: {
     /**
-     * History（唯一历史来源）的 compact 策略。
+     * messages（唯一上下文消息来源）的 compact 策略。
      */
-    history?: {
+    messages?: {
       /**
        * compact 后保留最近多少条消息（user/assistant 都计入）。
        * 默认：30
@@ -318,7 +318,7 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
     temperature: 0.7,
   },
   context: {
-    history: {
+    messages: {
       keepLastMessages: 30,
       maxInputTokensApprox: 16000,
       archiveOnCompact: true,
@@ -477,35 +477,35 @@ export function getShipContextDirPath(cwd: string, contextId: string): string {
 }
 
 /**
- * History Messages（对话历史，唯一事实源）。
+ * Context Messages（会话上下文消息，唯一事实源）。
  *
  * 关键点（中文）
- * - `.ship/context/<encodedContextId>/messages/history.jsonl`：每行一个 UIMessage（user/assistant）
+ * - `.ship/context/<encodedContextId>/messages/messages.jsonl`：每行一个 UIMessage（user/assistant）
  * - compact 会把被折叠的原始段写入 `messages/archive/*`（可审计）
  */
 export function getShipContextMessagesDirPath(cwd: string, contextId: string): string {
   return path.join(getShipContextDirPath(cwd, contextId), "messages");
 }
 
-export function getShipContextHistoryPath(cwd: string, contextId: string): string {
-  return path.join(getShipContextMessagesDirPath(cwd, contextId), "history.jsonl");
+export function getShipContextMessagesPath(cwd: string, contextId: string): string {
+  return path.join(getShipContextMessagesDirPath(cwd, contextId), "messages.jsonl");
 }
 
-export function getShipContextHistoryMetaPath(cwd: string, contextId: string): string {
+export function getShipContextMessagesMetaPath(cwd: string, contextId: string): string {
   return path.join(getShipContextMessagesDirPath(cwd, contextId), "meta.json");
 }
 
-export function getShipContextHistoryArchiveDirPath(cwd: string, contextId: string): string {
+export function getShipContextMessagesArchiveDirPath(cwd: string, contextId: string): string {
   return path.join(getShipContextMessagesDirPath(cwd, contextId), "archive");
 }
 
-export function getShipContextHistoryArchivePath(
+export function getShipContextMessagesArchivePath(
   cwd: string,
   contextId: string,
   archiveId: string,
 ): string {
   return path.join(
-    getShipContextHistoryArchiveDirPath(cwd, contextId),
+    getShipContextMessagesArchiveDirPath(cwd, contextId),
     `${encodeURIComponent(String(archiveId || "").trim())}.json`,
   );
 }

@@ -19,7 +19,7 @@ Task 存放在项目目录：
   <task_id>/
     task.md
     <timestamp>/
-      history.jsonl
+      messages.jsonl
       *.md
 ```
 
@@ -65,7 +65,7 @@ Task 存放在项目目录：
 
 执行完成后：
 
-- 在 `./.ship/task/<task_id>/<timestamp>/` 查看 `result.md` / `output.md` / `input.md` / `history.jsonl`
+- 在 `./.ship/task/<task_id>/<timestamp>/` 查看 `result.md` / `output.md` / `input.md` / `messages.jsonl`
 - 系统会向 `chatKey` 发送执行结果
 
 ## 编写任务正文建议

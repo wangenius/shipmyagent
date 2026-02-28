@@ -1,5 +1,5 @@
 /**
- * Context history 类型转发。
+ * Context message 类型转发。
  *
  * 关键点（中文）
  * - 源定义在 core/types
@@ -11,11 +11,11 @@
 
 export type {
   ShipContextChannel,
-  ShipHistoryKind,
-  ShipHistorySource,
+  ShipContextMessageKind,
+  ShipContextMessageSource,
   ShipMessageSourceRangeV1,
   ShipContextMetadataV1,
   ShipContextMessageV1,
-} from "../core/types/context-history.js";
+} from "../core/types/context-message.js";
 
 export type { ShipContextMessagesMetaV1 } from "../core/types/context-messages-meta.js";

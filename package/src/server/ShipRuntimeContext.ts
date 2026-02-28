@@ -293,7 +293,7 @@ You are a helpful project assistant.`;
       runContextMemoryMaintenance({
         context: getShipIntegrationContext(),
         contextId,
-        getHistoryStore: (id) => contextManager.getHistoryStore(id),
+        getContextStore: (id) => contextManager.getContextStore(id),
       }),
   });
 

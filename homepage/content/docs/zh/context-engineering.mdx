@@ -62,7 +62,7 @@ ShipMyAgent 的核心命题是 **Repo is the Agent**：你的代码仓库不仅�
 每次请求发送给模型的输入形态是稳定的：
 
 - `system`：上面这份 system prompt（包含运行时约束，例如“用户可见内容必须通过 `chat_send` 回复”）
-- `messages`：来自该 `chatKey` 的 history（`UIMessage[]`），落盘在 `.ship/chat/<encodedChatKey>/messages/history.jsonl`
+- `messages`：来自该 `chatKey` 的 history（`UIMessage[]`），落盘在 `.ship/chat/<encodedChatKey>/messages/messages.jsonl`
 - 本轮 `user` 消息保持原文（不加前缀）
 
 ## 历史太长怎么办（简化版）

@@ -18,7 +18,7 @@ sequenceDiagram
   participant U as 用户 (Telegram)
   participant TG as Telegram API
   participant BOT as ShipMyAgent TelegramBot
-  participant CS as History (.ship/chat/*/messages/history.jsonl)
+  participant CS as History (.ship/chat/*/messages/messages.jsonl)
   participant RT as Agent
   participant T as chat_send tool
 
@@ -83,7 +83,7 @@ ShipMyAgent 会把 Telegram 的聊天抽象为一个 **chatKey**，用来隔离�
 
 每次收到用户消息，TelegramBot 都会先把它写入对话 history（JSONL，append-only）：
 
-- 路径：`.ship/chat/<encode(chatKey)>/messages/history.jsonl`
+- 路径：`.ship/chat/<encode(chatKey)>/messages/messages.jsonl`
 - 格式：`UIMessage`（包含 `role/parts/metadata` 等）
 
 在真正执行之前，runtime 会直接使用该 `chatKey` 的 history 作为模型的 `messages` 输入；当 history 接近上下文窗口时会自动 compact。

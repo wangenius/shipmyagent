@@ -4,7 +4,7 @@
  * 职责（中文）
  * - 创建 run 目录（timestamp）
  * - 以“干净历史”调用当前 runtime 的 Agent（逻辑与正常 chat 一致）
- * - 把执行过程与结果写入 run 目录（history.jsonl / output.md / result.md / error.md）
+ * - 把执行过程与结果写入 run 目录（messages.jsonl / output.md / result.md / error.md）
  * - 执行结束后向 task.frontmatter.chatKey 推送一条结果消息（成功/失败都会发）
  */
 
@@ -124,7 +124,7 @@ export async function runTaskNow(params: {
   try {
     const agent = getIntegrationContextManager(context).getAgent(runContextId);
 
-    // 关键点（中文）：以 scheduler channel 运行，但使用 task-run chatKey 让 history 落盘到 runDir。
+    // 关键点（中文）：以 scheduler channel 运行，但使用 task-run chatKey 让 messages 落盘到 runDir。
     const result = await getIntegrationRequestContextBridge(context).withContextRequestContext(
       {
         channel: "scheduler",
@@ -142,9 +142,9 @@ export async function runTaskNow(params: {
 
     outputText = String((result as any)?.output || "");
 
-    // 落盘 assistant UIMessage（包含 tool parts），以便 history.jsonl 可审计。
+    // 落盘 assistant UIMessage（包含 tool parts），以便 messages.jsonl 可审计。
     try {
-      const store = getIntegrationContextManager(context).getHistoryStore(runContextId);
+      const store = getIntegrationContextManager(context).getContextStore(runContextId);
       const assistantMessage = (result as any)?.assistantMessage;
       if (assistantMessage && typeof assistantMessage === "object") {
         await store.append(assistantMessage as any);
@@ -239,7 +239,7 @@ export async function runTaskNow(params: {
   resultLines.push("");
   resultLines.push(`## Artifacts`);
   resultLines.push("");
-  resultLines.push(`- history: ${toMdLink(path.posix.join(runDirRel, "history.jsonl"))}`);
+  resultLines.push(`- messages: ${toMdLink(path.posix.join(runDirRel, "messages.jsonl"))}`);
   resultLines.push(`- input: ${toMdLink(path.posix.join(runDirRel, "input.md"))}`);
   resultLines.push(`- output: ${toMdLink(path.posix.join(runDirRel, "output.md"))}`);
   resultLines.push(`- result: ${toMdLink(path.posix.join(runDirRel, "result.md"))}`);

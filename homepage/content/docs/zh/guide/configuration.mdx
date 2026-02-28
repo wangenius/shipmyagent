@@ -126,7 +126,7 @@ description: 深入了解 ship.json 和 Agent.md 配置
 
 控制每次执行时注入多少"对话历史"和 Chat 的调度策略。
 
-- **context.history**：每个 `chatKey` 维护一份持续增长的 `UIMessage[]` 作为唯一 history（落盘在 `.ship/chat/<encodedChatKey>/messages/history.jsonl`），并在超出上下文窗口时自动 compact。
+- **context.messages**：每个 `chatKey` 维护一份持续增长的 `UIMessage[]` 作为唯一 history（落盘在 `.ship/chat/<encodedChatKey>/messages/messages.jsonl`），并在超出上下文窗口时自动 compact。
   - **keepLastMessages**: compact 后保留的最近消息条数（默认 `30`）
   - **maxInputTokensApprox**: 输入预算（近似 token 数，用于提前触发 compact，默认 `16000`）
   - **archiveOnCompact**: compact 时是否归档被折叠的原始段（默认 `true`）
