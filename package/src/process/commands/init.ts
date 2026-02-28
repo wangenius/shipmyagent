@@ -34,10 +34,12 @@ import {
   getShipDebugDirPath,
   getShipPublicDirPath,
   getShipTasksDirPath,
+} from "../../infra/utils/paths.js";
+import {
   ensureDir,
   saveJson,
-  ShipConfig,
-} from "../../infra/utils/index.js";
+} from "../../infra/utils/storage.js";
+import type { ShipConfig } from "../../infra/utils/config.js";
 import { SHIP_JSON_SCHEMA } from "../../schemas/ship.schema.js";
 import { MCP_JSON_SCHEMA } from "../../schemas/mcp.schema.js";
 import type { AdapterKey, InitOptions } from "./types/init.js";

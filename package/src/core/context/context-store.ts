@@ -12,16 +12,16 @@ import { open as openFile, readFile as readFileNative, stat as statNative } from
 import path from "node:path";
 import { convertToModelMessages, generateText, type LanguageModel, type SystemModelMessage } from "ai";
 import {
-  generateId,
   getShipContextDirPath,
   getShipContextMessagesArchiveDirPath,
   getShipContextMessagesMetaPath,
   getShipContextMessagesPath,
   getShipContextMessagesDirPath,
-} from "../../infra/utils/index.js";
+} from "../../infra/utils/paths.js";
+import { generateId } from "../../infra/utils/id.js";
 import type { ShipContextMetadataV1, ShipContextMessageV1 } from "../types/context-message.js";
 import type { ShipContextMessagesMetaV1 } from "../types/context-messages-meta.js";
-import { getLogger } from "../../logger/index.js";
+import { getLogger } from "../../logger/logger.js";
 import { getShipRuntimeContextBase } from "../../process/server/ShipRuntimeContext.js";
 
 /**

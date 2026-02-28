@@ -334,7 +334,7 @@ export class Scheduler {
     }
 
     const ctx: ContextRequestContext = {
-      channel: first.channel as ContextRequestContext["channel"],
+      chat: first.channel as ContextRequestContext["chat"],
       targetId: first.targetId,
       contextId: first.contextId,
       actorId: first.actorId,

@@ -5,11 +5,6 @@
  * - tool（如 `chat_send`）通过 dispatcher 把消息发回对应平台
  * - dispatcher 本身不关心 chatKey/history，只关心“怎么把一段 text 发出去”
  */
-export type {
-  ChatDispatchChannel,
-  ChatDispatcher,
-} from "../types/chat-dispatcher.js";
-
 import type {
   ChatDispatchChannel,
   ChatDispatcher,

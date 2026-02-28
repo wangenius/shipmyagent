@@ -7,7 +7,7 @@ import type {
   SystemPromptProvider,
   SystemPromptProviderContext,
   SystemPromptProviderOutput,
-} from "../../../infra/system-prompt-provider-types.js";
+} from "../../../core/types/system-prompt-provider.js";
 import { discoverClaudeSkillsSync } from "./discovery.js";
 import { renderClaudeSkillsPromptSection } from "./prompt.js";
 import { buildLoadedSkillsSystemText } from "./active-skills-prompt.js";

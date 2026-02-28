@@ -10,7 +10,7 @@
 
 import { AgentServer } from "../server/index.js";
 import { createInteractiveServer } from "../server/interactive.js";
-import { createTelegramBot } from "../../services/chat/adapters/telegram.js";
+import { createTelegramBot } from "../../services/chat/adapters/telegram/bot.js";
 import { createFeishuBot } from "../../services/chat/adapters/feishu.js";
 import { createQQBot } from "../../services/chat/adapters/qq.js";
 import {
@@ -19,7 +19,7 @@ import {
   initShipRuntimeContext,
 } from "../server/ShipRuntimeContext.js";
 import type { StartOptions } from "./types/start.js";
-import { logger } from "../../logger/index.js";
+import { logger } from "../../logger/logger.js";
 import { startAllServiceRuntimes, stopAllServiceRuntimes } from "../../core/services/registry.js";
 
 /**

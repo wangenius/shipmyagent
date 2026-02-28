@@ -8,7 +8,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
  * - `targetId/targetType/threadId` 是平台无关的“目标端点信息”。
  */
 export type ContextRequestContext = {
-  channel?: "telegram" | "feishu" | "qq" | "cli" | "scheduler" | "api";
+  chat?: "telegram" | "feishu" | "qq" | "cli" | "scheduler" | "api";
   contextId?: string;
   targetId?: string;
   targetType?: string;

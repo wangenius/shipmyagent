@@ -1,5 +1,5 @@
 import { DEFAULT_SHIP_PROMPTS } from "../../core/prompts/system.js";
-import { logger as defaultLogger, type Logger } from "../../logger/index.js";
+import { logger as defaultLogger, type Logger } from "../../logger/logger.js";
 import { McpManager } from "../../services/mcp/runtime/manager.js";
 import { ContextManager } from "../../core/context/manager.js";
 import {
@@ -26,10 +26,12 @@ import {
   getShipProfileDirPath,
   getShipPublicDirPath,
   getShipTasksDirPath,
+} from "../../infra/utils/paths.js";
+import {
   loadProjectDotenv,
   loadShipConfig,
   type ShipConfig,
-} from "../../infra/utils/index.js";
+} from "../../infra/utils/config.js";
 import fs from "fs-extra";
 import path from "path";
 
@@ -265,7 +267,7 @@ You are a helpful project assistant.`;
   let contextManager: ContextManager;
   contextManager = new ContextManager({
     sendAction: async ({ context, action }) => {
-      const channel = context.channel;
+      const channel = context.chat;
       if (channel !== "telegram" && channel !== "feishu" && channel !== "qq") {
         return;
       }

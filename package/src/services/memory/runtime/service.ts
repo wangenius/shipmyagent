@@ -1,6 +1,6 @@
 import type { ServiceContextStore } from "../../../infra/service-runtime-ports.js";
 import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
-import { getLogger } from "../../../logger/index.js";
+import { getLogger } from "../../../logger/logger.js";
 import { getServiceModelFactory } from "../../../infra/service-runtime-dependencies.js";
 import { MemoryManager } from "./manager.js";
 import { compressMemory, extractMemoryFromContextMessages } from "./extractor.js";

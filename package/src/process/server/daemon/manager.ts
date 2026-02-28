@@ -16,7 +16,7 @@
 import fs from "fs-extra";
 import path from "path";
 import { spawn } from "child_process";
-import { getShipDebugDirPath } from "../../../infra/utils/index.js";
+import { getShipDebugDirPath } from "../../../infra/utils/paths.js";
 import {
   DAEMON_LOG_FILENAME,
   DAEMON_META_FILENAME,

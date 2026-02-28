@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs-extra";
-import { getCacheDirPath } from "../../../../infra/utils/index.js";
+import { getCacheDirPath } from "../../../../infra/utils/paths.js";
 
 /**
  * Telegram 轮询模式的持久化状态存储。

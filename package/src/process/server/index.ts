@@ -10,12 +10,12 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { logger as server_logger } from "../../logger/index.js";
+import { logger as server_logger } from "../../logger/logger.js";
 import { withContextRequestContext } from "../../core/context/request-context.js";
 import http from "node:http";
 import fs from "fs-extra";
 import path from "path";
-import { getShipPublicDirPath } from "../../infra/utils/index.js";
+import { getShipPublicDirPath } from "../../infra/utils/paths.js";
 import {
   getShipServiceContext,
   getShipRuntimeContext,

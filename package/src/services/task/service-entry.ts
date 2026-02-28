@@ -28,7 +28,7 @@ import type {
   TaskUpdateResponse,
   TaskSetStatusResponse,
 } from "./types/task-command.js";
-import type { SmaService } from "../../infra/service-registry-types.js";
+import type { SmaService } from "../../core/services/types/service-registry.js";
 import type { ShipTaskStatus } from "./types/task.js";
 
 function parsePortOption(value: string): number {

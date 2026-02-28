@@ -11,5 +11,3 @@ import type { ContextAgent } from "../types/context-agent.js";
 export function createContextAgent(): ContextAgent {
   return new ContextAgentRunner();
 }
-
-export type { ContextAgent } from "../types/context-agent.js";

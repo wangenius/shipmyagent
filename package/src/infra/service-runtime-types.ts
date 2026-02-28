@@ -1,11 +1,11 @@
-import type { Logger } from "../logger/index.js";
+import type { Logger } from "../logger/logger.js";
 import type {
   ServiceModelFactory,
   ServiceContextManager,
   ServiceContextRequestContextBridge,
 } from "./service-runtime-ports.js";
 import type { ServiceChatRuntimeBridge } from "./service-chat-runtime-bridge.js";
-import type { ShipConfig } from "./utils/index.js";
+import type { ShipConfig } from "./utils/config.js";
 
 /**
  * Service 统一运行时依赖。

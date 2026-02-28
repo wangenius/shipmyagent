@@ -8,7 +8,8 @@
 
 import fs from "fs-extra";
 import path from "path";
-import { getLogsDirPath, getTimestamp } from "../infra/utils/index.js";
+import { getLogsDirPath } from "../infra/utils/paths.js";
+import { getTimestamp } from "../infra/utils/time.js";
 
 /**
  * Unified runtime logger for ShipMyAgent.
@@ -209,3 +210,15 @@ export class Logger {
 }
 
 export const logger = new Logger();
+
+/**
+ * 获取统一 logger。
+ *
+ * 说明（中文）
+ * - 当前实现是“进程级单例 logger”（落盘路径依赖 runtime root）。
+ * - 参数保留是为了兼容上层调用习惯：有些代码会传入 projectRoot/logLevel。
+ * - 若未来需要“多实例 logger”，可以在这里集中改，不影响调用方。
+ */
+export function getLogger(_projectRoot?: string, _logLevel?: string): Logger {
+  return logger;
+}

@@ -8,8 +8,8 @@
 
 import path from "path";
 import fs from "fs-extra";
-import { getCacheDirPath } from "../../../infra/utils/index.js";
-import type { ChatDispatchChannel } from "./chat-send-registry.js";
+import { getCacheDirPath } from "../../../infra/utils/paths.js";
+import type { ChatDispatchChannel } from "../types/chat-dispatcher.js";
 import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
 
 export async function tryClaimChatEgressChatSend(params: {

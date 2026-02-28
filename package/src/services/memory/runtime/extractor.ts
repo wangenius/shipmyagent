@@ -5,7 +5,7 @@ import type {
   MemoryExtractParams,
   MemoryCompressParams,
 } from "../types/memory.js";
-import { getLogger } from "../../../logger/index.js";
+import { getLogger } from "../../../logger/logger.js";
 import {
   getServiceContextManager,
 } from "../../../infra/service-runtime-dependencies.js";

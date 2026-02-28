@@ -16,15 +16,15 @@ import {
   type ModelMessage,
   type SystemModelMessage,
 } from "ai";
-import { withLlmRequestContext } from "../../logger/index.js";
-import { generateId } from "../../infra/utils/index.js";
+import { withLlmRequestContext } from "../../logger/context.js";
+import { generateId } from "../../infra/utils/id.js";
 import {
   buildContextSystemPrompt,
   transformPromptsIntoSystemMessages,
 } from "../prompts/system.js";
 import { createModel } from "../llm/create-model.js";
 import type { AgentRunInput, AgentResult } from "../types/agent.js";
-import type { Logger } from "../../logger/index.js";
+import type { Logger } from "../../logger/logger.js";
 import { contextRequestContext } from "../context/request-context.js";
 import { createAgentTools } from "../tools/agent-tools.js";
 import { openai } from "@ai-sdk/openai";
@@ -34,7 +34,7 @@ import {
   getShipRuntimeContextBase,
 } from "../../process/server/ShipRuntimeContext.js";
 import type { ContextAgent } from "../types/context-agent.js";
-import { collectSystemPromptProviderResult } from "../prompts/index.js";
+import { collectSystemPromptProviderResult } from "../prompts/system-provider.js";
 import {
   extractTextFromUiMessage,
   extractToolCallsFromUiMessage,
@@ -400,7 +400,7 @@ export class ContextAgentRunner implements ContextAgent {
       let finalAssistantUiMessage: any = null;
       try {
         const ctx = contextRequestContext.getStore();
-        const channel = (ctx?.channel as any) || "api";
+        const channel = (ctx?.chat as any) || "api";
         const targetId = String(ctx?.targetId || contextId);
         const md: ShipContextMetadataV1 = {
           v: 1,
@@ -587,8 +587,8 @@ export class ContextAgentRunner implements ContextAgent {
     const contextCtx = contextRequestContext.getStore();
     const runtimeExtraContextLines: string[] = [];
 
-    if (contextCtx?.channel)
-      runtimeExtraContextLines.push(`- Channel: ${contextCtx.channel}`);
+    if (contextCtx?.chat)
+      runtimeExtraContextLines.push(`- Channel: ${contextCtx.chat}`);
     if (contextCtx?.targetId)
       runtimeExtraContextLines.push(`- TargetId: ${contextCtx.targetId}`);
     if (contextCtx?.actorId)
@@ -736,7 +736,7 @@ export class ContextAgentRunner implements ContextAgent {
       if (lastText && lastText === String(userText || "").trim()) return;
 
       const ctx = contextRequestContext.getStore();
-      const channel = (ctx?.channel as any) || "api";
+      const channel = (ctx?.chat as any) || "api";
       const targetId = String(ctx?.targetId || contextId);
       const msg = contextStore.createUserTextMessage({
         text: userText,

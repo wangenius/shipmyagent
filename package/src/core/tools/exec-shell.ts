@@ -14,7 +14,7 @@ import { z } from "zod";
 import { tool } from "ai";
 import { getShipRuntimeContext } from "../../process/server/ShipRuntimeContext.js";
 import { contextRequestContext } from "../context/request-context.js";
-import { llmRequestContext } from "../../logger/index.js";
+import { llmRequestContext } from "../../logger/context.js";
 
 const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
 const DEFAULT_MAX_OUTPUT_LINES = 200;
@@ -193,7 +193,7 @@ function buildExecContextEnv(): NodeJS.ProcessEnv {
   const llmCtx = llmRequestContext.getStore();
 
   setEnvString(env, "SMA_CTX_CONTEXT_ID", contextCtx?.contextId);
-  setEnvString(env, "SMA_CTX_CHANNEL", contextCtx?.channel);
+  setEnvString(env, "SMA_CTX_CHANNEL", contextCtx?.chat);
   setEnvString(env, "SMA_CTX_TARGET_ID", contextCtx?.targetId);
   setEnvString(env, "SMA_CTX_TARGET_TYPE", contextCtx?.targetType);
   setEnvString(env, "SMA_CTX_ACTOR_ID", contextCtx?.actorId);

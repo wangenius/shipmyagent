@@ -9,8 +9,9 @@
  * - 这里是运行时内部能力（不是 tool）；tool `chat_contact_send` 也会复用本实现
  */
 
-import { getChatSender, type ChatDispatchChannel } from "./chat-send-registry.js";
-import type { ShipContextMessageV1 } from "../../../infra/context-message-types.js";
+import { getChatSender } from "./chat-send-registry.js";
+import type { ChatDispatchChannel } from "../types/chat-dispatcher.js";
+import type { ShipContextMessageV1 } from "../../../core/types/context-message.js";
 import { getServiceContextManager } from "../../../infra/service-runtime-dependencies.js";
 import type { ServiceRuntimeDependencies } from "../../../infra/service-runtime-types.js";
 

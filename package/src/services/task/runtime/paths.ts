@@ -12,7 +12,7 @@
  */
 
 import path from "node:path";
-import { getShipTasksDirPath } from "../../../infra/utils/index.js";
+import { getShipTasksDirPath } from "../../../infra/utils/paths.js";
 
 export function isValidTaskId(input: string): boolean {
   const id = String(input || "").trim();

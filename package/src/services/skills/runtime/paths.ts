@@ -9,7 +9,7 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import type { ShipConfig } from "../../../infra/utils/index.js";
+import type { ShipConfig } from "../../../infra/utils/config.js";
 import type { SkillRoot } from "../types/skill-root.js";
 import { expandHome, uniqStrings } from "./utils.js";
 

@@ -7,12 +7,12 @@
  */
 
 import fs from "fs-extra";
-import type { SystemPromptProvider } from "../../../infra/system-prompt-provider-types.js";
+import type { SystemPromptProvider } from "../../../core/types/system-prompt-provider.js";
 import {
   getShipProfileOtherPath,
   getShipProfilePrimaryPath,
   getShipContextMemoryPrimaryPath,
-} from "../../../infra/utils/index.js";
+} from "../../../infra/utils/paths.js";
 
 async function readOptionalMarkdown(filePath: string): Promise<string> {
   try {
@@ -72,4 +72,3 @@ export const memorySystemPromptProvider: SystemPromptProvider = {
     return { messages };
   },
 };
-
