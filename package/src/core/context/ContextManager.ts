@@ -10,7 +10,7 @@
 import type { ContextAgent } from "../types/ContextAgent.js";
 import { ContextStore } from "./ContextStore.js";
 import type { ShipContextMetadataV1 } from "../types/ContextMessage.js";
-import { getRuntimeContextBase } from "../../main/runtime/ShipRuntimeContext.js";
+import { getRuntimeStateBase } from "../../main/runtime/RuntimeState.js";
 import path from "node:path";
 import type { JsonObject } from "../../types/Json.js";
 import {
@@ -80,7 +80,7 @@ export class ContextManager {
     const created = parsedRun
       ? (() => {
           const runDir = getTaskRunDir(
-            getRuntimeContextBase().rootPath,
+            getRuntimeStateBase().rootPath,
             parsedRun.taskId,
             parsedRun.timestamp,
           );

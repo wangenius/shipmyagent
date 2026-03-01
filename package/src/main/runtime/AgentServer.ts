@@ -18,9 +18,9 @@ import path from "path";
 import { getShipPublicDirPath } from "../project/Paths.js";
 import type { ShipContextMetadataV1 } from "../../core/types/ContextMessage.js";
 import {
-  getShipServiceContext,
-  getShipRuntimeContext,
-} from "./ShipRuntimeContext.js";
+  getServiceRuntimeState,
+  getRuntimeState,
+} from "./RuntimeState.js";
 import { getProcessServiceBindings } from "../service/ServiceProcessBindings.js";
 import {
   controlServiceRuntime,
@@ -78,7 +78,7 @@ export class AgentServer {
     // Static file service (frontend pages)
     this.app.get("/", async (c) => {
       const indexPath = path.join(
-        getShipRuntimeContext().rootPath,
+        getRuntimeState().rootPath,
         "public",
         "index.html",
       );
@@ -94,7 +94,7 @@ export class AgentServer {
 
     this.app.get("/styles.css", async (c) => {
       const cssPath = path.join(
-        getShipRuntimeContext().rootPath,
+        getRuntimeState().rootPath,
         "public",
         "styles.css",
       );
@@ -110,7 +110,7 @@ export class AgentServer {
 
     this.app.get("/app.js", async (c) => {
       const jsPath = path.join(
-        getShipRuntimeContext().rootPath,
+        getRuntimeState().rootPath,
         "public",
         "app.js",
       );
@@ -126,7 +126,7 @@ export class AgentServer {
 
     // Public file service: `.ship/public/*` -> `/ship/public/*`
     this.app.get("/ship/public/*", async (c) => {
-      const root = getShipPublicDirPath(getShipRuntimeContext().rootPath);
+      const root = getShipPublicDirPath(getRuntimeState().rootPath);
       const prefix = "/ship/public/";
       const requestPath = c.req.path;
       const rel = requestPath.startsWith(prefix)
@@ -217,7 +217,7 @@ export class AgentServer {
       const result = await controlServiceRuntime({
         serviceName,
         action: action as "start" | "stop" | "restart" | "status",
-        context: getShipServiceContext(),
+        context: getServiceRuntimeState(),
       });
       return c.json(result, result.success ? 200 : 400);
     });
@@ -254,13 +254,13 @@ export class AgentServer {
         serviceName,
         command,
         payload: body?.payload,
-        context: getShipServiceContext(),
+        context: getServiceRuntimeState(),
       });
       return c.json(result, result.success ? 200 : 400);
     });
 
     // 统一注册服务路由（chat / skill / task / future）
-    registerAllServicesForServer(this.app, getShipServiceContext());
+    registerAllServicesForServer(this.app, getServiceRuntimeState());
 
     // Execute instruction
     // `/api/execute` 分段流程（中文）
@@ -329,7 +329,7 @@ export class AgentServer {
       try {
         // [阶段2] 上下文注入：构造 contextId，并写入一条 user 消息到上下文消息。
         const contextId = `api:chat:${chatId}`;
-        const runtime = getShipRuntimeContext();
+        const runtime = getRuntimeState();
         const messageId =
           typeof body?.messageId === "string" ? body.messageId : undefined;
         await runtime.contextManager.appendUserMessage({

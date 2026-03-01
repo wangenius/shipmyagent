@@ -13,9 +13,9 @@ import path from "path";
 import fs from "fs-extra";
 import { fileURLToPath } from "url";
 import { getAgentMdPath, getShipJsonPath } from "../project/Paths.js";
-import { startDaemonProcess } from "../runtime/daemon/Manager.js";
-import { buildRunArgsFromOptions } from "../runtime/daemon/CliArgs.js";
-import type { StartOptions } from "./types/Start.js";
+import { startDaemonProcess } from "../runtime/Manager.js";
+import { buildRunArgsFromOptions } from "../runtime/CliArgs.js";
+import type { StartOptions } from "../types/Start.js";
 
 /**
  * start 命令入口。
@@ -33,11 +33,15 @@ export async function startCommand(
 
   // 启动前先做最基本的工程校验，避免起了一个立刻报错退出的 daemon。
   if (!fs.existsSync(getAgentMdPath(projectRoot))) {
-    console.error('❌ Project not initialized. Please run "shipmyagent init" first');
+    console.error(
+      '❌ Project not initialized. Please run "shipmyagent init" first',
+    );
     process.exit(1);
   }
   if (!fs.existsSync(getShipJsonPath(projectRoot))) {
-    console.error('❌ ship.json does not exist. Please run "shipmyagent init" first');
+    console.error(
+      '❌ ship.json does not exist. Please run "shipmyagent init" first',
+    );
     process.exit(1);
   }
 

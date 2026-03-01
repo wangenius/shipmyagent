@@ -34,18 +34,18 @@ import fs from "fs-extra";
 import path from "path";
 
 /**
- * ShipRuntimeContext：ShipMyAgent 进程级运行时上下文（单例）。
+ * RuntimeState：ShipMyAgent 进程级运行时状态（单例）。
  *
  * 设计目标（中文，关键节点）
  * - 单进程只服务一个 rootPath，因此把 rootPath/config/utils/logger/systems 放到全局单例里读取
- * - 业务模块不再通过参数层层透传上下文（极简）
+ * - 业务模块不再通过参数层层透传运行时状态（极简）
  *
  * 初始化时序（关键节点）
- * - 启动入口先 `setShipRuntimeContextBase(...)`
- * - 初始化 ContextManager + ChatQueueWorker 后再 `setShipRuntimeContext(...)`
- * - 业务模块只调用 `getShipRuntimeContext()`（未 ready 会抛错）
+ * - 启动入口先 `setRuntimeStateBase(...)`
+ * - 初始化 ContextManager + ChatQueueWorker 后再 `setRuntimeState(...)`
+ * - 业务模块只调用 `getRuntimeState()`（未 ready 会抛错）
  */
-export type ShipRuntimeContextBase = {
+export type RuntimeStateBase = {
   cwd: string;
   /**
    * 工程根目录（rootPath）。
@@ -60,12 +60,12 @@ export type ShipRuntimeContextBase = {
   systems: string[];
 };
 
-export type ShipRuntimeContext = ShipRuntimeContextBase & {
+export type RuntimeState = RuntimeStateBase & {
   contextManager: ContextManager;
 };
 
-let base: ShipRuntimeContextBase | null = null;
-let ready: ShipRuntimeContext | null = null;
+let base: RuntimeStateBase | null = null;
+let ready: RuntimeState | null = null;
 
 /**
  * service 请求上下文桥接实现。
@@ -89,7 +89,7 @@ const serviceModelFactory = {
  * service chat 运行时桥接实现。
  *
  * 关键点（中文）
- * - 通过 `getShipServiceContext()` 延迟获取依赖，确保拿到最新 runtime。
+ * - 通过 `getServiceRuntimeState()` 延迟获取依赖，确保拿到最新 runtime。
  */
 const serviceChatRuntimeBridge = {
   pickLastSuccessfulChatSendText: (
@@ -99,7 +99,7 @@ const serviceChatRuntimeBridge = {
   ) => getProcessServiceBindings().pickLastSuccessfulChatSendText(message),
   sendTextByContextId: async (params: { contextId: string; text: string }) => {
     const result = await getProcessServiceBindings().sendTextByContextId({
-      context: getShipServiceContext(),
+      context: getServiceRuntimeState(),
       contextId: params.contextId,
       text: params.text,
     });
@@ -111,13 +111,13 @@ const serviceChatRuntimeBridge = {
 };
 
 /**
- * 构建基础 service context（不含 contextManager）。
+ * 构建基础 service runtime state（不含 contextManager）。
  *
  * 场景（中文）
  * - runtime 尚未 ready（例如 ContextManager 初始化阶段）也可安全使用。
  */
-function buildServiceContextBase(
-  input: ShipRuntimeContextBase,
+function buildServiceRuntimeStateBase(
+  input: RuntimeStateBase,
 ): ServiceRuntimeDependencies {
   return {
     cwd: input.cwd,
@@ -132,82 +132,82 @@ function buildServiceContextBase(
 }
 
 /**
- * 构建 ready service context。
+ * 构建 ready service runtime state。
  *
  * 关键点（中文）
  * - runtime 已完成初始化，可安全用于 services
  */
-function buildServiceContextReady(
-  input: ShipRuntimeContext,
+function buildServiceRuntimeStateReady(
+  input: RuntimeState,
 ): ServiceRuntimeDependencies {
   return {
-    ...buildServiceContextBase(input),
+    ...buildServiceRuntimeStateBase(input),
     contextManager: input.contextManager,
   };
 }
 
 /**
- * 获取基础 service context。
+ * 获取基础 service runtime state。
  */
-export function getShipServiceContextBase(): ServiceRuntimeDependencies {
-  return buildServiceContextBase(getRuntimeContextBase());
+export function getServiceRuntimeStateBase(): ServiceRuntimeDependencies {
+  return buildServiceRuntimeStateBase(getRuntimeStateBase());
 }
 
 /**
- * 获取完整 service context。
+ * 获取完整 service runtime state。
  */
-export function getShipServiceContext(): ServiceRuntimeDependencies {
-  return buildServiceContextReady(getShipRuntimeContext());
+export function getServiceRuntimeState(): ServiceRuntimeDependencies {
+  return buildServiceRuntimeStateReady(getRuntimeState());
 }
 
 /**
- * 设置 base context（未 ready）。
+ * 设置 base runtime state（未 ready）。
  *
  * 关键点（中文）
  * - 每次更新 base 都会重置 ready，避免读取到过期对象。
  */
-export function setShipRuntimeContextBase(next: ShipRuntimeContextBase): void {
+export function setRuntimeStateBase(next: RuntimeStateBase): void {
   base = next;
   ready = null;
 }
 
 /**
- * 设置 ready context（完整可用）。
+ * 设置 ready runtime state（完整可用）。
  */
-export function setShipRuntimeContext(next: ShipRuntimeContext): void {
+export function setRuntimeState(next: RuntimeState): void {
   base = next;
   ready = next;
 }
 
 /**
- * 获取 base context。
+ * 获取 base runtime state。
  *
  * 失败语义（中文）
  * - 未初始化直接抛错，提示启动阶段必须先调用 init。
  */
-export function getRuntimeContextBase(): ShipRuntimeContextBase {
+export function getRuntimeStateBase(): RuntimeStateBase {
   if (base) return base;
   throw new Error(
-    "Ship runtime context (base) is not initialized. Call initShipRuntimeContext() during startup.",
+    "Runtime state (base) is not initialized. Call initRuntimeState() during startup.",
   );
 }
 
 /**
- * 获取 ready context。
+ * 获取 ready runtime state。
  *
  * 失败语义（中文）
  * - base 未初始化：启动流程缺失。
  * - base 已有但 ready 为空：说明初始化尚未完成。
  */
-export function getShipRuntimeContext(): ShipRuntimeContext {
+export function getRuntimeState(): RuntimeState {
   if (ready) return ready;
   if (!base) {
     throw new Error(
-      "Ship runtime context is not initialized. Call initShipRuntimeContext() during startup.",
+      "Runtime state is not initialized. Call initRuntimeState() during startup.",
     );
   }
   throw new Error(
-    "Ship runtime context is not ready yet. Ensure ContextManager is initialized before access.",
+    "Runtime state is not ready yet. Ensure ContextManager is initialized before access.",
   );
 }
 
@@ -217,12 +217,12 @@ export function getShipRuntimeContext(): ShipRuntimeContext {
  * 阶段说明（中文）
  * 1) 解析 rootPath + 绑定 logger 落盘目录
  * 2) 校验关键文件并确保 `.ship` 目录结构
- * 3) 加载 dotenv + ship.json，建立 base context
- * 4) 初始化 ContextManager + ChatQueueWorker，建立 ready context
+ * 3) 加载 dotenv + ship.json，建立 base runtime state
+ * 4) 初始化 ContextManager + ChatQueueWorker，建立 ready runtime state
  * 5) 注册 service system prompt providers
  */
 
-export async function initShipRuntimeContext(cwd: string): Promise<void> {
+export async function initRuntimeState(cwd: string): Promise<void> {
   const resolvedCwd = String(cwd || "").trim() || ".";
   const rootPath = path.resolve(resolvedCwd);
 
@@ -238,8 +238,8 @@ export async function initShipRuntimeContext(cwd: string): Promise<void> {
 
   const config = loadShipConfig(rootPath);
 
-  // 关键点（中文）：先初始化 base context，保证底层模块可直接读取 rootPath/config/utils/logger/systems。
-  setShipRuntimeContextBase({
+  // 关键点（中文）：先初始化 base runtime state，保证底层模块可直接读取 rootPath/config/utils/logger/systems。
+  setRuntimeStateBase({
     cwd: resolvedCwd,
     rootPath,
     logger: defaultLogger,
@@ -259,8 +259,8 @@ You are a helpful project assistant.`;
 
   const systems = [agentProfiles, DEFAULT_SHIP_PROMPTS].filter(Boolean);
 
-  // 关键点（中文）：systems 在启动时确认后写回 base context，供后续模块读取。
-  setShipRuntimeContextBase({
+  // 关键点（中文）：systems 在启动时确认后写回 base runtime state，供后续模块读取。
+  setRuntimeStateBase({
     cwd: resolvedCwd,
     rootPath,
     logger: defaultLogger,
@@ -273,7 +273,7 @@ You are a helpful project assistant.`;
   contextManager = new ContextManager({
     runMemoryMaintenance: async (contextId) =>
       bindings.runMemoryMaintenance({
-        context: getShipServiceContext(),
+        context: getServiceRuntimeState(),
         contextId,
       }),
   });
@@ -285,7 +285,7 @@ You are a helpful project assistant.`;
   });
   chatQueueWorker.start();
 
-  setShipRuntimeContext({
+  setRuntimeState({
     cwd: resolvedCwd,
     rootPath,
     logger: defaultLogger,
@@ -294,7 +294,7 @@ You are a helpful project assistant.`;
     contextManager,
   });
   getProcessServiceBindings().registerSystemPromptProviders({
-    getContext: () => getShipServiceContext(),
+    getContext: () => getServiceRuntimeState(),
   });
 
 }

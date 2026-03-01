@@ -17,7 +17,7 @@ import {
   unloadSkill,
 } from "./Service.js";
 import { resolveContextId } from "../../main/service/ContextId.js";
-import { callDaemonJsonApi } from "../../main/runtime/daemon/Client.js";
+import { callServer } from "../../main/runtime/Client.js";
 import { printResult } from "../../main/utils/CliOutput.js";
 import type {
   SkillListResponse,
@@ -62,7 +62,7 @@ async function callSkillLoad(params: {
     return;
   }
 
-  const remote = await callDaemonJsonApi<SkillLoadResponse>({
+  const remote = await callServer<SkillLoadResponse>({
     projectRoot,
     path: "/api/skill/load",
     method: "POST",
@@ -120,7 +120,7 @@ async function callSkillUnload(params: {
     return;
   }
 
-  const remote = await callDaemonJsonApi<SkillUnloadResponse>({
+  const remote = await callServer<SkillUnloadResponse>({
     projectRoot,
     path: "/api/skill/unload",
     method: "POST",
@@ -176,7 +176,7 @@ async function callSkillPinned(options: SkillRemoteCliOptions): Promise<void> {
     return;
   }
 
-  const remote = await callDaemonJsonApi<SkillPinnedListResponse>({
+  const remote = await callServer<SkillPinnedListResponse>({
     projectRoot,
     path: `/api/skill/pinned?contextId=${encodeURIComponent(contextId)}`,
     method: "GET",

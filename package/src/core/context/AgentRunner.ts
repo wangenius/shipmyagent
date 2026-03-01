@@ -35,9 +35,9 @@ import type {
   ShipContextMetadataV1,
 } from "../types/ContextMessage.js";
 import {
-  getShipRuntimeContext,
-  getRuntimeContextBase,
-} from "../../main/runtime/ShipRuntimeContext.js";
+  getRuntimeState,
+  getRuntimeStateBase,
+} from "../../main/runtime/RuntimeState.js";
 import type { ContextAgent } from "../types/ContextAgent.js";
 import { collectSystemPromptProviderResult } from "../prompts/SystemProvider.js";
 import type { ContextStore } from "./ContextStore.js";
@@ -72,7 +72,7 @@ export class ContextAgentRunner implements ContextAgent {
    * 获取运行时 logger。
    */
   getLogger(): Logger {
-    return getRuntimeContextBase().logger;
+    return getRuntimeStateBase().logger;
   }
 
   /**
@@ -85,13 +85,13 @@ export class ContextAgentRunner implements ContextAgent {
    */
   async initialize(): Promise<void> {
     try {
-      // 注意：不要在模块顶层读取 runtime context，否则像 `sma -v` 这种只打印版本号的场景也会因为未初始化而崩溃
-      const runtime = getShipRuntimeContext();
+      // 注意：不要在模块顶层读取 runtime state，否则像 `sma -v` 这种只打印版本号的场景也会因为未初始化而崩溃
+      const runtime = getRuntimeState();
       loadProjectDotenv(runtime.rootPath);
       this.tools = { ...shellTools };
 
       this.model = await createModel({
-        config: getShipRuntimeContext().config,
+        config: getRuntimeState().config,
       });
 
       this.initialized = true;
@@ -122,7 +122,7 @@ export class ContextAgentRunner implements ContextAgent {
       requestId,
       contextId,
       instructionsPreview: query?.slice(0, 200),
-      rootPath: getShipRuntimeContext().rootPath,
+      rootPath: getRuntimeState().rootPath,
     });
     if (this.initialized) {
       return this.runWithToolLoopAgent(query, startTime, contextId, {
@@ -133,7 +133,7 @@ export class ContextAgentRunner implements ContextAgent {
 
     let contextStore: ContextStore | null = null;
     try {
-      contextStore = getShipRuntimeContext().contextManager.getContextStore(
+      contextStore = getRuntimeState().contextManager.getContextStore(
         contextId,
       );
     } catch {
@@ -199,7 +199,7 @@ export class ContextAgentRunner implements ContextAgent {
     try {
       this.bindContextId(contextId);
 
-      const runtime = getShipRuntimeContext();
+      const runtime = getRuntimeState();
       // phase 0（中文）：装配 context store 与 runtime/system prompt 基础上下文。
       contextStore = runtime.contextManager.getContextStore(contextId);
 
@@ -603,7 +603,7 @@ export class ContextAgentRunner implements ContextAgent {
     maxInputTokensApprox: number;
     archiveOnCompact: boolean;
   } {
-    const runtime = getShipRuntimeContext();
+    const runtime = getRuntimeState();
     const contextMessagesConfig = runtime.config.context?.messages;
 
     const baseKeepLastMessages =

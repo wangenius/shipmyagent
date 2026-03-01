@@ -37,7 +37,7 @@ export interface InteractiveStartOptions {
 /**
  * InteractiveServer。
  */
-export class InteractiveServer {
+export class WebUIClient {
   private app: Hono;
   private context: InteractiveServerContext;
   private server: ReturnType<typeof http.createServer> | null = null;
@@ -287,6 +287,6 @@ export class InteractiveServer {
   }
 }
 
-export function createInteractiveServer(context: InteractiveServerContext): InteractiveServer {
-  return new InteractiveServer(context);
+export function createInteractiveServer(context: InteractiveServerContext): WebUIClient {
+  return new WebUIClient(context);
 }

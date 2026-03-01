@@ -9,7 +9,7 @@
 
 import { z } from "zod";
 import { tool } from "ai";
-import { getShipRuntimeContext } from "../../main/runtime/ShipRuntimeContext.js";
+import { getRuntimeState } from "../../main/runtime/RuntimeState.js";
 import type {
   ShellCloseInput,
   ShellCommandInput,
@@ -145,7 +145,7 @@ export const exec_command = tool({
         };
       }
 
-      const runtime = getShipRuntimeContext();
+      const runtime = getRuntimeState();
       const context = createShellContext({
         command: cmd,
         cwd: resolveShellWorkdir(runtime.rootPath, workdir),

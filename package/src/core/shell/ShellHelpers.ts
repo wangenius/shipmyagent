@@ -8,7 +8,7 @@
 
 import path from "path";
 import { randomBytes } from "crypto";
-import { getShipRuntimeContext } from "../../main/runtime/ShipRuntimeContext.js";
+import { getRuntimeState } from "../../main/runtime/RuntimeState.js";
 import { contextRequestContext } from "../context/RequestContext.js";
 import { llmRequestContext } from "../../utils/logger/Context.js";
 import type {
@@ -92,7 +92,7 @@ export function validateChatSendCommand(cmd: string): string | null {
  * - 工具入参 `max_output_tokens` 会进一步收紧 maxChars
  */
 export function resolveOutputLimits(maxOutputTokens?: number): OutputLimits {
-  const cfg = getShipRuntimeContext().config.permissions?.exec_command;
+  const cfg = getRuntimeState().config.permissions?.exec_command;
   const cfgObject = cfg && typeof cfg === "object" ? cfg : undefined;
   const maxCharsRaw = cfgObject?.maxOutputChars;
   const maxLinesRaw = cfgObject?.maxOutputLines;

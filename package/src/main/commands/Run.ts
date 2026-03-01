@@ -9,14 +9,14 @@
  */
 
 import { AgentServer } from "../runtime/AgentServer.js";
-import { createInteractiveServer } from "../tui/Interactive.js";
+import { createInteractiveServer } from "../ui/WebUIClient.js";
 
 import {
-  getShipServiceContext,
-  getShipRuntimeContext,
-  initShipRuntimeContext,
-} from "../runtime/ShipRuntimeContext.js";
-import type { StartOptions } from "./types/Start.js";
+  getServiceRuntimeState,
+  getRuntimeState,
+  initRuntimeState,
+} from "../runtime/RuntimeState.js";
+import type { StartOptions } from "../types/Start.js";
 import { logger } from "../../utils/logger/Logger.js";
 import {
   startAllServiceRuntimes,
@@ -27,7 +27,7 @@ import {
  * `shipmyagent run` 命令入口。
  *
  * 职责（中文）
- * - 初始化 runtime 上下文（配置、日志、services 依赖）
+ * - 初始化 runtime 状态（配置、日志、services 依赖）
  * - 解析并合并启动参数（CLI > ship.json > 默认值）
  * - 启动主 HTTP 服务、可选交互式 Web
  * - 启动 service runtimes（例如 task cron）
@@ -37,8 +37,8 @@ export async function runCommand(
   cwd: string = ".",
   options: StartOptions,
 ): Promise<void> {
-  // 初始化加载（进程级单例上下文：root/config/utils/logger/chat/agents 等）
-  await initShipRuntimeContext(cwd);
+  // 初始化加载（进程级单例运行时状态：root/config/utils/logger/chat/agents 等）
+  await initRuntimeState(cwd);
   // 端口解析（中文）：允许 number/string；空值返回 undefined 以便走配置回退链。
   const parsePort = (
     value: string | number | undefined,
@@ -67,7 +67,7 @@ export async function runCommand(
     return undefined;
   };
 
-  const shipConfig = getShipRuntimeContext().config;
+  const shipConfig = getRuntimeState().config;
 
   // Resolve startup options: CLI flags override ship.json, then built-in defaults.
   let port: number;
@@ -114,7 +114,7 @@ export async function runCommand(
 
     // Stop service runtimes
     try {
-      await stopAllServiceRuntimes(getShipServiceContext());
+      await stopAllServiceRuntimes(getServiceRuntimeState());
     } catch {
       // ignore
     }
@@ -140,7 +140,7 @@ export async function runCommand(
   // 启动 service runtimes（含 task cron 等模块内生命周期逻辑）
   // 调度策略（中文）：单服务失败不阻断主服务启动，仅记录日志。
   try {
-    const lifecycle = await startAllServiceRuntimes(getShipServiceContext());
+    const lifecycle = await startAllServiceRuntimes(getServiceRuntimeState());
     for (const item of lifecycle.results) {
       if (item.success) continue;
       logger.error(

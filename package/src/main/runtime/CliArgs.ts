@@ -5,7 +5,7 @@
  * - daemon 实际启动的是 `shipmyagent run`（前台逻辑），这里拼装出对应的 argv。
  */
 
-import type { StartOptions } from "../../commands/types/Start.js";
+import type { StartOptions } from "../types/Start.js";
 
 /**
  * 将 start/restart 选项转换为 `run` 子进程 argv。

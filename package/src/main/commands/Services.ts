@@ -8,7 +8,7 @@
 
 import path from "node:path";
 import type { Command } from "commander";
-import { callDaemonJsonApi } from "../runtime/daemon/Client.js";
+import { callServer } from "../runtime/Client.js";
 import { printResult } from "../utils/CliOutput.js";
 import type { JsonValue } from "../../types/Json.js";
 import type {
@@ -17,7 +17,7 @@ import type {
   ServiceControlAction,
   ServiceControlResponse,
   ServiceListResponse,
-} from "./types/Services.js";
+} from "../types/Services.js";
 
 function parsePortOption(value: string): number {
   const port = Number.parseInt(value, 10);
@@ -45,7 +45,7 @@ function parseCommandPayload(raw?: string): JsonValue | undefined {
 
 async function runServiceListCommand(options: ServiceCliBaseOptions): Promise<void> {
   const projectRoot = resolveProjectRoot(options.path);
-  const remote = await callDaemonJsonApi<ServiceListResponse>({
+  const remote = await callServer<ServiceListResponse>({
     projectRoot,
     path: "/api/services/list",
     method: "GET",
@@ -84,7 +84,7 @@ async function runServiceControlCommand(params: {
   options: ServiceCliBaseOptions;
 }): Promise<void> {
   const projectRoot = resolveProjectRoot(params.options.path);
-  const remote = await callDaemonJsonApi<ServiceControlResponse>({
+  const remote = await callServer<ServiceControlResponse>({
     projectRoot,
     path: "/api/services/control",
     method: "POST",
@@ -128,7 +128,7 @@ async function runServiceCommandBridge(params: {
   options: ServiceCliBaseOptions;
 }): Promise<void> {
   const projectRoot = resolveProjectRoot(params.options.path);
-  const remote = await callDaemonJsonApi<ServiceCommandResponse>({
+  const remote = await callServer<ServiceCommandResponse>({
     projectRoot,
     path: "/api/services/command",
     method: "POST",

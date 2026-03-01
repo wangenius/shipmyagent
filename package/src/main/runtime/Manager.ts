@@ -16,13 +16,13 @@
 import fs from "fs-extra";
 import path from "path";
 import { spawn } from "child_process";
-import { getShipDebugDirPath } from "../../project/Paths.js";
+import { getShipDebugDirPath } from "../project/Paths.js";
 import {
   DAEMON_LOG_FILENAME,
   DAEMON_META_FILENAME,
   DAEMON_PID_FILENAME,
   type DaemonMeta,
-} from "./types/Daemon.js";
+} from "../types/Daemon.js";
 
 /**
  * 异步睡眠工具。

@@ -6,7 +6,7 @@
  * - 同时提供本地视角的 `list`：列出 ShipMyAgent 当前能发现的 skills（含 project/home/built-in）
  *
  * 注意（中文）
- * - 这里是 CLI 命令层，不依赖运行时 server，不读取 ShipRuntimeContext
+ * - 这里是 CLI 命令层，不依赖运行时 server，不读取 RuntimeState
  * - `find/add` 需要本机可运行 `npx`，并可能触发网络下载（由用户环境决定）
  */
 

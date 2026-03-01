@@ -12,9 +12,9 @@ import {
   type DaemonJsonApiCallParams,
   type DaemonJsonApiCallResult,
 } from "./Api.js";
-import { getShipJsonPath } from "../../project/Paths.js";
-import { loadShipConfig } from "../../project/Config.js";
-import type { JsonObject, JsonValue } from "../../../types/Json.js";
+import { getShipJsonPath } from "../project/Paths.js";
+import { loadShipConfig } from "../project/Config.js";
+import type { JsonObject, JsonValue } from "../../types/Json.js";
 
 /**
  * 解析端口值。
@@ -24,7 +24,8 @@ import type { JsonObject, JsonValue } from "../../../types/Json.js";
  */
 function parsePortLike(input: string | number | undefined): number | undefined {
   if (input === undefined || input === null || input === "") return undefined;
-  const raw = typeof input === "number" ? input : Number.parseInt(String(input), 10);
+  const raw =
+    typeof input === "number" ? input : Number.parseInt(String(input), 10);
   if (!Number.isFinite(raw) || Number.isNaN(raw)) return undefined;
   if (!Number.isInteger(raw) || raw <= 0 || raw > 65535) return undefined;
   return raw;
@@ -105,7 +106,7 @@ export function resolveDaemonEndpoint(params: {
  * - 网络异常：`success=false` + `error`（无 status）。
  * - HTTP 非 2xx：`success=false` + `status` + `error`。
  */
-export async function callDaemonJsonApi<T>(
+export async function callServer<T>(
   params: DaemonJsonApiCallParams,
 ): Promise<DaemonJsonApiCallResult<T>> {
   const endpoint = resolveDaemonEndpoint({
@@ -133,7 +134,8 @@ export async function callDaemonJsonApi<T>(
     }
 
     if (!response.ok) {
-      const messageFromData = parseErrorMessageFromPayload(data) || `HTTP ${response.status}`;
+      const messageFromData =
+        parseErrorMessageFromPayload(data) || `HTTP ${response.status}`;
       return {
         success: false,
         status: response.status,

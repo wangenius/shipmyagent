@@ -6,9 +6,9 @@ import path from "path";
 import fs from "fs-extra";
 import { fileURLToPath } from "url";
 import { getAgentMdPath, getShipJsonPath } from "../project/Paths.js";
-import { buildRunArgsFromOptions } from "../runtime/daemon/CliArgs.js";
-import { startDaemonProcess, stopDaemonProcess } from "../runtime/daemon/Manager.js";
-import type { StartOptions } from "./types/Start.js";
+import { buildRunArgsFromOptions } from "../runtime/CliArgs.js";
+import { startDaemonProcess, stopDaemonProcess } from "../runtime/Manager.js";
+import type { StartOptions } from "../types/Start.js";
 
 /**
  * restart 命令执行流程。
@@ -25,11 +25,15 @@ export async function restartCommand(
   const projectRoot = path.resolve(cwd);
 
   if (!fs.existsSync(getAgentMdPath(projectRoot))) {
-    console.error('❌ Project not initialized. Please run "shipmyagent init" first');
+    console.error(
+      '❌ Project not initialized. Please run "shipmyagent init" first',
+    );
     process.exit(1);
   }
   if (!fs.existsSync(getShipJsonPath(projectRoot))) {
-    console.error('❌ ship.json does not exist. Please run "shipmyagent init" first');
+    console.error(
+      '❌ ship.json does not exist. Please run "shipmyagent init" first',
+    );
     process.exit(1);
   }
 

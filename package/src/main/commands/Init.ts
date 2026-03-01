@@ -36,14 +36,13 @@ import {
 import { ensureDir, saveJson } from "../project/Storage.js";
 import type { ShipConfig } from "../project/Config.js";
 import { SHIP_JSON_SCHEMA } from "../constants/ShipSchema.js";
-import type { AdapterKey, InitOptions } from "./types/Init.js";
 import { MODEL_CONFIGS } from "../constants/Model.js";
 import { DEFAULT_SHIP_JSON } from "../constants/Ship.js";
 
 type InitPromptResponse = {
   name?: string;
   model?: string;
-  adapters?: AdapterKey[];
+  adapters?: string[];
   qqSandbox?: boolean;
   skillsToInstall?: string[];
 };
@@ -128,7 +127,7 @@ async function syncClaudeSkillsToUserShipSkills(): Promise<void> {
  */
 export async function initCommand(
   cwd: string = ".",
-  options: InitOptions = {},
+  options: { force?: boolean } = {},
 ): Promise<void> {
   const projectRoot = path.resolve(cwd);
   let allowOverwrite = Boolean(options.force);
@@ -273,8 +272,8 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     temperature: 0.7,
   };
 
-  const selectedAdapters = new Set<AdapterKey>(
-    Array.isArray(response.adapters) ? (response.adapters as AdapterKey[]) : [],
+  const selectedAdapters = new Set<string>(
+    Array.isArray(response.adapters) ? (response.adapters as string[]) : [],
   );
 
   const adaptersConfig: NonNullable<
