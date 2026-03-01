@@ -10,7 +10,15 @@
 import fs from "fs-extra";
 import { open as openFile, readFile as readFileNative, stat as statNative } from "node:fs/promises";
 import path from "node:path";
-import { convertToModelMessages, generateText, type LanguageModel, type SystemModelMessage } from "ai";
+import {
+  convertToModelMessages,
+  generateText,
+  isTextUIPart,
+  type LanguageModel,
+  type ModelMessage,
+  type SystemModelMessage,
+  type ToolSet,
+} from "ai";
 import {
   getShipContextDirPath,
   getShipContextMessagesArchiveDirPath,
@@ -166,7 +174,7 @@ export class ContextStore {
    *
    * - 仅保留非空字符串；去重并限制上限，避免 meta 异常膨胀。
    */
-  private normalizePinnedSkillIds(input: unknown): string[] {
+  private normalizePinnedSkillIds(input: string[] | undefined): string[] {
     if (!Array.isArray(input)) return [];
     const out: string[] = [];
     for (const v of input) {
@@ -186,7 +194,7 @@ export class ContextStore {
   private async readMetaUnsafe(): Promise<ShipContextMessagesMetaV1> {
     const file = this.getMetaFilePath();
     try {
-      const raw = (await fs.readJson(file)) as any;
+      const raw = (await fs.readJson(file)) as Partial<ShipContextMessagesMetaV1> | null;
       if (!raw || typeof raw !== "object") throw new Error("invalid_meta");
       return {
         v: 1,
@@ -253,11 +261,13 @@ export class ContextStore {
       const prev = await this.readMetaUnsafe();
       const next: ShipContextMessagesMetaV1 = {
         ...prev,
-        ...(patch as any),
+        ...patch,
         v: 1,
         contextId: this.contextId,
         updatedAt: Date.now(),
-        pinnedSkillIds: this.normalizePinnedSkillIds((patch as any)?.pinnedSkillIds ?? prev.pinnedSkillIds),
+        pinnedSkillIds: this.normalizePinnedSkillIds(
+          patch.pinnedSkillIds ?? prev.pinnedSkillIds,
+        ),
       };
       await this.writeMetaUnsafe(next);
       return next;
@@ -285,7 +295,9 @@ export class ContextStore {
    * 覆盖设置 pinned skills（用于 compact 时自动清理）。
    */
   async setPinnedSkillIds(skillIds: string[]): Promise<void> {
-    await this.updateMeta({ pinnedSkillIds: Array.isArray(skillIds) ? skillIds : [] } as any);
+    await this.updateMeta({
+      pinnedSkillIds: Array.isArray(skillIds) ? skillIds : [],
+    });
   }
 
   /**
@@ -311,8 +323,9 @@ export class ContextStore {
         await fh.writeFile(token, "utf8");
         await fh.close();
         break;
-      } catch (e: any) {
-        if (e && e.code !== "EEXIST") throw e;
+      } catch (error) {
+        const err = error as NodeJS.ErrnoException;
+        if (err.code !== "EEXIST") throw err;
         try {
           const stat = await statNative(lockPath);
           const age = Date.now() - stat.mtimeMs;
@@ -377,11 +390,11 @@ export class ContextStore {
     const out: ShipContextMessageV1[] = [];
     for (const line of lines) {
       try {
-        const obj = JSON.parse(line);
+        const obj = JSON.parse(line) as Partial<ShipContextMessageV1>;
         if (!obj || typeof obj !== "object") continue;
-        const role = String((obj as any).role || "");
+        const role = String(obj.role || "");
         if (role !== "user" && role !== "assistant") continue;
-        if (!Array.isArray((obj as any).parts)) continue;
+        if (!Array.isArray(obj.parts)) continue;
         out.push(obj as ShipContextMessageV1);
       } catch {
         // ignore invalid lines
@@ -419,10 +432,11 @@ export class ContextStore {
     metadata: Omit<ShipContextMetadataV1, "v" | "ts"> & Partial<Pick<ShipContextMetadataV1, "ts">>;
     id?: string;
   }): ShipContextMessageV1 {
+    const { ts, ...metadata } = params.metadata;
     const md: ShipContextMetadataV1 = {
       v: 1,
-      ts: typeof params.metadata.ts === "number" ? params.metadata.ts : Date.now(),
-      ...(params.metadata as any),
+      ts: typeof ts === "number" ? ts : Date.now(),
+      ...metadata,
       source: "ingress",
       kind: "normal",
     };
@@ -434,7 +448,7 @@ export class ContextStore {
       role: "user",
       metadata: md,
       parts: [{ type: "text", text: String(params.text ?? "") }],
-    } as any;
+    };
   }
 
   /**
@@ -448,10 +462,11 @@ export class ContextStore {
     source?: "egress" | "compact";
     sourceRange?: ShipContextMetadataV1["sourceRange"];
   }): ShipContextMessageV1 {
+    const { ts, ...metadata } = params.metadata;
     const md: ShipContextMetadataV1 = {
       v: 1,
-      ts: typeof params.metadata.ts === "number" ? params.metadata.ts : Date.now(),
-      ...(params.metadata as any),
+      ts: typeof ts === "number" ? ts : Date.now(),
+      ...metadata,
       source: params.source || "egress",
       kind: params.kind || "normal",
       ...(params.sourceRange ? { sourceRange: params.sourceRange } : {}),
@@ -462,7 +477,7 @@ export class ContextStore {
       role: "assistant",
       metadata: md,
       parts: [{ type: "text", text: String(params.text ?? "") }],
-    } as any;
+    };
   }
 
   /**
@@ -490,10 +505,10 @@ export class ContextStore {
     for (const m of messages) {
       if (!m || typeof m !== "object") continue;
       const role = m.role === "user" ? "user" : "assistant";
-      const parts = Array.isArray((m as any).parts) ? (m as any).parts : [];
+      const parts = Array.isArray(m.parts) ? m.parts : [];
       const textParts = parts
-        .filter((p: any) => p && typeof p === "object" && p.type === "text" && typeof p.text === "string")
-        .map((p: any) => String(p.text ?? ""));
+        .filter(isTextUIPart)
+        .map((p) => String(p.text ?? ""));
       const text = textParts.join("\n").trim();
       if (!text) continue;
       lines.push(`${role}: ${text}`);
@@ -531,7 +546,7 @@ export class ContextStore {
     if (snapshot.length <= params.keepLastMessages + 2) return { compacted: false, reason: "small_messages" };
 
     const systemText = (params.system || [])
-      .map((m) => String((m as any)?.content ?? ""))
+      .map((m) => String(m.content ?? ""))
       .join("\n\n");
     // 关键点（中文）：context messages 现在可能包含 tool parts/output，必须把它们计入预算估算，否则会低估 token。
     let messagesJson = "";
@@ -590,9 +605,9 @@ export class ContextStore {
       text: summary,
       metadata: {
         contextId: this.contextId,
-        channel: (kept[kept.length - 1]?.metadata as any)?.channel || "api",
-        targetId: (kept[kept.length - 1]?.metadata as any)?.targetId || this.contextId,
-      } as any,
+        channel: kept[kept.length - 1]?.metadata?.channel || "api",
+        targetId: kept[kept.length - 1]?.metadata?.targetId || this.contextId,
+      },
       kind: "summary",
       source: "compact",
       sourceRange: fromId && toId ? { fromId, toId, count: older.length } : undefined,
@@ -649,19 +664,19 @@ export class ContextStore {
    * 转换为模型输入 messages。
    *
    * 关键点（中文）
-   * - 去掉 UIMessage 的 id 字段，仅保留模型可消费结构。
-   * - `ignoreIncompleteToolCalls=true` 以容忍中断场景下的半成品 tool 记录。
-   */
-  async toModelMessages(params: { tools?: any }): Promise<any[]> {
+  * - 去掉 UIMessage 的 id 字段，仅保留模型可消费结构。
+  * - `ignoreIncompleteToolCalls=true` 以容忍中断场景下的半成品 tool 记录。
+  */
+  async toModelMessages(params: { tools?: ToolSet }): Promise<ModelMessage[]> {
     const msgs = await this.loadAll();
     // convertToModelMessages 需要的是“没有 id 的 UIMessage”
-    const input = msgs.map((m) => {
-      const { id: _id, ...rest } = m as any;
+    const input: Array<Omit<ShipContextMessageV1, "id">> = msgs.map((m) => {
+      const { id: _id, ...rest } = m;
       return rest;
     });
-    return await convertToModelMessages(input as any, {
+    return await convertToModelMessages(input, {
       ...(params.tools ? { tools: params.tools } : {}),
       ignoreIncompleteToolCalls: true,
-    } as any);
+    });
   }
 }

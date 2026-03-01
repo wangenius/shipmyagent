@@ -10,6 +10,7 @@ import path from "node:path";
 import type { Command } from "commander";
 import { callDaemonJsonApi } from "../daemon/client.js";
 import { printResult } from "../utils/cli-output.js";
+import type { JsonValue } from "../../types/json.js";
 import type {
   ServiceCliBaseOptions,
   ServiceCommandResponse,
@@ -30,12 +31,12 @@ function resolveProjectRoot(pathInput?: string): string {
   return path.resolve(String(pathInput || "."));
 }
 
-function parseCommandPayload(raw?: string): unknown {
+function parseCommandPayload(raw?: string): JsonValue | undefined {
   if (typeof raw !== "string") return undefined;
   const text = raw.trim();
   if (!text) return undefined;
   try {
-    return JSON.parse(text);
+    return JSON.parse(text) as JsonValue;
   } catch {
     // 关键点（中文）：payload 不是 JSON 时按字符串透传，避免强制格式。
     return text;

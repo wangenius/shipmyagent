@@ -17,6 +17,7 @@ import type { AgentResult } from "../types/agent.js";
 import type { ContextRequestContext } from "./request-context.js";
 import { getShipRuntimeContextBase } from "../../process/server/ShipRuntimeContext.js";
 import path from "node:path";
+import type { JsonObject } from "../../types/json.js";
 import {
   parseTaskRunContextId,
   getTaskRunDir,
@@ -38,6 +39,19 @@ export class ContextManager {
   private readonly runMemoryMaintenance?: (contextId: string) => Promise<void>;
 
   /**
+   * 归一化 channel 字段为 metadata 可接受值。
+   */
+  private toContextChannel(channel: string): ShipContextMetadataV1["channel"] {
+    const normalized = String(channel || "").trim();
+    if (normalized === "telegram") return "telegram";
+    if (normalized === "feishu") return "feishu";
+    if (normalized === "qq") return "qq";
+    if (normalized === "cli") return "cli";
+    if (normalized === "scheduler") return "scheduler";
+    return "api";
+  }
+
+  /**
    * 构造函数：装配 scheduler 与可选回调。
    *
    * 关键点（中文）
@@ -56,7 +70,7 @@ export class ContextManager {
     runMemoryMaintenance?: (contextId: string) => Promise<void>;
   }) {
     const base = getShipRuntimeContextBase();
-    const queueConfig = (base.config?.context as any)?.contextQueue || {};
+    const queueConfig = base.config?.context?.contextQueue || {};
 
     this.runMemoryMaintenance = params?.runMemoryMaintenance;
     this.scheduler = new Scheduler({
@@ -197,7 +211,7 @@ export class ContextManager {
     threadId?: number;
     targetType?: string;
     requestId?: string;
-    extra?: Record<string, unknown>;
+    extra?: JsonObject;
   }): Promise<void> {
     const contextId = String(params.contextId || "").trim();
     if (!contextId) return;
@@ -207,7 +221,7 @@ export class ContextManager {
         text: params.text,
         metadata: {
           contextId,
-          channel: params.channel as any,
+          channel: this.toContextChannel(params.channel),
           targetId: params.targetId,
           actorId: params.actorId,
           actorName: params.actorName,

@@ -11,6 +11,7 @@ import { withContextRequestContext, type ContextRequestContext } from "./request
 import type { ContextAgent } from "../types/context-agent.js";
 import type { ContextManager } from "./manager.js";
 import type { AgentResult } from "../types/agent.js";
+import type { ShipContextMetadataV1 } from "../types/context-message.js";
 import type {
   SchedulerConfig,
   SchedulerEnqueueResult,
@@ -58,7 +59,12 @@ type Lane = {
  * 关键点（中文）
  * - 非法值回退到默认值，并限制在 [min, max] 区间。
  */
-function clampInt(value: unknown, fallback: number, min: number, max: number): number {
+function clampInt(
+  value: number | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
   const n = Number.parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(min, Math.min(max, n));
@@ -423,31 +429,32 @@ export class Scheduler {
     try {
       const runtime = this.getContextManager();
       const store = runtime.getContextStore(first.contextId);
-      const assistantMessage = (result as any)?.assistantMessage;
+      const assistantMessage = result.assistantMessage;
 
       if (assistantMessage && typeof assistantMessage === "object") {
-        await store.append(assistantMessage as any);
+        await store.append(assistantMessage);
         void runtime.afterContextUpdatedAsync(first.contextId);
       } else {
-        const userVisible = String((result as any)?.output || "");
+        const userVisible = String(result.output || "");
         if (userVisible.trim()) {
+          const metadata: Omit<ShipContextMetadataV1, "v" | "ts"> = {
+            contextId: first.contextId,
+            channel: first.channel as ShipContextMetadataV1["channel"],
+            targetId: first.targetId,
+            actorId: "bot",
+            actorName: first.actorName,
+            messageId: first.messageId,
+            threadId: first.threadId,
+            targetType: first.targetType,
+            extra: {
+              via: "scheduler",
+              note: "assistant_message_missing",
+            },
+          };
           await store.append(
             store.createAssistantTextMessage({
               text: userVisible,
-              metadata: {
-                contextId: first.contextId,
-                channel: first.channel,
-                targetId: first.targetId,
-                actorId: "bot",
-                actorName: first.actorName,
-                messageId: first.messageId,
-                threadId: first.threadId,
-                targetType: first.targetType,
-                extra: {
-                  via: "scheduler",
-                  note: "assistant_message_missing",
-                },
-              } as any,
+              metadata,
               kind: "normal",
               source: "egress",
             }),

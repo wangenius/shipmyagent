@@ -100,9 +100,7 @@ export class TaskCronTriggerEngine implements ServiceCronEngine {
           // ignore
         }
       },
-      {
-        ...(definition.timezone ? { timezone: definition.timezone } : {}),
-      } as any,
+      definition.timezone ? { timezone: definition.timezone } : undefined,
     );
 
     this.scheduledJobs.set(definition.id, scheduled);

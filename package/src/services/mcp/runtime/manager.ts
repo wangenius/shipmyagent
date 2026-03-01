@@ -22,6 +22,18 @@ import { HttpTransport } from "./http-transport.js";
 import { resolveEnvVar, resolveEnvVarsInRecord } from "./env.js";
 import { getShipMcpConfigPath } from "../../../process/project/paths.js";
 import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
+import type { JsonObject, JsonValue } from "../../../types/json.js";
+
+type McpClientCallToolResult = Awaited<ReturnType<Client["callTool"]>>;
+type StringifyValue = JsonValue | object | undefined;
+
+function safeStringify(value: StringifyValue): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
 
 /**
  * MCP manager。
@@ -40,8 +52,8 @@ export interface McpLogger {
  * MCP 客户端包装状态。
  */
 interface McpClientWrapper {
-  client: Client;
-  transport: StdioClientTransport | SSEClientTransport | HttpTransport;
+  client: Client | null;
+  transport: StdioClientTransport | SSEClientTransport | HttpTransport | null;
   config: McpServerConfig;
   status: McpServerStatus;
   tools: McpToolDefinition[];
@@ -140,7 +152,7 @@ export class McpManager {
   async callTool(
     serverName: string,
     toolName: string,
-    args: Record<string, unknown>,
+    args: JsonObject,
   ): Promise<McpToolResult> {
     const wrapper = this.clients.get(serverName);
     if (!wrapper) throw new Error(`MCP server not found: ${serverName}`);
@@ -148,6 +160,9 @@ export class McpManager {
       throw new Error(
         `MCP server ${serverName} is not connected (status: ${wrapper.status})`,
       );
+    }
+    if (!wrapper.client) {
+      throw new Error(`MCP server ${serverName} client is unavailable`);
     }
 
     try {
@@ -158,8 +173,8 @@ export class McpManager {
       });
 
       return {
-        content: result.content as any,
-        isError: Boolean(result.isError),
+        content: this.normalizeToolResultContent(result),
+        isError: "isError" in result ? Boolean(result.isError) : false,
       };
     } catch (error) {
       const errorMessage =
@@ -205,7 +220,7 @@ export class McpManager {
 
     const closePromises = Array.from(this.clients.values()).map(
       async (wrapper) => {
-        if (wrapper.status !== "connected") return;
+        if (wrapper.status !== "connected" || !wrapper.client) return;
         try {
           await wrapper.client.close();
         } catch (error) {
@@ -255,9 +270,9 @@ export class McpManager {
           resolvedConfig.headers || {},
         );
       } else {
-        throw new Error(
-          `Unsupported transport type: ${(resolvedConfig as any).type}`,
-        );
+        const neverConfig: never = resolvedConfig;
+        void neverConfig;
+        throw new Error("Unsupported transport type");
       }
 
       const client = new Client(
@@ -265,14 +280,22 @@ export class McpManager {
         { capabilities: {} },
       );
 
-      await client.connect(transport as any);
+      await client.connect(transport);
 
       const toolsResponse = await client.listTools();
       const tools: McpToolDefinition[] = toolsResponse.tools.map(
-        (tool: any) => ({
+        (tool) => ({
           name: tool.name,
           description: tool.description,
-          inputSchema: tool.inputSchema as any,
+          inputSchema: {
+            type: "object",
+            ...(tool.inputSchema.properties
+              ? { properties: tool.inputSchema.properties }
+              : {}),
+            ...(Array.isArray(tool.inputSchema.required)
+              ? { required: tool.inputSchema.required }
+              : {}),
+          },
         }),
       );
 
@@ -294,8 +317,8 @@ export class McpManager {
       this.log.error(`Failed to connect to MCP server ${name}: ${errorMessage}`);
 
       this.clients.set(name, {
-        client: null as any,
-        transport: null as any,
+        client: null,
+        transport: null,
         config,
         status: "error",
         tools: [],
@@ -312,20 +335,79 @@ export class McpManager {
    * - 覆盖 `env` / `headers` / `url` 三类字段。
    */
   private resolveEnvVars(config: McpServerConfig): McpServerConfig {
-    const resolved = { ...config } as any;
-
-    if ("env" in resolved && resolved.env) {
-      resolved.env = resolveEnvVarsInRecord(resolved.env);
+    if (config.type === "stdio") {
+      return {
+        ...config,
+        ...(config.env ? { env: resolveEnvVarsInRecord(config.env) } : {}),
+      };
     }
 
-    if ("headers" in resolved && resolved.headers) {
-      resolved.headers = resolveEnvVarsInRecord(resolved.headers);
+    if (config.type === "sse" || config.type === "http") {
+      return {
+        ...config,
+        url: resolveEnvVar(config.url),
+        ...(config.headers
+          ? { headers: resolveEnvVarsInRecord(config.headers) }
+          : {}),
+      };
     }
 
-    if ("url" in resolved && resolved.url) {
-      resolved.url = resolveEnvVar(resolved.url);
+    return config;
+  }
+
+  /**
+   * 归一化 MCP `callTool` 返回内容。
+   *
+   * 关键点（中文）
+   * - 仅保留 runtime 需要的 text/image/resource 三类内容。
+   * - 非标准形态兜底序列化为 text，避免调用链中断。
+   */
+  private normalizeToolResultContent(
+    result: McpClientCallToolResult,
+  ): McpToolResult["content"] {
+    if (!("content" in result) || !Array.isArray(result.content)) {
+      const fallback =
+        "toolResult" in result
+          ? (result.toolResult as StringifyValue)
+          : (result as StringifyValue);
+      return [
+        {
+          type: "text",
+          text: safeStringify(fallback),
+        },
+      ];
     }
 
-    return resolved as McpServerConfig;
+    return result.content.map((item) => {
+      if (item.type === "text") {
+        return { type: "text", text: item.text };
+      }
+      if (item.type === "image") {
+        return {
+          type: "image",
+          data: item.data,
+          mimeType: item.mimeType,
+        };
+      }
+      if (item.type === "resource") {
+        if ("text" in item.resource) {
+          return {
+            type: "resource",
+            text: item.resource.text,
+            mimeType: item.resource.mimeType,
+          };
+        }
+        return {
+          type: "resource",
+          data: item.resource.blob,
+          mimeType: item.resource.mimeType,
+        };
+      }
+
+      return {
+        type: "text",
+        text: safeStringify(item),
+      };
+    });
   }
 }

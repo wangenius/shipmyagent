@@ -7,13 +7,14 @@
  */
 
 import type { ShipContextMessageV1 } from "./context-message.js";
+import type { JsonObject } from "../../types/json.js";
 
 export interface AgentResult {
   success: boolean;
   output: string;
   toolCalls: Array<{
     tool: string;
-    input: Record<string, unknown>;
+    input: JsonObject;
     output: string;
   }>;
   assistantMessage?: ShipContextMessageV1;

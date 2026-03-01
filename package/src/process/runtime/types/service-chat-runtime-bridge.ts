@@ -1,3 +1,5 @@
+import type { AgentResult } from "../../../core/types/agent.js";
+
 /**
  * Service Chat Runtime Bridge 类型定义。
  *
@@ -30,7 +32,7 @@ export type ServiceChatSendByKeyResult = {
  * - `sendTextByChatKey`：向指定会话回发消息。
  */
 export type ServiceChatRuntimeBridge = {
-  pickLastSuccessfulChatSendText(toolCalls: unknown[]): string;
+  pickLastSuccessfulChatSendText(toolCalls: AgentResult["toolCalls"]): string;
   sendTextByChatKey(
     params: ServiceChatSendByKeyParams,
   ): Promise<ServiceChatSendByKeyResult>;

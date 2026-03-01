@@ -1,3 +1,5 @@
+import type { JsonValue } from "../../types/json.js";
+
 /**
  * Daemon API 类型定义。
  *
@@ -31,7 +33,7 @@ export type DaemonJsonApiCallParams = {
   projectRoot: string;
   path: string;
   method?: DaemonHttpMethod;
-  body?: unknown;
+  body?: JsonValue;
   host?: string;
   port?: number;
 };
@@ -49,4 +51,3 @@ export type DaemonJsonApiCallResult<T> = {
   data?: T;
   error?: string;
 };
-

@@ -1,5 +1,7 @@
 import type { LanguageModel } from "ai";
 import type { ShipConfig } from "../../types/ship-config.js";
+import type { ShipContextMetadataV1, ShipContextMessageV1 } from "../../../core/types/context-message.js";
+import type { AgentResult } from "../../../core/types/agent.js";
 
 /**
  * Service 运行时端口类型。
@@ -44,20 +46,27 @@ export type ServiceContextRequestContextBridge = {
  * 会话上下文存储端口。
  */
 export type ServiceContextStore = {
-  loadAll(): Promise<any[]>;
-  loadRange(startIndex: number, endIndex: number): Promise<any[]>;
-  append(message: any): Promise<void>;
+  loadAll(): Promise<ShipContextMessageV1[]>;
+  loadRange(startIndex: number, endIndex: number): Promise<ShipContextMessageV1[]>;
+  append(message: ShipContextMessageV1): Promise<void>;
   getTotalMessageCount(): Promise<number>;
   loadMeta(): Promise<{ pinnedSkillIds?: string[] }>;
   setPinnedSkillIds(skillIds: string[]): Promise<void>;
-  createAssistantTextMessage(params: any): any;
+  createAssistantTextMessage(params: {
+    text: string;
+    metadata: Omit<ShipContextMetadataV1, "v" | "ts"> &
+      Partial<Pick<ShipContextMetadataV1, "ts">>;
+    id?: string;
+    kind?: "normal" | "summary";
+    source?: "egress" | "compact";
+  }): ShipContextMessageV1;
 };
 
 /**
  * 会话 Agent 端口。
  */
 export type ServiceContextAgent = {
-  run(params: { contextId: string; query: string }): Promise<any>;
+  run(params: { contextId: string; query: string }): Promise<AgentResult>;
 };
 
 /**
@@ -81,7 +90,7 @@ export type ServiceContextManager = {
     threadId?: number;
     targetType?: string;
     requestId?: string;
-    extra?: Record<string, unknown>;
+    extra?: ShipContextMetadataV1["extra"];
   }): Promise<void>;
   enqueue(params: {
     channel: string;

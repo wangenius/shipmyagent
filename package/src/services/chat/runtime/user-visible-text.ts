@@ -7,20 +7,25 @@
  * - 因此需要一个稳定的、与 Agent 解耦的提取逻辑（属于 chat/egress 语义）
  */
 
+import type { AgentResult } from "../../../core/types/agent.js";
+
 /**
  * 提取策略（中文）
  * - 倒序扫描：优先使用最后一次 `chat_send`，与最终用户感知一致。
  * - 若 output 可解析且 success=true，则确认采用 input.text。
  * - 若 output 为空/非 JSON，走 best-effort 采用 input.text。
  */
-export function pickLastSuccessfulChatSendText(toolCalls: any[]): string {
+export function pickLastSuccessfulChatSendText(
+  toolCalls: AgentResult["toolCalls"],
+): string {
   // 关键点（中文）：优先从 chat_send 的 input.text 还原"用户可见回复"。
   for (let i = toolCalls.length - 1; i >= 0; i -= 1) {
     const tc = toolCalls[i];
     if (!tc) continue;
     if (String(tc.tool || "") !== "chat_send") continue;
 
-    const text = String((tc.input as any)?.text ?? "").trim();
+    const inputText = tc.input ? tc.input.text : undefined;
+    const text = (typeof inputText === "string" ? inputText : "").trim();
     if (!text) continue;
 
     const raw = String(tc.output || "").trim();
@@ -28,7 +33,11 @@ export function pickLastSuccessfulChatSendText(toolCalls: any[]): string {
 
     try {
       const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object" && (parsed as any).success === true) {
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        (parsed as { success?: boolean }).success === true
+      ) {
         return text;
       }
     } catch {
@@ -38,4 +47,3 @@ export function pickLastSuccessfulChatSendText(toolCalls: any[]): string {
   }
   return "";
 }
-

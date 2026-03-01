@@ -20,7 +20,7 @@ import type { Logger } from "../../../../utils/logger/logger.js";
  * - 参数异常或接口失败时返回 false（安全优先）
  */
 export async function isTelegramAdmin(
-  requestJson: <T>(method: string, data: Record<string, unknown>) => Promise<T>,
+  requestJson: <T>(method: string, data: Record<string, string | number>) => Promise<T>,
   logger: Pick<Logger, "warn">,
   originChatId: string,
   actorId: string,
@@ -34,7 +34,7 @@ export async function isTelegramAdmin(
       chat_id: chatIdNum,
       user_id: userIdNum,
     });
-    const status = String((res as any)?.status || "").toLowerCase();
+    const status = String(res.status || "").toLowerCase();
     return status === "administrator" || status === "creator";
   } catch (e) {
     logger.warn("Failed to check Telegram admin", {

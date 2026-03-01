@@ -15,6 +15,7 @@ import {
   setContextAvailableSkills,
   setContextLoadedSkills,
 } from "./store.js";
+import type { JsonValue } from "../../../types/json.js";
 
 /**
  * 归一化 allowed tools。
@@ -22,7 +23,7 @@ import {
  * 关键点（中文）
  * - 去空值 + 去重，保证 provider 输出稳定。
  */
-function normalizeAllowedTools(input: unknown): string[] {
+function normalizeAllowedTools(input: JsonValue | undefined): string[] {
   if (!Array.isArray(input)) return [];
   const out: string[] = [];
   for (const item of input) {
@@ -41,7 +42,7 @@ function toLoadedSkill(params: {
   id: string;
   name: string;
   skillMdPath: string;
-  allowedTools: unknown;
+  allowedTools: JsonValue | undefined;
   content: string;
 }): LoadedSkillV1 {
   return {

@@ -11,6 +11,7 @@ import yaml from "js-yaml";
 import path from "node:path";
 import { parseFrontMatter } from "./frontmatter.js";
 import type { ShipTaskDefinitionV1, ShipTaskFrontmatterV1, ShipTaskStatus } from "../types/task.js";
+import type { JsonObject, JsonValue } from "../../../types/json.js";
 
 /**
  * 必填 frontmatter 字段清单。
@@ -23,13 +24,15 @@ const REQUIRED_FIELDS: Array<keyof ShipTaskFrontmatterV1> = [
   "status",
 ];
 
+type TaskRawValue = JsonValue | undefined;
+
 /**
  * 归一化 task 状态。
  *
  * 关键点（中文）
  * - 输入不合法时返回 `null`，由上层统一产出可读错误。
  */
-export function normalizeTaskStatus(input: unknown): ShipTaskStatus | null {
+export function normalizeTaskStatus(input: TaskRawValue): ShipTaskStatus | null {
   const s = typeof input === "string" ? input.trim().toLowerCase() : "";
   if (s === "enabled") return "enabled";
   if (s === "paused") return "paused";
@@ -45,7 +48,7 @@ export function normalizeTaskStatus(input: unknown): ShipTaskStatus | null {
  * - 输出统一为 posix 风格，便于跨平台审计
  */
 export function normalizeRequiredArtifacts(
-  input: unknown,
+  input: TaskRawValue,
 ): { ok: true; value: string[] } | { ok: false; error: string } {
   if (input === undefined || input === null) return { ok: true, value: [] };
   if (!Array.isArray(input)) {
@@ -86,7 +89,7 @@ export function normalizeRequiredArtifacts(
  * - 必须为 >= 0 的整数
  */
 export function normalizeMinOutputChars(
-  input: unknown,
+  input: TaskRawValue,
 ): { ok: true; value?: number } | { ok: false; error: string } {
   if (input === undefined || input === null || input === "") return { ok: true, value: undefined };
 
@@ -116,7 +119,7 @@ export function normalizeMinOutputChars(
  * - 必须为 >=1 的整数，并限制上限防止过长循环
  */
 export function normalizeMaxDialogueRounds(
-  input: unknown,
+  input: TaskRawValue,
 ): { ok: true; value?: number } | { ok: false; error: string } {
   if (input === undefined || input === null || input === "") return { ok: true, value: undefined };
 
@@ -160,9 +163,14 @@ export function parseTaskMarkdown(params: {
     return { ok: false, error: "Missing YAML frontmatter (--- ... ---) in task.md" };
   }
 
-  let meta: any = null;
+  let meta: JsonObject | null = null;
   try {
-    meta = yaml.load(frontMatterYaml);
+    const loaded = yaml.load(frontMatterYaml) as JsonValue;
+    if (loaded && typeof loaded === "object" && !Array.isArray(loaded)) {
+      meta = loaded as JsonObject;
+    } else {
+      meta = null;
+    }
   } catch (e) {
     return { ok: false, error: `Invalid YAML frontmatter: ${String(e)}` };
   }

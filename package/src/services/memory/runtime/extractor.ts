@@ -1,5 +1,11 @@
-import { generateText } from "ai";
-import type { LanguageModel } from "ai";
+import {
+  generateText,
+  isTextUIPart,
+  type LanguageModel,
+  type UIDataTypes,
+  type UIMessagePart,
+  type UITools,
+} from "ai";
 import type {
   MemoryEntry,
   MemoryExtractParams,
@@ -10,6 +16,12 @@ import {
   getServiceContextManager,
 } from "../../../process/runtime/service-runtime-dependencies.js";
 import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
+
+type AnyUiMessagePart = UIMessagePart<UIDataTypes, UITools>;
+
+function toUiParts(message: { parts?: AnyUiMessagePart[] } | null | undefined): AnyUiMessagePart[] {
+  return Array.isArray(message?.parts) ? message.parts : [];
+}
 
 /**
  * 从上下文消息中提取记忆摘要。
@@ -39,18 +51,10 @@ export async function extractMemoryFromContextMessages(
       for (const message of messages) {
         if (!message || typeof message !== "object") continue;
         const role = message.role === "user" ? "User" : "Assistant";
-        const parts = Array.isArray((message as any).parts)
-          ? (message as any).parts
-          : [];
+        const parts = toUiParts(message);
         const text = parts
-          .filter(
-            (part: any) =>
-              part &&
-              typeof part === "object" &&
-              part.type === "text" &&
-              typeof part.text === "string",
-          )
-          .map((part: any) => String(part.text ?? ""))
+          .filter(isTextUIPart)
+          .map((part) => String(part.text ?? ""))
           .join("\n")
           .trim();
         if (!text) continue;

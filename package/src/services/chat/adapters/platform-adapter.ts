@@ -56,7 +56,7 @@ export abstract class PlatformAdapter {
     const dispatcher: ChatDispatcher = {
       sendText: async (p) => this.sendToolText(p),
     };
-    if (typeof (this as any).sendActionToPlatform === "function") {
+    if (typeof this.sendActionToPlatform === "function") {
       dispatcher.sendAction = async (p) => this.sendToolAction(p);
     }
     registerChatSender(this.channel, dispatcher);

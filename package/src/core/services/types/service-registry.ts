@@ -9,6 +9,7 @@
 import type { Command } from "commander";
 import type { Handler, Hono } from "hono";
 import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
+import type { JsonValue } from "../../../types/json.js";
 
 /**
  * CLI 命令注册抽象。
@@ -55,7 +56,7 @@ export type SmaServiceRuntimeState = "running" | "stopped" | "starting" | "stopp
 export type SmaServiceCommandResult = {
   success: boolean;
   message?: string;
-  data?: unknown;
+  data?: JsonValue;
 };
 
 /**
@@ -71,7 +72,7 @@ export interface SmaServiceLifecycle {
   command?(params: {
     context: ServiceRuntimeDependencies;
     command: string;
-    payload?: unknown;
+    payload?: JsonValue;
   }): Promise<SmaServiceCommandResult> | SmaServiceCommandResult;
 }
 

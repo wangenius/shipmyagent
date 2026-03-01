@@ -14,6 +14,7 @@ import {
 } from "./api.js";
 import { getShipJsonPath } from "../project/paths.js";
 import { loadShipConfig } from "../project/config.js";
+import type { JsonObject, JsonValue } from "../../types/json.js";
 
 /**
  * 解析端口值。
@@ -21,7 +22,7 @@ import { loadShipConfig } from "../project/config.js";
  * 关键点（中文）
  * - 仅接受 1~65535 的整数；非法值返回 undefined。
  */
-function parsePortLike(input: unknown): number | undefined {
+function parsePortLike(input: string | number | undefined): number | undefined {
   if (input === undefined || input === null || input === "") return undefined;
   const raw = typeof input === "number" ? input : Number.parseInt(String(input), 10);
   if (!Number.isFinite(raw) || Number.isNaN(raw)) return undefined;
@@ -35,11 +36,19 @@ function parsePortLike(input: unknown): number | undefined {
  * 关键点（中文）
  * - `0.0.0.0`/`::` 会转换为 `127.0.0.1`，避免客户端直连通配地址失败。
  */
-function normalizeHost(input: unknown): string | undefined {
+function normalizeHost(input: string | undefined): string | undefined {
   const host = typeof input === "string" ? input.trim() : "";
   if (!host) return undefined;
   if (host === "0.0.0.0" || host === "::") return "127.0.0.1";
   return host;
+}
+
+function parseErrorMessageFromPayload(data: JsonValue | null): string | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const payload = data as JsonObject;
+  if (typeof payload.error === "string") return payload.error;
+  if (typeof payload.message === "string") return payload.message;
+  return null;
 }
 
 /**
@@ -116,20 +125,15 @@ export async function callDaemonJsonApi<T>(
       body: hasBody ? JSON.stringify(params.body) : undefined,
     });
 
-    let data: unknown = null;
+    let data: JsonValue | null = null;
     try {
-      data = await response.json();
+      data = (await response.json()) as JsonValue;
     } catch {
       data = null;
     }
 
     if (!response.ok) {
-      const messageFromData =
-        data && typeof data === "object" && typeof (data as any).error === "string"
-          ? String((data as any).error)
-          : data && typeof data === "object" && typeof (data as any).message === "string"
-            ? String((data as any).message)
-            : `HTTP ${response.status}`;
+      const messageFromData = parseErrorMessageFromPayload(data) || `HTTP ${response.status}`;
       return {
         success: false,
         status: response.status,

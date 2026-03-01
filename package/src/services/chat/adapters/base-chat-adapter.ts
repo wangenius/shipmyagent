@@ -3,6 +3,19 @@ import type { ChatDispatchChannel } from "../types/chat-dispatcher.js";
 import type { Logger } from "../../../utils/logger/logger.js";
 import { getServiceContextManager } from "../../../process/runtime/service-runtime-dependencies.js";
 import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
+import type { JsonObject, JsonValue } from "../../../types/json.js";
+
+type AdapterUserMessageMeta = {
+  [key: string]: JsonValue | undefined;
+};
+
+function stripUndefinedMeta(meta: AdapterUserMessageMeta): JsonObject {
+  const out: JsonObject = {};
+  for (const [k, v] of Object.entries(meta)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
 
 /**
  * 入站消息统一结构（跨平台最小公共字段）。
@@ -71,9 +84,16 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
     messageId?: string;
     userId?: string;
     text: string;
-    meta?: Record<string, unknown>;
+    meta?: AdapterUserMessageMeta;
   }): Promise<void> {
-    const meta = (params.meta || {}) as any;
+    const meta = (params.meta || {}) as AdapterUserMessageMeta;
+    const username = typeof meta.username === "string" ? meta.username : undefined;
+    const messageThreadId =
+      typeof meta.messageThreadId === "number" && Number.isFinite(meta.messageThreadId)
+        ? meta.messageThreadId
+        : undefined;
+    const chatType = typeof meta.chatType === "string" ? meta.chatType : undefined;
+    const extra = stripUndefinedMeta(meta);
     await this.contextManager.appendUserMessage({
       channel: this.channel,
       targetId: params.chatId,
@@ -81,14 +101,10 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
       actorId: params.userId,
       messageId: params.messageId,
       text: params.text,
-      actorName: typeof meta.username === "string" ? meta.username : undefined,
-      threadId:
-        typeof meta.messageThreadId === "number" &&
-        Number.isFinite(meta.messageThreadId)
-          ? meta.messageThreadId
-          : undefined,
-      targetType: typeof meta.chatType === "string" ? meta.chatType : undefined,
-      extra: params.meta,
+      actorName: username,
+      threadId: messageThreadId,
+      targetType: chatType,
+      extra,
     });
   }
 

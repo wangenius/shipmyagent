@@ -11,6 +11,7 @@ import fs from "fs-extra";
 import { getCacheDirPath } from "../../../process/project/paths.js";
 import type { ChatDispatchChannel } from "../types/chat-dispatcher.js";
 import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
+import type { JsonObject } from "../../../types/json.js";
 
 export async function tryClaimChatEgressChatSend(params: {
   context: ServiceRuntimeDependencies;
@@ -18,7 +19,7 @@ export async function tryClaimChatEgressChatSend(params: {
   chatId: string;
   messageId: string;
   messageKey: string;
-  meta?: Record<string, unknown>;
+  meta?: JsonObject;
 }): Promise<
   | { claimed: true; markerFile?: string }
   | { claimed: false; reason: string }
@@ -66,8 +67,9 @@ export async function tryClaimChatEgressChatSend(params: {
       flag: "wx",
     });
     return { claimed: true, markerFile };
-  } catch (error: any) {
-    if (error && typeof error === "object" && (error as any).code === "EEXIST") {
+  } catch (error) {
+    const errnoError = error as NodeJS.ErrnoException;
+    if (errnoError.code === "EEXIST") {
       return { claimed: false, reason: "already_claimed" };
     }
     return { claimed: true };
@@ -76,12 +78,12 @@ export async function tryClaimChatEgressChatSend(params: {
 
 export async function markChatEgressChatSendDelivered(params: {
   markerFile: string;
-  deliveredMeta?: Record<string, unknown>;
+  deliveredMeta?: JsonObject;
 }): Promise<void> {
   const markerFile = String(params.markerFile || "").trim();
   if (!markerFile) return;
   try {
-    const existing = (await fs.readJson(markerFile).catch(() => null)) as any;
+    const existing = (await fs.readJson(markerFile).catch(() => null)) as JsonObject | null;
     const next = {
       ...(existing && typeof existing === "object" ? existing : {}),
       status: "delivered",

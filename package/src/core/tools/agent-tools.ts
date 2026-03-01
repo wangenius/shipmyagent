@@ -17,20 +17,6 @@ import { execShellTools } from "./exec-shell.js";
 import { createMcpAiTool } from "./mcp.js";
 
 /**
- * Agent toolset logger 抽象。
- */
-export interface AgentToolsLogger {
-  info(message: string): void;
-  warn(message: string): void;
-  error(message: string): void;
-  log(
-    level: string,
-    message: string,
-    data?: Record<string, unknown>,
-  ): Promise<void> | void;
-}
-
-/**
  * 创建当前 runtime 可用的工具集合。
  *
  * 组装策略（中文）

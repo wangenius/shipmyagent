@@ -15,6 +15,7 @@ import { parseFrontMatter } from "./frontmatter.js";
 import { getClaudeSkillSearchRoots } from "./paths.js";
 import { isSubpath } from "./utils.js";
 import type { ClaudeSkill } from "../types/claude-skill.js";
+import type { JsonObject, JsonValue } from "../../../types/json.js";
 
 /**
  * 扫描并发现 Claude Code-compatible skills。
@@ -97,10 +98,15 @@ export function discoverClaudeSkillsSync(
       }
 
       const { frontMatterYaml } = parseFrontMatter(content);
-      let meta: any = null;
+      let meta: JsonObject | null = null;
       if (frontMatterYaml && frontMatterYaml.trim()) {
         try {
-          meta = yaml.load(frontMatterYaml);
+          const loaded = yaml.load(frontMatterYaml) as JsonValue;
+          if (loaded && typeof loaded === "object" && !Array.isArray(loaded)) {
+            meta = loaded as JsonObject;
+          } else {
+            meta = null;
+          }
         } catch {
           meta = null;
         }

@@ -6,6 +6,8 @@
  * - 支持 lifecycle 控制与通用 command 转发
  */
 
+import type { JsonValue } from "../../../types/json.js";
+
 export type ServiceControlAction = "start" | "stop" | "restart" | "status";
 
 export type ServiceRuntimeView = {
@@ -35,7 +37,7 @@ export type ServiceCommandResponse = {
   success: boolean;
   service?: ServiceRuntimeView;
   message?: string;
-  data?: unknown;
+  data?: JsonValue;
   error?: string;
 };
 

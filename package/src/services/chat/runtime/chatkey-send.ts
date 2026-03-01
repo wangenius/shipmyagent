@@ -14,6 +14,7 @@ import type { ChatDispatchChannel } from "../types/chat-dispatcher.js";
 import type { ShipContextMessageV1 } from "../../../core/types/context-message.js";
 import { getServiceContextManager } from "../../../process/runtime/service-runtime-dependencies.js";
 import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
+import type { JsonObject } from "../../../types/json.js";
 
 type DispatchableChannel = "telegram" | "feishu" | "qq";
 
@@ -81,20 +82,27 @@ function pickLatestUserMetaFromMessages(messages: ShipContextMessageV1[]): {
     const m = messages[i];
     if (!m || typeof m !== "object") continue;
     if (m.role !== "user") continue;
-    const md = (m as any).metadata || {};
+    const md = m.metadata;
+    const extra = md?.extra;
+    const extraObj =
+      extra && typeof extra === "object" && !Array.isArray(extra)
+        ? (extra as JsonObject)
+        : undefined;
     const chatType =
-      typeof md.targetType === "string"
+      typeof md?.targetType === "string"
         ? md.targetType.trim()
-        : typeof md.chatType === "string"
-          ? md.chatType.trim()
+        : typeof extraObj?.chatType === "string"
+          ? extraObj.chatType.trim()
           : undefined;
     const messageThreadId =
-      typeof md.threadId === "number" && Number.isFinite(md.threadId)
+      typeof md?.threadId === "number" && Number.isFinite(md.threadId)
         ? md.threadId
-        : typeof md.messageThreadId === "number" && Number.isFinite(md.messageThreadId)
-          ? md.messageThreadId
+        : typeof extraObj?.messageThreadId === "number" &&
+            Number.isFinite(extraObj.messageThreadId)
+          ? extraObj.messageThreadId
           : undefined;
-    const messageId = typeof md.messageId === "string" ? md.messageId.trim() : undefined;
+    const messageId =
+      typeof md?.messageId === "string" ? md.messageId.trim() : undefined;
     if (chatType || messageThreadId || messageId) {
       return {
         ...(chatType ? { chatType } : {}),
@@ -179,5 +187,5 @@ export async function sendTextByChatKey(params: {
     ...(typeof messageThreadId === "number" ? { messageThreadId } : {}),
     ...(typeof chatType === "string" && chatType ? { chatType } : {}),
     ...(typeof messageId === "string" && messageId ? { messageId } : {}),
-  }) as any;
+  });
 }

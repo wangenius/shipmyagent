@@ -1,10 +1,53 @@
-function safeJsonParse(input: unknown): unknown | null {
+import type { JsonObject, JsonValue } from "../../types/json.js";
+
+type ParsedPayload = JsonObject | JsonValue[];
+type FormattedToolCall = {
+  id?: string;
+  type?: string;
+  name?: string;
+  arguments?: string;
+};
+type FormattedMessage = {
+  role: string;
+  name?: string;
+  tool_call_id?: string;
+  content?: string;
+  tool_calls?: FormattedToolCall[];
+};
+
+function isJsonObject(value: JsonValue | null | undefined): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getStringField(
+  objectValue: JsonObject,
+  field: string,
+): string | undefined {
+  const value = objectValue[field];
+  return typeof value === "string" ? value : undefined;
+}
+
+function getObjectField(
+  objectValue: JsonObject,
+  field: string,
+): JsonObject | undefined {
+  const value = objectValue[field];
+  return isJsonObject(value) ? value : undefined;
+}
+
+function getArrayField(objectValue: JsonObject, field: string): JsonValue[] | undefined {
+  const value = objectValue[field];
+  return Array.isArray(value) ? value : undefined;
+}
+
+function safeJsonParse(input: string | undefined): ParsedPayload | null {
   if (typeof input !== "string") return null;
   const trimmed = input.trim();
   if (!trimmed) return null;
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return null;
   try {
-    return JSON.parse(trimmed);
+    const parsed = JSON.parse(trimmed) as JsonValue;
+    return isJsonObject(parsed) || Array.isArray(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -15,7 +58,10 @@ function truncate(text: string, maxChars: number): string {
   return text.slice(0, maxChars) + `…(truncated, ${text.length} chars total)`;
 }
 
-function stringifyCompact(value: unknown, maxChars: number): string {
+function stringifyCompact(
+  value: JsonValue | object | undefined,
+  maxChars: number,
+): string {
   try {
     return truncate(JSON.stringify(value), maxChars);
   } catch {
@@ -23,29 +69,29 @@ function stringifyCompact(value: unknown, maxChars: number): string {
   }
 }
 
-function contentToText(content: any, maxChars: number): string {
+function contentToText(content: JsonValue | undefined, maxChars: number): string {
   if (typeof content === "string") return truncate(content, maxChars);
   if (Array.isArray(content)) {
     const parts = content
-      .map((p) => {
-        if (!p || typeof p !== "object") return "";
-        if (p.type === "text") return String((p as any).text ?? "");
-        if (p.type === "input_text") return String((p as any).text ?? "");
-        if (p.type === "tool-approval-request") {
-          const toolName = ((p as any).toolCall as any)?.toolName;
+      .map((part) => {
+        if (!isJsonObject(part)) return "";
+        const partType = getStringField(part, "type");
+        if (partType === "text" || partType === "input_text") {
+          return String(getStringField(part, "text") ?? "");
+        }
+        if (partType === "tool-approval-request") {
+          const toolCall = getObjectField(part, "toolCall");
+          const toolName = toolCall ? getStringField(toolCall, "toolName") : "";
           return `Approval requested: ${String(toolName ?? "")}`;
         }
-        if (p.type === "tool-call") {
-          const toolName = (p as any).toolName;
-          return `Tool call: ${String(toolName ?? "")}`;
+        if (partType === "tool-call") {
+          return `Tool call: ${String(getStringField(part, "toolName") ?? "")}`;
         }
-        if (p.type === "tool-result") {
-          const toolName = (p as any).toolName;
-          return `Tool result: ${String(toolName ?? "")}`;
+        if (partType === "tool-result") {
+          return `Tool result: ${String(getStringField(part, "toolName") ?? "")}`;
         }
-        if (p.type === "tool-error") {
-          const toolName = (p as any).toolName;
-          return `Tool error: ${String(toolName ?? "")}`;
+        if (partType === "tool-error") {
+          return `Tool error: ${String(getStringField(part, "toolName") ?? "")}`;
         }
         return "";
       })
@@ -53,45 +99,45 @@ function contentToText(content: any, maxChars: number): string {
       .join("\n");
     return truncate(parts, maxChars);
   }
-  if (content && typeof content === "object")
-    return stringifyCompact(content, maxChars);
+  if (isJsonObject(content)) return stringifyCompact(content, maxChars);
   return truncate(String(content ?? ""), maxChars);
 }
 
-function extractMessages(payload: any): any[] | null {
-  if (!payload || typeof payload !== "object") return null;
-  if (Array.isArray((payload as any).messages))
-    return (payload as any).messages;
-  if (Array.isArray((payload as any).input)) return (payload as any).input;
+function extractMessages(payload: JsonObject): JsonObject[] | null {
+  const messages = getArrayField(payload, "messages");
+  if (Array.isArray(messages)) {
+    return messages.filter((item): item is JsonObject => isJsonObject(item));
+  }
+  const input = getArrayField(payload, "input");
+  if (Array.isArray(input)) {
+    return input.filter((item): item is JsonObject => isJsonObject(item));
+  }
   return null;
 }
 
 function indentBlock(text: string, indent: string): string {
   return text
     .split("\n")
-    .map((l) => `${indent}${l}`)
+    .map((line) => `${indent}${line}`)
     .join("\n");
 }
 
-function formatToolCalls(toolCalls: any, maxArgsChars: number): any[] | null {
+function formatToolCalls(
+  toolCalls: JsonValue | undefined,
+  maxArgsChars: number,
+): FormattedToolCall[] | null {
   if (!Array.isArray(toolCalls) || toolCalls.length === 0) return null;
-  const out: any[] = [];
-  for (const tc of toolCalls) {
-    if (!tc || typeof tc !== "object") continue;
-    const id = typeof (tc as any).id === "string" ? (tc as any).id : undefined;
-    const type =
-      typeof (tc as any).type === "string" ? (tc as any).type : undefined;
-    const fn = (tc as any).function;
+  const out: FormattedToolCall[] = [];
+
+  for (const toolCall of toolCalls) {
+    if (!isJsonObject(toolCall)) continue;
+
+    const id = getStringField(toolCall, "id");
+    const type = getStringField(toolCall, "type");
+    const fn = getObjectField(toolCall, "function");
     const name =
-      fn && typeof fn === "object" && typeof fn.name === "string"
-        ? fn.name
-        : typeof (tc as any).tool === "string"
-          ? (tc as any).tool
-          : undefined;
-    const argsRaw =
-      fn && typeof fn === "object"
-        ? (fn as any).arguments
-        : (tc as any).arguments;
+      (fn && getStringField(fn, "name")) || getStringField(toolCall, "tool");
+    const argsRaw = fn ? fn.arguments : toolCall.arguments;
     const args =
       typeof argsRaw === "string"
         ? truncate(argsRaw, maxArgsChars)
@@ -104,38 +150,35 @@ function formatToolCalls(toolCalls: any, maxArgsChars: number): any[] | null {
       ...(args ? { arguments: args } : {}),
     });
   }
+
   return out.length > 0 ? out : null;
 }
 
-function formatMessagesForLog(messages: any[], opts: {
-  maxContentChars: number;
-  maxToolArgsChars: number;
-}): any[] {
-  const out: any[] = [];
+function formatMessagesForLog(
+  messages: JsonObject[],
+  opts: {
+    maxContentChars: number;
+    maxToolArgsChars: number;
+  },
+): FormattedMessage[] {
+  const out: FormattedMessage[] = [];
 
-  for (const m of messages) {
-    if (!m || typeof m !== "object") continue;
+  for (const message of messages) {
+    const role = getStringField(message, "role") ?? "unknown";
+    const name = getStringField(message, "name");
+    const toolCallId = getStringField(message, "tool_call_id");
 
-    const role = typeof (m as any).role === "string" ? (m as any).role : "unknown";
-    const name = typeof (m as any).name === "string" ? (m as any).name : undefined;
-    const toolCallId =
-      typeof (m as any).tool_call_id === "string"
-        ? (m as any).tool_call_id
-        : undefined;
-
-    const formatted: any = {
+    const formatted: FormattedMessage = {
       role,
       ...(name ? { name } : {}),
       ...(toolCallId ? { tool_call_id: toolCallId } : {}),
     };
 
-    // 关键注释：不要做“整体截断”，而是每条消息独立截断，并保留完整消息序列（含 tool）。
-    if ("content" in (m as any)) {
-      formatted.content = contentToText((m as any).content, opts.maxContentChars);
+    if ("content" in message) {
+      formatted.content = contentToText(message.content, opts.maxContentChars);
     }
 
-    // OpenAI-compatible: assistant tool_calls
-    const toolCalls = formatToolCalls((m as any).tool_calls, opts.maxToolArgsChars);
+    const toolCalls = formatToolCalls(message.tool_calls, opts.maxToolArgsChars);
     if (toolCalls) formatted.tool_calls = toolCalls;
 
     out.push(formatted);
@@ -144,24 +187,27 @@ function formatMessagesForLog(messages: any[], opts: {
   return out;
 }
 
-export type ProviderFetch = (input: any, init?: any) => Promise<any>;
+export type ProviderFetch = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>;
 
 export function parseFetchRequestForLog(
-  input: any,
-  init: any,
+  input: string | URL | Request,
+  init?: RequestInit,
 ): {
   url: string;
   method: string;
-  payload: unknown | null;
+  payload: ParsedPayload | null;
   includePayload: boolean;
   maxChars: number;
-  messages: any[] | null;
-  system: unknown;
+  messages: JsonObject[] | null;
+  system: JsonValue | undefined;
   model?: string;
   toolsCount: number;
   systemLength?: number;
   requestText: string;
-  meta: Record<string, unknown>;
+  meta: JsonObject;
 } | null {
   // 关键注释：这里的 maxChars 不用于“整体截断请求日志”，仅作为 payload 兜底 stringify 的保护上限。
   const maxChars = 12000;
@@ -174,17 +220,16 @@ export function parseFetchRequestForLog(
       ? input
       : input instanceof URL
         ? input.toString()
-        : (input as Request).url;
+        : input.url;
   const method = String(
     init?.method ||
-      (typeof input !== "string" && input instanceof Request
-        ? input.method
-        : "POST"),
+      (input instanceof Request ? input.method : "POST"),
   );
 
-  const payload = safeJsonParse((init as any)?.body);
-  if (!payload || typeof payload !== "object") {
-    if ((init as any)?.body) {
+  const initBody = typeof init?.body === "string" ? init.body : undefined;
+  const payload = safeJsonParse(initBody);
+  if (!payload) {
+    if (initBody) {
       return {
         url,
         method,
@@ -201,16 +246,14 @@ export function parseFetchRequestForLog(
     return null;
   }
 
-  const model =
-    typeof (payload as any).model === "string"
-      ? (payload as any).model
-      : undefined;
-  const system = (payload as any).system;
-  const messages = extractMessages(payload);
-  const tools = (payload as any).tools;
+  const payloadObject = isJsonObject(payload) ? payload : undefined;
+  const model = payloadObject ? getStringField(payloadObject, "model") : undefined;
+  const system = payloadObject ? payloadObject.system : undefined;
+  const messages = payloadObject ? extractMessages(payloadObject) : null;
+  const tools = payloadObject ? payloadObject.tools : undefined;
   const toolsCount = Array.isArray(tools)
     ? tools.length
-    : tools && typeof tools === "object"
+    : isJsonObject(tools)
       ? Object.keys(tools).length
       : 0;
 
@@ -234,7 +277,9 @@ export function parseFetchRequestForLog(
       maxContentChars: 2000,
       maxToolArgsChars: 1200,
     });
-    messageTextParts.push(`messages: ${JSON.stringify(formattedMessages, null, 2)}`);
+    messageTextParts.push(
+      `messages: ${JSON.stringify(formattedMessages, null, 2)}`,
+    );
   } else {
     messageTextParts.push(
       ["payload:", indentBlock(stringifyCompact(payload, maxChars), "  ")].join(
@@ -261,10 +306,10 @@ export function parseFetchRequestForLog(
       kind: "llm_request",
       url,
       method,
-      model,
+      ...(model ? { model } : {}),
       toolsCount,
       messagesCount: Array.isArray(messages) ? messages.length : 0,
-      systemLength: typeof system === "string" ? system.length : undefined,
+      ...(typeof system === "string" ? { systemLength: system.length } : {}),
       ...(includePayload ? { payload } : {}),
     },
   };

@@ -10,12 +10,32 @@ import { z } from "zod";
 import { tool } from "ai";
 import type { McpToolDefinition } from "../../services/mcp/runtime/types.js";
 import { getShipRuntimeContext } from "../../process/server/ShipRuntimeContext.js";
+import type { JsonObject, JsonValue } from "../../types/json.js";
+
+const jsonSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonSchema),
+    z.record(jsonSchema),
+  ]),
+);
+
+function getSchemaFieldDescription(value: object, fallback: string): string {
+  const schemaNode = value as { description?: string };
+  if (typeof schemaNode.description === "string") {
+    return schemaNode.description;
+  }
+  return fallback;
+}
 
 /**
  * 将 MCP tool 定义转换为 AI SDK tool。
  *
  * 关键点（中文）
- * - 输入 schema 采用宽松映射（字段级 `z.any()`），由 MCP 侧做最终校验。
+ * - 输入 schema 采用 JSON 递归类型映射，由 MCP 侧做最终校验。
  * - 执行阶段只做结果形态归一化，不绑定具体业务协议。
  */
 export function createMcpAiTool(params: {
@@ -30,13 +50,13 @@ export function createMcpAiTool(params: {
       Object.fromEntries(
         Object.entries(mcpTool.inputSchema.properties || {}).map(([key, value]) => [
           key,
-          z.any().describe((value as any).description || key),
+          jsonSchema.describe(getSchemaFieldDescription(value, key)),
         ]),
       ),
     ),
     // MCP tools do not require approval by default.
     needsApproval: async () => false,
-    execute: async (args: Record<string, unknown>) => {
+    execute: async (args: JsonObject) => {
       try {
         const result = await getShipRuntimeContext().mcpManager.callTool(
           server,
@@ -45,7 +65,7 @@ export function createMcpAiTool(params: {
         );
 
         const output = result.content
-          .map((item: any) => {
+          .map((item) => {
             if (item.type === "text") return item.text || "";
             if (item.type === "image") return `[Image: ${item.mimeType || "unknown"}]`;
             if (item.type === "resource") return `[Resource: ${item.mimeType || "unknown"}]`;

@@ -10,6 +10,7 @@ import path from "node:path";
 import { nanoid } from "nanoid";
 import type { ShipTaskStatus } from "./types/task.js";
 import type { ServiceRuntimeDependencies } from "../../process/runtime/types/service-runtime-types.js";
+import type { JsonValue } from "../../types/json.js";
 import {
   isValidTaskId,
   normalizeTaskId,
@@ -34,7 +35,7 @@ import type {
   TaskSetStatusResponse,
 } from "./types/task-command.js";
 
-function resolveTaskStatus(input: unknown, fallback: ShipTaskStatus): ShipTaskStatus {
+function resolveTaskStatus(input: JsonValue | undefined, fallback: ShipTaskStatus): ShipTaskStatus {
   const normalized = normalizeTaskStatus(input);
   return normalized || fallback;
 }

@@ -16,6 +16,7 @@ import http from "node:http";
 import fs from "fs-extra";
 import path from "path";
 import { getShipPublicDirPath } from "../project/paths.js";
+import type { ShipContextMetadataV1 } from "../../core/types/context-message.js";
 import {
   getShipServiceContext,
   getShipRuntimeContext,
@@ -197,9 +198,9 @@ export class AgentServer {
 
     // service runtime control
     this.app.post("/api/services/control", async (c) => {
-      let body: any = null;
+      let body: { serviceName?: string; action?: string } | null = null;
       try {
-        body = await c.req.json();
+        body = (await c.req.json()) as { serviceName?: string; action?: string };
       } catch {
         return c.json({ success: false, error: "Invalid JSON body" }, 400);
       }
@@ -223,9 +224,19 @@ export class AgentServer {
 
     // service command bridge
     this.app.post("/api/services/command", async (c) => {
-      let body: any = null;
+      let body:
+        | {
+            serviceName?: string;
+            command?: string;
+            payload?: Record<string, string | number | boolean | null>;
+          }
+        | null = null;
       try {
-        body = await c.req.json();
+        body = (await c.req.json()) as {
+          serviceName?: string;
+          command?: string;
+          payload?: Record<string, string | number | boolean | null>;
+        };
       } catch {
         return c.json({ success: false, error: "Invalid JSON body" }, 400);
       }
@@ -278,7 +289,13 @@ export class AgentServer {
 
       let body;
       try {
-        body = JSON.parse(bodyText);
+        body = JSON.parse(bodyText) as {
+          instructions?: string;
+          chatId?: string;
+          userId?: string;
+          actorId?: string;
+          messageId?: string;
+        };
       } catch {
         return c.json(
           {
@@ -343,27 +360,31 @@ export class AgentServer {
 
         // [阶段3] 结果提取：优先拿 chat_send 的最终文本，其次回退到 result.output。
         const userVisible =
-          pickLastSuccessfulChatSendText((result as any)?.toolCalls || []) ||
+          pickLastSuccessfulChatSendText(result.toolCalls || []) ||
           String(result?.output || "");
         try {
           // [阶段3] 上下文消息落盘：优先 append assistantMessage；缺失时生成文本消息兜底。
           const store = runtime.contextManager.getContextStore(contextId);
-          const assistantMessage = (result as any)?.assistantMessage;
+          const assistantMessage = result.assistantMessage;
           if (assistantMessage && typeof assistantMessage === "object") {
-            await store.append(assistantMessage as any);
+            await store.append(assistantMessage);
             void runtime.contextManager.afterContextUpdatedAsync(contextId);
           } else if (userVisible && userVisible.trim()) {
+            const metadata: Omit<ShipContextMetadataV1, "v" | "ts"> = {
+              contextId,
+              channel: "api",
+              targetId: chatId,
+              actorId: "bot",
+              messageId,
+              extra: {
+                via: "api_execute",
+                note: "assistant_message_missing",
+              },
+            };
             await store.append(
               store.createAssistantTextMessage({
                 text: userVisible,
-                metadata: {
-                  contextId,
-                  channel: "api",
-                  targetId: chatId,
-                  actorId: "bot",
-                  messageId,
-                  extra: { via: "api_execute", note: "assistant_message_missing" },
-                } as any,
+                metadata,
                 kind: "normal",
                 source: "egress",
               }),

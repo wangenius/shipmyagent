@@ -1,19 +1,22 @@
 import { llmRequestContext, type LlmRequestContext } from "./context.js";
 import { parseFetchRequestForLog, type ProviderFetch } from "./format.js";
+import type { JsonObject } from "../../types/json.js";
 
 export function createLlmLoggingFetch(args: {
-  logger: { log(level: string, message: string, data?: Record<string, unknown>): Promise<void> };
+  logger: {
+    log(level: string, message: string, data?: JsonObject): Promise<void>;
+  };
   enabled: boolean;
   maxChars?: number;
 }): ProviderFetch {
-  const baseFetch: ProviderFetch = (globalThis.fetch as any).bind(globalThis);
+  const baseFetch: ProviderFetch = globalThis.fetch.bind(globalThis);
   const maxChars = args.maxChars ?? 99999999;
 
   return async (input, init) => {
     if (args.enabled) {
       try {
         const parsed = parseFetchRequestForLog(input, init);
-        const ctx = llmRequestContext.getStore() as LlmRequestContext | undefined;
+        const ctx: LlmRequestContext | undefined = llmRequestContext.getStore();
 
         if (parsed) {
           const contextId = ctx?.contextId;
@@ -26,8 +29,8 @@ export function createLlmLoggingFetch(args: {
 
           await args.logger.log("info", message.slice(0, maxChars), {
             ...parsed.meta,
-            contextId,
-            requestId,
+            ...(contextId ? { contextId } : {}),
+            ...(requestId ? { requestId } : {}),
           });
         }
       } catch {

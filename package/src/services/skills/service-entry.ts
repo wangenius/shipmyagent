@@ -26,6 +26,7 @@ import type {
   SkillUnloadResponse,
 } from "./types/skill-command.js";
 import type { SmaService } from "../../core/services/types/service-registry.js";
+import type { JsonObject } from "../../types/json.js";
 
 function parsePortOption(value: string): number {
   const port = Number.parseInt(value, 10);
@@ -283,9 +284,13 @@ function setupServer(
   });
 
   registry.post("/api/skill/load", async (c) => {
-    let body: any = null;
+    let body: JsonObject | null = null;
     try {
-      body = await c.req.json();
+      const parsed = await c.req.json();
+      body =
+        parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? (parsed as JsonObject)
+          : {};
     } catch {
       return c.json({ success: false, error: "Invalid JSON body" }, 400);
     }
@@ -304,9 +309,13 @@ function setupServer(
   });
 
   registry.post("/api/skill/unload", async (c) => {
-    let body: any = null;
+    let body: JsonObject | null = null;
     try {
-      body = await c.req.json();
+      const parsed = await c.req.json();
+      body =
+        parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? (parsed as JsonObject)
+          : {};
     } catch {
       return c.json({ success: false, error: "Invalid JSON body" }, 400);
     }

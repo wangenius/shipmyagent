@@ -15,6 +15,7 @@ import {
 } from "../../process/project/paths.js";
 import { loadShipConfig } from "../../process/project/config.js";
 import type { ClaudeSkill } from "./types/claude-skill.js";
+import type { JsonObject, JsonValue } from "../../types/json.js";
 import type {
   SkillListResponse,
   SkillLoadRequest,
@@ -25,7 +26,7 @@ import type {
   SkillUnloadResponse,
 } from "./types/skill-command.js";
 
-function normalizeAllowedTools(input: unknown): string[] {
+function normalizeAllowedTools(input: JsonValue | undefined): string[] {
   if (!Array.isArray(input)) return [];
   const values: string[] = [];
   for (const item of input) {
@@ -62,7 +63,7 @@ function findSkill(skills: ClaudeSkill[], name: string): ClaudeSkill | null {
 async function readPinnedSkillIds(projectRoot: string, chatKey: string): Promise<string[]> {
   const metaPath = getShipContextMessagesMetaPath(projectRoot, chatKey);
   try {
-    const raw = (await fs.readJson(metaPath)) as any;
+    const raw = (await fs.readJson(metaPath)) as JsonObject;
     if (!raw || typeof raw !== "object" || !Array.isArray(raw.pinnedSkillIds)) {
       return [];
     }
@@ -91,9 +92,9 @@ async function writePinnedSkillIds(params: {
   const metaPath = getShipContextMessagesMetaPath(projectRoot, chatKey);
   await fs.ensureDir(messagesDir);
 
-  let prev: Record<string, unknown> = {};
+  let prev: JsonObject = {};
   try {
-    const raw = (await fs.readJson(metaPath)) as any;
+    const raw = (await fs.readJson(metaPath)) as JsonObject;
     if (raw && typeof raw === "object") prev = raw;
   } catch {
     prev = {};

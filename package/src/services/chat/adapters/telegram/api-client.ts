@@ -120,10 +120,7 @@ export class TelegramApiClient {
     const file = await this.requestJson<{ file_path?: string }>("getFile", {
       file_id: fileId,
     });
-    const filePath =
-      typeof (file as any)?.file_path === "string"
-        ? String((file as any).file_path)
-        : "";
+    const filePath = typeof file.file_path === "string" ? file.file_path : "";
     if (!filePath) {
       throw new Error("Telegram getFile returned empty file_path");
     }

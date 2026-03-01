@@ -9,6 +9,7 @@
 import type { Command } from "commander";
 import type { Hono } from "hono";
 import type { ServiceRuntimeDependencies } from "../../process/runtime/types/service-runtime-types.js";
+import type { JsonValue } from "../../types/json.js";
 import type {
   ServerRouteRegistry,
   SmaService,
@@ -275,7 +276,7 @@ export async function controlServiceRuntime(params: {
 export async function runServiceCommand(params: {
   serviceName: string;
   command: string;
-  payload?: unknown;
+  payload?: JsonValue;
   context: ServiceRuntimeDependencies;
 }): Promise<SmaServiceCommandResult & { service?: ServiceRuntimeSnapshot }> {
   const service = resolveServiceByName(params.serviceName);
@@ -413,7 +414,7 @@ function wrapServiceRouteHandler(serviceName: string, handler: RouteHandler): Ro
         503,
       );
     }
-    return await (handler as any)(c, next);
+    return await handler(c, next);
   };
 }
 

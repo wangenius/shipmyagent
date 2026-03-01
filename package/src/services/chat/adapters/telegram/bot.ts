@@ -113,7 +113,7 @@ export class TelegramBot extends BaseChatAdapter {
             const chatKey = this.buildChatKey(chatId, messageThreadId);
             const from = message.from;
             const fromIsBot =
-              (from as any)?.is_bot === true ||
+              from?.is_bot === true ||
               (!!this.botId &&
                 typeof from?.id === "number" &&
                 from.id === this.botId) ||
@@ -332,11 +332,11 @@ export class TelegramBot extends BaseChatAdapter {
     if (!params.hasIncomingAttachment) return "";
 
     const types: string[] = [];
-    const m = params.message as any;
-    if (m?.document) types.push("document");
-    if (Array.isArray(m?.photo) && m.photo.length > 0) types.push("photo");
-    if (m?.voice) types.push("voice");
-    if (m?.audio) types.push("audio");
+    const message = params.message;
+    if (message?.document) types.push("document");
+    if (Array.isArray(message?.photo) && message.photo.length > 0) types.push("photo");
+    if (message?.voice) types.push("voice");
+    if (message?.audio) types.push("audio");
 
     const uniq = Array.from(new Set(types)).filter(Boolean);
     const suffix = uniq.length > 0 ? ` (${uniq.join(", ")})` : "";
@@ -553,7 +553,7 @@ export class TelegramBot extends BaseChatAdapter {
       !!message.audio;
     const from = message.from;
     const fromIsBot =
-      (from as any)?.is_bot === true ||
+      from?.is_bot === true ||
       (!!this.botId &&
         typeof from?.id === "number" &&
         from.id === this.botId) ||

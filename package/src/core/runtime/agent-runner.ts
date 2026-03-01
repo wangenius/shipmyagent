@@ -13,7 +13,7 @@ import {
   Tool,
   type LanguageModel,
   type ModelMessage,
-  type SystemModelMessage
+  type SystemModelMessage,
 } from "ai";
 import { withLlmRequestContext } from "../../utils/logger/context.js";
 import { generateId } from "../../process/utils/id.js";
@@ -24,21 +24,40 @@ import {
 import { createModel } from "../llm/create-model.js";
 import type { AgentRunInput, AgentResult } from "../types/agent.js";
 import type { Logger } from "../../utils/logger/logger.js";
-import { contextRequestContext } from "../context/request-context.js";
+import {
+  contextRequestContext,
+  type ContextRequestContext,
+} from "../context/request-context.js";
 import { createAgentTools } from "../tools/agent-tools.js";
 import { openai } from "@ai-sdk/openai";
-import type { ShipContextMetadataV1 } from "../types/context-message.js";
+import type {
+  ShipContextChannel,
+  ShipContextMessageV1,
+  ShipContextMetadataV1,
+} from "../types/context-message.js";
 import {
   getShipRuntimeContext,
   getShipRuntimeContextBase,
 } from "../../process/server/ShipRuntimeContext.js";
 import type { ContextAgent } from "../types/context-agent.js";
 import { collectSystemPromptProviderResult } from "../prompts/system-provider.js";
+import type { ContextStore } from "../context/context-store.js";
 import {
   extractTextFromUiMessage,
   extractToolCallsFromUiMessage,
 } from "./ui-message.js";
 import type { SystemPromptProviderResult } from "../types/system-prompt-provider.js";
+
+type ToolExecute = NonNullable<Tool["execute"]>;
+type ToolWithExecute = Tool & {
+  execute?: ToolExecute;
+};
+
+function toShipContextChannel(
+  chat: ContextRequestContext["chat"] | undefined,
+): ShipContextChannel {
+  return chat ?? "api";
+}
 
 export class ContextAgentRunner implements ContextAgent {
   // 是否初始化
@@ -222,7 +241,7 @@ export class ContextAgentRunner implements ContextAgent {
           maxInputTokensApprox: compactPolicy.maxInputTokensApprox,
           archiveOnCompact: compactPolicy.archiveOnCompact,
         });
-        compacted = Boolean((compactResult as any)?.compacted);
+        compacted = Boolean(compactResult.compacted);
       } catch {
         // ignore compact failure; fallback to un-compacted context messages
       }
@@ -244,10 +263,11 @@ export class ContextAgentRunner implements ContextAgent {
         ...currentProviderResult.messages,
       ];
 
-      let baseModelMessages: ModelMessage[] =
-        (await contextStore.toModelMessages({ tools: this.tools })) as any;
+      let baseModelMessages: ModelMessage[] = await contextStore.toModelMessages(
+        { tools: this.tools },
+      );
       if (!Array.isArray(baseModelMessages) || baseModelMessages.length === 0) {
-        baseModelMessages = [{ role: "user", content: userText } as any];
+        baseModelMessages = [{ role: "user", content: userText }];
       }
 
       await logger.log("debug", "Context selected", {
@@ -272,13 +292,13 @@ export class ContextAgentRunner implements ContextAgent {
         const toAppend: ModelMessage[] = [];
         let latestUserText: string | undefined;
         for (const m of messages) {
-          const text = String((m as any)?.text ?? "").trim();
+          const text = String(m?.text ?? "").trim();
           if (!text) continue;
-          toAppend.push({ role: "user", content: text } as any);
+          toAppend.push({ role: "user", content: text });
           latestUserText = text;
         }
         if (toAppend.length > 0) {
-          baseModelMessages = [...baseModelMessages, ...toAppend] as any;
+          baseModelMessages = [...baseModelMessages, ...toAppend];
         }
         return { added: toAppend.length, latestUserText };
       };
@@ -294,14 +314,9 @@ export class ContextAgentRunner implements ContextAgent {
         if (typeof drainLaneMerged !== "function") return { reloaded: false };
         try {
           const r = await drainLaneMerged();
-          const drained =
-            r && typeof (r as any).drained === "number"
-              ? (r as any).drained
-              : 0;
+          const drained = r && typeof r.drained === "number" ? r.drained : 0;
           if (drained <= 0) return { reloaded: false, drained: 0 };
-          const mergedMessages = Array.isArray((r as any)?.messages)
-            ? ((r as any).messages as Array<{ text: string }>)
-            : [];
+          const mergedMessages = Array.isArray(r?.messages) ? r.messages : [];
           const appended = appendMergedLaneMessages(mergedMessages);
           needsLaneResync = true;
           void logger.log(
@@ -330,15 +345,16 @@ export class ContextAgentRunner implements ContextAgent {
 
       const toolsWithLaneMerge: Record<string, Tool> = {};
       for (const [toolName, tool] of Object.entries(this.tools)) {
-        const exec = (tool as any)?.execute;
+        const toolWithExecute = tool as ToolWithExecute;
+        const exec = toolWithExecute.execute;
         if (typeof exec !== "function") {
           toolsWithLaneMerge[toolName] = tool;
           continue;
         }
 
         toolsWithLaneMerge[toolName] = {
-          ...(tool as any),
-          execute: async (...args: any[]) => {
+          ...toolWithExecute,
+          execute: async (...args: Parameters<ToolExecute>) => {
             try {
               return await exec.apply(tool, args);
             } finally {
@@ -346,7 +362,7 @@ export class ContextAgentRunner implements ContextAgent {
               await reloadModelMessages(`after_tool:${toolName}`);
             }
           },
-        } as any;
+        };
       }
 
       // phase 2（中文）：进入 tool-loop。
@@ -358,7 +374,7 @@ export class ContextAgentRunner implements ContextAgent {
             system: currentBaseSystemMessages,
             prepareStep: async ({ messages }) => {
               const incomingMessages: ModelMessage[] = Array.isArray(messages)
-                ? (messages as any)
+                ? messages
                 : [];
               const suffix =
                 incomingMessages.length >= lastAppliedBasePrefixLen
@@ -372,7 +388,7 @@ export class ContextAgentRunner implements ContextAgent {
               // 若 lane 已变化，则替换“前缀 base”，并保留后缀 tool 链。
               let outMessages: ModelMessage[] | undefined;
               if (needsLaneResync) {
-                outMessages = [...(baseModelMessages as any), ...suffix] as any;
+                outMessages = [...baseModelMessages, ...suffix];
                 needsLaneResync = false;
                 lastAppliedBasePrefixLen = Array.isArray(baseModelMessages)
                   ? baseModelMessages.length
@@ -400,10 +416,10 @@ export class ContextAgentRunner implements ContextAgent {
 
       // phase 3（中文）：把 stream 结果固化为最终 assistant UIMessage。
       // 关键点（中文）：用 ai-sdk v6 的 UIMessage 流来生成最终 assistant UIMessage（包含 tool parts），避免手工拼装。
-      let finalAssistantUiMessage: any = null;
+      let finalAssistantUiMessage: ShipContextMessageV1 | null = null;
       try {
         const ctx = contextRequestContext.getStore();
-        const channel = (ctx?.chat as any) || "api";
+        const channel = toShipContextChannel(ctx?.chat);
         const targetId = String(ctx?.targetId || contextId);
         const md: ShipContextMetadataV1 = {
           v: 1,
@@ -423,18 +439,18 @@ export class ContextAgentRunner implements ContextAgent {
           extra: { note: "ai_sdk_ui_message" },
         };
 
-        const uiStream = (result as any).toUIMessageStream({
+        const uiStream = result.toUIMessageStream<ShipContextMessageV1>({
           sendReasoning: false,
           sendSources: false,
           generateMessageId: () => `a:${contextId}:${generateId()}`,
           // 关键点（中文）：metadata 通过 ai-sdk 的 UIMessage 生成管线注入，避免我们手工改写最终 message。
           messageMetadata: () => md,
-          onFinish: (e: any) => {
-            finalAssistantUiMessage = e?.responseMessage ?? null;
+          onFinish: (event) => {
+            finalAssistantUiMessage = event.responseMessage ?? null;
           },
         });
         // 关键点（中文）：必须消费完整 UIMessage stream，onFinish 才会触发并产出 responseMessage。
-        for await (const _ of uiStream as any) {
+        for await (const _ of uiStream) {
           // ignore chunks
         }
       } catch {
@@ -495,13 +511,11 @@ export class ContextAgentRunner implements ContextAgent {
             parsed &&
             typeof parsed === "object" &&
             "success" in parsed &&
-            (parsed as any).success === false
+            (parsed as { success?: boolean }).success === false
           ) {
             hadToolFailure = true;
-            const err =
-              (parsed as any).error ||
-              (parsed as any).stderr ||
-              "unknown error";
+            const parsedObj = parsed as { error?: string; stderr?: string };
+            const err = parsedObj.error ?? parsedObj.stderr ?? "unknown error";
             toolFailureSummaries.push(
               `${tc.tool}: ${String(err)}`.slice(0, 200),
             );
@@ -524,7 +538,7 @@ export class ContextAgentRunner implements ContextAgent {
         : "";
       if (!assistantText) {
         try {
-          assistantText = String((await (result as any)?.text) ?? "").trim();
+          assistantText = String((await result.text) ?? "").trim();
         } catch {
           assistantText = "";
         }
@@ -665,30 +679,25 @@ export class ContextAgentRunner implements ContextAgent {
     archiveOnCompact: boolean;
   } {
     const runtime = getShipRuntimeContext();
+    const contextMessagesConfig = runtime.config.context?.messages;
 
     const baseKeepLastMessages =
-      typeof (runtime.config as any)?.context?.messages?.keepLastMessages ===
-      "number"
+      typeof contextMessagesConfig?.keepLastMessages === "number"
         ? Math.max(
             6,
             Math.min(
               5000,
-              Math.floor(
-                (runtime.config as any).context.messages.keepLastMessages,
-              ),
+              Math.floor(contextMessagesConfig.keepLastMessages),
             ),
           )
         : 30;
     const baseMaxInputTokensApprox =
-      typeof (runtime.config as any)?.context?.messages
-        ?.maxInputTokensApprox === "number"
+      typeof contextMessagesConfig?.maxInputTokensApprox === "number"
         ? Math.max(
             2000,
             Math.min(
               200_000,
-              Math.floor(
-                (runtime.config as any).context.messages.maxInputTokensApprox,
-              ),
+              Math.floor(contextMessagesConfig.maxInputTokensApprox),
             ),
           )
         : 16000;
@@ -704,9 +713,9 @@ export class ContextAgentRunner implements ContextAgent {
       Math.floor(baseMaxInputTokensApprox / retryFactor),
     );
     const archiveOnCompact =
-      (runtime.config as any)?.context?.messages?.archiveOnCompact === undefined
+      contextMessagesConfig?.archiveOnCompact === undefined
         ? true
-        : Boolean((runtime.config as any).context.messages.archiveOnCompact);
+        : Boolean(contextMessagesConfig.archiveOnCompact);
 
     return {
       keepLastMessages,
@@ -718,18 +727,12 @@ export class ContextAgentRunner implements ContextAgent {
   /**
    * 确保当前用户消息已经落盘。
    *
-   * 关键点（中文）
-   * - 某些入口可能未提前 append user message；这里兜底补写。
-   * - 通过“最后一条 user 文本相等”做幂等，避免重复写入。
-   */
+  * 关键点（中文）
+  * - 某些入口可能未提前 append user message；这里兜底补写。
+  * - 通过“最后一条 user 文本相等”做幂等，避免重复写入。
+  */
   private async ensureCurrentUserRecorded(params: {
-    contextStore: ReturnType<
-      typeof getShipRuntimeContext
-    >["contextManager"] extends {
-      getContextStore: (...args: any[]) => infer T;
-    }
-      ? T
-      : any;
+    contextStore: ContextStore;
     userText: string;
     contextId: string;
     requestId: string;
@@ -738,37 +741,28 @@ export class ContextAgentRunner implements ContextAgent {
     try {
       const msgs = await contextStore.loadAll();
       const last = msgs.length > 0 ? msgs[msgs.length - 1] : null;
-      const lastText = (() => {
-        if (!last || last.role !== "user") return "";
-        const parts = Array.isArray((last as any).parts)
-          ? (last as any).parts
-          : [];
-        return parts
-          .filter((p: any) => p && typeof p === "object" && p.type === "text")
-          .map((p: any) => String(p.text ?? ""))
-          .join("\n")
-          .trim();
-      })();
+      const lastText =
+        last && last.role === "user" ? extractTextFromUiMessage(last) : "";
       if (lastText && lastText === String(userText || "").trim()) return;
 
       const ctx = contextRequestContext.getStore();
-      const channel = (ctx?.chat as any) || "api";
+      const channel = toShipContextChannel(ctx?.chat);
       const targetId = String(ctx?.targetId || contextId);
+      const metadata: Omit<ShipContextMetadataV1, "v" | "ts"> = {
+        contextId,
+        channel,
+        targetId,
+        actorId: ctx?.actorId,
+        actorName: ctx?.actorName,
+        messageId: ctx?.messageId,
+        threadId: typeof ctx?.threadId === "number" ? ctx.threadId : undefined,
+        targetType: ctx?.targetType,
+        requestId,
+        extra: { note: "injected_by_agent_run" },
+      };
       const msg = contextStore.createUserTextMessage({
         text: userText,
-        metadata: {
-          contextId,
-          channel,
-          targetId,
-          actorId: ctx?.actorId,
-          actorName: ctx?.actorName,
-          messageId: ctx?.messageId,
-          threadId:
-            typeof ctx?.threadId === "number" ? ctx.threadId : undefined,
-          targetType: ctx?.targetType,
-          requestId,
-          extra: { note: "injected_by_agent_run" },
-        } as any,
+        metadata,
       });
       await contextStore.append(msg);
     } catch {

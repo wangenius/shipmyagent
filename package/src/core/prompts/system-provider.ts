@@ -10,6 +10,7 @@ import type { SystemModelMessage } from "ai";
 import type {
   SystemPromptProvider,
   SystemPromptProviderContext,
+  SystemPromptLoadedSkill,
   SystemPromptProviderOutput,
   SystemPromptProviderResult,
 } from "../types/system-prompt-provider.js";
@@ -24,21 +25,24 @@ function normalizeProviderId(id: string): string {
   return value;
 }
 
-function normalizeMessages(messages: unknown): SystemModelMessage[] {
+function normalizeMessages(
+  messages: SystemPromptProviderOutput["messages"],
+): SystemModelMessage[] {
   if (!Array.isArray(messages)) return [];
 
   const out: SystemModelMessage[] = [];
   for (const item of messages) {
-    if (!item || typeof item !== "object") continue;
-    const role = String((item as any).role || "").trim();
-    const content = String((item as any).content ?? "").trim();
+    const role = String(item?.role || "").trim();
+    const content = String(item?.content ?? "").trim();
     if (role !== "system" || !content) continue;
     out.push({ role: "system", content });
   }
   return out;
 }
 
-function normalizeActiveTools(activeTools: unknown): string[] {
+function normalizeActiveTools(
+  activeTools: SystemPromptProviderOutput["activeTools"],
+): string[] {
   if (!Array.isArray(activeTools)) return [];
   const out: string[] = [];
   for (const item of activeTools) {
@@ -49,16 +53,16 @@ function normalizeActiveTools(activeTools: unknown): string[] {
   return Array.from(new Set(out));
 }
 
-function normalizeProviderOutput(output: unknown): SystemPromptProviderOutput {
-  if (!output || typeof output !== "object") {
+function normalizeProviderOutput(
+  output: SystemPromptProviderOutput | null | undefined,
+): SystemPromptProviderOutput {
+  if (!output) {
     return { messages: [] };
   }
   return {
-    messages: normalizeMessages((output as any).messages),
-    activeTools: normalizeActiveTools((output as any).activeTools),
-    loadedSkills: Array.isArray((output as any).loadedSkills)
-      ? (output as any).loadedSkills
-      : [],
+    messages: normalizeMessages(output.messages),
+    activeTools: normalizeActiveTools(output.activeTools),
+    loadedSkills: Array.isArray(output.loadedSkills) ? output.loadedSkills : [],
   };
 }
 
@@ -143,7 +147,7 @@ export async function collectSystemPromptProviderResult(
 ): Promise<SystemPromptProviderResult> {
   const providers = listSystemPromptProviders();
   const messages: SystemModelMessage[] = [];
-  const loadedSkills = new Map<string, any>();
+  const loadedSkills = new Map<string, SystemPromptLoadedSkill>();
   let activeTools: Set<string> | null = null;
 
   for (const provider of providers) {
@@ -161,7 +165,7 @@ export async function collectSystemPromptProviderResult(
 
     if (Array.isArray(output.loadedSkills)) {
       for (const skill of output.loadedSkills) {
-        const id = String((skill as any)?.id || "").trim();
+        const id = String(skill?.id || "").trim();
         if (!id) continue;
         loadedSkills.set(id, skill);
       }
@@ -179,4 +183,3 @@ export async function collectSystemPromptProviderResult(
     loadedSkills,
   };
 }
-

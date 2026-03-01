@@ -1,4 +1,4 @@
-import WebSocket from "ws";
+import WebSocket, { type RawData } from "ws";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { BaseChatAdapter } from "./base-chat-adapter.js";
@@ -8,6 +8,7 @@ import type {
   AdapterSendTextParams,
 } from "./platform-adapter.js";
 import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
+import type { JsonObject, JsonValue } from "../../../types/json.js";
 
 /**
  * QQ official bot adapter (WebSocket gateway).
@@ -26,6 +27,58 @@ interface QQConfig {
   sandbox?: boolean; // 是否使用沙箱环境
   groupAccess?: "initiator_or_admin" | "anyone";
 }
+
+type QQGatewayPayload = {
+  op: number;
+  d?: JsonObject;
+  s?: number;
+  t?: string;
+};
+
+type QQReadyUser = {
+  id?: string;
+  user_id?: string;
+  username?: string;
+};
+
+type QQReadyData = {
+  context_id?: string;
+  user?: QQReadyUser;
+};
+
+type QQAuthor = {
+  member_openid?: string;
+  user_openid?: string;
+  id?: string;
+  user_id?: string;
+  uid?: string;
+  nickname?: string;
+  username?: string;
+  name?: string;
+  user?: {
+    username?: string;
+    nickname?: string;
+  };
+  member_role?: string;
+  role?: string;
+  permissions?: string;
+  permission?: string;
+};
+
+type QQMessageData = {
+  id?: string;
+  group_openid?: string;
+  channel_id?: string;
+  content?: string;
+  author?: QQAuthor;
+};
+
+type QQSendMessageBody = {
+  content: string;
+  msg_type: number;
+  msg_id: string;
+  msg_seq: number;
+};
 
 // QQ 官方机器人 WebSocket 操作码
 enum OpCode {
@@ -362,9 +415,13 @@ export class QQBot extends BaseChatAdapter {
         this.reconnectAttempts = 0;
       });
 
-      ws.on("message", async (data: any) => {
+      ws.on("message", async (data: RawData) => {
         try {
-          const payload = JSON.parse(data.toString());
+          const payload = this.parseGatewayPayload(data);
+          if (!payload) {
+            this.logger.warn("收到无法解析的 QQ WebSocket 消息，已忽略");
+            return;
+          }
           this.logger.debug(
             `收到 WebSocket 消息: op=${payload.op}, t=${payload.t || "N/A"}`,
           );
@@ -411,7 +468,7 @@ export class QQBot extends BaseChatAdapter {
         }
       });
 
-      ws.on("error", (error: unknown) => {
+      ws.on("error", (error: Error) => {
         this.logger.error("WebSocket 错误", { error: String(error) });
         reject(error);
       });
@@ -421,7 +478,35 @@ export class QQBot extends BaseChatAdapter {
   /**
    * 处理 WebSocket 消息
    */
-  private async handleWebSocketMessage(payload: any): Promise<void> {
+  private parseGatewayPayload(rawData: RawData): QQGatewayPayload | null {
+    try {
+      const text = Buffer.isBuffer(rawData)
+        ? rawData.toString("utf-8")
+        : Array.isArray(rawData)
+          ? Buffer.concat(rawData).toString("utf-8")
+          : typeof rawData === "string"
+            ? rawData
+            : Buffer.from(rawData).toString("utf-8");
+      const parsed = JSON.parse(text) as JsonValue;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+      const obj = parsed as JsonObject;
+      const op = typeof obj.op === "number" ? obj.op : Number(obj.op);
+      if (!Number.isFinite(op)) return null;
+      const payload: QQGatewayPayload = {
+        op,
+        ...(obj.d && typeof obj.d === "object" && !Array.isArray(obj.d)
+          ? { d: obj.d as JsonObject }
+          : {}),
+        ...(typeof obj.s === "number" ? { s: obj.s } : {}),
+        ...(typeof obj.t === "string" ? { t: obj.t } : {}),
+      };
+      return payload;
+    } catch {
+      return null;
+    }
+  }
+
+  private async handleWebSocketMessage(payload: QQGatewayPayload): Promise<void> {
     const { op, d, s, t } = payload;
 
     // 更新序列号
@@ -432,14 +517,15 @@ export class QQBot extends BaseChatAdapter {
     switch (op) {
       case OpCode.Hello:
         // 收到 Hello，发送鉴权
-        const heartbeatIntervalMs = d.heartbeat_interval;
+        const heartbeatIntervalMs =
+          typeof d?.heartbeat_interval === "number" ? d.heartbeat_interval : 30000;
         this.startHeartbeat(heartbeatIntervalMs);
         await this.sendIdentify();
         break;
 
       case OpCode.Dispatch:
         // 处理事件分发
-        await this.handleDispatch(t, d);
+        await this.handleDispatch(String(t || ""), d || {});
         break;
 
       case OpCode.HeartbeatAck:
@@ -482,20 +568,18 @@ export class QQBot extends BaseChatAdapter {
    *   - `SHIP_QQ_CAPTURE_DIR=/abs/or/relative/path` (optional)
    * - Files are written as JSON snapshots with a timestamp-based filename.
    */
-  private async captureIncomingWsPayload(payload: unknown): Promise<void> {
+  private async captureIncomingWsPayload(payload: QQGatewayPayload): Promise<void> {
     if (!this.qqEventCapture.enabled) return;
 
-    const op = (payload as any)?.op;
+    const op = payload.op;
     if (this.qqEventCapture.mode === "dispatch" && op !== OpCode.Dispatch) {
       return;
     }
 
     try {
-      const safeTag = sanitizeFileTag(
-        `${String((payload as any)?.t ?? "N/A")}`,
-      );
+      const safeTag = sanitizeFileTag(`${String(payload.t ?? "N/A")}`);
       const safeOp = sanitizeFileTag(`${String(op ?? "unknown")}`);
-      const safeSeq = sanitizeFileTag(`${String((payload as any)?.s ?? "")}`);
+      const safeSeq = sanitizeFileTag(`${String(payload.s ?? "")}`);
       const filename = `${Date.now()}_${safeOp}_${safeTag}${safeSeq ? `_${safeSeq}` : ""}.json`;
 
       await mkdir(this.qqEventCapture.dir, { recursive: true });
@@ -616,20 +700,25 @@ export class QQBot extends BaseChatAdapter {
    * - 只在此处分发到各类消息处理器，保持事件路由单一出口
    * - 未识别事件仅 debug 记录，不阻断连接
    */
-  private async handleDispatch(eventType: string, data: any): Promise<void> {
+  private async handleDispatch(eventType: string, data: JsonObject): Promise<void> {
     this.logger.info(`收到事件: ${eventType}`);
 
     switch (eventType) {
       case EventType.READY:
-        this.wsContextId = data.context_id;
+        this.wsContextId =
+          typeof data.context_id === "string" ? data.context_id : "";
         this.logger.info(`QQ Bot 已就绪，WS Context ID: ${this.wsContextId}`);
-        this.logger.info(`用户: ${data.user?.username || "N/A"}`);
+        const readyUser =
+          data.user && typeof data.user === "object" && !Array.isArray(data.user)
+            ? (data.user as QQReadyUser)
+            : undefined;
+        this.logger.info(`用户: ${readyUser?.username || "N/A"}`);
         // best-effort：记录 bot 自己的 userId，供入站过滤使用
         this.botUserId =
-          typeof data.user?.id === "string"
-            ? data.user.id.trim()
-            : typeof data.user?.user_id === "string"
-              ? data.user.user_id.trim()
+          typeof readyUser?.id === "string"
+            ? readyUser.id.trim()
+            : typeof readyUser?.user_id === "string"
+              ? readyUser.user_id.trim()
               : "";
         break;
 
@@ -639,17 +728,17 @@ export class QQBot extends BaseChatAdapter {
 
       case EventType.GROUP_AT_MESSAGE_CREATE:
         // 群聊 @机器人 消息
-        await this.handleGroupMessage(data);
+        await this.handleGroupMessage(data as QQMessageData);
         break;
 
       case EventType.C2C_MESSAGE_CREATE:
         // C2C 私聊消息
-        await this.handleC2CMessage(data);
+        await this.handleC2CMessage(data as QQMessageData);
         break;
 
       case EventType.AT_MESSAGE_CREATE:
         // 频道消息（可选）
-        await this.handleChannelMessage(data);
+        await this.handleChannelMessage(data as QQMessageData);
         break;
 
       default:
@@ -660,8 +749,9 @@ export class QQBot extends BaseChatAdapter {
   /**
    * 处理群聊消息
    */
-  private async handleGroupMessage(data: any): Promise<void> {
+  private async handleGroupMessage(data: QQMessageData): Promise<void> {
     const { id: messageId, group_openid: groupId, content, author } = data;
+    if (!groupId || !messageId) return;
     const chatType = "group";
     const chatKey = this.getChatKey({ chatId: groupId, chatType });
     if (
@@ -674,7 +764,7 @@ export class QQBot extends BaseChatAdapter {
     }
 
     // 提取纯文本内容（去除 @机器人 的部分）
-    const userMessage = this.extractTextContent(content);
+    const userMessage = this.extractTextContent(String(content || ""));
     const actor = this.extractAuthorIdentity(author);
 
     if (actor.userId && this.botUserId && actor.userId === this.botUserId) {
@@ -743,8 +833,9 @@ export class QQBot extends BaseChatAdapter {
   /**
    * 处理 C2C 私聊消息
    */
-  private async handleC2CMessage(data: any): Promise<void> {
+  private async handleC2CMessage(data: QQMessageData): Promise<void> {
     const { id: messageId, author, content } = data;
+    if (!messageId) return;
     if (
       await this.shouldSkipDuplicatedInboundMessage(
         EventType.C2C_MESSAGE_CREATE,
@@ -757,7 +848,7 @@ export class QQBot extends BaseChatAdapter {
     const chatType = "c2c";
     const chatId = actor.userId || "";
 
-    const userMessage = this.extractTextContent(content);
+    const userMessage = this.extractTextContent(String(content || ""));
 
     if (actor.userId && this.botUserId && actor.userId === this.botUserId) {
       this.logger.debug("忽略机器人自身消息（c2c）", {
@@ -782,8 +873,9 @@ export class QQBot extends BaseChatAdapter {
   /**
    * 处理频道消息（可选）
    */
-  private async handleChannelMessage(data: any): Promise<void> {
+  private async handleChannelMessage(data: QQMessageData): Promise<void> {
     const { id: messageId, channel_id: channelId, content, author } = data;
+    if (!channelId || !messageId) return;
     const chatType = "channel";
     if (
       await this.shouldSkipDuplicatedInboundMessage(
@@ -794,7 +886,7 @@ export class QQBot extends BaseChatAdapter {
       return;
     }
 
-    const userMessage = this.extractTextContent(content);
+    const userMessage = this.extractTextContent(String(content || ""));
     const actor = this.extractAuthorIdentity(author);
 
     if (actor.userId && this.botUserId && actor.userId === this.botUserId) {
@@ -830,7 +922,7 @@ export class QQBot extends BaseChatAdapter {
    */
   private async shouldSkipDuplicatedInboundMessage(
     eventType: string,
-    messageId: unknown,
+    messageId: string | undefined,
   ): Promise<boolean> {
     const id = typeof messageId === "string" ? messageId.trim() : "";
     if (!id) return false;
@@ -856,7 +948,7 @@ export class QQBot extends BaseChatAdapter {
    * Notes:
    * - For C2C events, `userId` also serves as `chatId` (DM target).
    */
-  private extractAuthorIdentity(author: any): {
+  private extractAuthorIdentity(author: QQAuthor | undefined): {
     userId?: string;
     username?: string;
   } {
@@ -907,7 +999,7 @@ export class QQBot extends BaseChatAdapter {
    * - QQ 事件字段在不同能力集/事件类型下差异较大，无法保证一定带角色字段。
    * - 这里仅做“有字段则识别”的最小策略；识别失败时回退为非管理员。
    */
-  private isLikelyGroupAdmin(author: any): boolean {
+  private isLikelyGroupAdmin(author: QQAuthor | undefined): boolean {
     const roleCandidates = [
       author?.member_role,
       author?.role,
@@ -939,7 +1031,7 @@ export class QQBot extends BaseChatAdapter {
   private isAllowedGroupActor(params: {
     chatKey: string;
     actorId?: string;
-    author?: any;
+    author?: QQAuthor;
   }): boolean {
     if (this.groupAccess === "anyone") return true;
 
@@ -1054,7 +1146,7 @@ export class QQBot extends BaseChatAdapter {
 
       const apiBase = this.getApiBase();
       let url = "";
-      const body: any = {
+      const body: QQSendMessageBody = {
         content: text,
         msg_type: 0, // 文本消息
         msg_id: messageId, // 被动回复需要带上消息ID

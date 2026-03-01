@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs-extra";
 import { getCacheDirPath } from "../../../../process/project/paths.js";
+import type { JsonObject } from "../../../../types/json.js";
 
 /**
  * Telegram 轮询模式的持久化状态存储。
@@ -37,8 +38,8 @@ export class TelegramStateStore {
   async loadLastUpdateId(): Promise<number | undefined> {
     try {
       if (!(await fs.pathExists(this.lastUpdateIdFile))) return undefined;
-      const data = await fs.readJson(this.lastUpdateIdFile);
-      const value = Number((data as any)?.lastUpdateId);
+      const data = (await fs.readJson(this.lastUpdateIdFile)) as JsonObject;
+      const value = Number(data?.lastUpdateId);
       if (Number.isFinite(value) && value > 0) return value;
       return undefined;
     } catch {
@@ -69,8 +70,8 @@ export class TelegramStateStore {
     const out = new Map<string, string>();
     try {
       if (!(await fs.pathExists(this.threadInitiatorsFile))) return out;
-      const data = await fs.readJson(this.threadInitiatorsFile);
-      const raw = (data as any)?.initiators;
+      const data = (await fs.readJson(this.threadInitiatorsFile)) as JsonObject;
+      const raw = data?.initiators;
       if (!raw || typeof raw !== "object") return out;
       for (const [k, v] of Object.entries(raw)) {
         const threadId = String(k);

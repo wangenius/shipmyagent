@@ -84,7 +84,7 @@ export interface ShipConfig {
            * Who can interact with the bot in group chats.
            * - "initiator_or_admin" (default): only the first person who talked to the bot in that chat/topic,
            *   or group admins, can use it.
-           * - "anyone": any group member can talk to the bot (when addressed).
+           * - "anyone": all group members can talk to the bot (when addressed).
            */
           groupAccess?: "initiator_or_admin" | "anyone";
         };

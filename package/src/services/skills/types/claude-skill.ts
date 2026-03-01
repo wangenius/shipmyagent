@@ -7,6 +7,7 @@
  */
 
 import type { SkillRootSource } from "./skill-root.js";
+import type { JsonValue } from "../../../types/json.js";
 
 export type ClaudeSkill = {
   /** skill id（目录名） */
@@ -24,5 +25,5 @@ export type ClaudeSkill = {
   /** SKILL.md 绝对路径 */
   skillMdPath: string;
   /** front matter 的 allowed-tools 原始值 */
-  allowedTools?: unknown;
+  allowedTools?: JsonValue;
 };

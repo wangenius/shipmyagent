@@ -30,18 +30,29 @@ export interface McpToolDefinition {
   description?: string;
   inputSchema: {
     type: "object";
-    properties?: Record<string, any>;
+    properties?: Record<string, object>;
     required?: string[];
   };
 }
 
 export interface McpToolResult {
-  content: Array<{
-    type: "text" | "image" | "resource";
-    text?: string;
-    data?: string;
-    mimeType?: string;
-  }>;
+  content: Array<
+    | {
+        type: "text";
+        text: string;
+      }
+    | {
+        type: "image";
+        data: string;
+        mimeType: string;
+      }
+    | {
+        type: "resource";
+        text?: string;
+        data?: string;
+        mimeType?: string;
+      }
+  >;
   isError?: boolean;
 }
 
@@ -55,4 +66,3 @@ export interface McpServerInfo {
   error?: string;
   connectedAt?: Date;
 }
-

@@ -57,7 +57,7 @@ export async function createModel(input: {
   }
 
   // 日志策略（中文）：默认开启 LLM 请求日志，可通过 llm.logMessages 关闭。
-  const configLog = (input.config as any)?.llm?.logMessages;
+  const configLog = input.config.llm?.logMessages;
   const logLlmMessages = typeof configLog === "boolean" ? configLog : true;
 
   const loggingFetch = createLlmLoggingFetch({
@@ -68,7 +68,7 @@ export async function createModel(input: {
   if (provider === "anthropic") {
     const anthropicProvider = createAnthropic({
       apiKey: resolvedApiKey,
-      fetch: loggingFetch as any,
+      fetch: loggingFetch as typeof fetch,
     });
     return anthropicProvider(resolvedModel);
   }
@@ -78,7 +78,7 @@ export async function createModel(input: {
       name: "custom",
       apiKey: resolvedApiKey,
       baseURL: resolvedBaseUrl || "https://api.openai.com/v1",
-      fetch: loggingFetch as any,
+      fetch: loggingFetch as typeof fetch,
     });
     return compatProvider(resolvedModel);
   }
@@ -86,7 +86,7 @@ export async function createModel(input: {
   const openaiProvider = createOpenAI({
     apiKey: resolvedApiKey,
     baseURL: resolvedBaseUrl || "https://api.openai.com/v1",
-    fetch: loggingFetch as any,
+    fetch: loggingFetch as typeof fetch,
   });
   return openaiProvider(resolvedModel);
 }

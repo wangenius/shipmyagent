@@ -6,6 +6,7 @@
  * 2. 统一封装 fs-extra 的常用行为，减少业务层重复判断。
  */
 import fs from "fs-extra";
+import type { JsonValue } from "../../types/json.js";
 
 export async function ensureDir(dir: string): Promise<void> {
   if (!fs.existsSync(dir)) {
@@ -13,7 +14,7 @@ export async function ensureDir(dir: string): Promise<void> {
   }
 }
 
-export async function saveJson(filePath: string, data: unknown): Promise<void> {
+export async function saveJson(filePath: string, data: JsonValue | object): Promise<void> {
   await fs.writeJson(filePath, data, { spaces: 2 });
 }
 

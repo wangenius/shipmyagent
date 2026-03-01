@@ -8,6 +8,7 @@ import type {
   AdapterSendTextParams,
 } from "./platform-adapter.js";
 import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
+import type { JsonObject } from "../../../types/json.js";
 
 /**
  * Feishu (Lark) chat adapter.
@@ -37,6 +38,35 @@ interface FeishuConfig {
   adminUserIds?: string[];
 }
 
+type FeishuMention = {
+  key?: string;
+  name?: string;
+};
+
+type FeishuTextContentPayload = {
+  text?: string;
+  mentions?: FeishuMention[];
+};
+
+type FeishuMessageEvent = {
+  sender?: {
+    sender_id?: {
+      user_id?: string;
+      open_id?: string;
+      union_id?: string;
+      chat_id?: string;
+    };
+  };
+  message?: {
+    chat_id: string;
+    content: string;
+    message_type: string;
+    chat_type: string;
+    message_id: string;
+    mentions?: FeishuMention[];
+  };
+};
+
 function sanitizeChatText(text: string): string {
   if (!text) return text;
   let out = text;
@@ -55,8 +85,8 @@ export class FeishuBot extends BaseChatAdapter {
   private appId: string;
   private appSecret: string;
   private domain?: string;
-  private client: any;
-  private wsClient: any;
+  private client: Lark.Client | null = null;
+  private wsClient: Lark.WSClient | null = null;
   private isRunning: boolean = false;
   private processedMessages: Set<string> = new Set(); // 用于消息去重
   private messageCleanupInterval: NodeJS.Timeout | null = null;
@@ -140,9 +170,9 @@ export class FeishuBot extends BaseChatAdapter {
     );
     try {
       if (!(await fs.pathExists(file))) return new Set();
-      const data = await fs.readJson(file);
-      const ids = Array.isArray((data as any)?.ids) ? (data as any).ids : [];
-      return new Set(ids.map((x: any) => String(x)));
+      const data = (await fs.readJson(file)) as JsonObject;
+      const ids = Array.isArray(data?.ids) ? data.ids : [];
+      return new Set(ids.map((x) => String(x)));
     } catch {
       return new Set();
     }
@@ -175,8 +205,8 @@ export class FeishuBot extends BaseChatAdapter {
   private async loadThreadInitiators(): Promise<void> {
     try {
       if (!(await fs.pathExists(this.threadInitiatorsFile))) return;
-      const data = await fs.readJson(this.threadInitiatorsFile);
-      const raw = (data as any)?.initiators;
+      const data = (await fs.readJson(this.threadInitiatorsFile)) as JsonObject;
+      const raw = data?.initiators;
       if (!raw || typeof raw !== "object") return;
       for (const [k, v] of Object.entries(raw)) {
         const threadId = String(k);
@@ -210,7 +240,7 @@ export class FeishuBot extends BaseChatAdapter {
     return chatType !== "p2p";
   }
 
-  private extractSenderId(data: any): string | undefined {
+  private extractSenderId(data: FeishuMessageEvent): string | undefined {
     const sid =
       data?.sender?.sender_id?.user_id ||
       data?.sender?.sender_id?.open_id ||
@@ -219,8 +249,8 @@ export class FeishuBot extends BaseChatAdapter {
     return sid ? String(sid) : undefined;
   }
 
-  private parseTextContent(content: string): { text: string; mentions: any[] } {
-    const parsed = JSON.parse(content);
+  private parseTextContent(content: string): { text: string; mentions: FeishuMention[] } {
+    const parsed = JSON.parse(content) as FeishuTextContentPayload;
     const text = typeof parsed?.text === "string" ? parsed.text : "";
     const mentions = Array.isArray(parsed?.mentions) ? parsed.mentions : [];
     return { text, mentions };
@@ -228,8 +258,8 @@ export class FeishuBot extends BaseChatAdapter {
 
   private hasAtMention(
     text: string,
-    mentionsFromContent: any[],
-    mentionsFromEvent: any[],
+    mentionsFromContent: FeishuMention[],
+    mentionsFromEvent: FeishuMention[],
   ): boolean {
     if (mentionsFromContent.length > 0) return true;
     if (mentionsFromEvent.length > 0) return true;
@@ -307,7 +337,7 @@ export class FeishuBot extends BaseChatAdapter {
          * Register message receive event
          * https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/events/receive
          */
-        "im.message.receive_v1": async (data: any) => {
+        "im.message.receive_v1": async (data: FeishuMessageEvent) => {
           await this.handleMessage(data);
         },
       });
@@ -331,8 +361,9 @@ export class FeishuBot extends BaseChatAdapter {
     }
   }
 
-  private async handleMessage(data: any): Promise<void> {
+  private async handleMessage(data: FeishuMessageEvent): Promise<void> {
     try {
+      if (!data?.message) return;
       const {
         message: {
           chat_id,
@@ -369,8 +400,8 @@ export class FeishuBot extends BaseChatAdapter {
 
       // Parse user message
       let userMessage = "";
-      let mentionsFromContent: any[] = [];
-      const mentionsFromEvent: any[] = Array.isArray(eventMentions)
+      let mentionsFromContent: FeishuMention[] = [];
+      const mentionsFromEvent: FeishuMention[] = Array.isArray(eventMentions)
         ? eventMentions
         : [];
 
@@ -544,6 +575,10 @@ Available commands:
     messageId: string,
     text: string,
   ): Promise<void> {
+    if (!this.client) {
+      this.logger.warn("Feishu client is not initialized");
+      return;
+    }
     try {
       if (chatType === "p2p") {
         // Private chat message, send directly
@@ -581,6 +616,10 @@ Available commands:
     chatType: string,
     text: string,
   ): Promise<void> {
+    if (!this.client) {
+      this.logger.warn("Feishu client is not initialized");
+      return;
+    }
     try {
       // Send directly to chat without needing to reply to a message
       await this.client.im.v1.message.create({

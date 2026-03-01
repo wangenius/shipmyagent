@@ -30,6 +30,7 @@ import type {
 } from "./types/task-command.js";
 import type { SmaService } from "../../core/services/types/service-registry.js";
 import type { ShipTaskStatus } from "./types/task.js";
+import type { JsonObject, JsonValue } from "../../types/json.js";
 import {
   restartTaskCronRuntime,
   startTaskCronRuntime,
@@ -114,6 +115,49 @@ type TaskUpdateCliOptions = BaseTaskCliOptions & {
 
 function resolveProjectRoot(pathInput?: string): string {
   return path.resolve(String(pathInput || "."));
+}
+
+function parseJsonBodyObject(rawBody: JsonValue): JsonObject {
+  if (rawBody && typeof rawBody === "object" && !Array.isArray(rawBody)) {
+    return rawBody as JsonObject;
+  }
+  return {};
+}
+
+function getStringField(body: JsonObject, key: string): string {
+  const value = body[key];
+  return typeof value === "string" ? value : "";
+}
+
+function getOptionalStringField(body: JsonObject, key: string): string | undefined {
+  const value = body[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function getBooleanField(body: JsonObject, key: string): boolean {
+  return body[key] === true;
+}
+
+function getOptionalNumberField(body: JsonObject, key: string): number | undefined {
+  const value = body[key];
+  return typeof value === "number" ? value : undefined;
+}
+
+function getOptionalStringArrayField(body: JsonObject, key: string): string[] | undefined {
+  const value = body[key];
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function getOptionalTaskStatusField(
+  body: JsonObject,
+  key: string,
+): ShipTaskStatus | undefined {
+  const value = body[key];
+  if (value === "enabled" || value === "paused" || value === "disabled") {
+    return value;
+  }
+  return undefined;
 }
 
 async function runTaskListCommand(options: TaskListCliOptions): Promise<void> {
@@ -594,9 +638,9 @@ function setupServer(
   });
 
   registry.post("/api/task/create", async (c) => {
-    let body: any = null;
+    let body: JsonObject = {};
     try {
-      body = await c.req.json();
+      body = parseJsonBodyObject(await c.req.json());
     } catch {
       return c.json({ success: false, error: "Invalid JSON body" }, 400);
     }
@@ -604,18 +648,18 @@ function setupServer(
     const result = await createTaskDefinition({
       projectRoot: context.rootPath,
       request: {
-        taskId: body?.taskId,
-        title: body?.title,
-        cron: body?.cron,
-        description: body?.description,
-        chatKey: body?.chatKey,
-        status: body?.status,
-        timezone: body?.timezone,
-        body: body?.body,
-        requiredArtifacts: body?.requiredArtifacts,
-        minOutputChars: body?.minOutputChars,
-        maxDialogueRounds: body?.maxDialogueRounds,
-        overwrite: Boolean(body?.overwrite),
+        taskId: getOptionalStringField(body, "taskId"),
+        title: getStringField(body, "title"),
+        cron: getStringField(body, "cron"),
+        description: getStringField(body, "description"),
+        chatKey: getStringField(body, "chatKey"),
+        status: getOptionalTaskStatusField(body, "status"),
+        timezone: getOptionalStringField(body, "timezone"),
+        body: getOptionalStringField(body, "body"),
+        requiredArtifacts: getOptionalStringArrayField(body, "requiredArtifacts"),
+        minOutputChars: getOptionalNumberField(body, "minOutputChars"),
+        maxDialogueRounds: getOptionalNumberField(body, "maxDialogueRounds"),
+        overwrite: getBooleanField(body, "overwrite"),
       },
     });
 
@@ -623,9 +667,9 @@ function setupServer(
   });
 
   registry.post("/api/task/run", async (c) => {
-    let body: any = null;
+    let body: JsonObject = {};
     try {
-      body = await c.req.json();
+      body = parseJsonBodyObject(await c.req.json());
     } catch {
       return c.json({ success: false, error: "Invalid JSON body" }, 400);
     }
@@ -634,8 +678,10 @@ function setupServer(
       context,
       projectRoot: context.rootPath,
       request: {
-        taskId: String(body?.taskId || ""),
-        ...(typeof body?.reason === "string" ? { reason: body.reason } : {}),
+        taskId: getStringField(body, "taskId"),
+        ...(getOptionalStringField(body, "reason")
+          ? { reason: getOptionalStringField(body, "reason") }
+          : {}),
       },
     });
 
@@ -643,9 +689,9 @@ function setupServer(
   });
 
   registry.put("/api/task/update", async (c) => {
-    let body: any = null;
+    let body: JsonObject = {};
     try {
-      body = await c.req.json();
+      body = parseJsonBodyObject(await c.req.json());
     } catch {
       return c.json({ success: false, error: "Invalid JSON body" }, 400);
     }
@@ -653,24 +699,46 @@ function setupServer(
     const result = await updateTaskDefinition({
       projectRoot: context.rootPath,
       request: {
-        taskId: String(body?.taskId || ""),
-        ...(typeof body?.title === "string" ? { title: body.title } : {}),
-        ...(typeof body?.description === "string" ? { description: body.description } : {}),
-        ...(typeof body?.cron === "string" ? { cron: body.cron } : {}),
-        ...(typeof body?.chatKey === "string" ? { chatKey: body.chatKey } : {}),
-        ...(typeof body?.status === "string" ? { status: body.status } : {}),
-        ...(typeof body?.timezone === "string" ? { timezone: body.timezone } : {}),
-        ...(Boolean(body?.clearTimezone) ? { clearTimezone: true } : {}),
-        ...(Array.isArray(body?.requiredArtifacts)
-          ? { requiredArtifacts: body.requiredArtifacts }
+        taskId: getStringField(body, "taskId"),
+        ...(getOptionalStringField(body, "title")
+          ? { title: getOptionalStringField(body, "title") }
           : {}),
-        ...(Boolean(body?.clearRequiredArtifacts) ? { clearRequiredArtifacts: true } : {}),
-        ...(body?.minOutputChars !== undefined ? { minOutputChars: body.minOutputChars } : {}),
-        ...(Boolean(body?.clearMinOutputChars) ? { clearMinOutputChars: true } : {}),
-        ...(body?.maxDialogueRounds !== undefined ? { maxDialogueRounds: body.maxDialogueRounds } : {}),
-        ...(Boolean(body?.clearMaxDialogueRounds) ? { clearMaxDialogueRounds: true } : {}),
-        ...(typeof body?.body === "string" ? { body: body.body } : {}),
-        ...(Boolean(body?.clearBody) ? { clearBody: true } : {}),
+        ...(getOptionalStringField(body, "description")
+          ? { description: getOptionalStringField(body, "description") }
+          : {}),
+        ...(getOptionalStringField(body, "cron")
+          ? { cron: getOptionalStringField(body, "cron") }
+          : {}),
+        ...(getOptionalStringField(body, "chatKey")
+          ? { chatKey: getOptionalStringField(body, "chatKey") }
+          : {}),
+        ...(getOptionalTaskStatusField(body, "status")
+          ? { status: getOptionalTaskStatusField(body, "status") }
+          : {}),
+        ...(getOptionalStringField(body, "timezone")
+          ? { timezone: getOptionalStringField(body, "timezone") }
+          : {}),
+        ...(getBooleanField(body, "clearTimezone") ? { clearTimezone: true } : {}),
+        ...(getOptionalStringArrayField(body, "requiredArtifacts")
+          ? { requiredArtifacts: getOptionalStringArrayField(body, "requiredArtifacts") }
+          : {}),
+        ...(getBooleanField(body, "clearRequiredArtifacts")
+          ? { clearRequiredArtifacts: true }
+          : {}),
+        ...(typeof getOptionalNumberField(body, "minOutputChars") === "number"
+          ? { minOutputChars: getOptionalNumberField(body, "minOutputChars") }
+          : {}),
+        ...(getBooleanField(body, "clearMinOutputChars") ? { clearMinOutputChars: true } : {}),
+        ...(typeof getOptionalNumberField(body, "maxDialogueRounds") === "number"
+          ? { maxDialogueRounds: getOptionalNumberField(body, "maxDialogueRounds") }
+          : {}),
+        ...(getBooleanField(body, "clearMaxDialogueRounds")
+          ? { clearMaxDialogueRounds: true }
+          : {}),
+        ...(getOptionalStringField(body, "body")
+          ? { body: getOptionalStringField(body, "body") }
+          : {}),
+        ...(getBooleanField(body, "clearBody") ? { clearBody: true } : {}),
       },
     });
 
@@ -678,18 +746,23 @@ function setupServer(
   });
 
   registry.put("/api/task/status", async (c) => {
-    let body: any = null;
+    let body: JsonObject = {};
     try {
-      body = await c.req.json();
+      body = parseJsonBodyObject(await c.req.json());
     } catch {
       return c.json({ success: false, error: "Invalid JSON body" }, 400);
+    }
+
+    const status = getOptionalTaskStatusField(body, "status");
+    if (!status) {
+      return c.json({ success: false, error: "Missing or invalid status" }, 400);
     }
 
     const result = await setTaskStatus({
       projectRoot: context.rootPath,
       request: {
-        taskId: String(body?.taskId || ""),
-        status: body?.status,
+        taskId: getStringField(body, "taskId"),
+        status,
       },
     });
 

@@ -1,4 +1,6 @@
-export const MCP_JSON_SCHEMA: Record<string, unknown> = {
+import type { JsonObject } from "../types/json.js";
+
+export const MCP_JSON_SCHEMA: JsonObject = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://shipmyagent.dev/schemas/mcp.schema.json",
   title: "ShipMyAgent MCP config (.ship/config/mcp.json)",

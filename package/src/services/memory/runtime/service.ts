@@ -1,5 +1,6 @@
 import type { ServiceContextStore } from "../../../process/runtime/types/service-runtime-ports.js";
 import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
+import type { LanguageModel } from "ai";
 import { getLogger } from "../../../utils/logger/logger.js";
 import { getServiceModelFactory } from "../../../process/runtime/service-runtime-dependencies.js";
 import { MemoryManager } from "./manager.js";
@@ -120,7 +121,7 @@ async function extractAndSaveMemory(params: {
 async function checkAndCompressMemory(
   context: ServiceRuntimeDependencies,
   contextId: string,
-  model: any,
+  model: LanguageModel,
 ): Promise<void> {
   const logger = getLogger(context.rootPath, "info");
 

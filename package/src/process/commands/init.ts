@@ -43,6 +43,14 @@ import type { AdapterKey, InitOptions } from "./types/init.js";
 import { MODEL_CONFIGS } from "./const/model.js";
 import { DEFAULT_SHIP_JSON } from "./const/ship.js";
 
+type InitPromptResponse = {
+  name?: string;
+  model?: string;
+  adapters?: AdapterKey[];
+  qqSandbox?: boolean;
+  skillsToInstall?: string[];
+};
+
 /**
  * 获取用户级 `.ship/skills` 目录。
  */
@@ -145,15 +153,15 @@ export async function initCommand(
 
   if (existingAgentMd || existingShipJson) {
     if (!allowOverwrite) {
-      const response = await prompts({
+      const confirmResponse = (await prompts({
         type: "confirm",
         name: "overwrite",
         message:
           "Project already initialized. Overwrite existing configuration files?",
         initial: false,
-      });
+      })) as { overwrite?: boolean };
 
-      if (!response.overwrite) {
+      if (!confirmResponse.overwrite) {
         console.log("❌ Initialization cancelled");
         return;
       }
@@ -163,7 +171,7 @@ export async function initCommand(
 
   // Collect configuration information
   // 交互采集（中文）：模型 + adapters + 推荐 skills，最小化首启配置成本。
-  const response = await prompts([
+  const response = (await prompts([
     {
       type: "text",
       name: "name",
@@ -227,7 +235,7 @@ export async function initCommand(
         },
       ],
     },
-  ]);
+  ])) as InitPromptResponse;
 
   // Create configuration files
   const agentMdPath = getAgentMdPath(projectRoot);
@@ -465,12 +473,8 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   await installBuiltInSkillsToUserDir();
 
   // Skills installation (optional)
-  const skillsToInstall: string[] = Array.isArray(
-    (response as any).skillsToInstall,
-  )
-    ? ((response as any).skillsToInstall as any[])
-        .map((x) => String(x))
-        .filter(Boolean)
+  const skillsToInstall: string[] = Array.isArray(response.skillsToInstall)
+    ? response.skillsToInstall.map((x) => String(x)).filter(Boolean)
     : [];
 
   if (skillsToInstall.length > 0) {

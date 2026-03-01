@@ -10,6 +10,7 @@ import dotenv from "dotenv";
 import fs from "fs-extra";
 import path from "path";
 import type { ShipConfig } from "../types/ship-config.js";
+import type { JsonObject, JsonValue } from "../../types/json.js";
 import { getShipJsonPath } from "./paths.js";
 
 export type { ShipConfig };
@@ -19,7 +20,13 @@ export function loadProjectDotenv(projectRoot: string): void {
   dotenv.config({ path: path.join(projectRoot, ".env") });
 }
 
-function resolveEnvPlaceholdersDeep(value: unknown): unknown {
+type ResolvedConfigValue =
+  | JsonValue
+  | undefined
+  | { [key: string]: ResolvedConfigValue }
+  | ResolvedConfigValue[];
+
+function resolveEnvPlaceholdersDeep(value: ResolvedConfigValue): ResolvedConfigValue {
   if (typeof value === "string") {
     const match = value.match(/^\$\{([A-Z0-9_]+)\}$/);
     if (!match) return value;
@@ -32,10 +39,10 @@ function resolveEnvPlaceholdersDeep(value: unknown): unknown {
   }
 
   if (value && typeof value === "object") {
-    const obj = value as Record<string, unknown>;
-    const out: Record<string, unknown> = {};
+    const obj = value as JsonObject;
+    const out: { [key: string]: ResolvedConfigValue } = {};
     for (const [k, v] of Object.entries(obj)) {
-      out[k] = resolveEnvPlaceholdersDeep(v);
+      out[k] = resolveEnvPlaceholdersDeep(v as ResolvedConfigValue);
     }
     return out;
   }
@@ -47,6 +54,19 @@ export function loadShipConfig(projectRoot: string): ShipConfig {
   loadProjectDotenv(projectRoot);
 
   const shipJsonPath = getShipJsonPath(projectRoot);
-  const raw = fs.readJsonSync(shipJsonPath) as unknown;
-  return resolveEnvPlaceholdersDeep(raw) as ShipConfig;
+  const raw = fs.readJsonSync(shipJsonPath) as ResolvedConfigValue;
+  const resolved = resolveEnvPlaceholdersDeep(raw);
+  if (!resolved || typeof resolved !== "object" || Array.isArray(resolved)) {
+    throw new Error("Invalid ship.json: expected object");
+  }
+
+  const candidate = resolved as Partial<ShipConfig>;
+  if (typeof candidate.name !== "string" || typeof candidate.version !== "string") {
+    throw new Error("Invalid ship.json: missing required fields name/version");
+  }
+  if (!candidate.llm || typeof candidate.llm !== "object") {
+    throw new Error("Invalid ship.json: missing required field llm");
+  }
+
+  return candidate as ShipConfig;
 }

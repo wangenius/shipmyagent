@@ -1,4 +1,5 @@
 import type { UIMessage } from "ai";
+import type { JsonObject } from "../../types/json.js";
 /**
  * Context 消息：以 UIMessage[] 作为唯一事实源。
  *
@@ -55,7 +56,7 @@ export type ShipContextMetadataV1 = {
   /** compact 来源范围 */
   sourceRange?: ShipMessageSourceRangeV1;
   /** 扩展元信息 */
-  extra?: Record<string, unknown>;
+  extra?: JsonObject;
 };
 
 export type ShipContextMessageV1 = UIMessage<ShipContextMetadataV1>;

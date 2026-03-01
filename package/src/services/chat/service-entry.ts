@@ -19,6 +19,7 @@ import { callDaemonJsonApi } from "../../process/daemon/client.js";
 import { printResult } from "../../process/utils/cli-output.js";
 import type { SmaService } from "../../core/services/types/service-registry.js";
 import type { ChatSendResponse } from "./types/chat-command.js";
+import type { JsonObject } from "../../types/json.js";
 
 /**
  * 解析端口参数。
@@ -212,13 +213,13 @@ export const chatService: SmaService = {
     });
 
     registry.post("/api/chat/send", async (c) => {
-      const body = await c.req.json().catch(() => null as any);
+      const body = (await c.req.json().catch(() => null)) as JsonObject | null;
       if (!body || typeof body !== "object") {
         return c.json({ success: false, error: "Invalid JSON body" }, 400);
       }
 
-      const text = String((body as any).text ?? "");
-      const chatKey = String((body as any).chatKey || "").trim();
+      const text = String(body.text ?? "");
+      const chatKey = String(body.chatKey || "").trim();
       if (!chatKey) return c.json({ success: false, error: "Missing chatKey" }, 400);
 
       const result = await sendChatTextByChatKey({

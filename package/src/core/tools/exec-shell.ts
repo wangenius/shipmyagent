@@ -15,6 +15,7 @@ import { tool } from "ai";
 import { getShipRuntimeContext } from "../../process/server/ShipRuntimeContext.js";
 import { contextRequestContext } from "../context/request-context.js";
 import { llmRequestContext } from "../../utils/logger/context.js";
+import type { JsonObject } from "../../types/json.js";
 
 const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
 const DEFAULT_MAX_OUTPUT_LINES = 200;
@@ -116,10 +117,11 @@ function validateChatSendCommand(cmd: string): string | null {
  */
 function resolveOutputLimits(maxOutputTokens?: number): OutputLimits {
   const cfg = getShipRuntimeContext().config.permissions?.exec_command;
+  const cfgObject = cfg && typeof cfg === "object" ? cfg : undefined;
   const maxCharsRaw =
-    cfg && typeof cfg === "object" ? (cfg as any).maxOutputChars : undefined;
+    cfgObject?.maxOutputChars;
   const maxLinesRaw =
-    cfg && typeof cfg === "object" ? (cfg as any).maxOutputLines : undefined;
+    cfgObject?.maxOutputLines;
 
   const maxChars =
     typeof maxCharsRaw === "number" &&
@@ -164,7 +166,7 @@ function resolveExecWorkdir(projectRoot: string, workdir?: string): string {
 function setEnvString(
   env: NodeJS.ProcessEnv,
   key: string,
-  value: unknown,
+  value: string | undefined,
 ): void {
   if (typeof value !== "string") return;
   const trimmed = value.trim();
@@ -175,7 +177,7 @@ function setEnvString(
 function setEnvNumber(
   env: NodeJS.ProcessEnv,
   key: string,
-  value: unknown,
+  value: number | undefined,
 ): void {
   if (typeof value !== "number" || !Number.isFinite(value)) return;
   env[key] = String(Math.trunc(value));
@@ -340,7 +342,7 @@ function createExecContext(input: {
     appendContextOutput(context, String(chunk ?? ""));
   });
 
-  child.on("error", (err: unknown) => {
+  child.on("error", (err: Error) => {
     appendContextOutput(context, `\n[process error] ${String(err)}\n`);
     context.exited = true;
     context.exitCode = -1;
@@ -616,7 +618,7 @@ function formatContextResponse(input: {
     droppedChars: number;
   };
   startedAt: number;
-}): Record<string, unknown> {
+}): JsonObject {
   const { context, page, startedAt } = input;
   const contextId = finalizeContextIfDrainComplete(context, page.hasMoreOutput);
 

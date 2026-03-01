@@ -41,7 +41,10 @@ export async function runCommand(
   // 占位符判定（中文）：init 生成的模板值 `${...}` 不应被当作真实密钥。
   const isPlaceholder = (value?: string): boolean => value === "${}";
   // 端口解析（中文）：允许 number/string；空值返回 undefined 以便走配置回退链。
-  const parsePort = (value: unknown, label: string): number | undefined => {
+  const parsePort = (
+    value: string | number | undefined,
+    label: string,
+  ): number | undefined => {
     if (value === undefined || value === null || value === "") return undefined;
     const num =
       typeof value === "number" ? value : Number.parseInt(String(value), 10);
@@ -54,7 +57,9 @@ export async function runCommand(
     return num;
   };
   // 布尔解析（中文）：兼容 true/false、1/0、yes/no、on/off。
-  const parseBoolean = (value: unknown): boolean | undefined => {
+  const parseBoolean = (
+    value: string | boolean | undefined,
+  ): boolean | undefined => {
     if (value === undefined || value === null || value === "") return undefined;
     if (typeof value === "boolean") return value;
     const s = String(value).trim().toLowerCase();
@@ -103,6 +108,9 @@ export async function runCommand(
   let feishuBot = null;
   if (adapters.feishu?.enabled) {
     logger.info("Feishu adapter enabled");
+    const feishuAdapter = adapters.feishu as typeof adapters.feishu & {
+      adminUserIds?: string[];
+    };
 
     // Read Feishu configuration from environment variables or config
     const feishuConfig = {
@@ -119,9 +127,9 @@ export async function runCommand(
           : undefined) ||
         process.env.FEISHU_APP_SECRET ||
         "",
-      domain: adapters.feishu?.domain || "https://open.feishu.cn",
-      adminUserIds: Array.isArray((adapters.feishu as any)?.adminUserIds)
-        ? (adapters.feishu as any).adminUserIds
+      domain: feishuAdapter?.domain || "https://open.feishu.cn",
+      adminUserIds: Array.isArray(feishuAdapter?.adminUserIds)
+        ? feishuAdapter.adminUserIds
         : undefined,
     };
 
@@ -133,9 +141,9 @@ export async function runCommand(
   if (adapters.qq?.enabled) {
     logger.info("QQ adapter enabled");
     const qqGroupAccess: "initiator_or_admin" | "anyone" | undefined =
-      (adapters.qq as any)?.groupAccess === "anyone"
+      adapters.qq?.groupAccess === "anyone"
         ? "anyone"
-        : (adapters.qq as any)?.groupAccess === "initiator_or_admin"
+        : adapters.qq?.groupAccess === "initiator_or_admin"
           ? "initiator_or_admin"
           : (process.env.QQ_GROUP_ACCESS || "").toLowerCase() === "anyone"
             ? "anyone"

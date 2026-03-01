@@ -50,7 +50,9 @@ export class InteractiveServer {
     this.app = new Hono();
 
     try {
-      const pkg = fs.readJsonSync(path.join(__dirname, '../../package.json')) as any;
+      const pkg = fs.readJsonSync(path.join(__dirname, '../../package.json')) as {
+        version?: string;
+      };
       if (pkg && typeof pkg.version === 'string') this.version = pkg.version;
     } catch {
       // ignore

@@ -1,3 +1,5 @@
+import type { JsonObject } from "../../../types/json.js";
+
 /**
  * 记忆模块类型定义。
  *
@@ -11,7 +13,7 @@ export interface MemoryEntry {
   roundRange: [number, number];
   summary: string;
   keyFacts: string[];
-  userPreferences?: Record<string, unknown>;
+  userPreferences?: JsonObject;
 }
 
 export interface MemoryConfig {

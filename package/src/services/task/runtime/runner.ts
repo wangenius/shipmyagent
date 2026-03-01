@@ -24,6 +24,8 @@ import type {
   ShipTaskRunStatusV1,
   ShipTaskRunTriggerV1,
 } from "../types/task.js";
+import type { AgentResult } from "../../../core/types/agent.js";
+import type { JsonObject } from "../../../types/json.js";
 import { createTaskRunContextId, formatTaskRunTimestamp, getTaskRunDir } from "./paths.js";
 import { ensureRunDir, readTask } from "./store.js";
 
@@ -73,15 +75,15 @@ const DEFAULT_MAX_DIALOGUE_ROUNDS = 3;
 /**
  * 从文本中提取 JSON 对象（支持 ```json 代码块）。
  */
-function tryExtractJsonObject(text: string): Record<string, unknown> | null {
+function tryExtractJsonObject(text: string): JsonObject | null {
   const raw = String(text ?? "").trim();
   if (!raw) return null;
 
-  const tryParse = (s: string): Record<string, unknown> | null => {
+  const tryParse = (s: string): JsonObject | null => {
     try {
       const parsed = JSON.parse(s);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed as Record<string, unknown>;
+        return parsed as JsonObject;
       }
       return null;
     } catch {
@@ -242,7 +244,7 @@ async function runAgentRound(params: {
   query: string;
   actorId: string;
   actorName: string;
-}): Promise<{ outputText: string; rawResult: any }> {
+}): Promise<{ outputText: string; rawResult: AgentResult }> {
   const agent = getServiceContextManager(params.context).getAgent(params.contextId);
   const result = await getServiceRequestContextBridge(params.context).withContextRequestContext(
     {
@@ -259,8 +261,8 @@ async function runAgentRound(params: {
       }),
   );
   return {
-    outputText: String((result as any)?.output || ""),
-    rawResult: result as any,
+    outputText: String(result.output || ""),
+    rawResult: result,
   };
 }
 
@@ -271,12 +273,12 @@ async function appendExecutorAssistantMessage(params: {
   context: ServiceRuntimeDependencies;
   runContextId: string;
   taskId: string;
-  rawResult: any;
+  rawResult: AgentResult;
 }): Promise<void> {
   const store = getServiceContextManager(params.context).getContextStore(params.runContextId);
   const assistantMessage = params.rawResult?.assistantMessage;
   if (assistantMessage && typeof assistantMessage === "object") {
-    await store.append(assistantMessage as any);
+    await store.append(assistantMessage);
     return;
   }
 
@@ -289,12 +291,16 @@ async function appendExecutorAssistantMessage(params: {
       store.createAssistantTextMessage({
         text: userVisible,
         metadata: {
-          chatKey: params.runContextId,
+          contextId: params.runContextId,
           channel: "scheduler",
           targetId: params.taskId,
           actorId: "bot",
-          extra: { via: "task_runner", note: "assistant_message_missing" },
-        } as any,
+          extra: {
+            via: "task_runner",
+            note: "assistant_message_missing",
+            chatKey: params.runContextId,
+          },
+        },
         kind: "normal",
         source: "egress",
       }),
@@ -830,9 +836,9 @@ export async function runTaskNow(params: {
       chatKey: task.frontmatter.chatKey,
       text: textLines.join("\n"),
     });
-    if ((send as any)?.success === false) {
+    if (!send.success) {
       notified = false;
-      notifyError = String((send as any)?.error || "chat send failed");
+      notifyError = String(send.error || "chat send failed");
     } else {
       notified = true;
     }

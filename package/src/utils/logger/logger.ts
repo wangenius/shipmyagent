@@ -10,6 +10,22 @@ import fs from "fs-extra";
 import path from "path";
 import { getLogsDirPath } from "../../process/project/paths.js";
 import { getTimestamp } from "../../process/utils/time.js";
+import type { JsonObject } from "../../types/json.js";
+
+type LogDetails = {
+  [key: string]: JsonObject[keyof JsonObject] | undefined;
+};
+
+function normalizeLogDetails(details?: LogDetails): JsonObject | undefined {
+  if (!details) return undefined;
+  const normalized: JsonObject = {};
+  for (const [key, value] of Object.entries(details)) {
+    if (value !== undefined) {
+      normalized[key] = value;
+    }
+  }
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
 
 /**
  * Unified runtime logger for ShipMyAgent.
@@ -31,7 +47,7 @@ export interface LogEntry {
   timestamp: string;
   type: "info" | "warn" | "error" | "debug" | "action";
   message: string;
-  details?: Record<string, unknown>;
+  details?: JsonObject;
   duration?: number;
   /** Back-compat: kept for older code that expects a `level` field. */
   level?: string;
@@ -75,29 +91,29 @@ export class Logger {
   async log(
     level: string,
     message: string,
-    details?: Record<string, unknown>,
+    details?: LogDetails,
   ): Promise<void> {
     const type = this.normalizeType(level);
     await this.emit(type, message, details);
   }
 
-  info(message: string, details?: Record<string, unknown>): void {
+  info(message: string, details?: LogDetails): void {
     void this.emit("info", message, details);
   }
 
-  warn(message: string, details?: Record<string, unknown>): void {
+  warn(message: string, details?: LogDetails): void {
     void this.emit("warn", message, details);
   }
 
-  error(message: string, details?: Record<string, unknown>): void {
+  error(message: string, details?: LogDetails): void {
     void this.emit("error", message, details);
   }
 
-  debug(message: string, details?: Record<string, unknown>): void {
+  debug(message: string, details?: LogDetails): void {
     void this.emit("debug", message, details);
   }
 
-  action(message: string, details?: Record<string, unknown>): void {
+  action(message: string, details?: LogDetails): void {
     void this.emit("action", message, details);
   }
 
@@ -119,14 +135,14 @@ export class Logger {
   private async emit(
     type: LogEntry["type"],
     message: string,
-    details?: Record<string, unknown>,
+    details?: LogDetails,
   ): Promise<void> {
     const entry: LogEntry = {
       id: this.generateId(),
       timestamp: getTimestamp(),
       type,
       message,
-      details,
+      details: normalizeLogDetails(details),
       level: type,
     };
 
