@@ -1,10 +1,10 @@
-import type { ServiceContextStore } from "../../../process/runtime/types/service-runtime-ports.js";
-import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
+import type { ServiceContextStore } from "../../../process/runtime/types/ServiceRuntimePorts.js";
+import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/ServiceRuntimeTypes.js";
 import type { LanguageModel } from "ai";
-import { getLogger } from "../../../utils/logger/logger.js";
-import { getServiceModelFactory } from "../../../process/runtime/service-runtime-dependencies.js";
-import { MemoryManager } from "./manager.js";
-import { compressMemory, extractMemoryFromContextMessages } from "./extractor.js";
+import { getLogger } from "../../../utils/logger/Logger.js";
+import { getServiceModelFactory } from "../../../process/runtime/ServiceRuntimeDependencies.js";
+import { MemoryManager } from "./Manager.js";
+import { compressMemory, extractMemoryFromContextMessages } from "./Extractor.js";
 
 const memoryManagers: Map<string, MemoryManager> = new Map();
 

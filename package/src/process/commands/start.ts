@@ -12,10 +12,10 @@
 import path from "path";
 import fs from "fs-extra";
 import { fileURLToPath } from "url";
-import { getAgentMdPath, getShipJsonPath } from "../project/paths.js";
-import { startDaemonProcess } from "../server/daemon/manager.js";
-import { buildRunArgsFromOptions } from "../server/daemon/cli-args.js";
-import type { StartOptions } from "./types/start.js";
+import { getAgentMdPath, getShipJsonPath } from "../project/Paths.js";
+import { startDaemonProcess } from "../server/daemon/Manager.js";
+import { buildRunArgsFromOptions } from "../server/daemon/CliArgs.js";
+import type { StartOptions } from "./types/Start.js";
 
 /**
  * start 命令入口。
@@ -44,7 +44,7 @@ export async function startCommand(
   // 计算当前 CLI 的入口路径（编译后是 `bin/process/commands/index.js`）。
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
-  const cliPath = path.resolve(__dirname, "./index.js");
+  const cliPath = path.resolve(__dirname, "./Index.js");
 
   const args = buildRunArgsFromOptions(projectRoot, options || {});
 

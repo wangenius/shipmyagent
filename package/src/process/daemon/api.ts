@@ -1,4 +1,4 @@
-import type { JsonValue } from "../../types/json.js";
+import type { JsonValue } from "../../types/Json.js";
 
 /**
  * Daemon API 类型定义。

@@ -8,16 +8,16 @@
 
 import path from "node:path";
 import type { Command } from "commander";
-import { callDaemonJsonApi } from "../daemon/client.js";
-import { printResult } from "../utils/cli-output.js";
-import type { JsonValue } from "../../types/json.js";
+import { callDaemonJsonApi } from "../daemon/Client.js";
+import { printResult } from "../utils/CliOutput.js";
+import type { JsonValue } from "../../types/Json.js";
 import type {
   ServiceCliBaseOptions,
   ServiceCommandResponse,
   ServiceControlAction,
   ServiceControlResponse,
   ServiceListResponse,
-} from "./types/services.js";
+} from "./types/Services.js";
 
 function parsePortOption(value: string): number {
   const port = Number.parseInt(value, 10);

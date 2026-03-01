@@ -8,21 +8,21 @@
 
 import path from "node:path";
 import { nanoid } from "nanoid";
-import type { ShipTaskStatus } from "./types/task.js";
-import type { ServiceRuntimeDependencies } from "../../process/runtime/types/service-runtime-types.js";
-import type { JsonValue } from "../../types/json.js";
+import type { ShipTaskStatus } from "./types/Task.js";
+import type { ServiceRuntimeDependencies } from "../../process/runtime/types/ServiceRuntimeTypes.js";
+import type { JsonValue } from "../../types/Json.js";
 import {
   isValidTaskId,
   normalizeTaskId,
-} from "./runtime/paths.js";
+} from "./runtime/Paths.js";
 import {
   normalizeMaxDialogueRounds,
   normalizeMinOutputChars,
   normalizeRequiredArtifacts,
   normalizeTaskStatus,
-} from "./runtime/model.js";
-import { listTasks, readTask, writeTask } from "./runtime/store.js";
-import { runTaskNow } from "./runtime/runner.js";
+} from "./runtime/Model.js";
+import { listTasks, readTask, writeTask } from "./runtime/Store.js";
+import { runTaskNow } from "./runtime/Runner.js";
 import type {
   TaskCreateRequest,
   TaskCreateResponse,
@@ -33,7 +33,7 @@ import type {
   TaskUpdateResponse,
   TaskSetStatusRequest,
   TaskSetStatusResponse,
-} from "./types/task-command.js";
+} from "./types/TaskCommand.js";
 
 function resolveTaskStatus(input: JsonValue | undefined, fallback: ShipTaskStatus): ShipTaskStatus {
   const normalized = normalizeTaskStatus(input);

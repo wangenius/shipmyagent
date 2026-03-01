@@ -11,10 +11,10 @@ import {
   type DaemonEndpoint,
   type DaemonJsonApiCallParams,
   type DaemonJsonApiCallResult,
-} from "./api.js";
-import { getShipJsonPath } from "../project/paths.js";
-import { loadShipConfig } from "../project/config.js";
-import type { JsonObject, JsonValue } from "../../types/json.js";
+} from "./Api.js";
+import { getShipJsonPath } from "../project/Paths.js";
+import { loadShipConfig } from "../project/Config.js";
+import type { JsonObject, JsonValue } from "../../types/Json.js";
 
 /**
  * 解析端口值。

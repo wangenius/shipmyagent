@@ -10,12 +10,12 @@ import fs from "fs-extra";
 import yaml from "js-yaml";
 import path from "path";
 import type { Dirent, Stats } from "node:fs";
-import type { ShipConfig } from "../../../process/project/config.js";
-import { parseFrontMatter } from "./frontmatter.js";
-import { getClaudeSkillSearchRoots } from "./paths.js";
-import { isSubpath } from "./utils.js";
-import type { ClaudeSkill } from "../types/claude-skill.js";
-import type { JsonObject, JsonValue } from "../../../types/json.js";
+import type { ShipConfig } from "../../../process/project/Config.js";
+import { parseFrontMatter } from "./Frontmatter.js";
+import { getClaudeSkillSearchRoots } from "./Paths.js";
+import { isSubpath } from "./Utils.js";
+import type { ClaudeSkill } from "../types/ClaudeSkill.js";
+import type { JsonObject, JsonValue } from "../../../types/Json.js";
 
 /**
  * 扫描并发现 Claude Code-compatible skills。

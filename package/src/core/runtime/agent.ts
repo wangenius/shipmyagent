@@ -1,5 +1,5 @@
-import { ContextAgentRunner } from "./agent-runner.js";
-import type { ContextAgent } from "../types/context-agent.js";
+import { ContextAgentRunner } from "./AgentRunner.js";
+import type { ContextAgent } from "../types/ContextAgent.js";
 
 /**
  * createContextAgent：创建一个 context 执行器实例。

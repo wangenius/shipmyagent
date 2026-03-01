@@ -9,9 +9,9 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import type { ShipConfig } from "../../../process/project/config.js";
-import type { SkillRoot } from "../types/skill-root.js";
-import { expandHome, uniqStrings } from "./utils.js";
+import type { ShipConfig } from "../../../process/project/Config.js";
+import type { SkillRoot } from "../types/SkillRoot.js";
+import { expandHome, uniqStrings } from "./Utils.js";
 
 function normalizeSkillRootCandidate(candidate: string): string {
   const normalized = path.normalize(candidate);

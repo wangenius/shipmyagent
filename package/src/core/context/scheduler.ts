@@ -7,16 +7,16 @@
  * - 快速矫正通过“drain lane”实现，不在 scheduler 内拼接文本。
  */
 
-import { withContextRequestContext, type ContextRequestContext } from "./request-context.js";
-import type { ContextAgent } from "../types/context-agent.js";
-import type { ContextManager } from "./manager.js";
-import type { AgentResult } from "../types/agent.js";
-import type { ShipContextMetadataV1 } from "../types/context-message.js";
+import { withContextRequestContext, type ContextRequestContext } from "./RequestContext.js";
+import type { ContextAgent } from "../types/ContextAgent.js";
+import type { ContextManager } from "./ContextManager.js";
+import type { AgentResult } from "../types/Agent.js";
+import type { ShipContextMetadataV1 } from "../types/ContextMessage.js";
 import type {
   SchedulerConfig,
   SchedulerEnqueueResult,
   SchedulerStats,
-} from "../types/context-scheduler.js";
+} from "../types/ContextScheduler.js";
 
 const TYPING_ACTION_INTERVAL_MS = 4_000;
 

@@ -1,4 +1,4 @@
-import type { JsonObject, JsonValue } from "../../types/json.js";
+import type { JsonObject, JsonValue } from "../../types/Json.js";
 
 type ParsedPayload = JsonObject | JsonValue[];
 type FormattedToolCall = {

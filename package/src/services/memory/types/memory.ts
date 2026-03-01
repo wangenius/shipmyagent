@@ -1,4 +1,4 @@
-import type { JsonObject } from "../../../types/json.js";
+import type { JsonObject } from "../../../types/Json.js";
 
 /**
  * 记忆模块类型定义。

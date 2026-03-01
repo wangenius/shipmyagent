@@ -8,9 +8,9 @@
 
 import fs from "fs-extra";
 import path from "path";
-import { getLogsDirPath } from "../../process/project/paths.js";
-import { getTimestamp } from "../../process/utils/time.js";
-import type { JsonObject } from "../../types/json.js";
+import { getLogsDirPath } from "../../process/project/Paths.js";
+import { getTimestamp } from "../../process/utils/Time.js";
+import type { JsonObject } from "../../types/Json.js";
 
 type LogDetails = {
   [key: string]: JsonObject[keyof JsonObject] | undefined;

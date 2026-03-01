@@ -14,8 +14,8 @@ import {
   getServiceChatRuntimeBridge,
   getServiceRequestContextBridge,
   getServiceContextManager,
-} from "../../../process/runtime/service-runtime-dependencies.js";
-import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
+} from "../../../process/runtime/ServiceRuntimeDependencies.js";
+import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/ServiceRuntimeTypes.js";
 import type {
   ShipTaskFrontmatterV1,
   ShipTaskRunExecutionStatusV1,
@@ -23,11 +23,11 @@ import type {
   ShipTaskRunResultStatusV1,
   ShipTaskRunStatusV1,
   ShipTaskRunTriggerV1,
-} from "../types/task.js";
-import type { AgentResult } from "../../../core/types/agent.js";
-import type { JsonObject } from "../../../types/json.js";
-import { createTaskRunContextId, formatTaskRunTimestamp, getTaskRunDir } from "./paths.js";
-import { ensureRunDir, readTask } from "./store.js";
+} from "../types/Task.js";
+import type { AgentResult } from "../../../core/types/Agent.js";
+import type { JsonObject } from "../../../types/Json.js";
+import { createTaskRunContextId, formatTaskRunTimestamp, getTaskRunDir } from "./Paths.js";
+import { ensureRunDir, readTask } from "./Store.js";
 
 /**
  * 把相对路径渲染为 markdown 行内链接文本。

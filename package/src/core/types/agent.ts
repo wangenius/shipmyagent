@@ -6,8 +6,8 @@
  * - 不包含具体实现细节
  */
 
-import type { ShipContextMessageV1 } from "./context-message.js";
-import type { JsonObject } from "../../types/json.js";
+import type { ShipContextMessageV1 } from "./ContextMessage.js";
+import type { JsonObject } from "../../types/Json.js";
 
 export interface AgentResult {
   success: boolean;
@@ -34,12 +34,4 @@ export interface AgentRunInput {
       threadId?: number;
     }>;
   } | null>;
-}
-
-export interface ConversationMessage {
-  role: "user" | "assistant" | "tool";
-  content: string;
-  toolCallId?: string;
-  toolName?: string;
-  timestamp: number;
 }

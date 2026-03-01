@@ -8,14 +8,14 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import { discoverClaudeSkillsSync } from "./runtime/discovery.js";
+import { discoverClaudeSkillsSync } from "./runtime/Discovery.js";
 import {
   getShipContextMessagesMetaPath,
   getShipContextMessagesDirPath,
-} from "../../process/project/paths.js";
-import { loadShipConfig } from "../../process/project/config.js";
-import type { ClaudeSkill } from "./types/claude-skill.js";
-import type { JsonObject, JsonValue } from "../../types/json.js";
+} from "../../process/project/Paths.js";
+import { loadShipConfig } from "../../process/project/Config.js";
+import type { ClaudeSkill } from "./types/ClaudeSkill.js";
+import type { JsonObject, JsonValue } from "../../types/Json.js";
 import type {
   SkillListResponse,
   SkillLoadRequest,
@@ -24,7 +24,7 @@ import type {
   SkillSummary,
   SkillUnloadRequest,
   SkillUnloadResponse,
-} from "./types/skill-command.js";
+} from "./types/SkillCommand.js";
 
 function normalizeAllowedTools(input: JsonValue | undefined): string[] {
   if (!Array.isArray(input)) return [];

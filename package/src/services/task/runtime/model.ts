@@ -9,9 +9,9 @@
 
 import yaml from "js-yaml";
 import path from "node:path";
-import { parseFrontMatter } from "./frontmatter.js";
-import type { ShipTaskDefinitionV1, ShipTaskFrontmatterV1, ShipTaskStatus } from "../types/task.js";
-import type { JsonObject, JsonValue } from "../../../types/json.js";
+import { parseFrontMatter } from "./Frontmatter.js";
+import type { ShipTaskDefinitionV1, ShipTaskFrontmatterV1, ShipTaskStatus } from "../types/Task.js";
+import type { JsonObject, JsonValue } from "../../../types/Json.js";
 
 /**
  * 必填 frontmatter 字段清单。

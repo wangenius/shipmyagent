@@ -6,12 +6,12 @@
  * - core 不负责也不感知 skill/memory 业务状态
  */
 
-import type { ClaudeSkill } from "../types/claude-skill.js";
-import type { LoadedSkillV1 } from "../types/loaded-skill.js";
+import type { ClaudeSkill } from "../types/ClaudeSkill.js";
+import type { LoadedSkillV1 } from "../types/LoadedSkill.js";
 import type {
   ContextSkillStateInternal,
   ContextSkillStateSnapshot,
-} from "./types.js";
+} from "./Types.js";
 
 const contextSkillStateStore = new Map<string, ContextSkillStateInternal>();
 

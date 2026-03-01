@@ -1,23 +1,23 @@
-import { DEFAULT_SHIP_PROMPTS } from "../../core/prompts/system.js";
-import { logger as defaultLogger, type Logger } from "../../utils/logger/logger.js";
-import { McpManager } from "../../services/mcp/runtime/manager.js";
-import { ContextManager } from "../../core/context/manager.js";
+import { DEFAULT_SHIP_PROMPTS } from "../../core/prompts/System.js";
+import { logger as defaultLogger, type Logger } from "../../utils/logger/Logger.js";
+import { McpManager } from "../../services/mcp/runtime/Manager.js";
+import { ContextManager } from "../../core/context/ContextManager.js";
 import {
   contextRequestContext,
   withContextRequestContext,
-} from "../../core/context/request-context.js";
-import { createModel } from "../../core/llm/create-model.js";
-import { runContextMemoryMaintenance } from "../../services/memory/runtime/service.js";
-import { pickLastSuccessfulChatSendText } from "../../services/chat/runtime/user-visible-text.js";
-import { sendTextByChatKey } from "../../services/chat/runtime/chatkey-send.js";
-import { getChatSender } from "../../services/chat/runtime/chat-send-registry.js";
-import { registerServiceSystemPromptProviders } from "./system-prompt-providers.js";
-import type { ServiceRuntimeDependencies } from "../runtime/types/service-runtime-types.js";
+} from "../../core/context/RequestContext.js";
+import { createModel } from "../../core/llm/CreateModel.js";
+import { runContextMemoryMaintenance } from "../../services/memory/runtime/Service.js";
+import { pickLastSuccessfulChatSendText } from "../../services/chat/runtime/UserVisibleText.js";
+import { sendTextByChatKey } from "../../services/chat/runtime/ChatkeySend.js";
+import { getChatSender } from "../../services/chat/runtime/ChatSendRegistry.js";
+import { registerServiceSystemPromptProviders } from "./SystemPromptProviders.js";
+import type { ServiceRuntimeDependencies } from "../runtime/types/ServiceRuntimeTypes.js";
 import {
   loadProjectDotenv,
   loadShipConfig,
   type ShipConfig,
-} from "../project/config.js";
+} from "../project/Config.js";
 import {
   getAgentMdPath,
   getCacheDirPath,
@@ -31,7 +31,7 @@ import {
   getShipProfileDirPath,
   getShipPublicDirPath,
   getShipTasksDirPath,
-} from "../project/paths.js";
+} from "../project/Paths.js";
 import fs from "fs-extra";
 import path from "path";
 

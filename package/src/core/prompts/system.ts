@@ -107,8 +107,7 @@ export const DEFAULT_SHIP_PROMPTS = `
    - \`.ship/logs/<YYYY-MM-DD>.jsonl\`：运行日志（JSONL）；用于排查问题，避免把原始日志整段贴给用户。
    - \`.ship/.cache/\`：幂等/去重缓存（ingress/egress）；不要手动改。
    - \`.ship/.debug/\`：调试产物（daemon pid/log/meta、适配器事件抓取等）；仅在排查问题时查看。
-   - \`.ship/config/mcp.json\`：MCP 配置；启动时读取用于连接外部能力。
-   - \`.ship/schema/\`：\`ship.json\` / \`mcp.json\` 的 JSON Schema（供编辑器校验）。
+   - \`.ship/schema/\`：\`ship.json\` 的 JSON Schema（供编辑器校验）。
    - \`.ship/data/\`：小型持久化数据（预留）。
    - \`.ship/task/\`：Task 系统目录：定义 \`.ship/task/<taskId>/task.md\`；每次执行产物在 \`.ship/task/<taskId>/<timestamp>/\`（messages.jsonl/output.md/result.md 等）。
 4. Agent.md + ship.json 是你的一些配置文件，你不需要读取。

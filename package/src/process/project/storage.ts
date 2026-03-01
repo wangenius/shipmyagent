@@ -6,7 +6,7 @@
  * 2. 统一封装 fs-extra 的常用行为，减少业务层重复判断。
  */
 import fs from "fs-extra";
-import type { JsonValue } from "../../types/json.js";
+import type { JsonValue } from "../../types/Json.js";
 
 export async function ensureDir(dir: string): Promise<void> {
   if (!fs.existsSync(dir)) {

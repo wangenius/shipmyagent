@@ -12,17 +12,17 @@ import { readFileSync } from "fs";
 import { basename, dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { Command } from "commander";
-import { aliasCommand } from "./alias.js";
-import { initCommand } from "./init.js";
-import { restartCommand } from "./restart.js";
-import { runCommand } from "./run.js";
-import { registerServicesCommand } from "./services.js";
-import { startCommand } from "./start.js";
-import { stopCommand } from "./stop.js";
+import { aliasCommand } from "./Alias.js";
+import { initCommand } from "./Init.js";
+import { restartCommand } from "./Restart.js";
+import { runCommand } from "./Run.js";
+import { registerServicesCommand } from "./Services.js";
+import { startCommand } from "./Start.js";
+import { stopCommand } from "./Stop.js";
 import {
   getServiceRootCommandNames,
   registerAllServicesForCli,
-} from "../../core/services/registry.js";
+} from "../../core/services/Registry.js";
 
 // 在 ES 模块中获取 __dirname
 const __filename = fileURLToPath(import.meta.url);

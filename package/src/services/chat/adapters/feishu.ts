@@ -1,14 +1,14 @@
 import * as Lark from "@larksuiteoapi/node-sdk";
 import fs from "fs-extra";
 import path from "path";
-import { getCacheDirPath } from "../../../process/project/paths.js";
-import { BaseChatAdapter } from "./base-chat-adapter.js";
+import { getCacheDirPath } from "../../../process/project/Paths.js";
+import { BaseChatAdapter } from "./BaseChatAdapter.js";
 import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
-} from "./platform-adapter.js";
-import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
-import type { JsonObject } from "../../../types/json.js";
+} from "./PlatformAdapter.js";
+import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/ServiceRuntimeTypes.js";
+import type { JsonObject } from "../../../types/Json.js";
 
 /**
  * Feishu (Lark) chat adapter.

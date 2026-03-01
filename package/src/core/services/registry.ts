@@ -8,19 +8,19 @@
 
 import type { Command } from "commander";
 import type { Hono } from "hono";
-import type { ServiceRuntimeDependencies } from "../../process/runtime/types/service-runtime-types.js";
-import type { JsonValue } from "../../types/json.js";
+import type { ServiceRuntimeDependencies } from "../../process/runtime/types/ServiceRuntimeTypes.js";
+import type { JsonValue } from "../../types/Json.js";
 import type {
   ServerRouteRegistry,
   SmaService,
   SmaServiceCommandResult,
   SmaServiceRuntimeState,
-} from "./types/service-registry.js";
-import { createCliCommandRegistry } from "./cli-registry.js";
-import { createServerRouteRegistry } from "./server-registry.js";
-import { chatService } from "../../services/chat/service-entry.js";
-import { skillsService } from "../../services/skills/service-entry.js";
-import { taskService } from "../../services/task/service-entry.js";
+} from "./ServiceRegistry.js";
+import { createCliCommandRegistry } from "./CliRegistry.js";
+import { createServerRouteRegistry } from "./ServerRegistry.js";
+import { chatService } from "../../services/chat/ServiceEntry.js";
+import { skillsService } from "../../services/skills/ServiceEntry.js";
+import { taskService } from "../../services/task/ServiceEntry.js";
 
 /**
  * 服务清单（中文）

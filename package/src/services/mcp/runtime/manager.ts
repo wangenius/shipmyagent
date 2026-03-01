@@ -17,12 +17,12 @@ import type {
   McpServerStatus,
   McpToolDefinition,
   McpToolResult,
-} from "./types.js";
-import { HttpTransport } from "./http-transport.js";
-import { resolveEnvVar, resolveEnvVarsInRecord } from "./env.js";
-import { getShipMcpConfigPath } from "../../../process/project/paths.js";
-import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/service-runtime-types.js";
-import type { JsonObject, JsonValue } from "../../../types/json.js";
+} from "./Types.js";
+import { HttpTransport } from "./HttpTransport.js";
+import { resolveEnvVar, resolveEnvVarsInRecord } from "./Env.js";
+import { getShipMcpConfigPath } from "../../../process/project/Paths.js";
+import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/ServiceRuntimeTypes.js";
+import type { JsonObject, JsonValue } from "../../../types/Json.js";
 
 type McpClientCallToolResult = Awaited<ReturnType<Client["callTool"]>>;
 type StringifyValue = JsonValue | object | undefined;
