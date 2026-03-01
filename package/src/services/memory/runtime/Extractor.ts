@@ -12,10 +12,8 @@ import type {
   MemoryCompressParams,
 } from "../types/Memory.js";
 import { getLogger } from "../../../utils/logger/Logger.js";
-import {
-  getServiceContextManager,
-} from "../../../process/runtime/ServiceRuntimeDependencies.js";
-import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/ServiceRuntimeTypes.js";
+import type { ServiceRuntimeDependencies } from "../../../main/service/types/ServiceRuntimeTypes.js";
+import { getServiceContextManager } from "../../../main/service/ServiceRuntimeDependencies.js";
 
 type AnyUiMessagePart = UIMessagePart<UIDataTypes, UITools>;
 
@@ -41,9 +39,7 @@ export async function extractMemoryFromContextMessages(
   const logger = getLogger(context.rootPath, "info");
 
   try {
-    const contextStore = getServiceContextManager(context).getContextStore(
-      contextId,
-    );
+    const contextStore = getServiceContextManager(context).getContextStore(contextId);
     const messages = await contextStore.loadRange(startIndex, endIndex);
 
     const messagesText = (() => {

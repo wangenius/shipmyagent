@@ -7,7 +7,7 @@ import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "../PlatformAdapter.js";
-import type { ServiceRuntimeDependencies } from "../../../../process/runtime/types/ServiceRuntimeTypes.js";
+import type { ServiceRuntimeDependencies } from "../../../../main/service/types/ServiceRuntimeTypes.js";
 import type { JsonObject, JsonValue } from "../../../../types/Json.js";
 
 /**

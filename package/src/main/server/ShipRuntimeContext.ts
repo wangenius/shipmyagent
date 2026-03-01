@@ -1,7 +1,7 @@
 import { DEFAULT_SHIP_PROMPTS } from "../../core/prompts/System.js";
-import "../../core/services/ProcessBindings.js";
 import { logger as defaultLogger, type Logger } from "../../utils/logger/Logger.js";
 import { ContextManager } from "../../core/context/ContextManager.js";
+import { ChatQueueWorker } from "../service/ChatQueueWorker.js";
 import {
   contextRequestContext,
   withContextRequestContext,
@@ -9,8 +9,8 @@ import {
 import { createModel } from "../../core/llm/CreateModel.js";
 import {
   getProcessServiceBindings,
-} from "../runtime/ServiceProcessBindings.js";
-import type { ServiceRuntimeDependencies } from "../runtime/types/ServiceRuntimeTypes.js";
+} from "../service/ServiceProcessBindings.js";
+import type { ServiceRuntimeDependencies } from "../service/types/ServiceRuntimeTypes.js";
 import {
   loadProjectDotenv,
   loadShipConfig,
@@ -42,7 +42,7 @@ import path from "path";
  *
  * 初始化时序（关键节点）
  * - 启动入口先 `setShipRuntimeContextBase(...)`
- * - 初始化 ContextManager 后再 `setShipRuntimeContext(...)`
+ * - 初始化 ContextManager + ChatQueueWorker 后再 `setShipRuntimeContext(...)`
  * - 业务模块只调用 `getShipRuntimeContext()`（未 ready 会抛错）
  */
 export type ShipRuntimeContextBase = {
@@ -89,7 +89,7 @@ const serviceModelFactory = {
  * service chat 运行时桥接实现。
  *
  * 关键点（中文）
- * - 通过 `getShipServiceContext()` 延迟获取依赖，确保拿到最新 contextManager。
+ * - 通过 `getShipServiceContext()` 延迟获取依赖，确保拿到最新 runtime。
  */
 const serviceChatRuntimeBridge = {
   pickLastSuccessfulChatSendText: (
@@ -132,7 +132,10 @@ function buildServiceContextBase(
 }
 
 /**
- * 构建 ready service context（含 contextManager）。
+ * 构建 ready service context。
+ *
+ * 关键点（中文）
+ * - runtime 已完成初始化，可安全用于 services
  */
 function buildServiceContextReady(
   input: ShipRuntimeContext,
@@ -215,7 +218,7 @@ export function getShipRuntimeContext(): ShipRuntimeContext {
  * 1) 解析 rootPath + 绑定 logger 落盘目录
  * 2) 校验关键文件并确保 `.ship` 目录结构
  * 3) 加载 dotenv + ship.json，建立 base context
- * 4) 初始化 ContextManager，建立 ready context
+ * 4) 初始化 ContextManager + ChatQueueWorker，建立 ready context
  * 5) 注册 service system prompt providers
  */
 
@@ -268,35 +271,19 @@ You are a helpful project assistant.`;
   const bindings = getProcessServiceBindings();
   let contextManager: ContextManager;
   contextManager = new ContextManager({
-    sendAction: async ({ context, action }) => {
-      const channel = context.chat;
-      if (channel !== "telegram" && channel !== "feishu" && channel !== "qq") {
-        return;
-      }
-      const chatId = String(context.targetId || "").trim();
-      if (!chatId) return;
-      await bindings.sendChatAction({
-        channel,
-        chatId,
-        action,
-        ...(typeof context.threadId === "number"
-          ? { messageThreadId: context.threadId }
-          : {}),
-        ...(typeof context.targetType === "string" && context.targetType
-          ? { chatType: context.targetType }
-          : {}),
-        ...(typeof context.messageId === "string" && context.messageId
-          ? { messageId: context.messageId }
-          : {}),
-      });
-    },
     runMemoryMaintenance: async (contextId) =>
       bindings.runMemoryMaintenance({
         context: getShipServiceContext(),
         contextId,
-        getContextStore: (id) => contextManager.getContextStore(id),
       }),
   });
+
+  const chatQueueWorker = new ChatQueueWorker({
+    logger: defaultLogger,
+    contextManager,
+    config: config.services?.chat?.queue,
+  });
+  chatQueueWorker.start();
 
   setShipRuntimeContext({
     cwd: resolvedCwd,

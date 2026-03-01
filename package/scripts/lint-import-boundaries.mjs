@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
  * Import 边界检查。
  *
  * 关键点（中文）
- * - 限制 services 层对 core/server 的反向依赖
+ * - 限制 services 层对 core/main-server 的反向依赖
  * - 限制 service module 入口对 core/server 的直接依赖
  * - 限制 services 之间的横向直接依赖（全部禁止）
  * - 以脚本方式落地，避免引入额外 lint 工具链
@@ -79,12 +79,14 @@ async function run() {
 
       const target = resolveToSrcRelative(filePath, specifier);
 
-      // 规则 1（中文）：service 全量禁止反向依赖 server。
-      if (target.startsWith("server/")) {
+      const allowMainServerClient = target.startsWith("main/server/daemon/Client");
+
+      // 规则 1（中文）：service 全量禁止反向依赖 main/server（daemon client 例外）。
+      if (target.startsWith("main/server/") && !allowMainServerClient) {
         violations.push({
           file: srcRelativeFilePath,
           specifier,
-          reason: "services 层禁止直接依赖 server/*，请通过依赖注入访问运行时能力",
+          reason: "services 层禁止直接依赖 main/server/*，请通过依赖注入访问运行时能力",
         });
       }
 
@@ -97,12 +99,16 @@ async function run() {
         });
       }
 
-      // 规则 2（中文）：service 入口文件禁止直接依赖 core/server。
-      if (isServiceEntryFile && (target.startsWith("core/") || target.startsWith("server/"))) {
+      // 规则 2（中文）：service 入口文件禁止直接依赖 core/main-server。
+      if (
+        isServiceEntryFile &&
+        (target.startsWith("core/") ||
+          (target.startsWith("main/server/") && !allowMainServerClient))
+      ) {
         violations.push({
           file: srcRelativeFilePath,
           specifier,
-          reason: "services/*/service-entry.ts 禁止直接依赖 core/* 或 server/*",
+          reason: "services/*/service-entry.ts 禁止直接依赖 core/* 或 main/server/*",
         });
       }
 

@@ -1,7 +1,5 @@
 import { registerChatSender } from "../runtime/ChatSendRegistry.js";
-import { getServiceContextManager } from "../../../process/runtime/ServiceRuntimeDependencies.js";
-import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/ServiceRuntimeTypes.js";
-import type { ServiceContextManager } from "../../../process/runtime/types/ServiceRuntimePorts.js";
+import type { ServiceRuntimeDependencies } from "../../../main/service/types/ServiceRuntimeTypes.js";
 import type {
   ChatDispatchAction,
   ChatDispatchChannel,
@@ -35,13 +33,12 @@ export type AdapterSendActionParams = AdapterChatKeyParams & {
  * 平台适配器基类。
  *
  * 关键点（中文）
- * - 通过 context 显式注入 contextManager
+ * - 通过 context 显式注入 runtime 依赖
  * - 统一注册 dispatcher，暴露 sendText/sendAction 能力
  */
 export abstract class PlatformAdapter {
   readonly channel: ChatDispatchChannel;
   protected readonly context: ServiceRuntimeDependencies;
-  protected readonly contextManager: ServiceContextManager;
 
   protected constructor(params: {
     channel: ChatDispatchChannel;
@@ -49,7 +46,6 @@ export abstract class PlatformAdapter {
   }) {
     this.channel = params.channel;
     this.context = params.context;
-    this.contextManager = getServiceContextManager(params.context);
 
     // 统一把“平台发送能力”注册到 chat-send registry。
     // 后续 `chat_send` 等工具只依赖 channel，不耦合具体适配器实例。

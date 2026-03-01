@@ -8,8 +8,8 @@
 
 import fs from "fs-extra";
 import path from "path";
-import { getLogsDirPath } from "../../process/project/Paths.js";
-import { getTimestamp } from "../../process/utils/Time.js";
+import { getLogsDirPath } from "../../main/project/Paths.js";
+import { getTimestamp } from "../../main/utils/Time.js";
 import type { JsonObject } from "../../types/Json.js";
 
 type LogDetails = {

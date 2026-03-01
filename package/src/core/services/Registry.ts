@@ -8,7 +8,7 @@
 
 import type { Command } from "commander";
 import type { Hono } from "hono";
-import type { ServiceRuntimeDependencies } from "../../process/runtime/types/ServiceRuntimeTypes.js";
+import type { ServiceRuntimeDependencies } from "../../main/service/types/ServiceRuntimeTypes.js";
 import type { JsonValue } from "../../types/Json.js";
 import "./ProcessBindings.js";
 import type {
@@ -23,10 +23,6 @@ import { chatService } from "../../services/chat/ServiceEntry.js";
 import { skillsService } from "../../services/skills/ServiceEntry.js";
 import { taskService } from "../../services/task/ServiceEntry.js";
 
-/**
- * 服务清单（中文）
- * - 新服务接入时，在这里显式注册，保持入口可审计。
- */
 const SERVICES: SmaService[] = [chatService, skillsService, taskService];
 
 type ServiceRuntimeRecord = {
@@ -77,7 +73,6 @@ function ensureServiceRuntimeRecord(service: SmaService): ServiceRuntimeRecord {
 
   const created: ServiceRuntimeRecord = {
     service,
-    // 默认 stopped：由启动编排显式调用 startAll 进入 running。
     state: "stopped",
     updatedAt: nowMs(),
     chain: Promise.resolve(),
@@ -132,26 +127,14 @@ function markServiceCommand(record: ServiceRuntimeRecord, command: string): void
   record.updatedAt = nowMs();
 }
 
-/**
- * 获取服务只读快照。
- */
 export function getSmaServices(): SmaService[] {
   return [...SERVICES];
 }
 
-/**
- * 获取顶层命令名列表。
- *
- * 用途（中文）
- * - 可用于冲突检测、帮助文档生成等。
- */
 export function getServiceRootCommandNames(): string[] {
   return SERVICES.map((service) => service.name);
 }
 
-/**
- * 获取全部 service 运行状态。
- */
 export function listServiceRuntimes(): ServiceRuntimeSnapshot[] {
   for (const service of SERVICES) {
     ensureServiceRuntimeRecord(service);
@@ -161,9 +144,6 @@ export function listServiceRuntimes(): ServiceRuntimeSnapshot[] {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/**
- * 查询 service 是否处于 running 状态。
- */
 export function isServiceRuntimeRunning(serviceName: string): boolean {
   const service = resolveServiceByName(serviceName);
   if (!service) return false;
@@ -230,9 +210,6 @@ async function stopServiceRuntimeInternal(
   }
 }
 
-/**
- * 控制 service 运行状态。
- */
 export async function controlServiceRuntime(params: {
   serviceName: string;
   action: ServiceRuntimeControlAction;
@@ -267,13 +244,6 @@ export async function controlServiceRuntime(params: {
   return startServiceRuntimeInternal(service, params.context);
 }
 
-/**
- * 统一 service 命令入口。
- *
- * 默认命令（中文）
- * - `status|start|stop|restart`：由 registry 层兜底支持。
- * - 其他命令转发给 service.lifecycle.command（若未实现则返回失败）。
- */
 export async function runServiceCommand(params: {
   serviceName: string;
   command: string;
@@ -355,9 +325,6 @@ export async function runServiceCommand(params: {
   }
 }
 
-/**
- * 启动全部 service runtime（用于进程启动阶段）。
- */
 export async function startAllServiceRuntimes(context: ServiceRuntimeDependencies): Promise<{
   success: boolean;
   results: ServiceRuntimeControlResult[];
@@ -378,9 +345,6 @@ export async function startAllServiceRuntimes(context: ServiceRuntimeDependencie
   };
 }
 
-/**
- * 停止全部 service runtime（用于进程退出阶段）。
- */
 export async function stopAllServiceRuntimes(context: ServiceRuntimeDependencies): Promise<{
   success: boolean;
   results: ServiceRuntimeControlResult[];
@@ -442,12 +406,6 @@ function createServiceScopedServerRouteRegistry(
   };
 }
 
-/**
- * 注册全部 CLI 服务。
- *
- * 算法（中文）
- * - 先创建统一 registry 适配层，再按 SERVICES 顺序注册。
- */
 export function registerAllServicesForCli(program: Command): void {
   const registry = createCliCommandRegistry(program);
   for (const service of SERVICES) {
@@ -456,12 +414,6 @@ export function registerAllServicesForCli(program: Command): void {
   }
 }
 
-/**
- * 注册全部 Server 服务。
- *
- * 关键点（中文）
- * - `context` 由 server 注入；services 只消费抽象依赖。
- */
 export function registerAllServicesForServer(
   app: Hono,
   context: ServiceRuntimeDependencies,

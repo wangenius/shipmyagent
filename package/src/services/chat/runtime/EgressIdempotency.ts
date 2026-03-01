@@ -8,9 +8,9 @@
 
 import path from "path";
 import fs from "fs-extra";
-import { getCacheDirPath } from "../../../process/project/Paths.js";
+import { getCacheDirPath } from "../../../main/project/Paths.js";
 import type { ChatDispatchChannel } from "../types/ChatDispatcher.js";
-import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/ServiceRuntimeTypes.js";
+import type { ServiceRuntimeDependencies } from "../../../main/service/types/ServiceRuntimeTypes.js";
 import type { JsonObject } from "../../../types/Json.js";
 
 export async function tryClaimChatEgressChatSend(params: {

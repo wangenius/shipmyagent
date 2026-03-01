@@ -23,12 +23,6 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
       maxInputTokensApprox: 16000,
       archiveOnCompact: true,
     },
-    contextQueue: {
-      maxConcurrency: 2,
-      enableCorrectionMerge: true,
-      correctionMaxRounds: 2,
-      correctionMaxMergedMessages: 5,
-    },
   },
   permissions: {
     read_repo: true,
@@ -45,6 +39,9 @@ export const DEFAULT_SHIP_JSON: ShipConfig = {
   },
   services: {
     chat: {
+      queue: {
+        maxConcurrency: 2,
+      },
       adapters: {
         telegram: {
           enabled: false,

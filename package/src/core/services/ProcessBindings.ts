@@ -8,7 +8,7 @@ import { createSkillsSystemPromptProvider } from "../../services/skills/runtime/
 import { pickLastSuccessfulChatSendText } from "../../services/chat/runtime/UserVisibleText.js";
 import { sendChatTextByContextId } from "../../services/chat/Service.js";
 import { getChatSender } from "../../services/chat/runtime/ChatSendRegistry.js";
-import { setProcessServiceBindings } from "../../process/runtime/ServiceProcessBindings.js";
+import { setProcessServiceBindings } from "../../main/service/ServiceProcessBindings.js";
 
 /**
  * 绑定 process 所需的具体服务实现。

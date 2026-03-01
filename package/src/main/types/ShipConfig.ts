@@ -2,8 +2,8 @@
  * Ship 配置类型定义。
  *
  * 关键点（中文）
- * - 作为全局共享类型，不再挂在 process/server 目录下。
- * - 供 process/core/services/shared 多层复用，避免反向类型依赖。
+ * - 作为全局共享类型，不再挂在 main/server 目录下。
+ * - 供 main/core/services 多层复用，避免反向类型依赖。
  */
 
 export interface ShipConfig {
@@ -52,6 +52,16 @@ export interface ShipConfig {
      * Chat service 配置。
      */
     chat?: {
+      /**
+       * Chat 调度队列（按 chatKey 分 lane）。
+       */
+      queue?: {
+        /**
+         * 全局最大并发（不同 chatKey 之间）。
+         * 默认：2
+         */
+        maxConcurrency?: number;
+      };
       /**
        * 出站（egress）控制：用于限制工具发送、避免重复与无限循环刷屏。
        */
@@ -159,40 +169,6 @@ export interface ShipConfig {
        */
       archiveOnCompact?: boolean;
     };
-    /**
-     * Chat 消息调度（按 contextId 分 lane）。
-     *
-     * 设计目标
-     * - 同一 contextId 串行：避免上下文错乱/工具竞态
-     * - 不同 contextId 可并发：提升整体吞吐
-     *
-     * 注意
-     * - 这是工程运行时行为配置，修改后需重启服务生效。
-     */
-    contextQueue?: {
-      /**
-       * 全局最大并发（不同 contextId 之间）。
-       * 默认：2
-       */
-      maxConcurrency?: number;
-      /**
-       * 是否启用“快速补充/纠正”：当一次执行尚未结束时，如果该 contextId 又收到新消息，
-       * 会把新消息合并注入当前 in-flight userMessage，帮助模型及时修正。
-       * 默认：true
-       */
-      enableCorrectionMerge?: boolean;
-      /**
-       * 每次请求最多合并注入多少轮（以 step_finish 为触发点）。
-       * 默认：2
-       */
-      correctionMaxRounds?: number;
-      /**
-       * 每轮最多合并多少条新消息。
-       * 默认：5
-       */
-      correctionMaxMergedMessages?: number;
-    };
-
     /**
      * 记忆管理配置。
      *

@@ -1,8 +1,10 @@
-import type { ServiceContextStore } from "../../../process/runtime/types/ServiceRuntimePorts.js";
-import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/ServiceRuntimeTypes.js";
+import type { ServiceRuntimeDependencies } from "../../../main/service/types/ServiceRuntimeTypes.js";
 import type { LanguageModel } from "ai";
 import { getLogger } from "../../../utils/logger/Logger.js";
-import { getServiceModelFactory } from "../../../process/runtime/ServiceRuntimeDependencies.js";
+import {
+  getServiceContextManager,
+  getServiceModelFactory,
+} from "../../../main/service/ServiceRuntimeDependencies.js";
 import { MemoryManager } from "./Manager.js";
 import { compressMemory, extractMemoryFromContextMessages } from "./Extractor.js";
 
@@ -34,7 +36,6 @@ function getMemoryManager(
 export async function runContextMemoryMaintenance(params: {
   context: ServiceRuntimeDependencies;
   contextId: string;
-  getContextStore: (contextId: string) => ServiceContextStore;
 }): Promise<void> {
   const contextId = String(params.contextId || "").trim();
   if (!contextId) return;
@@ -47,7 +48,7 @@ export async function runContextMemoryMaintenance(params: {
   const extractMinEntries = config?.extractMinEntries ?? 40;
 
   try {
-    const store = params.getContextStore(contextId);
+    const store = getServiceContextManager(context).getContextStore(contextId);
     const totalEntries = await store.getTotalMessageCount();
 
     const memoryManager = getMemoryManager(context, contextId);

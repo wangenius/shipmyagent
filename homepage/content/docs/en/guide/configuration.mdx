@@ -144,7 +144,7 @@ Controls how much "conversation history" is injected at each execution and Chat 
   - **keepLastMessages**: Number of recent messages to keep after compact (default `30`)
   - **maxInputTokensApprox**: Input budget (approximate token count, used to trigger compact early, default `16000`)
   - **archiveOnCompact**: Whether to archive collapsed original segments during compact (default `true`)
-- **context.chatQueue**: Scheduler divided by `chatKey` lanes (serial for same chatKey, concurrent for different chatKeys; supports "fast correction merge").
+- **services.chat.queue**: Scheduler divided by `chatKey` lanes (serial for same chatKey, concurrent for different chatKeys; merges new messages at step boundaries during a run).
 
 ## Agent.md
 

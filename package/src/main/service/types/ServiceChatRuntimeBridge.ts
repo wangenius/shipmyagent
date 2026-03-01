@@ -9,28 +9,16 @@ import type { ShipContextMessageV1 } from "../../../core/types/ContextMessage.js
  * - 能力字段固定在统一依赖对象中，是否使用由具体 service 自行决定
  */
 
-/**
- * 按 contextId 发送文本参数。
- */
 export type ServiceChatSendByContextIdParams = {
   contextId: string;
   text: string;
 };
 
-/**
- * 按 contextId 发送结果。
- */
 export type ServiceChatSendByContextIdResult = {
   success: boolean;
   error?: string;
 };
 
-/**
- * Chat 运行时桥接端口。
- *
- * - `pickLastSuccessfulChatSendText`：从 assistant message 还原用户可见文本。
- * - `sendTextByContextId`：向指定会话回发消息。
- */
 export type ServiceChatRuntimeBridge = {
   pickLastSuccessfulChatSendText(
     message: ShipContextMessageV1 | null | undefined,

@@ -239,20 +239,18 @@ package/src/services
 4. 从 history 生成 model messages（必要时先 compact）。
 5. `streamText` 执行 tool-loop，支持最多 30 steps。
 6. 消费 `UIMessageStream` 产出最终 `assistantMessage`。
-7. 提取 `toolCalls` 和文本，返回标准 `AgentResult`。
+7. 返回标准 `AgentResult`。
 8. 识别 context window 错误时递进重试（最多 3 次）。
 
-## 5.3 lane merge / correction 机制
+## 5.3 lane merge / step 边界合并
 
-为支持“正在执行时用户又发了更正消息”：
+当执行过程中收到新消息：
 
-1. Scheduler 提供 `drainLaneMerged` 回调。
-2. Agent 在每个 step 前与每次工具后调用该回调。
-3. 有新消息则重载 history 前缀，保留 in-flight tool 链后缀。
+1. ChatQueueWorker 通过 shared queue 提供 `drainLaneMerged` 回调。
+2. Agent 在每个 step 前调用该回调。
+3. 有新消息则追加到 history 前缀，下一步立即生效。
 
 这样可减少“模型基于旧输入继续跑很久”的问题。
-
----
 
 ## 6. Context 与调度系统
 
@@ -262,45 +260,45 @@ package/src/services
 
 1. 缓存 `contextId -> Agent`
 2. 缓存 `contextId -> HistoryStore`
-3. 入队前先写 user message 到 history
-4. 调用 Scheduler 执行
-5. 历史更新后触发 memory maintenance（异步）
+3. 入站消息写入 history
+4. 历史更新后触发 memory maintenance（异步）
 
 关键点：
 
 1. 一个 `contextId` 对应一个 Agent 实例（上下文连续性）。
 2. task-run contextId 会重定向 history 路径到 task run 目录。
 
-文件：`package/src/core/context/manager.ts`
+文件：`package/src/core/context/ContextManager.ts`
 
-## 6.2 Scheduler（lane 公平调度）
+## 6.2 ChatQueueWorker（main 调度）
 
 并发模型：
 
-1. lane 粒度：`contextId`
+1. lane 粒度：`chatKey`
 2. lane 内：严格串行
 3. lane 间：受 `maxConcurrency` 限制并发
 4. 调度策略：runnable FIFO + 去重
 
-额外机制：
+入站处理（中文）：
 
-1. correction merge（可配置轮次与每轮合并条数）
-2. `deliverResult` 回包失败不影响主调度流程
+1. services/chat 仅入队（不直接写 history）
+2. main 在消费队列时写入 context history
+3. step 边界合并通过 chat 队列完成
 
-文件：`package/src/core/context/scheduler.ts`
+文件：
+
+1. `package/src/main/service/ChatQueueWorker.ts`
+2. `package/src/services/chat/runtime/ChatQueue.ts`
 
 ## 6.3 配置注意点（重要）
 
 当前实现里，队列配置已经统一为：
 
-1. `context.contextQueue`
+1. `services.chat.queue`
 
 包含字段：
 
 1. `maxConcurrency`
-2. `enableCorrectionMerge`
-3. `correctionMaxRounds`
-4. `correctionMaxMergedMessages`
 
 ---
 
@@ -557,7 +555,7 @@ Task 是独立的业务子系统（非 core 内核）：
 2. `llm.*`：模型配置（支持 `${ENV}` 占位符）
 3. `skills.*`：技能扫描根与外部路径策略
 4. `context.messages.*`：history compact 策略
-5. `context.contextQueue.*`：调度参数（注意实现中存在 `contextQueue` 读取差异）
+5. `services.chat.queue.*`：chat 调度参数
 6. `context.memory.*`：记忆提取/压缩策略
 7. `permissions.*`：执行权限与输出预算
 8. `adapters.*`：平台接入配置

@@ -16,9 +16,9 @@ import {
   loadSkill,
   unloadSkill,
 } from "./Service.js";
-import { resolveContextId } from "../../process/context/ContextId.js";
-import { callDaemonJsonApi } from "../../process/server/daemon/Client.js";
-import { printResult } from "../../process/utils/CliOutput.js";
+import { resolveContextId } from "../../main/context/ContextId.js";
+import { callDaemonJsonApi } from "../../main/server/daemon/Client.js";
+import { printResult } from "../../main/utils/CliOutput.js";
 import type {
   SkillListResponse,
   SkillLoadResponse,

@@ -22,9 +22,6 @@ import {
   startAllServiceRuntimes,
   stopAllServiceRuntimes,
 } from "../../core/services/Registry.js";
-import { createTelegramBot } from "../../services/chat/adapters/telegram/Bot.js";
-import { createFeishuBot } from "../../services/chat/adapters/feishu/Feishu.js";
-import { createQQBot } from "../../services/chat/adapters/qq/QQ.js";
 
 /**
  * `shipmyagent run` 命令入口。
@@ -32,7 +29,7 @@ import { createQQBot } from "../../services/chat/adapters/qq/QQ.js";
  * 职责（中文）
  * - 初始化 runtime 上下文（配置、日志、services 依赖）
  * - 解析并合并启动参数（CLI > ship.json > 默认值）
- * - 启动主 HTTP 服务、可选交互式 Web、各聊天适配器
+ * - 启动主 HTTP 服务、可选交互式 Web
  * - 启动 service runtimes（例如 task cron）
  * - 统一处理进程信号并优雅停机
  */
@@ -42,8 +39,6 @@ export async function runCommand(
 ): Promise<void> {
   // 初始化加载（进程级单例上下文：root/config/utils/logger/chat/agents 等）
   await initShipRuntimeContext(cwd);
-  // 占位符判定（中文）：init 生成的模板值 `${...}` 不应被当作真实密钥。
-  const isPlaceholder = (value?: string): boolean => value === "${}";
   // 端口解析（中文）：允许 number/string；空值返回 undefined 以便走配置回退链。
   const parsePort = (
     value: string | number | undefined,
@@ -99,84 +94,6 @@ export async function runCommand(
   // Create and start server
   const server = new AgentServer();
 
-  const adapters = shipConfig.services?.chat?.adapters || {};
-
-  // Create Telegram Adapter (if enabled)
-  let telegramBot = null;
-  if (adapters.telegram?.enabled) {
-    logger.info("Telegram adapter enabled");
-    telegramBot = createTelegramBot(adapters.telegram, getShipServiceContext());
-  }
-
-  // Create Feishu Adapter (if enabled)
-  let feishuBot = null;
-  if (adapters.feishu?.enabled) {
-    logger.info("Feishu adapter enabled");
-    const feishuAdapter = adapters.feishu as typeof adapters.feishu & {
-      adminUserIds?: string[];
-    };
-
-    // Read Feishu configuration from environment variables or config
-    const feishuConfig = {
-      enabled: true,
-      appId:
-        (adapters.feishu?.appId && !isPlaceholder(adapters.feishu.appId)
-          ? adapters.feishu.appId
-          : undefined) ||
-        process.env.FEISHU_APP_ID ||
-        "",
-      appSecret:
-        (adapters.feishu?.appSecret && !isPlaceholder(adapters.feishu.appSecret)
-          ? adapters.feishu.appSecret
-          : undefined) ||
-        process.env.FEISHU_APP_SECRET ||
-        "",
-      domain: feishuAdapter?.domain || "https://open.feishu.cn",
-      adminUserIds: Array.isArray(feishuAdapter?.adminUserIds)
-        ? feishuAdapter.adminUserIds
-        : undefined,
-    };
-
-    feishuBot = await createFeishuBot(feishuConfig, getShipServiceContext());
-  }
-
-  // Create QQ Adapter (if enabled)
-  let qqBot = null;
-  if (adapters.qq?.enabled) {
-    logger.info("QQ adapter enabled");
-    const qqGroupAccess: "initiator_or_admin" | "anyone" | undefined =
-      adapters.qq?.groupAccess === "anyone"
-        ? "anyone"
-        : adapters.qq?.groupAccess === "initiator_or_admin"
-          ? "initiator_or_admin"
-          : (process.env.QQ_GROUP_ACCESS || "").toLowerCase() === "anyone"
-            ? "anyone"
-            : undefined;
-
-    const qqConfig = {
-      enabled: true,
-      appId:
-        (adapters.qq?.appId && !isPlaceholder(adapters.qq.appId)
-          ? adapters.qq.appId
-          : undefined) ||
-        process.env.QQ_APP_ID ||
-        "",
-      appSecret:
-        (adapters.qq?.appSecret && !isPlaceholder(adapters.qq.appSecret)
-          ? adapters.qq.appSecret
-          : undefined) ||
-        process.env.QQ_APP_SECRET ||
-        "",
-      sandbox:
-        typeof adapters.qq?.sandbox === "boolean"
-          ? adapters.qq.sandbox
-          : (process.env.QQ_SANDBOX || "").toLowerCase() === "true",
-      groupAccess: qqGroupAccess,
-    };
-
-    qqBot = await createQQBot(qqConfig, getShipServiceContext());
-  }
-
   // 创建交互式 Web 服务器（如果已启用）
   let interactiveServer = null;
   if (interactiveWeb) {
@@ -187,7 +104,7 @@ export async function runCommand(
   }
 
   // 处理进程信号
-  // 停机顺序（中文）：services -> adapters -> interactive server -> API server -> flush logs。
+  // 停机顺序（中文）：services -> interactive server -> API server -> flush logs。
   let isShuttingDown = false;
   const shutdown = async (signal: string) => {
     if (isShuttingDown) return;
@@ -200,21 +117,6 @@ export async function runCommand(
       await stopAllServiceRuntimes(getShipServiceContext());
     } catch {
       // ignore
-    }
-
-    // Stop Telegram Bot
-    if (telegramBot) {
-      await telegramBot.stop();
-    }
-
-    // Stop Feishu Bot
-    if (feishuBot) {
-      await feishuBot.stop();
-    }
-
-    // Stop QQ Bot
-    if (qqBot) {
-      await qqBot.stop();
     }
 
     // 停止交互式 Web 服务器
@@ -261,21 +163,6 @@ export async function runCommand(
       port: interactivePort ?? 3001,
       host,
     });
-  }
-
-  // 启动 Telegram Bot
-  if (telegramBot) {
-    await telegramBot.start();
-  }
-
-  // Start Feishu Bot
-  if (feishuBot) {
-    await feishuBot.start();
-  }
-
-  // Start QQ Bot
-  if (qqBot) {
-    await qqBot.start();
   }
 
   logger.info("=== ShipMyAgent Started ===");

@@ -11,7 +11,7 @@
  */
 
 import path from "node:path";
-import { getShipTasksDirPath } from "../../../process/project/Paths.js";
+import { getShipTasksDirPath } from "../../../main/project/Paths.js";
 
 export function isValidTaskId(input: string): boolean {
   const id = String(input || "").trim();
@@ -71,7 +71,9 @@ export function createTaskRunContextId(taskId: string, timestamp: string): strin
   return `task-run:${id}:${ts}`;
 }
 
-export function parseTaskRunContextId(contextId: string): { taskId: string; timestamp: string } | null {
+export function parseTaskRunContextId(
+  contextId: string,
+): { taskId: string; timestamp: string } | null {
   const key = String(contextId || "").trim();
   if (!key) return null;
   const m = key.match(/^task-run:([^:]+):(.+)$/);

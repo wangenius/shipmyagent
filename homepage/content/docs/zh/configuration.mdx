@@ -150,22 +150,21 @@ your-project/
 }
 ```
 
-**context.chatQueue** (object, 可选)
+**services.chat.queue** (object, 可选)
 
 用于控制按 chatKey 分 lane 的消息调度：
 
 - 同一 `chatKey` 串行执行（避免同一会话回复交叉/错乱）
 - 不同 `chatKey` 可并发（提升整体吞吐）
-- 如果 Agent 还在执行时又收到新消息，可以把新消息合并注入当前执行，帮助模型快速补充/纠正
+- 如果 Agent 正在执行时又收到新消息，会在 step 边界并入下一步执行
 
 ```json
 {
-  "context": {
-    "chatQueue": {
-      "maxConcurrency": 2,
-      "enableCorrectionMerge": true,
-      "correctionMaxRounds": 2,
-      "correctionMaxMergedMessages": 5
+  "services": {
+    "chat": {
+      "queue": {
+        "maxConcurrency": 2
+      }
     }
   }
 }

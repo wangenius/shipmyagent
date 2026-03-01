@@ -14,8 +14,8 @@ import {
   getServiceChatRuntimeBridge,
   getServiceRequestContextBridge,
   getServiceContextManager,
-} from "../../../process/runtime/ServiceRuntimeDependencies.js";
-import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/ServiceRuntimeTypes.js";
+} from "../../../main/service/ServiceRuntimeDependencies.js";
+import type { ServiceRuntimeDependencies } from "../../../main/service/types/ServiceRuntimeTypes.js";
 import type {
   ShipTaskFrontmatterV1,
   ShipTaskRunExecutionStatusV1,
@@ -26,7 +26,11 @@ import type {
 } from "../types/Task.js";
 import type { AgentResult } from "../../../core/types/Agent.js";
 import type { JsonObject } from "../../../types/Json.js";
-import { createTaskRunContextId, formatTaskRunTimestamp, getTaskRunDir } from "./Paths.js";
+import {
+  createTaskRunContextId,
+  formatTaskRunTimestamp,
+  getTaskRunDir,
+} from "./Paths.js";
 import { ensureRunDir, readTask } from "./Store.js";
 
 /**
@@ -248,7 +252,7 @@ async function runAgentRound(params: {
   const agent = getServiceContextManager(params.context).getAgent(params.contextId);
   const result = await getServiceRequestContextBridge(params.context).withContextRequestContext(
     {
-      channel: "scheduler",
+      chat: "scheduler",
       targetId: params.taskId,
       contextId: params.contextId,
       actorId: params.actorId,
@@ -278,7 +282,9 @@ async function appendExecutorAssistantMessage(params: {
   taskId: string;
   rawResult: AgentResult;
 }): Promise<void> {
-  const store = getServiceContextManager(params.context).getContextStore(params.runContextId);
+  const store = getServiceContextManager(params.context).getContextStore(
+    params.runContextId,
+  );
   const assistantMessage = params.rawResult?.assistantMessage;
   if (assistantMessage && typeof assistantMessage === "object") {
     await store.append(assistantMessage);

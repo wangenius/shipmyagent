@@ -16,14 +16,14 @@ shipmyagent .
 
 ### zsh: permission denied: shipmyagent
 
-这不是 `sudo` / 系统管理员权限问题，通常是因为 `pnpm` 的 `.bin/shipmyagent` 可能是软链到实际入口文件（例如 `.../shipmyagent/bin/process/commands/index.js`），而目标文件缺少可执行位（`+x`）。
+这不是 `sudo` / 系统管理员权限问题，通常是因为 `pnpm` 的 `.bin/shipmyagent` 可能是软链到实际入口文件（例如 `.../shipmyagent/bin/main/commands/index.js`），而目标文件缺少可执行位（`+x`）。
 
 ```bash
 # 本地依赖安装（仓库内）
-chmod +x node_modules/shipmyagent/bin/process/commands/index.js
+chmod +x node_modules/shipmyagent/bin/main/commands/index.js
 
 # 或者直接用 node 执行（不依赖可执行位）
-node node_modules/shipmyagent/bin/process/commands/index.js .
+node node_modules/shipmyagent/bin/main/commands/index.js .
 ```
 
 ## access

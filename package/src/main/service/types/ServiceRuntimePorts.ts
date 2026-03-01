@@ -1,7 +1,7 @@
 import type { LanguageModel } from "ai";
 import type { ShipConfig } from "../../types/ShipConfig.js";
 import type { ShipContextMetadataV1, ShipContextMessageV1 } from "../../../core/types/ContextMessage.js";
-import type { AgentResult } from "../../../core/types/Agent.js";
+import type { AgentResult, AgentRunInput } from "../../../core/types/Agent.js";
 
 /**
  * Service 运行时端口类型。
@@ -19,7 +19,7 @@ import type { AgentResult } from "../../../core/types/Agent.js";
  * - 这是跨 service 共享的最小上下文字段集合。
  */
 export type ServiceContextRequestContext = {
-  channel?: "telegram" | "feishu" | "qq" | "cli" | "scheduler" | "api";
+  chat?: "telegram" | "feishu" | "qq" | "cli" | "scheduler" | "api";
   contextId?: string;
   targetId?: string;
   targetType?: string;
@@ -31,8 +31,6 @@ export type ServiceContextRequestContext = {
 
 /**
  * 请求上下文桥接端口。
- *
- * - `withContextRequestContext` 用于在一次调用栈内绑定上下文。
  */
 export type ServiceContextRequestContextBridge = {
   getCurrentContextRequestContext(): ServiceContextRequestContext | undefined;
@@ -66,19 +64,17 @@ export type ServiceContextStore = {
  * 会话 Agent 端口。
  */
 export type ServiceContextAgent = {
-  run(params: { contextId: string; query: string }): Promise<AgentResult>;
+  run(params: AgentRunInput): Promise<AgentResult>;
 };
 
 /**
  * 会话管理端口。
- *
- * 关键点（中文）
- * - 对 service 暴露消息入队、上下文访问、agent 获取等最小能力。
  */
 export type ServiceContextManager = {
   getAgent(contextId: string): ServiceContextAgent;
   getContextStore(contextId: string): ServiceContextStore;
   clearAgent(contextId?: string): void;
+  afterContextUpdatedAsync(contextId: string): Promise<void>;
   appendUserMessage(params: {
     channel: string;
     targetId: string;
@@ -92,17 +88,6 @@ export type ServiceContextManager = {
     requestId?: string;
     extra?: ShipContextMetadataV1["extra"];
   }): Promise<void>;
-  enqueue(params: {
-    channel: string;
-    targetId: string;
-    contextId: string;
-    text: string;
-    targetType?: string;
-    threadId?: number;
-    messageId?: string;
-    actorId?: string;
-    actorName?: string;
-  }): Promise<{ lanePosition: number }>;
 };
 
 /**

@@ -6,10 +6,10 @@
  * - 内部通过注入的 request context bridge 做映射读取
  */
 
-import type { ServiceRuntimeDependencies } from "../../process/runtime/types/ServiceRuntimeTypes.js";
+import type { ServiceRuntimeDependencies } from "../../main/service/types/ServiceRuntimeTypes.js";
 import {
   getServiceRequestContextBridge,
-} from "../../process/runtime/ServiceRuntimeDependencies.js";
+} from "../../main/service/ServiceRuntimeDependencies.js";
 import { parseChatKeyForDispatch, sendTextByChatKey } from "./runtime/ChatkeySend.js";
 import { llmRequestContext } from "../../utils/logger/Context.js";
 import type {
@@ -70,8 +70,8 @@ export function resolveChatContextSnapshot(input?: {
   const envChatKey = readEnvString("SMA_CTX_CHAT_KEY");
 
   const channel =
-    (typeof requestCtx?.channel === "string" && requestCtx.channel.trim()
-      ? requestCtx.channel.trim()
+    (typeof requestCtx?.chat === "string" && requestCtx.chat.trim()
+      ? requestCtx.chat.trim()
       : readEnvString("SMA_CTX_CHANNEL")) || undefined;
   const chatId =
     (typeof requestCtx?.targetId === "string" && requestCtx.targetId.trim()

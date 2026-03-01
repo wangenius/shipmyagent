@@ -15,11 +15,18 @@ import {
   resolveChatKey,
   sendChatTextByChatKey,
 } from "./Service.js";
-import { callDaemonJsonApi } from "../../process/server/daemon/Client.js";
-import { printResult } from "../../process/utils/CliOutput.js";
+import { createTelegramBot } from "./adapters/telegram/Bot.js";
+import { createFeishuBot } from "./adapters/feishu/Feishu.js";
+import { createQQBot } from "./adapters/qq/QQ.js";
+import { callDaemonJsonApi } from "../../main/server/daemon/Client.js";
+import { printResult } from "../../main/utils/CliOutput.js";
 import type { SmaService } from "../../core/services/ServiceRegistry.js";
 import type { ChatSendResponse } from "./types/ChatCommand.js";
 import type { JsonObject } from "../../types/Json.js";
+import type { ServiceRuntimeDependencies } from "../../main/service/types/ServiceRuntimeTypes.js";
+import type { TelegramBot } from "./adapters/telegram/Bot.js";
+import type { FeishuBot } from "./adapters/feishu/Feishu.js";
+import type { QQBot } from "./adapters/qq/QQ.js";
 
 /**
  * 解析端口参数。
@@ -33,6 +40,127 @@ function parsePortOption(value: string): number {
     throw new Error(`Invalid port: ${value}`);
   }
   return port;
+}
+
+type ChatAdapterState = {
+  telegram: TelegramBot | null;
+  feishu: FeishuBot | null;
+  qq: QQBot | null;
+};
+
+let adapterState: ChatAdapterState = {
+  telegram: null,
+  feishu: null,
+  qq: null,
+};
+
+function resetAdapterState(): void {
+  adapterState = {
+    telegram: null,
+    feishu: null,
+    qq: null,
+  };
+}
+
+// 占位符判定（中文）：init 生成的模板值 `${...}` 不应被当作真实密钥。
+function isPlaceholder(value?: string): boolean {
+  return value === "${}";
+}
+
+async function startChatAdapters(context: ServiceRuntimeDependencies): Promise<void> {
+  if (adapterState.telegram || adapterState.feishu || adapterState.qq) {
+    await stopChatAdapters();
+  }
+  const adapters = context.config.services?.chat?.adapters || {};
+
+  if (adapters.telegram?.enabled) {
+    context.logger.info("Telegram adapter enabled");
+    adapterState.telegram = createTelegramBot(adapters.telegram, context);
+    if (adapterState.telegram) {
+      await adapterState.telegram.start();
+    }
+  }
+
+  if (adapters.feishu?.enabled) {
+    context.logger.info("Feishu adapter enabled");
+    const feishuAdapter = adapters.feishu as typeof adapters.feishu & {
+      adminUserIds?: string[];
+    };
+    const feishuConfig = {
+      enabled: true,
+      appId:
+        (adapters.feishu?.appId && !isPlaceholder(adapters.feishu.appId)
+          ? adapters.feishu.appId
+          : undefined) ||
+        process.env.FEISHU_APP_ID ||
+        "",
+      appSecret:
+        (adapters.feishu?.appSecret && !isPlaceholder(adapters.feishu.appSecret)
+          ? adapters.feishu.appSecret
+          : undefined) ||
+        process.env.FEISHU_APP_SECRET ||
+        "",
+      domain: feishuAdapter?.domain || "https://open.feishu.cn",
+      adminUserIds: Array.isArray(feishuAdapter?.adminUserIds)
+        ? feishuAdapter.adminUserIds
+        : undefined,
+    };
+    adapterState.feishu = await createFeishuBot(feishuConfig, context);
+    if (adapterState.feishu) {
+      await adapterState.feishu.start();
+    }
+  }
+
+  if (adapters.qq?.enabled) {
+    context.logger.info("QQ adapter enabled");
+    const qqGroupAccess: "initiator_or_admin" | "anyone" | undefined =
+      adapters.qq?.groupAccess === "anyone"
+        ? "anyone"
+        : adapters.qq?.groupAccess === "initiator_or_admin"
+          ? "initiator_or_admin"
+          : (process.env.QQ_GROUP_ACCESS || "").toLowerCase() === "anyone"
+            ? "anyone"
+            : undefined;
+    const qqConfig = {
+      enabled: true,
+      appId:
+        (adapters.qq?.appId && !isPlaceholder(adapters.qq.appId)
+          ? adapters.qq.appId
+          : undefined) ||
+        process.env.QQ_APP_ID ||
+        "",
+      appSecret:
+        (adapters.qq?.appSecret && !isPlaceholder(adapters.qq.appSecret)
+          ? adapters.qq.appSecret
+          : undefined) ||
+        process.env.QQ_APP_SECRET ||
+        "",
+      sandbox:
+        typeof adapters.qq?.sandbox === "boolean"
+          ? adapters.qq.sandbox
+          : (process.env.QQ_SANDBOX || "").toLowerCase() === "true",
+      groupAccess: qqGroupAccess,
+    };
+    adapterState.qq = await createQQBot(qqConfig, context);
+    if (adapterState.qq) {
+      await adapterState.qq.start();
+    }
+  }
+}
+
+async function stopChatAdapters(): Promise<void> {
+  const current = adapterState;
+  resetAdapterState();
+
+  if (current.telegram) {
+    await current.telegram.stop();
+  }
+  if (current.feishu) {
+    await current.feishu.stop();
+  }
+  if (current.qq) {
+    await current.qq.stop();
+  }
 }
 
 type ChatSendCliOptions = {
@@ -229,5 +357,13 @@ export const chatService: SmaService = {
       });
       return c.json(result, result.success ? 200 : 400);
     });
+  },
+  lifecycle: {
+    async start(context) {
+      await startChatAdapters(context);
+    },
+    async stop() {
+      await stopChatAdapters();
+    },
   },
 };

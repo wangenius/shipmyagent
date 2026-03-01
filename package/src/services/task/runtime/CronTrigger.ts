@@ -11,7 +11,7 @@ import type { ScheduledTask } from "node-cron";
 import type {
   ServiceCronEngine,
   ServiceCronTriggerDefinition,
-} from "../../../process/runtime/types/ServiceRuntimePorts.js";
+} from "../../../main/service/types/ServiceRuntimePorts.js";
 
 export class TaskCronTriggerEngine implements ServiceCronEngine {
   private readonly definitions: Map<string, ServiceCronTriggerDefinition> = new Map();

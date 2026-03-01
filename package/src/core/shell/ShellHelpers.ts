@@ -8,7 +8,7 @@
 
 import path from "path";
 import { randomBytes } from "crypto";
-import { getShipRuntimeContext } from "../../process/server/ShipRuntimeContext.js";
+import { getShipRuntimeContext } from "../../main/server/ShipRuntimeContext.js";
 import { contextRequestContext } from "../context/RequestContext.js";
 import { llmRequestContext } from "../../utils/logger/Context.js";
 import type {

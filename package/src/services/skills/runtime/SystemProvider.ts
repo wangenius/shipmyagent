@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
-import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/ServiceRuntimeTypes.js";
-import { getServiceContextManager } from "../../../process/runtime/ServiceRuntimeDependencies.js";
+import type { ServiceRuntimeDependencies } from "../../../main/service/types/ServiceRuntimeTypes.js";
+import { getServiceContextManager } from "../../../main/service/ServiceRuntimeDependencies.js";
 import type { LoadedSkillV1 } from "../types/LoadedSkill.js";
 import type {
   SystemPromptProvider,
@@ -68,9 +68,7 @@ async function buildSkillsProviderOutput(
   ctx: SystemPromptProviderContext,
 ): Promise<SystemPromptProviderOutput> {
   const runtime = getContext();
-  const contextStore = getServiceContextManager(runtime).getContextStore(
-    ctx.contextId,
-  );
+  const contextStore = getServiceContextManager(runtime).getContextStore(ctx.contextId);
   const discoveredSkills = discoverClaudeSkillsSync(runtime.rootPath, runtime.config);
   setContextAvailableSkills(ctx.contextId, discoveredSkills);
 

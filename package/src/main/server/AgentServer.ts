@@ -21,7 +21,7 @@ import {
   getShipServiceContext,
   getShipRuntimeContext,
 } from "./ShipRuntimeContext.js";
-import { getProcessServiceBindings } from "../runtime/ServiceProcessBindings.js";
+import { getProcessServiceBindings } from "../service/ServiceProcessBindings.js";
 import {
   controlServiceRuntime,
   listServiceRuntimes,

@@ -1,13 +1,13 @@
 import * as Lark from "@larksuiteoapi/node-sdk";
 import fs from "fs-extra";
 import path from "path";
-import { getCacheDirPath } from "../../../../process/project/Paths.js";
+import { getCacheDirPath } from "../../../../main/project/Paths.js";
 import { BaseChatAdapter } from "../BaseChatAdapter.js";
 import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
 } from "../PlatformAdapter.js";
-import type { ServiceRuntimeDependencies } from "../../../../process/runtime/types/ServiceRuntimeTypes.js";
+import type { ServiceRuntimeDependencies } from "../../../../main/service/types/ServiceRuntimeTypes.js";
 import type { JsonObject } from "../../../../types/Json.js";
 
 /**

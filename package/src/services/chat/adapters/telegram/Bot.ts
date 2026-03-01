@@ -20,7 +20,7 @@ import {
   type TelegramUser,
 } from "./Shared.js";
 import { TelegramStateStore } from "./StateStore.js";
-import type { ServiceRuntimeDependencies } from "../../../../process/runtime/types/ServiceRuntimeTypes.js";
+import type { ServiceRuntimeDependencies } from "../../../../main/service/types/ServiceRuntimeTypes.js";
 
 /**
  * Telegram 平台适配器。
@@ -28,7 +28,7 @@ import type { ServiceRuntimeDependencies } from "../../../../process/runtime/typ
  * 关键职责（中文）
  * - 轮询拉取 updates，并转换为统一会话输入
  * - 维护 follow-up 窗口与群聊访问策略，降低误触发
- * - 统一走 BaseChatAdapter 入库 + enqueue，确保调度语义一致
+ * - 统一走 BaseChatAdapter 入队（history 由 process 写入），确保调度语义一致
  */
 export class TelegramBot extends BaseChatAdapter {
   private botToken: string;
@@ -87,7 +87,7 @@ export class TelegramBot extends BaseChatAdapter {
     try {
       // 关键点（中文）
       // - Telegram 会把离线期间的消息缓存为 pending updates。
-      // - 我们会把这些消息“只入库，不执行/不回复”，然后推进 offset，避免重启后补回复旧消息。
+      // - 我们会把这些消息“只入队，不执行/不回复”，然后推进 offset，避免重启后补回复旧消息。
       for (let i = 0; i < 50; i++) {
         const updates = await this.api.requestJson<TelegramUpdate[]>(
           "getUpdates",
@@ -102,7 +102,7 @@ export class TelegramBot extends BaseChatAdapter {
         for (const update of updates) {
           this.lastUpdateId = Math.max(this.lastUpdateId, update.update_id);
 
-          // 仅把 pending 入库，不触发执行
+          // 仅把 pending 入队，不触发执行
           if (update.message?.chat?.id) {
             const message = update.message;
             const chatId = message.chat.id.toString();
@@ -141,7 +141,7 @@ export class TelegramBot extends BaseChatAdapter {
                 : undefined;
             const actorId = from?.id ? String(from.id) : undefined;
 
-            await this.appendUserMessage({
+            await this.enqueueAuditMessage({
               chatId,
               chatKey,
               messageId,
@@ -165,7 +165,7 @@ export class TelegramBot extends BaseChatAdapter {
                 ? q.message.message_thread_id
                 : undefined;
             const chatKey = this.buildChatKey(chatId, messageThreadId);
-            await this.appendUserMessage({
+            await this.enqueueAuditMessage({
               chatId,
               chatKey,
               messageId: undefined,
@@ -187,12 +187,12 @@ export class TelegramBot extends BaseChatAdapter {
 
       await this.stateStore.saveLastUpdateId(this.lastUpdateId);
       if (drained > 0) {
-        this.logger.info(`Drained ${drained} pending Telegram updates to history`, {
+        this.logger.info(`Drained ${drained} pending Telegram updates to queue`, {
           reason: params.reason,
         });
       }
     } catch (error) {
-      this.logger.warn("Failed to drain pending Telegram updates to history", {
+      this.logger.warn("Failed to drain pending Telegram updates to queue", {
         error: String(error),
         reason: params.reason,
       });
@@ -319,7 +319,7 @@ export class TelegramBot extends BaseChatAdapter {
    * 将“所有入站消息”统一转成可落盘的文本形式（用于审计/回溯）。
    *
    * 关键点（中文）
-   * - 即使消息不会触发 agent 执行（例如：群里未 @bot），也应当入库
+   * - 即使消息不会触发 agent 执行（例如：群里未 @bot），也应当入队
    * - 但纯附件消息可能没有 text/caption，这里会生成一个稳定的占位文本
    */
   private buildAuditText(params: {
@@ -448,7 +448,7 @@ export class TelegramBot extends BaseChatAdapter {
       return;
     }
 
-    // 关键点（中文）：把离线期间积压的 updates 入库，但不执行/不回复
+    // 关键点（中文）：把离线期间积压的 updates 入队，但不执行/不回复
     await this.drainPendingUpdatesToHistory({ reason: "startup" });
 
     // Start polling
@@ -617,8 +617,8 @@ export class TelegramBot extends BaseChatAdapter {
 
       // Check if it's a command
       if (rawText.startsWith("/")) {
-        // 关键点（中文）：命令消息也要入库（否则历史会“断层”）。
-        await this.appendUserMessage({
+        // 关键点（中文）：命令消息也要入队（否则历史会“断层”）。
+        await this.enqueueAuditMessage({
           chatId,
           chatKey,
           messageId,
@@ -652,9 +652,9 @@ export class TelegramBot extends BaseChatAdapter {
         if (isGroup) this.touchFollowupWindow(chatKey, actorId);
         await this.handleCommand(chatId, rawText, from, messageThreadId);
       } else {
-        // 关键点（中文）：群聊“是否触发 bot” 与 “是否入库” 解耦。
+        // 关键点（中文）：群聊“是否触发 bot” 与 “是否入队” 解耦。
         // - 触发 bot：仍然按 mention/reply/window + 权限门禁
-        // - 入库：所有入站消息都应落盘（审计/回溯）
+        // - 入队：所有入站消息都应落盘（审计/回溯）
         const isMentioned = isGroup ? this.isBotMentioned(rawText, entities) : false;
         const inWindow = isGroup ? this.isWithinFollowupWindow(chatKey, actorId) : false;
         const explicit = isGroup ? (isMentioned || isReplyToBot) : true;
@@ -664,7 +664,7 @@ export class TelegramBot extends BaseChatAdapter {
           if (!actorId) return;
 
           if (!shouldConsider) {
-            await this.appendUserMessage({
+            await this.enqueueAuditMessage({
               chatId,
               chatKey,
               messageId,
@@ -685,7 +685,7 @@ export class TelegramBot extends BaseChatAdapter {
 
           const ok = await this.isAllowedGroupActor(chatKey, chatId, actorId);
           if (!ok) {
-            await this.appendUserMessage({
+            await this.enqueueAuditMessage({
               chatId,
               chatKey,
               messageId,
@@ -714,7 +714,7 @@ export class TelegramBot extends BaseChatAdapter {
           if (!explicit && inWindow && cleaned) {
             const okIntent = this.isLikelyAddressedToBot(cleaned);
             if (!okIntent) {
-              await this.appendUserMessage({
+              await this.enqueueAuditMessage({
                 chatId,
                 chatKey,
                 messageId,

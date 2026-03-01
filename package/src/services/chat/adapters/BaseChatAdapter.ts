@@ -1,9 +1,9 @@
 import { PlatformAdapter } from "./PlatformAdapter.js";
 import type { ChatDispatchChannel } from "../types/ChatDispatcher.js";
 import type { Logger } from "../../../utils/logger/Logger.js";
-import { getServiceContextManager } from "../../../process/runtime/ServiceRuntimeDependencies.js";
-import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/ServiceRuntimeTypes.js";
+import type { ServiceRuntimeDependencies } from "../../../main/service/types/ServiceRuntimeTypes.js";
 import type { JsonObject, JsonValue } from "../../../types/Json.js";
+import { enqueueChatQueue } from "../runtime/ChatQueue.js";
 
 type AdapterUserMessageMeta = {
   [key: string]: JsonValue | undefined;
@@ -67,18 +67,25 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
    * - 常用于用户触发“重置对话”类命令
    */
   clearChat(chatKey: string): void {
-    getServiceContextManager(this.context).clearAgent(chatKey);
+    enqueueChatQueue({
+      kind: "control",
+      channel: this.channel,
+      targetId: chatKey,
+      contextId: chatKey,
+      text: "",
+      control: { type: "clear" },
+    });
     this.logger.info(`Cleared chat: ${chatKey}`);
   }
 
   /**
-   * 将入站消息追加到 UIMessage 历史（审计事实源）。
+   * 入站消息写入队列（审计用途，不触发执行）。
    *
    * 说明（中文）
-   * - 该方法只负责“落盘记录”，不负责调度执行
+   * - 不直接写 history，由 process 负责落盘
    * - channel/targetId/contextId 三元组由适配层统一补齐
    */
-  protected async appendUserMessage(params: {
+  protected async enqueueAuditMessage(params: {
     chatId: string;
     chatKey: string;
     messageId?: string;
@@ -94,14 +101,15 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
         : undefined;
     const chatType = typeof meta.chatType === "string" ? meta.chatType : undefined;
     const extra = stripUndefinedMeta(meta);
-    await this.contextManager.appendUserMessage({
+    enqueueChatQueue({
+      kind: "audit",
       channel: this.channel,
       targetId: params.chatId,
       contextId: params.chatKey,
       actorId: params.userId,
+      actorName: username,
       messageId: params.messageId,
       text: params.text,
-      actorName: username,
       threadId: messageThreadId,
       targetType: chatType,
       extra,
@@ -125,19 +133,18 @@ export abstract class BaseChatAdapter extends PlatformAdapter {
       messageId: msg.messageId,
     });
 
-    const { lanePosition } = await getServiceContextManager(this.context).enqueue(
-      {
-        channel: this.channel,
-        targetId: msg.chatId,
-        contextId: chatKey,
-        text: msg.text,
-        targetType: msg.chatType,
-        threadId: msg.messageThreadId,
-        messageId: msg.messageId,
-        actorId: msg.userId,
-        actorName: msg.username,
-      },
-    );
+    const { lanePosition } = enqueueChatQueue({
+      kind: "exec",
+      channel: this.channel,
+      targetId: msg.chatId,
+      contextId: chatKey,
+      text: msg.text,
+      targetType: msg.chatType,
+      threadId: msg.messageThreadId,
+      messageId: msg.messageId,
+      actorId: msg.userId,
+      actorName: msg.username,
+    });
 
     return { chatKey, position: lanePosition };
   }

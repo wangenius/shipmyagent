@@ -130,23 +130,21 @@ Language Model configuration.
 
 Runtime behavior configuration.
 
-**context.chatQueue** (object, optional)
+**services.chat.queue** (object, optional)
 
 Controls the per-chat lane scheduler:
 
 - Same `chatKey` runs serially (no reply interleaving)
 - Different `chatKey`s can run concurrently (better overall throughput)
-- If new messages arrive while the agent is still working, they can be merged into the current run as extra context (quick correction)
+- If new messages arrive while a run is in progress, they will be merged at step boundaries into the next step
 
 ```json
 {
-  "context": {
-    "chatQueue": {
-      "maxConcurrency": 2,
-      "enableCorrectionMerge": true,
-      "correctionMaxRounds": 2,
-      "correctionMaxMergedMessages": 5,
-      "correctionMaxChars": 3000
+  "services": {
+    "chat": {
+      "queue": {
+        "maxConcurrency": 2
+      }
     }
   }
 }

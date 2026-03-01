@@ -60,7 +60,7 @@ function getUserShipSkillsDir(): string {
  */
 function getBuiltInSkillsDirFromBin(): string {
   // 关键点（中文）
-  // - 发布包中该文件在 `bin/process/commands/init.js`
+  // - 发布包中该文件在 `bin/main/commands/init.js`
   // - 内置 skills 会在 build 阶段复制到 `bin/services/skills/built-in`
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);

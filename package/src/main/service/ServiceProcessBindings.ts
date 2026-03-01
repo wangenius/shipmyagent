@@ -1,6 +1,5 @@
 import type { ShipContextMessageV1 } from "../../core/types/ContextMessage.js";
 import type { ServiceRuntimeDependencies } from "./types/ServiceRuntimeTypes.js";
-import type { ServiceContextStore } from "./types/ServiceRuntimePorts.js";
 
 /**
  * 进程侧服务实现绑定。
@@ -29,7 +28,6 @@ export type ProcessServiceBindings = {
   runMemoryMaintenance(params: {
     context: ServiceRuntimeDependencies;
     contextId: string;
-    getContextStore: (contextId: string) => ServiceContextStore;
   }): Promise<void>;
   registerSystemPromptProviders(params: {
     getContext: () => ServiceRuntimeDependencies;

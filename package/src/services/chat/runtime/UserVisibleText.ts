@@ -11,7 +11,7 @@ import type { ShipContextMessageV1 } from "../../../core/types/ContextMessage.js
 import {
   extractTextFromUiMessage,
   extractToolCallsFromUiMessage,
-} from "../../../core/context/UiMessage.js";
+} from "./UiMessage.js";
 
 /**
  * 提取策略（中文）

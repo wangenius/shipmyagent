@@ -10,7 +10,7 @@ import fs from "fs-extra";
 import yaml from "js-yaml";
 import path from "path";
 import type { Dirent, Stats } from "node:fs";
-import type { ShipConfig } from "../../../process/project/Config.js";
+import type { ShipConfig } from "../../../main/project/Config.js";
 import { parseFrontMatter } from "./Frontmatter.js";
 import { getClaudeSkillSearchRoots } from "./Paths.js";
 import { isSubpath } from "./Utils.js";

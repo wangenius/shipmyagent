@@ -3,18 +3,14 @@
  *
  * 关键职责（中文）
  * - 管理 contextId -> Agent/ContextStore 缓存
- * - 负责消息入库与调度入队
+ * - 负责消息入库与 agent/store 访问
  * - 在上下文更新后触发 memory 维护钩子
  */
 
 import type { ContextAgent } from "../types/ContextAgent.js";
-import type { SchedulerEnqueueResult } from "../types/ContextScheduler.js";
-import { Scheduler } from "./Scheduler.js";
 import { ContextStore } from "./ContextStore.js";
 import type { ShipContextMetadataV1 } from "../types/ContextMessage.js";
-import type { AgentResult } from "../types/Agent.js";
-import type { ContextRequestContext } from "./RequestContext.js";
-import { getRuntimeContextBase } from "../../process/server/ShipRuntimeContext.js";
+import { getRuntimeContextBase } from "../../main/server/ShipRuntimeContext.js";
 import path from "node:path";
 import type { JsonObject } from "../../types/Json.js";
 import {
@@ -28,14 +24,13 @@ import { ContextAgentRunner } from "./AgentRunner.js";
  *
  * 关键点（中文）
  * - 一个 contextId 对应一个 Agent 实例与一个 ContextStore 实例。
- * - scheduler 只处理执行时序；ContextManager 负责上下文对象组装。
+ * - ContextManager 只负责上下文对象组装与落盘，不处理调度。
  */
 export class ContextManager {
   private readonly agentsByContextId: Map<string, ContextAgent> = new Map();
   private readonly contextStoresByContextId: Map<string, ContextStore> =
     new Map();
 
-  private readonly scheduler: Scheduler;
   private readonly runMemoryMaintenance?: (contextId: string) => Promise<void>;
 
   /**
@@ -52,53 +47,15 @@ export class ContextManager {
   }
 
   /**
-   * 构造函数：装配 scheduler 与可选回调。
+   * 构造函数：装配可选回调。
    *
    * 关键点（中文）
-   * - `deliverResult` 用于平台侧异步回包。
    * - `runMemoryMaintenance` 由 service 注入，core 只负责触发。
    */
   constructor(params?: {
-    deliverResult?: (params: {
-      context: ContextRequestContext;
-      result: AgentResult;
-    }) => Promise<void>;
-    sendAction?: (params: {
-      context: ContextRequestContext;
-      action: "typing";
-    }) => Promise<void>;
     runMemoryMaintenance?: (contextId: string) => Promise<void>;
   }) {
-    const base = getRuntimeContextBase();
-    const queueConfig = base.config?.context?.contextQueue || {};
-
     this.runMemoryMaintenance = params?.runMemoryMaintenance;
-    this.scheduler = new Scheduler({
-      config: queueConfig,
-      getAgent: (contextId) => this.getAgent(contextId),
-      getContextManager: () => this,
-      deliverResult: params?.deliverResult,
-      sendAction: params?.sendAction,
-    });
-  }
-
-  /**
-   * 调度器忙闲状态。
-   *
-   * - `true` 表示仍有排队消息或正在执行中的 lane。
-   */
-  isBusy(): boolean {
-    return this.scheduler.isBusy();
-  }
-
-  /**
-   * 获取调度统计快照。
-   *
-   * 关键点（中文）
-   * - 用于 API 状态展示与排障观测，不改变任何调度状态。
-   */
-  stats(): ReturnType<Scheduler["stats"]> {
-    return this.scheduler.stats();
   }
 
   /**
@@ -195,7 +152,7 @@ export class ContextManager {
    * 追加一条 user 消息到上下文消息流。
    *
    * 关键点（中文）
-   * - 入队前先落盘，确保 scheduler 执行时可读取到完整上下文。
+   * - 先落盘，确保后续执行可读取到完整上下文。
    * - 写入成功后异步触发 memory 维护（不阻塞主流程）。
    */
   async appendUserMessage(params: {
@@ -238,53 +195,6 @@ export class ContextManager {
   }
 
   /**
-   * 入队执行。
-   *
-   * 流程（中文）
-   * 1) append user message
-   * 2) 交给 scheduler 按 context lane 串行调度
-   *
-   * 一致性（中文）
-   * - 先写上下文消息再入 scheduler，保证执行时上下文可回放。
+   * 入队执行由 services/chat 负责；core 不再提供调度能力。
    */
-  async enqueue(params: {
-    channel: string;
-    targetId: string;
-    contextId: string;
-    text: string;
-    targetType?: string;
-    threadId?: number;
-    messageId?: string;
-    actorId?: string;
-    actorName?: string;
-  }): Promise<SchedulerEnqueueResult> {
-    const contextId = String(params.contextId || "").trim();
-    if (!contextId) {
-      throw new Error("ContextManager.enqueue requires a non-empty contextId");
-    }
-
-    await this.appendUserMessage({
-      channel: params.channel,
-      targetId: params.targetId,
-      contextId,
-      actorId: params.actorId,
-      actorName: params.actorName,
-      messageId: params.messageId,
-      threadId: params.threadId,
-      targetType: params.targetType,
-      text: params.text,
-    });
-
-    return this.scheduler.enqueue({
-      channel: params.channel,
-      targetId: params.targetId,
-      contextId,
-      text: params.text,
-      targetType: params.targetType,
-      threadId: params.threadId,
-      messageId: params.messageId,
-      actorId: params.actorId,
-      actorName: params.actorName,
-    });
-  }
 }

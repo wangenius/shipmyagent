@@ -41,6 +41,13 @@ export const SHIP_JSON_SCHEMA: JsonObject = {
           type: "object",
           additionalProperties: true,
           properties: {
+            queue: {
+              type: "object",
+              additionalProperties: true,
+              properties: {
+                maxConcurrency: { type: "integer", minimum: 1, maximum: 32 },
+              },
+            },
             egress: {
               type: "object",
               additionalProperties: true,
@@ -129,20 +136,6 @@ export const SHIP_JSON_SCHEMA: JsonObject = {
             keepLastMessages: { type: "integer", minimum: 6, maximum: 5000 },
             maxInputTokensApprox: { type: "integer", minimum: 2000, maximum: 200000 },
             archiveOnCompact: { type: "boolean" },
-          },
-        },
-        contextQueue: {
-          type: "object",
-          additionalProperties: true,
-          properties: {
-            maxConcurrency: { type: "integer", minimum: 1, maximum: 32 },
-            enableCorrectionMerge: { type: "boolean" },
-            correctionMaxRounds: { type: "integer", minimum: 0, maximum: 10 },
-            correctionMaxMergedMessages: {
-              type: "integer",
-              minimum: 1,
-              maximum: 50,
-            },
           },
         },
       },

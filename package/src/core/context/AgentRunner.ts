@@ -16,7 +16,7 @@ import {
   type SystemModelMessage,
 } from "ai";
 import { withLlmRequestContext } from "../../utils/logger/Context.js";
-import { generateId } from "../../process/utils/Id.js";
+import { generateId } from "../../main/utils/Id.js";
 import {
   buildContextSystemPrompt,
   transformPromptsIntoSystemMessages,
@@ -37,21 +37,12 @@ import type {
 import {
   getShipRuntimeContext,
   getRuntimeContextBase,
-} from "../../process/server/ShipRuntimeContext.js";
+} from "../../main/server/ShipRuntimeContext.js";
 import type { ContextAgent } from "../types/ContextAgent.js";
 import { collectSystemPromptProviderResult } from "../prompts/SystemProvider.js";
 import type { ContextStore } from "./ContextStore.js";
-import {
-  extractTextFromUiMessage,
-  extractToolCallsFromUiMessage,
-} from "./UiMessage.js";
-import { loadProjectDotenv } from "../../process/project/Config.js";
+import { loadProjectDotenv } from "../../main/project/Config.js";
 import { shellTools } from "../shell/Tool.js";
-
-type ToolExecute = NonNullable<Tool["execute"]>;
-type ToolWithExecute = Tool & {
-  execute?: ToolExecute;
-};
 
 function toShipContextChannel(
   chat: ContextRequestContext["chat"] | undefined,
@@ -192,18 +183,14 @@ export class ContextAgentRunner implements ContextAgent {
     contextId: string,
     opts?: {
       retryAttempts?: number;
-      laneMergeAttempts?: number;
-      drainLaneMerged?: AgentRunInput["drainLaneMerged"];
       requestId?: string;
+      drainLaneMerged?: AgentRunInput["drainLaneMerged"];
     },
   ): Promise<AgentResult> {
     let contextStore: ContextStore | null = null;
-    let toolCalls: ReturnType<typeof extractToolCallsFromUiMessage> = [];
-    let hadToolFailure = false;
     const retryAttempts = opts?.retryAttempts ?? 0;
-    const laneMergeAttempts = opts?.laneMergeAttempts ?? 0;
-    const drainLaneMerged = opts?.drainLaneMerged;
     const requestId = opts?.requestId || "";
+    const drainLaneMerged = opts?.drainLaneMerged;
     const logger = this.getLogger();
     if (!this.initialized) {
       throw new Error("Agent not initialized");
@@ -218,14 +205,6 @@ export class ContextAgentRunner implements ContextAgent {
 
       const runtimeSystemMessages = this.buildRuntimeSystemMessages({
         projectRoot: runtime.rootPath,
-        contextId,
-        requestId,
-      });
-
-      // 先确保本轮 user 已写入 context store（best-effort）
-      await this.ensureCurrentUserRecorded({
-        contextStore,
-        userText,
         contextId,
         requestId,
       });
@@ -291,38 +270,31 @@ export class ContextAgentRunner implements ContextAgent {
       });
 
       // 关键点（中文）
-      // - AI SDK 的 tool-loop 会把 tool call / tool output 以 messages 的形式串起来（in-flight）。
-      // - lane merge 到来时，我们需要把“新入队 user 消息”并入前缀，并保留后缀 tool 链。
+      // - 在 step 边界尝试合并新消息，保证下一步使用最新输入。
+      // - 保留 tool-loop 的 in-flight 后缀消息（工具调用链）。
       let lastAppliedBasePrefixLen = baseModelMessages.length;
       let needsLaneResync = false;
 
       const appendMergedLaneMessages = (
         messages: Array<{ text: string }> | undefined,
-      ): { added: number; latestUserText?: string } => {
+      ): { added: number } => {
         if (!Array.isArray(messages) || messages.length === 0)
           return { added: 0 };
         const toAppend: ModelMessage[] = [];
-        let latestUserText: string | undefined;
         for (const m of messages) {
           const text = String(m?.text ?? "").trim();
           if (!text) continue;
           toAppend.push({ role: "user", content: text });
-          latestUserText = text;
         }
         if (toAppend.length > 0) {
           baseModelMessages = [...baseModelMessages, ...toAppend];
         }
-        return { added: toAppend.length, latestUserText };
+        return { added: toAppend.length };
       };
 
       const reloadModelMessages = async (
         trigger: string,
-      ): Promise<{
-        reloaded: boolean;
-        drained?: number;
-        added?: number;
-        latestUserText?: string;
-      }> => {
+      ): Promise<{ reloaded: boolean; drained?: number; added?: number }> => {
         if (typeof drainLaneMerged !== "function") return { reloaded: false };
         try {
           const r = await drainLaneMerged();
@@ -346,36 +318,11 @@ export class ContextAgentRunner implements ContextAgent {
             reloaded: true,
             drained,
             added: appended.added,
-            ...(appended.latestUserText
-              ? { latestUserText: appended.latestUserText }
-              : {}),
           };
         } catch {
           return { reloaded: false };
         }
       };
-
-      const toolsWithLaneMerge: Record<string, Tool> = {};
-      for (const [toolName, tool] of Object.entries(this.tools)) {
-        const toolWithExecute = tool as ToolWithExecute;
-        const exec = toolWithExecute.execute;
-        if (typeof exec !== "function") {
-          toolsWithLaneMerge[toolName] = tool;
-          continue;
-        }
-
-        toolsWithLaneMerge[toolName] = {
-          ...toolWithExecute,
-          execute: async (...args: Parameters<ToolExecute>) => {
-            try {
-              return await exec.apply(tool, args);
-            } finally {
-              // 关键点（中文）：工具结束后立即检查 lane 是否有新消息；若有则并入消息前缀。
-              await reloadModelMessages(`after_tool:${toolName}`);
-            }
-          },
-        };
-      }
 
       // phase 2（中文）：进入 tool-loop。
       const result = await withLlmRequestContext(
@@ -393,11 +340,8 @@ export class ContextAgentRunner implements ContextAgent {
                   ? incomingMessages.slice(lastAppliedBasePrefixLen)
                   : [];
 
-              // 1) 在每个 step 前先检查 lane 是否有新消息；若有则从队列并入 user 消息。
               await reloadModelMessages("before_step");
 
-              // 2) messages：默认保留 tool-loop 的 in-flight messages（包含 tool call/output 链）。
-              // 若 lane 已变化，则替换“前缀 base”，并保留后缀 tool 链。
               let outMessages: ModelMessage[] | undefined;
               if (needsLaneResync) {
                 outMessages = [...baseModelMessages, ...suffix];
@@ -419,7 +363,6 @@ export class ContextAgentRunner implements ContextAgent {
               ) {
                 stepOverrides.activeTools = currentProviderResult.activeTools;
               }
-
               return {
                 ...stepOverrides,
                 ...(Array.isArray(outMessages)
@@ -428,7 +371,7 @@ export class ContextAgentRunner implements ContextAgent {
               };
             },
             messages: baseModelMessages,
-            tools: toolsWithLaneMerge,
+            tools: this.tools,
             stopWhen: [stepCountIs(30)],
           });
         },
@@ -477,72 +420,10 @@ export class ContextAgentRunner implements ContextAgent {
         finalAssistantUiMessage = null;
       }
 
-      if (finalAssistantUiMessage) {
-        toolCalls = extractToolCallsFromUiMessage(finalAssistantUiMessage);
-      }
-
-      // 关键点（中文）
-      // - 对“无工具调用的单轮 LLM”场景，若本轮结束时 lane 收到新消息，
-      //   当前结果通常已经过时；这里做一次轻量重跑（最多 2 轮）来吸收最新输入。
-      // - 仅在 toolCalls=0 时启用，避免重复执行工具带来副作用。
-      if (
-        toolCalls.length === 0 &&
-        laneMergeAttempts < 2 &&
-        typeof drainLaneMerged === "function"
-      ) {
-        const postRunMerge = await reloadModelMessages("after_llm_complete");
-        if (postRunMerge.reloaded) {
-          const latestUserText = String(
-            postRunMerge.latestUserText || userText || "",
-          );
-          await logger.log(
-            "info",
-            "Detected new lane messages right after LLM completion; rerunning once to absorb latest input",
-            {
-              contextId,
-              requestId,
-              drained: postRunMerge.drained || 0,
-              laneMergeAttempts,
-            },
-          );
-          return this.runWithToolLoopAgent(
-            latestUserText,
-            startTime,
-            contextId,
-            {
-              retryAttempts,
-              laneMergeAttempts: laneMergeAttempts + 1,
-              requestId,
-              drainLaneMerged,
-            },
-          );
-        }
-      }
-
-      // 基于 toolCalls 统计失败摘要（保持旧行为）
-      for (const tc of toolCalls) {
-        const raw = String(tc.output || "").trim();
-        if (!raw) continue;
-        try {
-          const parsed = JSON.parse(raw);
-          if (
-            parsed &&
-            typeof parsed === "object" &&
-            "success" in parsed &&
-            (parsed as { success?: boolean }).success === false
-          ) {
-            hadToolFailure = true;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
       // phase 4（中文）：统计结果并返回标准 AgentResult。
       const duration = Date.now() - startTime;
       await logger.log("info", "Agent execution completed", {
         duration,
-        toolCallsTotal: toolCalls.length,
       });
       // 关键点（中文）：对话消息由 ContextManager 管理并写入 messages（messages.jsonl）
 
@@ -562,7 +443,7 @@ export class ContextAgentRunner implements ContextAgent {
         });
       }
       return {
-        success: !hadToolFailure,
+        success: true,
         assistantMessage: finalAssistantUiMessage,
       };
     } catch (error) {
@@ -599,7 +480,6 @@ export class ContextAgentRunner implements ContextAgent {
 
         return this.runWithToolLoopAgent(userText, startTime, contextId, {
           retryAttempts: retryAttempts + 1,
-          laneMergeAttempts,
           requestId,
           drainLaneMerged,
         });
@@ -764,52 +644,6 @@ export class ContextAgentRunner implements ContextAgent {
       maxInputTokensApprox,
       archiveOnCompact,
     };
-  }
-
-  /**
-   * 确保当前用户消息已经落盘。
-   *
-   * 关键点（中文）
-   * - 某些入口可能未提前 append user message；这里兜底补写。
-   * - 通过“最后一条 user 文本相等”做幂等，避免重复写入。
-   */
-  private async ensureCurrentUserRecorded(params: {
-    contextStore: ContextStore;
-    userText: string;
-    contextId: string;
-    requestId: string;
-  }): Promise<void> {
-    const { contextStore, userText, contextId, requestId } = params;
-    try {
-      const msgs = await contextStore.loadAll();
-      const last = msgs.length > 0 ? msgs[msgs.length - 1] : null;
-      const lastText =
-        last && last.role === "user" ? extractTextFromUiMessage(last) : "";
-      if (lastText && lastText === String(userText || "").trim()) return;
-
-      const ctx = contextRequestContext.getStore();
-      const channel = toShipContextChannel(ctx?.chat);
-      const targetId = String(ctx?.targetId || contextId);
-      const metadata: Omit<ShipContextMetadataV1, "v" | "ts"> = {
-        contextId,
-        channel,
-        targetId,
-        actorId: ctx?.actorId,
-        actorName: ctx?.actorName,
-        messageId: ctx?.messageId,
-        threadId: typeof ctx?.threadId === "number" ? ctx.threadId : undefined,
-        targetType: ctx?.targetType,
-        requestId,
-        extra: { note: "injected_by_agent_run" },
-      };
-      const msg = contextStore.createUserTextMessage({
-        text: userText,
-        metadata,
-      });
-      await contextStore.append(msg);
-    } catch {
-      // ignore
-    }
   }
 
   /**
