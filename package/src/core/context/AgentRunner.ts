@@ -37,7 +37,7 @@ import type {
 import {
   getShipRuntimeContext,
   getRuntimeContextBase,
-} from "../../main/server/ShipRuntimeContext.js";
+} from "../../main/runtime/ShipRuntimeContext.js";
 import type { ContextAgent } from "../types/ContextAgent.js";
 import { collectSystemPromptProviderResult } from "../prompts/SystemProvider.js";
 import type { ContextStore } from "./ContextStore.js";

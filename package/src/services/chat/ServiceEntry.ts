@@ -18,7 +18,7 @@ import {
 import { createTelegramBot } from "./adapters/telegram/Bot.js";
 import { createFeishuBot } from "./adapters/feishu/Feishu.js";
 import { createQQBot } from "./adapters/qq/QQ.js";
-import { callDaemonJsonApi } from "../../main/server/daemon/Client.js";
+import { callDaemonJsonApi } from "../../main/runtime/daemon/Client.js";
 import { printResult } from "../../main/utils/CliOutput.js";
 import type { SmaService } from "../../core/services/ServiceRegistry.js";
 import type { ChatSendResponse } from "./types/ChatCommand.js";

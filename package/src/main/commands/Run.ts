@@ -8,14 +8,14 @@
  * - 后台常驻启动请使用 `shipmyagent start`（daemon 模式），并用 `shipmyagent stop|restart` 管理。
  */
 
-import { AgentServer } from "../server/AgentServer.js";
+import { AgentServer } from "../runtime/AgentServer.js";
 import { createInteractiveServer } from "../tui/Interactive.js";
 
 import {
   getShipServiceContext,
   getShipRuntimeContext,
   initShipRuntimeContext,
-} from "../server/ShipRuntimeContext.js";
+} from "../runtime/ShipRuntimeContext.js";
 import type { StartOptions } from "./types/Start.js";
 import { logger } from "../../utils/logger/Logger.js";
 import {

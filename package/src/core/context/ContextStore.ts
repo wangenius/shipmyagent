@@ -30,7 +30,7 @@ import { generateId } from "../../main/utils/Id.js";
 import type { ShipContextMetadataV1, ShipContextMessageV1 } from "../types/ContextMessage.js";
 import type { ShipContextMessagesMetaV1 } from "../types/ContextMessagesMeta.js";
 import { getLogger } from "../../utils/logger/Logger.js";
-import { getRuntimeContextBase } from "../../main/server/ShipRuntimeContext.js";
+import { getRuntimeContextBase } from "../../main/runtime/ShipRuntimeContext.js";
 
 /**
  * ContextStore：基于 UIMessage 的会话上下文存储（per contextId）。

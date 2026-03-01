@@ -3,7 +3,7 @@
  */
 
 import path from "path";
-import { stopDaemonProcess, readDaemonPid, isProcessAlive } from "../server/daemon/Manager.js";
+import { stopDaemonProcess, readDaemonPid, isProcessAlive } from "../runtime/daemon/Manager.js";
 
 export async function stopCommand(cwd: string = "."): Promise<void> {
   const projectRoot = path.resolve(cwd);

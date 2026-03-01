@@ -35,10 +35,10 @@ import {
 } from "../project/Paths.js";
 import { ensureDir, saveJson } from "../project/Storage.js";
 import type { ShipConfig } from "../project/Config.js";
-import { SHIP_JSON_SCHEMA } from "../const/ShipSchema.js";
+import { SHIP_JSON_SCHEMA } from "../constants/ShipSchema.js";
 import type { AdapterKey, InitOptions } from "./types/Init.js";
-import { MODEL_CONFIGS } from "../const/Model.js";
-import { DEFAULT_SHIP_JSON } from "../const/Ship.js";
+import { MODEL_CONFIGS } from "../constants/Model.js";
+import { DEFAULT_SHIP_JSON } from "../constants/Ship.js";
 
 type InitPromptResponse = {
   name?: string;

@@ -9,7 +9,7 @@
 
 import { z } from "zod";
 import { tool } from "ai";
-import { getShipRuntimeContext } from "../../main/server/ShipRuntimeContext.js";
+import { getShipRuntimeContext } from "../../main/runtime/ShipRuntimeContext.js";
 import type {
   ShellCloseInput,
   ShellCommandInput,
