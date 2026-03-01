@@ -260,8 +260,11 @@ async function runAgentRound(params: {
         query: params.query,
       }),
   );
+  const outputText = getServiceChatRuntimeBridge(
+    params.context,
+  ).pickLastSuccessfulChatSendText(result.assistantMessage);
   return {
-    outputText: String(result.output || ""),
+    outputText,
     rawResult: result,
   };
 }
@@ -280,31 +283,6 @@ async function appendExecutorAssistantMessage(params: {
   if (assistantMessage && typeof assistantMessage === "object") {
     await store.append(assistantMessage);
     return;
-  }
-
-  const userVisible =
-    getServiceChatRuntimeBridge(params.context).pickLastSuccessfulChatSendText(
-      params.rawResult?.toolCalls || [],
-    ) || String(params.rawResult?.output || "");
-  if (userVisible && userVisible.trim()) {
-    await store.append(
-      store.createAssistantTextMessage({
-        text: userVisible,
-        metadata: {
-          contextId: params.runContextId,
-          channel: "scheduler",
-          targetId: params.taskId,
-          actorId: "bot",
-          extra: {
-            via: "task_runner",
-            note: "assistant_message_missing",
-            contextId: params.runContextId,
-          },
-        },
-        kind: "normal",
-        source: "egress",
-      }),
-    );
   }
 }
 

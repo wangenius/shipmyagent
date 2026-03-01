@@ -11,7 +11,6 @@ import { withContextRequestContext, type ContextRequestContext } from "./Request
 import type { ContextAgent } from "../types/ContextAgent.js";
 import type { ContextManager } from "./ContextManager.js";
 import type { AgentResult } from "../types/Agent.js";
-import type { ShipContextMetadataV1 } from "../types/ContextMessage.js";
 import type {
   SchedulerConfig,
   SchedulerEnqueueResult,
@@ -434,33 +433,6 @@ export class Scheduler {
       if (assistantMessage && typeof assistantMessage === "object") {
         await store.append(assistantMessage);
         void runtime.afterContextUpdatedAsync(first.contextId);
-      } else {
-        const userVisible = String(result.output || "");
-        if (userVisible.trim()) {
-          const metadata: Omit<ShipContextMetadataV1, "v" | "ts"> = {
-            contextId: first.contextId,
-            channel: first.channel as ShipContextMetadataV1["channel"],
-            targetId: first.targetId,
-            actorId: "bot",
-            actorName: first.actorName,
-            messageId: first.messageId,
-            threadId: first.threadId,
-            targetType: first.targetType,
-            extra: {
-              via: "scheduler",
-              note: "assistant_message_missing",
-            },
-          };
-          await store.append(
-            store.createAssistantTextMessage({
-              text: userVisible,
-              metadata,
-              kind: "normal",
-              source: "egress",
-            }),
-          );
-          void runtime.afterContextUpdatedAsync(first.contextId);
-        }
       }
     } catch {
       // ignore

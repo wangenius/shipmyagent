@@ -96,7 +96,7 @@ export function transformPromptsIntoSystemMessages(
  * - 启动时若文件缺失，直接抛错，避免在生产中静默降级。
  */
 const DEFAULT_SHIP_PROMPTS_FILE_URL = new URL(
-  "./default-ship-prompts.txt",
+  "./prompt.txt",
   import.meta.url,
 );
 

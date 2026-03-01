@@ -140,11 +140,24 @@ export class ContextAgentRunner implements ContextAgent {
       });
     }
 
+    let contextStore: ContextStore | null = null;
+    try {
+      contextStore = getShipRuntimeContext().contextManager.getContextStore(
+        contextId,
+      );
+    } catch {
+      contextStore = null;
+    }
     return {
       success: false,
-      output:
-        "LLM is not configured (or runtime not initialized). Please configure `ship.json.llm` (model + apiKey) and restart.",
-      toolCalls: [],
+      assistantMessage: this.buildFallbackAssistantMessage({
+        contextId,
+        requestId,
+        contextStore,
+        text:
+          "LLM is not configured (or runtime not initialized). Please configure `ship.json.llm` (model + apiKey) and restart.",
+        note: "agent_not_initialized",
+      }),
     };
   }
 
@@ -184,7 +197,8 @@ export class ContextAgentRunner implements ContextAgent {
       requestId?: string;
     },
   ): Promise<AgentResult> {
-    const toolCalls: AgentResult["toolCalls"] = [];
+    let contextStore: ContextStore | null = null;
+    let toolCalls: ReturnType<typeof extractToolCallsFromUiMessage> = [];
     let hadToolFailure = false;
     const retryAttempts = opts?.retryAttempts ?? 0;
     const laneMergeAttempts = opts?.laneMergeAttempts ?? 0;
@@ -200,7 +214,7 @@ export class ContextAgentRunner implements ContextAgent {
 
       const runtime = getShipRuntimeContext();
       // phase 0（中文）：装配 context store 与 runtime/system prompt 基础上下文。
-      const contextStore = runtime.contextManager.getContextStore(contextId);
+      contextStore = runtime.contextManager.getContextStore(contextId);
 
       const runtimeSystemMessages = this.buildRuntimeSystemMessages({
         projectRoot: runtime.rootPath,
@@ -464,9 +478,7 @@ export class ContextAgentRunner implements ContextAgent {
       }
 
       if (finalAssistantUiMessage) {
-        toolCalls.push(
-          ...extractToolCallsFromUiMessage(finalAssistantUiMessage),
-        );
+        toolCalls = extractToolCallsFromUiMessage(finalAssistantUiMessage);
       }
 
       // 关键点（中文）
@@ -534,23 +546,24 @@ export class ContextAgentRunner implements ContextAgent {
       });
       // 关键点（中文）：对话消息由 ContextManager 管理并写入 messages（messages.jsonl）
 
-      let assistantText = finalAssistantUiMessage
-        ? extractTextFromUiMessage(finalAssistantUiMessage)
-        : "";
-      if (!assistantText) {
+      if (!finalAssistantUiMessage) {
+        let assistantText = "";
         try {
           assistantText = String((await result.text) ?? "").trim();
         } catch {
           assistantText = "";
         }
+        finalAssistantUiMessage = this.buildFallbackAssistantMessage({
+          contextId,
+          requestId,
+          contextStore,
+          text: assistantText || "Execution completed",
+          note: "assistant_message_fallback",
+        });
       }
       return {
         success: !hadToolFailure,
-        output: assistantText || "Execution completed",
-        toolCalls,
-        ...(finalAssistantUiMessage
-          ? { assistantMessage: finalAssistantUiMessage }
-          : {}),
+        assistantMessage: finalAssistantUiMessage,
       };
     } catch (error) {
       const errorMsg = String(error);
@@ -573,9 +586,14 @@ export class ContextAgentRunner implements ContextAgent {
         if (retryAttempts >= 3) {
           return {
             success: false,
-            output:
-              "Context length exceeded and retries failed. Please resend your question (or tune context.messages.* compaction settings).",
-            toolCalls,
+            assistantMessage: this.buildFallbackAssistantMessage({
+              contextId,
+              requestId,
+              contextStore,
+              text:
+                "Context length exceeded and retries failed. Please resend your question (or tune context.messages.* compaction settings).",
+              note: "context_length_exceeded",
+            }),
           };
         }
 
@@ -592,8 +610,13 @@ export class ContextAgentRunner implements ContextAgent {
       });
       return {
         success: false,
-        output: `Execution failed: ${errorMsg}`,
-        toolCalls,
+        assistantMessage: this.buildFallbackAssistantMessage({
+          contextId,
+          requestId,
+          contextStore,
+          text: `Execution failed: ${errorMsg}`,
+          note: "agent_execution_failed",
+        }),
       };
     }
   }
@@ -632,6 +655,60 @@ export class ContextAgentRunner implements ContextAgent {
         }),
       },
     ];
+  }
+
+  /**
+   * 构造 fallback assistant 消息。
+   *
+   * 关键点（中文）
+   * - 仅在 UIMessage 生成失败/异常时兜底使用
+   * - metadata 尽量与正常 assistant 消息保持一致
+   */
+  private buildFallbackAssistantMessage(params: {
+    contextId: string;
+    text: string;
+    requestId?: string;
+    contextStore?: ContextStore | null;
+    note: string;
+  }): ShipContextMessageV1 {
+    const ctx = contextRequestContext.getStore();
+    const channel = toShipContextChannel(ctx?.chat);
+    const targetId = String(ctx?.targetId || params.contextId);
+    const metadata: Omit<ShipContextMetadataV1, "v" | "ts"> = {
+      contextId: params.contextId,
+      channel,
+      targetId,
+      actorId: "bot",
+      actorName: ctx?.actorName,
+      messageId: ctx?.messageId,
+      threadId: typeof ctx?.threadId === "number" ? ctx.threadId : undefined,
+      targetType: ctx?.targetType,
+      requestId: params.requestId,
+      extra: { note: params.note },
+    };
+    const finalText = String(params.text ?? "").trim() || "Execution completed";
+    const store = params.contextStore || null;
+    if (store) {
+      return store.createAssistantTextMessage({
+        text: finalText,
+        metadata,
+        kind: "normal",
+        source: "egress",
+      });
+    }
+    const md: ShipContextMetadataV1 = {
+      v: 1,
+      ts: Date.now(),
+      ...metadata,
+      source: "egress",
+      kind: "normal",
+    };
+    return {
+      id: `a:${params.contextId}:${generateId()}`,
+      role: "assistant",
+      metadata: md,
+      parts: [{ type: "text", text: finalText }],
+    };
   }
 
   /**

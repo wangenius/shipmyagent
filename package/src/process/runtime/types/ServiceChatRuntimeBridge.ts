@@ -1,4 +1,4 @@
-import type { AgentResult } from "../../../core/types/Agent.js";
+import type { ShipContextMessageV1 } from "../../../core/types/ContextMessage.js";
 
 /**
  * Service Chat Runtime Bridge 类型定义。
@@ -28,11 +28,13 @@ export type ServiceChatSendByContextIdResult = {
 /**
  * Chat 运行时桥接端口。
  *
- * - `pickLastSuccessfulChatSendText`：从 toolCalls 还原用户可见文本。
+ * - `pickLastSuccessfulChatSendText`：从 assistant message 还原用户可见文本。
  * - `sendTextByContextId`：向指定会话回发消息。
  */
 export type ServiceChatRuntimeBridge = {
-  pickLastSuccessfulChatSendText(toolCalls: AgentResult["toolCalls"]): string;
+  pickLastSuccessfulChatSendText(
+    message: ShipContextMessageV1 | null | undefined,
+  ): string;
   sendTextByContextId(
     params: ServiceChatSendByContextIdParams,
   ): Promise<ServiceChatSendByContextIdResult>;

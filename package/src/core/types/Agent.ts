@@ -4,20 +4,14 @@
  * 关键点（中文）
  * - 仅描述 core runtime 的最小输入/输出契约
  * - 不包含具体实现细节
+ * - 输出仅暴露 assistantMessage（UIMessage）
  */
 
 import type { ShipContextMessageV1 } from "./ContextMessage.js";
-import type { JsonObject } from "../../types/Json.js";
 
 export interface AgentResult {
   success: boolean;
-  output: string;
-  toolCalls: Array<{
-    tool: string;
-    input: JsonObject;
-    output: string;
-  }>;
-  assistantMessage?: ShipContextMessageV1;
+  assistantMessage: ShipContextMessageV1;
 }
 
 export interface AgentRunInput {

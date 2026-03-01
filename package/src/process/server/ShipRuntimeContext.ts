@@ -93,10 +93,10 @@ const serviceModelFactory = {
  */
 const serviceChatRuntimeBridge = {
   pickLastSuccessfulChatSendText: (
-    toolCalls: Parameters<
+    message: Parameters<
       ReturnType<typeof getProcessServiceBindings>["pickLastSuccessfulChatSendText"]
     >[0],
-  ) => getProcessServiceBindings().pickLastSuccessfulChatSendText(toolCalls),
+  ) => getProcessServiceBindings().pickLastSuccessfulChatSendText(message),
   sendTextByContextId: async (params: { contextId: string; text: string }) => {
     const result = await getProcessServiceBindings().sendTextByContextId({
       context: getShipServiceContext(),

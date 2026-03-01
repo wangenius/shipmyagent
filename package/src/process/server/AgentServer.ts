@@ -358,12 +358,11 @@ export class AgentServer {
             }),
         );
 
-        // [阶段3] 结果提取：优先拿 chat_send 的最终文本，其次回退到 result.output。
+        // [阶段3] 结果提取：优先拿 chat_send 的最终文本，其次回退到 message 文本。
         const userVisible =
           getProcessServiceBindings().pickLastSuccessfulChatSendText(
-            result.toolCalls || [],
-          ) ||
-          String(result?.output || "");
+            result.assistantMessage,
+          );
         try {
           // [阶段3] 上下文消息落盘：优先 append assistantMessage；缺失时生成文本消息兜底。
           const store = runtime.contextManager.getContextStore(contextId);

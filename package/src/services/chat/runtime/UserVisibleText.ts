@@ -1,5 +1,5 @@
 /**
- * 从 toolCalls 中提取“用户可见文本”。
+ * 从 assistant message 中提取“用户可见文本”。
  *
  * 背景（中文，关键点）
  * - 在 tool-strict 模式下，模型的 `result.text` 可能为空
@@ -7,17 +7,23 @@
  * - 因此需要一个稳定的、与 Agent 解耦的提取逻辑（属于 chat/egress 语义）
  */
 
-import type { AgentResult } from "../../../core/types/Agent.js";
+import type { ShipContextMessageV1 } from "../../../core/types/ContextMessage.js";
+import {
+  extractTextFromUiMessage,
+  extractToolCallsFromUiMessage,
+} from "../../../core/context/UiMessage.js";
 
 /**
  * 提取策略（中文）
  * - 倒序扫描：优先使用最后一次 `chat_send`，与最终用户感知一致。
- * - 若 output 可解析且 success=true，则确认采用 input.text。
- * - 若 output 为空/非 JSON，走 best-effort 采用 input.text。
+ * - 优先使用 chat_send 的 input.text（需结合 tool output 判断成功）。
+ * - 若 tool output 为空/非 JSON，走 best-effort 采用 input.text。
+ * - 若无 tool call，则回退到 message 文本内容。
  */
 export function pickLastSuccessfulChatSendText(
-  toolCalls: AgentResult["toolCalls"],
+  message: ShipContextMessageV1 | null | undefined,
 ): string {
+  const toolCalls = extractToolCallsFromUiMessage(message);
   // 关键点（中文）：优先从 chat_send 的 input.text 还原"用户可见回复"。
   for (let i = toolCalls.length - 1; i >= 0; i -= 1) {
     const tc = toolCalls[i];
@@ -45,5 +51,5 @@ export function pickLastSuccessfulChatSendText(
       return text;
     }
   }
-  return "";
+  return extractTextFromUiMessage(message);
 }

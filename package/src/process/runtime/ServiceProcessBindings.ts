@@ -1,4 +1,4 @@
-import type { AgentResult } from "../../core/types/Agent.js";
+import type { ShipContextMessageV1 } from "../../core/types/ContextMessage.js";
 import type { ServiceRuntimeDependencies } from "./types/ServiceRuntimeTypes.js";
 import type { ServiceContextStore } from "./types/ServiceRuntimePorts.js";
 
@@ -11,7 +11,7 @@ import type { ServiceContextStore } from "./types/ServiceRuntimePorts.js";
  */
 export type ProcessServiceBindings = {
   pickLastSuccessfulChatSendText(
-    toolCalls: AgentResult["toolCalls"],
+    message: ShipContextMessageV1 | null | undefined,
   ): string;
   sendTextByContextId(params: {
     context: ServiceRuntimeDependencies;
