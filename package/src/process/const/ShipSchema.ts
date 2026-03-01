@@ -1,4 +1,4 @@
-import type { JsonObject } from "../types/Json.js";
+import type { JsonObject } from "../../types/Json.js";
 
 export const SHIP_JSON_SCHEMA: JsonObject = {
   $schema: "https://json-schema.org/draft/2020-12/schema",

@@ -9,9 +9,9 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import type { Logger } from "../../../utils/logger/Logger.js";
-import { getCacheDirPath } from "../../../process/project/Paths.js";
-import type { QqInboundDedupeSnapshotV1 } from "../types/QqInboundDedupe.js";
+import type { Logger } from "../../../../utils/logger/Logger.js";
+import { getCacheDirPath } from "../../../../process/project/Paths.js";
+import type { QqInboundDedupeSnapshotV1 } from "../../types/QqInboundDedupe.js";
 
 /**
  * QqInboundDedupeStore：QQ 入站消息去重存储器。
@@ -51,7 +51,9 @@ export class QqInboundDedupeStore {
 
     try {
       if (!(await fs.pathExists(this.filePath))) return;
-      const raw = (await fs.readJson(this.filePath)) as Partial<QqInboundDedupeSnapshotV1>;
+      const raw = (await fs.readJson(
+        this.filePath,
+      )) as Partial<QqInboundDedupeSnapshotV1>;
       const list = Array.isArray(raw?.ids) ? raw.ids : [];
       for (const item of list) {
         const key = typeof item === "string" ? item.trim() : "";

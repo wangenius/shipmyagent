@@ -8,7 +8,7 @@
  * - 后台常驻启动请使用 `shipmyagent start`（daemon 模式），并用 `shipmyagent stop|restart` 管理。
  */
 
-import { AgentServer } from "../server/Index.js";
+import { AgentServer } from "../server/AgentServer.js";
 import { createInteractiveServer } from "../tui/Interactive.js";
 
 import {
@@ -23,8 +23,8 @@ import {
   stopAllServiceRuntimes,
 } from "../../core/services/Registry.js";
 import { createTelegramBot } from "../../services/chat/adapters/telegram/Bot.js";
-import { createFeishuBot } from "../../services/chat/adapters/Feishu.js";
-import { createQQBot } from "../../services/chat/adapters/Qq.js";
+import { createFeishuBot } from "../../services/chat/adapters/feishu/Feishu.js";
+import { createQQBot } from "../../services/chat/adapters/qq/QQ.js";
 
 /**
  * `shipmyagent run` 命令入口。

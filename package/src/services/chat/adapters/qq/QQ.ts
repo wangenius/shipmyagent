@@ -1,14 +1,14 @@
 import WebSocket, { type RawData } from "ws";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { BaseChatAdapter } from "./BaseChatAdapter.js";
-import { QqInboundDedupeStore } from "./QqInboundDedupe.js";
+import { BaseChatAdapter } from "../BaseChatAdapter.js";
+import { QqInboundDedupeStore } from "./QQInboundDedupe.js";
 import type {
   AdapterChatKeyParams,
   AdapterSendTextParams,
-} from "./PlatformAdapter.js";
-import type { ServiceRuntimeDependencies } from "../../../process/runtime/types/ServiceRuntimeTypes.js";
-import type { JsonObject, JsonValue } from "../../../types/Json.js";
+} from "../PlatformAdapter.js";
+import type { ServiceRuntimeDependencies } from "../../../../process/runtime/types/ServiceRuntimeTypes.js";
+import type { JsonObject, JsonValue } from "../../../../types/Json.js";
 
 /**
  * QQ official bot adapter (WebSocket gateway).
@@ -488,7 +488,8 @@ export class QQBot extends BaseChatAdapter {
             ? rawData
             : Buffer.from(rawData).toString("utf-8");
       const parsed = JSON.parse(text) as JsonValue;
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+        return null;
       const obj = parsed as JsonObject;
       const op = typeof obj.op === "number" ? obj.op : Number(obj.op);
       if (!Number.isFinite(op)) return null;
@@ -506,7 +507,9 @@ export class QQBot extends BaseChatAdapter {
     }
   }
 
-  private async handleWebSocketMessage(payload: QQGatewayPayload): Promise<void> {
+  private async handleWebSocketMessage(
+    payload: QQGatewayPayload,
+  ): Promise<void> {
     const { op, d, s, t } = payload;
 
     // 更新序列号
@@ -518,7 +521,9 @@ export class QQBot extends BaseChatAdapter {
       case OpCode.Hello:
         // 收到 Hello，发送鉴权
         const heartbeatIntervalMs =
-          typeof d?.heartbeat_interval === "number" ? d.heartbeat_interval : 30000;
+          typeof d?.heartbeat_interval === "number"
+            ? d.heartbeat_interval
+            : 30000;
         this.startHeartbeat(heartbeatIntervalMs);
         await this.sendIdentify();
         break;
@@ -568,7 +573,9 @@ export class QQBot extends BaseChatAdapter {
    *   - `SHIP_QQ_CAPTURE_DIR=/abs/or/relative/path` (optional)
    * - Files are written as JSON snapshots with a timestamp-based filename.
    */
-  private async captureIncomingWsPayload(payload: QQGatewayPayload): Promise<void> {
+  private async captureIncomingWsPayload(
+    payload: QQGatewayPayload,
+  ): Promise<void> {
     if (!this.qqEventCapture.enabled) return;
 
     const op = payload.op;
@@ -700,7 +707,10 @@ export class QQBot extends BaseChatAdapter {
    * - 只在此处分发到各类消息处理器，保持事件路由单一出口
    * - 未识别事件仅 debug 记录，不阻断连接
    */
-  private async handleDispatch(eventType: string, data: JsonObject): Promise<void> {
+  private async handleDispatch(
+    eventType: string,
+    data: JsonObject,
+  ): Promise<void> {
     this.logger.info(`收到事件: ${eventType}`);
 
     switch (eventType) {
@@ -709,7 +719,9 @@ export class QQBot extends BaseChatAdapter {
           typeof data.context_id === "string" ? data.context_id : "";
         this.logger.info(`QQ Bot 已就绪，WS Context ID: ${this.wsContextId}`);
         const readyUser =
-          data.user && typeof data.user === "object" && !Array.isArray(data.user)
+          data.user &&
+          typeof data.user === "object" &&
+          !Array.isArray(data.user)
             ? (data.user as QQReadyUser)
             : undefined;
         this.logger.info(`用户: ${readyUser?.username || "N/A"}`);
