@@ -60,8 +60,8 @@ function findSkill(skills: ClaudeSkill[], name: string): ClaudeSkill | null {
   );
 }
 
-async function readPinnedSkillIds(projectRoot: string, chatKey: string): Promise<string[]> {
-  const metaPath = getShipContextMessagesMetaPath(projectRoot, chatKey);
+async function readPinnedSkillIds(projectRoot: string, contextId: string): Promise<string[]> {
+  const metaPath = getShipContextMessagesMetaPath(projectRoot, contextId);
   try {
     const raw = (await fs.readJson(metaPath)) as JsonObject;
     if (!raw || typeof raw !== "object" || !Array.isArray(raw.pinnedSkillIds)) {
@@ -82,14 +82,14 @@ async function readPinnedSkillIds(projectRoot: string, chatKey: string): Promise
 
 async function writePinnedSkillIds(params: {
   projectRoot: string;
-  chatKey: string;
+  contextId: string;
   pinnedSkillIds: string[];
 }): Promise<void> {
-  const { projectRoot, chatKey } = params;
+  const { projectRoot, contextId } = params;
   const pinnedSkillIds = Array.from(new Set(params.pinnedSkillIds.map((id) => id.trim()).filter(Boolean)));
 
-  const messagesDir = getShipContextMessagesDirPath(projectRoot, chatKey);
-  const metaPath = getShipContextMessagesMetaPath(projectRoot, chatKey);
+  const messagesDir = getShipContextMessagesDirPath(projectRoot, contextId);
+  const metaPath = getShipContextMessagesMetaPath(projectRoot, contextId);
   await fs.ensureDir(messagesDir);
 
   let prev: JsonObject = {};
@@ -103,7 +103,7 @@ async function writePinnedSkillIds(params: {
   const next = {
     ...prev,
     v: 1,
-    chatKey,
+    contextId,
     updatedAt: Date.now(),
     pinnedSkillIds,
   };
@@ -129,11 +129,11 @@ export async function loadSkill(params: {
   request: SkillLoadRequest;
 }): Promise<SkillLoadResponse> {
   const root = path.resolve(params.projectRoot);
-  const chatKey = String(params.request.chatKey || "").trim();
-  if (!chatKey) {
+  const contextId = String(params.request.contextId || "").trim();
+  if (!contextId) {
     return {
       success: false,
-      error: "Missing chatKey",
+      error: "Missing contextId",
     };
   }
 
@@ -142,22 +142,22 @@ export async function loadSkill(params: {
   if (!target) {
     return {
       success: false,
-      chatKey,
+      contextId,
       error: `Skill not found: ${params.request.name}`,
     };
   }
 
-  const pinned = await readPinnedSkillIds(root, chatKey);
+  const pinned = await readPinnedSkillIds(root, contextId);
   const nextPinned = Array.from(new Set([...pinned, target.id]));
   await writePinnedSkillIds({
     projectRoot: root,
-    chatKey,
+    contextId,
     pinnedSkillIds: nextPinned,
   });
 
   return {
     success: true,
-    chatKey,
+    contextId,
     skill: toSkillSummary(target),
   };
 }
@@ -167,11 +167,11 @@ export async function unloadSkill(params: {
   request: SkillUnloadRequest;
 }): Promise<SkillUnloadResponse> {
   const root = path.resolve(params.projectRoot);
-  const chatKey = String(params.request.chatKey || "").trim();
-  if (!chatKey) {
+  const contextId = String(params.request.contextId || "").trim();
+  if (!contextId) {
     return {
       success: false,
-      error: "Missing chatKey",
+      error: "Missing contextId",
     };
   }
 
@@ -180,23 +180,23 @@ export async function unloadSkill(params: {
   if (!target) {
     return {
       success: false,
-      chatKey,
+      contextId,
       error: `Skill not found: ${params.request.name}`,
     };
   }
 
-  const pinned = await readPinnedSkillIds(root, chatKey);
+  const pinned = await readPinnedSkillIds(root, contextId);
   const nextPinned = pinned.filter((id) => id !== target.id);
 
   await writePinnedSkillIds({
     projectRoot: root,
-    chatKey,
+    contextId,
     pinnedSkillIds: nextPinned,
   });
 
   return {
     success: true,
-    chatKey,
+    contextId,
     removedSkillId: target.id,
     pinnedSkillIds: nextPinned,
   };
@@ -204,21 +204,21 @@ export async function unloadSkill(params: {
 
 export async function listPinnedSkills(params: {
   projectRoot: string;
-  chatKey: string;
+  contextId: string;
 }): Promise<SkillPinnedListResponse> {
   const root = path.resolve(params.projectRoot);
-  const chatKey = String(params.chatKey || "").trim();
-  if (!chatKey) {
+  const contextId = String(params.contextId || "").trim();
+  if (!contextId) {
     return {
       success: false,
-      error: "Missing chatKey",
+      error: "Missing contextId",
     };
   }
 
-  const pinnedSkillIds = await readPinnedSkillIds(root, chatKey);
+  const pinnedSkillIds = await readPinnedSkillIds(root, contextId);
   return {
     success: true,
-    chatKey,
+    contextId,
     pinnedSkillIds,
   };
 }

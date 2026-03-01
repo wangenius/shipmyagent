@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - CLI：统一承载 `skill find/add/list/load/unload/pinned`
  * - Server：统一承载 `/api/skill/*`
- * - load/unload/pinned 支持 chatKey 自动解析（上下文注入）
+ * - load/unload/pinned 统一基于 contextId
  */
 
 import path from "node:path";
@@ -16,8 +16,8 @@ import {
   loadSkill,
   unloadSkill,
 } from "./Service.js";
-import { resolveChatKey } from "../../process/runtime/ChatKey.js";
-import { callDaemonJsonApi } from "../../process/daemon/Client.js";
+import { resolveContextId } from "../../process/context/ContextId.js";
+import { callDaemonJsonApi } from "../../process/server/daemon/Client.js";
 import { printResult } from "../../process/utils/CliOutput.js";
 import type {
   SkillListResponse,
@@ -37,7 +37,7 @@ function parsePortOption(value: string): number {
 }
 
 type SkillRemoteCliOptions = {
-  chatKey?: string;
+  contextId?: string;
   path?: string;
   host?: string;
   port?: number;
@@ -49,14 +49,14 @@ async function callSkillLoad(params: {
   options: SkillRemoteCliOptions;
 }): Promise<void> {
   const projectRoot = path.resolve(String(params.options.path || "."));
-  const chatKey = resolveChatKey({ chatKey: params.options.chatKey });
-  if (!chatKey) {
+  const contextId = resolveContextId({ contextId: params.options.contextId });
+  if (!contextId) {
     printResult({
       asJson: params.options.json,
       success: false,
       title: "skill load failed",
       payload: {
-        error: "Missing chatKey. Provide --chat-key or ensure SMA_CTX_CHAT_KEY is available.",
+        error: "Missing contextId. Provide --context-id or ensure SMA_CTX_CONTEXT_ID is available.",
       },
     });
     return;
@@ -70,7 +70,7 @@ async function callSkillLoad(params: {
     port: params.options.port,
     body: {
       name: params.name,
-      chatKey,
+      contextId,
     },
   });
 
@@ -81,7 +81,7 @@ async function callSkillLoad(params: {
       success: Boolean(data.success),
       title: data.success ? "skill loaded" : "skill load failed",
       payload: {
-        chatKey,
+        contextId,
         ...(data.skill ? { skill: data.skill } : {}),
         ...(data.error ? { error: data.error } : {}),
       },
@@ -94,7 +94,7 @@ async function callSkillLoad(params: {
     success: false,
     title: "skill load failed",
     payload: {
-      chatKey,
+      contextId,
       error:
         remote.error ||
         "Skill load requires an active Agent server runtime. Start via `sma start` or `sma run` first.",
@@ -107,14 +107,14 @@ async function callSkillUnload(params: {
   options: SkillRemoteCliOptions;
 }): Promise<void> {
   const projectRoot = path.resolve(String(params.options.path || "."));
-  const chatKey = resolveChatKey({ chatKey: params.options.chatKey });
-  if (!chatKey) {
+  const contextId = resolveContextId({ contextId: params.options.contextId });
+  if (!contextId) {
     printResult({
       asJson: params.options.json,
       success: false,
       title: "skill unload failed",
       payload: {
-        error: "Missing chatKey. Provide --chat-key or ensure SMA_CTX_CHAT_KEY is available.",
+        error: "Missing contextId. Provide --context-id or ensure SMA_CTX_CONTEXT_ID is available.",
       },
     });
     return;
@@ -128,7 +128,7 @@ async function callSkillUnload(params: {
     port: params.options.port,
     body: {
       name: params.name,
-      chatKey,
+      contextId,
     },
   });
 
@@ -139,7 +139,7 @@ async function callSkillUnload(params: {
       success: Boolean(data.success),
       title: data.success ? "skill unloaded" : "skill unload failed",
       payload: {
-        chatKey,
+        contextId,
         ...(data.removedSkillId ? { removedSkillId: data.removedSkillId } : {}),
         ...(Array.isArray(data.pinnedSkillIds) ? { pinnedSkillIds: data.pinnedSkillIds } : {}),
         ...(data.error ? { error: data.error } : {}),
@@ -153,7 +153,7 @@ async function callSkillUnload(params: {
     success: false,
     title: "skill unload failed",
     payload: {
-      chatKey,
+      contextId,
       error:
         remote.error ||
         "Skill unload requires an active Agent server runtime. Start via `sma start` or `sma run` first.",
@@ -163,14 +163,14 @@ async function callSkillUnload(params: {
 
 async function callSkillPinned(options: SkillRemoteCliOptions): Promise<void> {
   const projectRoot = path.resolve(String(options.path || "."));
-  const chatKey = resolveChatKey({ chatKey: options.chatKey });
-  if (!chatKey) {
+  const contextId = resolveContextId({ contextId: options.contextId });
+  if (!contextId) {
     printResult({
       asJson: options.json,
       success: false,
       title: "skill pinned failed",
       payload: {
-        error: "Missing chatKey. Provide --chat-key or ensure SMA_CTX_CHAT_KEY is available.",
+        error: "Missing contextId. Provide --context-id or ensure SMA_CTX_CONTEXT_ID is available.",
       },
     });
     return;
@@ -178,7 +178,7 @@ async function callSkillPinned(options: SkillRemoteCliOptions): Promise<void> {
 
   const remote = await callDaemonJsonApi<SkillPinnedListResponse>({
     projectRoot,
-    path: `/api/skill/pinned?chatKey=${encodeURIComponent(chatKey)}`,
+    path: `/api/skill/pinned?contextId=${encodeURIComponent(contextId)}`,
     method: "GET",
     host: options.host,
     port: options.port,
@@ -191,7 +191,7 @@ async function callSkillPinned(options: SkillRemoteCliOptions): Promise<void> {
       success: Boolean(data.success),
       title: data.success ? "skill pinned listed" : "skill pinned failed",
       payload: {
-        chatKey,
+        contextId,
         ...(Array.isArray(data.pinnedSkillIds) ? { pinnedSkillIds: data.pinnedSkillIds } : {}),
         ...(data.error ? { error: data.error } : {}),
       },
@@ -204,7 +204,7 @@ async function callSkillPinned(options: SkillRemoteCliOptions): Promise<void> {
     success: false,
     title: "skill pinned failed",
     payload: {
-      chatKey,
+      contextId,
       error:
         remote.error ||
         "Skill pinned query requires an active Agent server runtime. Start via `sma start` or `sma run` first.",
@@ -236,9 +236,9 @@ function setupCli(registry: Parameters<SmaService["registerCli"]>[0]): void {
       });
     });
 
-    group.command("load <name>", "给当前 chatKey 加载 skill", (command: Command) => {
+    group.command("load <name>", "给当前 contextId 加载 skill", (command: Command) => {
       command
-        .option("--chat-key <chatKey>", "目标 chatKey")
+        .option("--context-id <contextId>", "目标 contextId")
         .option("--path <path>", "项目根目录（默认当前目录）", ".")
         .option("--host <host>", "Server host（覆盖自动解析）")
         .option("--port <port>", "Server port（覆盖自动解析）", parsePortOption)
@@ -248,9 +248,9 @@ function setupCli(registry: Parameters<SmaService["registerCli"]>[0]): void {
         });
     });
 
-    group.command("unload <name>", "给当前 chatKey 卸载 skill", (command: Command) => {
+    group.command("unload <name>", "给当前 contextId 卸载 skill", (command: Command) => {
       command
-        .option("--chat-key <chatKey>", "目标 chatKey")
+        .option("--context-id <contextId>", "目标 contextId")
         .option("--path <path>", "项目根目录（默认当前目录）", ".")
         .option("--host <host>", "Server host（覆盖自动解析）")
         .option("--port <port>", "Server port（覆盖自动解析）", parsePortOption)
@@ -260,9 +260,9 @@ function setupCli(registry: Parameters<SmaService["registerCli"]>[0]): void {
         });
     });
 
-    group.command("pinned", "查看 chatKey 已固定的 skillIds", (command: Command) => {
+    group.command("pinned", "查看 contextId 已固定的 skillIds", (command: Command) => {
       command
-        .option("--chat-key <chatKey>", "目标 chatKey")
+        .option("--context-id <contextId>", "目标 contextId")
         .option("--path <path>", "项目根目录（默认当前目录）", ".")
         .option("--host <host>", "Server host（覆盖自动解析）")
         .option("--port <port>", "Server port（覆盖自动解析）", parsePortOption)
@@ -296,13 +296,13 @@ function setupServer(
     }
 
     const name = String(body?.name || "").trim();
-    const chatKey = String(body?.chatKey || "").trim();
+    const contextId = String(body?.contextId || "").trim();
     if (!name) return c.json({ success: false, error: "Missing name" }, 400);
-    if (!chatKey) return c.json({ success: false, error: "Missing chatKey" }, 400);
+    if (!contextId) return c.json({ success: false, error: "Missing contextId" }, 400);
 
     const result = await loadSkill({
       projectRoot: context.rootPath,
-      request: { name, chatKey },
+      request: { name, contextId },
     });
 
     return c.json(result, result.success ? 200 : 400);
@@ -321,25 +321,25 @@ function setupServer(
     }
 
     const name = String(body?.name || "").trim();
-    const chatKey = String(body?.chatKey || "").trim();
+    const contextId = String(body?.contextId || "").trim();
     if (!name) return c.json({ success: false, error: "Missing name" }, 400);
-    if (!chatKey) return c.json({ success: false, error: "Missing chatKey" }, 400);
+    if (!contextId) return c.json({ success: false, error: "Missing contextId" }, 400);
 
     const result = await unloadSkill({
       projectRoot: context.rootPath,
-      request: { name, chatKey },
+      request: { name, contextId },
     });
 
     return c.json(result, result.success ? 200 : 400);
   });
 
   registry.get("/api/skill/pinned", async (c) => {
-    const chatKey = String(c.req.query("chatKey") || "").trim();
-    if (!chatKey) return c.json({ success: false, error: "Missing chatKey" }, 400);
+    const contextId = String(c.req.query("contextId") || "").trim();
+    if (!contextId) return c.json({ success: false, error: "Missing contextId" }, 400);
 
     const result = await listPinnedSkills({
       projectRoot: context.rootPath,
-      chatKey,
+      contextId,
     });
 
     return c.json(result, result.success ? 200 : 400);

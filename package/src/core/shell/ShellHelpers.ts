@@ -8,10 +8,14 @@
 
 import path from "path";
 import { randomBytes } from "crypto";
-import { getShipRuntimeContext } from "../../../process/server/ShipRuntimeContext.js";
-import { contextRequestContext } from "../../context/RequestContext.js";
-import { llmRequestContext } from "../../../utils/logger/Context.js";
-import type { ShellContext, ShellOutputPage, OutputLimits } from "../../types/Shell.js";
+import { getShipRuntimeContext } from "../../process/server/ShipRuntimeContext.js";
+import { contextRequestContext } from "../context/RequestContext.js";
+import { llmRequestContext } from "../../utils/logger/Context.js";
+import type {
+  ShellContext,
+  ShellOutputPage,
+  OutputLimits,
+} from "../types/Shell.js";
 
 export const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
 export const DEFAULT_MAX_OUTPUT_LINES = 200;
@@ -32,7 +36,10 @@ export const MAX_YIELD_TIME_MS = 30_000;
  */
 export const MAX_CONTEXT_PENDING_CHARS = 1_000_000;
 
-export function clampYieldTimeMs(value: number | undefined, fallback: number): number {
+export function clampYieldTimeMs(
+  value: number | undefined,
+  fallback: number,
+): number {
   const n =
     typeof value === "number" && Number.isFinite(value)
       ? Math.floor(value)
@@ -69,7 +76,8 @@ export function validateChatSendCommand(cmd: string): string | null {
   if (!/\bsma\s+chat\s+send\b/.test(source)) return null;
   if (!/[\r\n]/.test(source)) return null;
   if (/\bsma\s+chat\s+send\b[\s\S]*\s--stdin(?:\s|$)/.test(source)) return null;
-  if (/\bsma\s+chat\s+send\b[\s\S]*\s--text-file(?:\s|$)/.test(source)) return null;
+  if (/\bsma\s+chat\s+send\b[\s\S]*\s--text-file(?:\s|$)/.test(source))
+    return null;
   return [
     "Unsafe `sma chat send` command: real newlines are not allowed.",
     "If your message is multi-line, use `sma chat send --stdin` (with heredoc/pipe) or `--text-file`.",
@@ -121,7 +129,10 @@ export function resolveOutputLimits(maxOutputTokens?: number): OutputLimits {
  *
  * - 空值回退 projectRoot；相对路径按 projectRoot 解析。
  */
-export function resolveShellWorkdir(projectRoot: string, workdir?: string): string {
+export function resolveShellWorkdir(
+  projectRoot: string,
+  workdir?: string,
+): string {
   const trimmed = String(workdir ?? "").trim();
   if (!trimmed) return projectRoot;
   return path.isAbsolute(trimmed)

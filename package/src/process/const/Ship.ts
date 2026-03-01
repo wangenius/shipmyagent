@@ -1,4 +1,4 @@
-import type { ShipConfig } from "../../types/ShipConfig.js";
+import type { ShipConfig } from "../types/ShipConfig.js";
 
 export const DEFAULT_SHIP_JSON: ShipConfig = {
   $schema: "./.ship/schema/ship.schema.json",

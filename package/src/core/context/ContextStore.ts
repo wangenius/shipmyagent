@@ -30,7 +30,7 @@ import { generateId } from "../../process/utils/Id.js";
 import type { ShipContextMetadataV1, ShipContextMessageV1 } from "../types/ContextMessage.js";
 import type { ShipContextMessagesMetaV1 } from "../types/ContextMessagesMeta.js";
 import { getLogger } from "../../utils/logger/Logger.js";
-import { getShipRuntimeContextBase } from "../../process/server/ShipRuntimeContext.js";
+import { getRuntimeContextBase } from "../../process/server/ShipRuntimeContext.js";
 
 /**
  * ContextStore：基于 UIMessage 的会话上下文存储（per contextId）。
@@ -79,7 +79,7 @@ export class ContextStore {
       archiveDirPath?: string;
     },
   ) {
-    const rootPath = String(getShipRuntimeContextBase().rootPath || "").trim();
+    const rootPath = String(getRuntimeContextBase().rootPath || "").trim();
     if (!rootPath) throw new Error("ContextStore requires a non-empty rootPath");
     const key = String(contextId || "").trim();
     if (!key) throw new Error("ContextStore requires a non-empty contextId");

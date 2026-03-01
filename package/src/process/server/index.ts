@@ -21,7 +21,7 @@ import {
   getShipServiceContext,
   getShipRuntimeContext,
 } from "./ShipRuntimeContext.js";
-import { pickLastSuccessfulChatSendText } from "../../services/chat/runtime/UserVisibleText.js";
+import { getProcessServiceBindings } from "../runtime/ServiceProcessBindings.js";
 import {
   controlServiceRuntime,
   listServiceRuntimes,
@@ -342,7 +342,7 @@ export class AgentServer {
         });
 
         // [阶段2] 执行：在 withContextRequestContext 下运行 agent，保证下游可读取会话上下文。
-        // API 也是一种 “chat”（有 chatKey + 可落盘 context messages），但它不是“平台消息回发”场景：
+        // API 场景同样会落盘 context messages，但它不是“平台消息回发”场景：
         // - 不提供 dispatcher 回发能力（响应通过 HTTP body 返回）
         const result = await withContextRequestContext(
           {
@@ -360,7 +360,9 @@ export class AgentServer {
 
         // [阶段3] 结果提取：优先拿 chat_send 的最终文本，其次回退到 result.output。
         const userVisible =
-          pickLastSuccessfulChatSendText(result.toolCalls || []) ||
+          getProcessServiceBindings().pickLastSuccessfulChatSendText(
+            result.toolCalls || [],
+          ) ||
           String(result?.output || "");
         try {
           // [阶段3] 上下文消息落盘：优先 append assistantMessage；缺失时生成文本消息兜底。

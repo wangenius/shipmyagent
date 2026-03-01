@@ -7,6 +7,7 @@
  */
 
 export type ChatContextSnapshot = {
+  contextId?: string;
   chatKey?: string;
   channel?: string;
   chatId?: string;

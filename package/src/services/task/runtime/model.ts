@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - `task.md` 使用 YAML frontmatter + markdown 正文
- * - frontmatter 必须包含：title/cron/description/chatKey/status
+ * - frontmatter 必须包含：title/cron/description/contextId/status
  * - 正文（body）会作为一次 run 的输入，且每次执行都从“干净历史”开始
  */
 
@@ -20,7 +20,7 @@ const REQUIRED_FIELDS: Array<keyof ShipTaskFrontmatterV1> = [
   "title",
   "cron",
   "description",
-  "chatKey",
+  "contextId",
   "status",
 ];
 
@@ -215,7 +215,7 @@ export function parseTaskMarkdown(params: {
     title: String(meta.title).trim(),
     cron: String(meta.cron).trim(),
     description: String(meta.description).trim(),
-    chatKey: String(meta.chatKey).trim(),
+    contextId: String(meta.contextId).trim(),
     status,
     ...(typeof meta.timezone === "string" && meta.timezone.trim()
       ? { timezone: meta.timezone.trim() }
@@ -276,7 +276,7 @@ export function buildTaskMarkdown(params: {
     title: String(frontmatter.title || "").trim(),
     cron: String(frontmatter.cron || "").trim(),
     description: String(frontmatter.description || "").trim(),
-    chatKey: String(frontmatter.chatKey || "").trim(),
+    contextId: String(frontmatter.contextId || "").trim(),
     status: String(frontmatter.status || "").trim(),
     ...(typeof frontmatter.timezone === "string" && frontmatter.timezone.trim()
       ? { timezone: frontmatter.timezone.trim() }

@@ -26,13 +26,13 @@ import {
   resolveOutputLimits,
   validateChatSendCommand,
   writeContextStdin,
-} from "./utils/ShellHelpers.js";
+} from "./ShellHelpers.js";
 import {
   closeShellContext,
   createShellContext,
   getContextOrThrow,
-} from "./utils/ShellContextManager.js";
-import { formatContextResponse } from "./utils/ShellResponse.js";
+} from "./ShellContextManager.js";
+import { formatContextResponse } from "./ShellResponse.js";
 
 /**
  * 构建标准错误响应。

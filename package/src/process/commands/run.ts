@@ -9,10 +9,8 @@
  */
 
 import { AgentServer } from "../server/Index.js";
-import { createInteractiveServer } from "../server/Interactive.js";
-import { createTelegramBot } from "../../services/chat/adapters/telegram/Bot.js";
-import { createFeishuBot } from "../../services/chat/adapters/Feishu.js";
-import { createQQBot } from "../../services/chat/adapters/Qq.js";
+import { createInteractiveServer } from "../tui/Interactive.js";
+
 import {
   getShipServiceContext,
   getShipRuntimeContext,
@@ -20,7 +18,13 @@ import {
 } from "../server/ShipRuntimeContext.js";
 import type { StartOptions } from "./types/Start.js";
 import { logger } from "../../utils/logger/Logger.js";
-import { startAllServiceRuntimes, stopAllServiceRuntimes } from "../../core/services/Registry.js";
+import {
+  startAllServiceRuntimes,
+  stopAllServiceRuntimes,
+} from "../../core/services/Registry.js";
+import { createTelegramBot } from "../../services/chat/adapters/telegram/Bot.js";
+import { createFeishuBot } from "../../services/chat/adapters/Feishu.js";
+import { createQQBot } from "../../services/chat/adapters/Qq.js";
 
 /**
  * `shipmyagent run` 命令入口。
@@ -36,7 +40,7 @@ export async function runCommand(
   cwd: string = ".",
   options: StartOptions,
 ): Promise<void> {
-  // 初始化加载（进程级单例上下文：root/config/utils/logger/chat/mcp/agents 等）
+  // 初始化加载（进程级单例上下文：root/config/utils/logger/chat/agents 等）
   await initShipRuntimeContext(cwd);
   // 占位符判定（中文）：init 生成的模板值 `${...}` 不应被当作真实密钥。
   const isPlaceholder = (value?: string): boolean => value === "${}";
@@ -237,7 +241,9 @@ export async function runCommand(
     const lifecycle = await startAllServiceRuntimes(getShipServiceContext());
     for (const item of lifecycle.results) {
       if (item.success) continue;
-      logger.error(`Service runtime start failed: ${item.service?.name || "unknown"} - ${item.error || "unknown error"}`);
+      logger.error(
+        `Service runtime start failed: ${item.service?.name || "unknown"} - ${item.error || "unknown error"}`,
+      );
     }
   } catch (e) {
     logger.error(`Service runtime bootstrap failed: ${String(e)}`);

@@ -8,7 +8,7 @@
 
 import path from "node:path";
 import type { Command } from "commander";
-import { callDaemonJsonApi } from "../daemon/Client.js";
+import { callDaemonJsonApi } from "../server/daemon/Client.js";
 import { printResult } from "../utils/CliOutput.js";
 import type { JsonValue } from "../../types/Json.js";
 import type {

@@ -10,18 +10,18 @@
 import type { ContextAgent } from "../types/ContextAgent.js";
 import type { SchedulerEnqueueResult } from "../types/ContextScheduler.js";
 import { Scheduler } from "./Scheduler.js";
-import { createContextAgent } from "../runtime/Agent.js";
 import { ContextStore } from "./ContextStore.js";
 import type { ShipContextMetadataV1 } from "../types/ContextMessage.js";
 import type { AgentResult } from "../types/Agent.js";
 import type { ContextRequestContext } from "./RequestContext.js";
-import { getShipRuntimeContextBase } from "../../process/server/ShipRuntimeContext.js";
+import { getRuntimeContextBase } from "../../process/server/ShipRuntimeContext.js";
 import path from "node:path";
 import type { JsonObject } from "../../types/Json.js";
 import {
   parseTaskRunContextId,
   getTaskRunDir,
 } from "../../services/task/runtime/Paths.js";
+import { ContextAgentRunner } from "./AgentRunner.js";
 
 /**
  * ContextManager：统一会话运行管理容器。
@@ -69,7 +69,7 @@ export class ContextManager {
     }) => Promise<void>;
     runMemoryMaintenance?: (contextId: string) => Promise<void>;
   }) {
-    const base = getShipRuntimeContextBase();
+    const base = getRuntimeContextBase();
     const queueConfig = base.config?.context?.contextQueue || {};
 
     this.runMemoryMaintenance = params?.runMemoryMaintenance;
@@ -123,7 +123,7 @@ export class ContextManager {
     const created = parsedRun
       ? (() => {
           const runDir = getTaskRunDir(
-            getShipRuntimeContextBase().rootPath,
+            getRuntimeContextBase().rootPath,
             parsedRun.taskId,
             parsedRun.timestamp,
           );
@@ -150,13 +150,11 @@ export class ContextManager {
   getAgent(contextId: string): ContextAgent {
     const key = String(contextId || "").trim();
     if (!key) {
-      throw new Error(
-        "ContextManager.getAgent requires a non-empty contextId",
-      );
+      throw new Error("ContextManager.getAgent requires a non-empty contextId");
     }
     const existing = this.agentsByContextId.get(key);
     if (existing) return existing;
-    const created = createContextAgent();
+    const created = new ContextAgentRunner();
     this.agentsByContextId.set(key, created);
     return created;
   }

@@ -6,8 +6,8 @@
  * - 在输出读空且进程退出时自动回收会话。
  */
 
-import type { JsonObject } from "../../../types/Json.js";
-import type { ShellContext, ShellOutputPage } from "../../types/Shell.js";
+import type { JsonObject } from "../../types/Json.js";
+import type { ShellContext, ShellOutputPage } from "../types/Shell.js";
 import {
   MAX_CONTEXT_PENDING_CHARS,
   approxTokenCountFromChars,

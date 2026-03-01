@@ -26,8 +26,6 @@ import {
   getShipContextRootDirPath,
   getShipConfigDirPath,
   getShipDataDirPath,
-  getShipMcpConfigPath,
-  getShipMcpSchemaPath,
   getShipProfileDirPath,
   getShipProfileOtherPath,
   getShipProfilePrimaryPath,
@@ -38,10 +36,9 @@ import {
 import { ensureDir, saveJson } from "../project/Storage.js";
 import type { ShipConfig } from "../project/Config.js";
 import { SHIP_JSON_SCHEMA } from "../../schemas/ShipSchema.js";
-import { MCP_JSON_SCHEMA } from "../../schemas/McpSchema.js";
 import type { AdapterKey, InitOptions } from "./types/Init.js";
-import { MODEL_CONFIGS } from "./const/Model.js";
-import { DEFAULT_SHIP_JSON } from "./const/Ship.js";
+import { MODEL_CONFIGS } from "../const/Model.js";
+import { DEFAULT_SHIP_JSON } from "../const/Ship.js";
 
 type InitPromptResponse = {
   name?: string;
@@ -457,18 +454,6 @@ Help users understand and work with their codebase by exploring, analyzing, and 
     // ignore
   }
 
-  // Create default mcp.json file in .ship/config/ directory + schema in .ship/schema/
-  const mcpSchemaPath = getShipMcpSchemaPath(projectRoot);
-  const mcpJsonPath = getShipMcpConfigPath(projectRoot);
-  await ensureDir(path.dirname(mcpSchemaPath));
-  await ensureDir(path.dirname(mcpJsonPath));
-  await saveJson(mcpSchemaPath, MCP_JSON_SCHEMA);
-  await saveJson(mcpJsonPath, {
-    $schema: "../schema/mcp.schema.json",
-    servers: {},
-  });
-  console.log(`✅ Created .ship/config/mcp.json (MCP configuration)`);
-
   // Install built-in skills to user directory (~/.ship/skills)
   await installBuiltInSkillsToUserDir();
 
@@ -539,7 +524,6 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   const nextSteps: string[] = [
     "Edit Agent.md to customize agent behavior",
     "Edit ship.json to modify LLM configuration (baseUrl, apiKey, temperature, etc.)",
-    "(Optional) Edit .ship/config/mcp.json to configure MCP servers for extended capabilities",
   ];
 
   if (selectedAdapters.has("telegram")) {
@@ -567,10 +551,6 @@ Help users understand and work with their codebase by exploring, analyzing, and 
   console.log(
     "💡 Tip: API Key is recommended to use environment variables (e.g. ${ANTHROPIC_API_KEY} or ${OPENAI_API_KEY})\n",
   );
-  console.log(
-    "🔌 MCP Support: Configure MCP servers in .ship/config/mcp.json to connect to databases, APIs, and more",
-  );
-  console.log("   Learn more: https://modelcontextprotocol.io\n");
   console.log(
     "To switch models or modify configuration, edit the llm field in ship.json directly.\n",
   );

@@ -22,24 +22,24 @@ export type SkillListResponse = {
 
 export type SkillLoadRequest = {
   name: string;
-  chatKey: string;
+  contextId: string;
 };
 
 export type SkillLoadResponse = {
   success: boolean;
   skill?: SkillSummary;
-  chatKey?: string;
+  contextId?: string;
   error?: string;
 };
 
 export type SkillUnloadRequest = {
   name: string;
-  chatKey: string;
+  contextId: string;
 };
 
 export type SkillUnloadResponse = {
   success: boolean;
-  chatKey?: string;
+  contextId?: string;
   removedSkillId?: string;
   pinnedSkillIds?: string[];
   error?: string;
@@ -47,7 +47,7 @@ export type SkillUnloadResponse = {
 
 export type SkillPinnedListResponse = {
   success: boolean;
-  chatKey?: string;
+  contextId?: string;
   pinnedSkillIds?: string[];
   error?: string;
 };

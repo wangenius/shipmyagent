@@ -144,11 +144,3 @@ export function getShipTasksDirPath(cwd: string): string {
 export function getShipDebugDirPath(cwd: string): string {
   return path.join(getShipDirPath(cwd), ".debug");
 }
-
-export function getShipMcpConfigPath(cwd: string): string {
-  return path.join(getShipConfigDirPath(cwd), "mcp.json");
-}
-
-export function getShipMcpSchemaPath(cwd: string): string {
-  return path.join(getShipDirPath(cwd), "schema", "mcp.schema.json");
-}

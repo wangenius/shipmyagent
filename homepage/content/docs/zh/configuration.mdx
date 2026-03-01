@@ -30,41 +30,6 @@ your-project/
 `shipmyagent init` 会自动生成 `ship.json` 的 `$schema` 以及对应的 schema 文件（`.ship/schema/ship.schema.json`），便于 IDE 自动补全与校验。
 :::
 
-## MCP（Model Context Protocol）
-
-ShipMyAgent 的 MCP 配置不在 `ship.json` 里，而是在项目运行目录下的 `.ship/config/mcp.json`。
-
-详细说明见：[/docs/zh/mcp](/docs/zh/mcp)。
-
-`shipmyagent init` 会自动生成：
-
-- `.ship/config/mcp.json`
-- `.ship/schema/mcp.schema.json`（并在 `mcp.json` 里写入 `$schema`，用于 IDE 校验/补全）
-
-### 配置格式
-
-```json
-{
-  "$schema": "../schema/mcp.schema.json",
-  "servers": {
-    "my-server": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["path/to/mcp-server.js"],
-      "env": {
-        "API_KEY": "${API_KEY}"
-      }
-    }
-  }
-}
-```
-
-支持的 `type`：
-
-- `stdio`: 本地命令（`command` + `args`）
-- `sse`: `url`
-- `http`: `url`（可选 `headers`）
-
 ### 配置部分
 
 #### name (string, 必需)

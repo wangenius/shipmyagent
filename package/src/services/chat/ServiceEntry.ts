@@ -15,7 +15,7 @@ import {
   resolveChatKey,
   sendChatTextByChatKey,
 } from "./Service.js";
-import { callDaemonJsonApi } from "../../process/daemon/Client.js";
+import { callDaemonJsonApi } from "../../process/server/daemon/Client.js";
 import { printResult } from "../../process/utils/CliOutput.js";
 import type { SmaService } from "../../core/services/ServiceRegistry.js";
 import type { ChatSendResponse } from "./types/ChatCommand.js";

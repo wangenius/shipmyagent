@@ -15,8 +15,8 @@ export type ShipTaskFrontmatterV1 = {
   cron: string;
   /** 任务描述（给执行器的意图说明） */
   description: string;
-  /** 执行结果回发目标（chatKey） */
-  chatKey: string;
+  /** 执行结果回发目标（contextId） */
+  contextId: string;
   /** 启停状态 */
   status: ShipTaskStatus;
   /** 可选时区（IANA，如 Asia/Shanghai） */
@@ -58,7 +58,7 @@ export type ShipTaskRunMetaV1 = {
   /** 本次 run 时间戳（目录名） */
   timestamp: string;
   /** 通知回发目标 */
-  chatKey: string;
+  contextId: string;
   /** 触发来源 */
   trigger: ShipTaskRunTriggerV1;
   /** 最终状态（综合执行阶段 + 结果校验） */

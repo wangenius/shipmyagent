@@ -73,7 +73,7 @@ export async function listTaskDefinitions(params: {
       description: task.description,
       cron: task.cron,
       status: task.status,
-      chatKey: task.chatKey,
+      contextId: task.contextId,
       ...(task.timezone ? { timezone: task.timezone } : {}),
       ...(Array.isArray(task.requiredArtifacts) && task.requiredArtifacts.length > 0
         ? { requiredArtifacts: task.requiredArtifacts }
@@ -101,11 +101,11 @@ export async function createTaskDefinition(params: {
   const title = String(req.title || "").trim();
   const description = String(req.description || "").trim();
   const cron = String(req.cron || "@manual").trim() || "@manual";
-  const chatKey = String(req.chatKey || "").trim();
+  const contextId = String(req.contextId || "").trim();
 
   if (!title) return { success: false, error: "Missing title" };
   if (!description) return { success: false, error: "Missing description" };
-  if (!chatKey) return { success: false, error: "Missing chatKey" };
+  if (!contextId) return { success: false, error: "Missing contextId" };
 
   const status = resolveTaskStatus(req.status, "paused");
   const timezone = typeof req.timezone === "string" ? req.timezone.trim() : "";
@@ -126,7 +126,7 @@ export async function createTaskDefinition(params: {
         title,
         description,
         cron,
-        chatKey,
+        contextId,
         status,
         ...(timezone ? { timezone } : {}),
         ...(requiredArtifactsNormalized.value.length > 0
@@ -200,9 +200,9 @@ export async function updateTaskDefinition(params: {
       typeof req.cron === "string" ? req.cron.trim() : current.frontmatter.cron;
     if (!cron) return { success: false, error: "cron cannot be empty" };
 
-    const chatKey =
-      typeof req.chatKey === "string" ? req.chatKey.trim() : current.frontmatter.chatKey;
-    if (!chatKey) return { success: false, error: "chatKey cannot be empty" };
+    const contextId =
+      typeof req.contextId === "string" ? req.contextId.trim() : current.frontmatter.contextId;
+    if (!contextId) return { success: false, error: "contextId cannot be empty" };
 
     const status =
       req.status === undefined
@@ -280,7 +280,7 @@ export async function updateTaskDefinition(params: {
         title,
         description,
         cron,
-        chatKey,
+        contextId,
         status,
         ...(timezone ? { timezone } : {}),
         ...(requiredArtifacts.length > 0 ? { requiredArtifacts } : {}),

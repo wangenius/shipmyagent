@@ -27,8 +27,7 @@ import type { Logger } from "../../utils/logger/Logger.js";
 import {
   contextRequestContext,
   type ContextRequestContext,
-} from "../context/RequestContext.js";
-import { createAgentTools } from "../tools/AgentTools.js";
+} from "./RequestContext.js";
 import { openai } from "@ai-sdk/openai";
 import type {
   ShipContextChannel,
@@ -37,16 +36,17 @@ import type {
 } from "../types/ContextMessage.js";
 import {
   getShipRuntimeContext,
-  getShipRuntimeContextBase,
+  getRuntimeContextBase,
 } from "../../process/server/ShipRuntimeContext.js";
 import type { ContextAgent } from "../types/ContextAgent.js";
 import { collectSystemPromptProviderResult } from "../prompts/SystemProvider.js";
-import type { ContextStore } from "../context/ContextStore.js";
+import type { ContextStore } from "./ContextStore.js";
 import {
   extractTextFromUiMessage,
   extractToolCallsFromUiMessage,
 } from "./UiMessage.js";
-import type { SystemPromptProviderResult } from "../types/SystemPromptProvider.js";
+import { loadProjectDotenv } from "../../process/project/Config.js";
+import { shellTools } from "../shell/Tool.js";
 
 type ToolExecute = NonNullable<Tool["execute"]>;
 type ToolWithExecute = Tool & {
@@ -81,7 +81,7 @@ export class ContextAgentRunner implements ContextAgent {
    * 获取运行时 logger。
    */
   getLogger(): Logger {
-    return getShipRuntimeContextBase().logger;
+    return getRuntimeContextBase().logger;
   }
 
   /**
@@ -94,7 +94,10 @@ export class ContextAgentRunner implements ContextAgent {
    */
   async initialize(): Promise<void> {
     try {
-      this.tools = createAgentTools();
+      // 注意：不要在模块顶层读取 runtime context，否则像 `sma -v` 这种只打印版本号的场景也会因为未初始化而崩溃
+      const runtime = getShipRuntimeContext();
+      loadProjectDotenv(runtime.rootPath);
+      this.tools = { ...shellTools };
 
       this.model = await createModel({
         config: getShipRuntimeContext().config,
@@ -183,7 +186,6 @@ export class ContextAgentRunner implements ContextAgent {
   ): Promise<AgentResult> {
     const toolCalls: AgentResult["toolCalls"] = [];
     let hadToolFailure = false;
-    const toolFailureSummaries: string[] = [];
     const retryAttempts = opts?.retryAttempts ?? 0;
     const laneMergeAttempts = opts?.laneMergeAttempts ?? 0;
     const drainLaneMerged = opts?.drainLaneMerged;
@@ -214,21 +216,19 @@ export class ContextAgentRunner implements ContextAgent {
         requestId,
       });
 
-      // phase 1（中文）：收集 provider 结果（附加系统消息 + activeTools）。
-      const providerResult = await collectSystemPromptProviderResult({
+      const staticSystemMessages = transformPromptsIntoSystemMessages([
+        ...runtime.systems,
+      ]);
+      let currentProviderResult = await collectSystemPromptProviderResult({
         projectRoot: runtime.rootPath,
         contextId,
         requestId,
         allToolNames: Object.keys(this.tools),
       });
-
-      const staticSystemMessages = transformPromptsIntoSystemMessages([
-        ...runtime.systems,
-      ]);
-      const baseSystemMessages: SystemModelMessage[] = [
+      let currentBaseSystemMessages: SystemModelMessage[] = [
         ...runtimeSystemMessages,
         ...staticSystemMessages,
-        ...providerResult.messages,
+        ...currentProviderResult.messages,
       ];
 
       const compactPolicy = this.resolveCompactPolicy(retryAttempts);
@@ -236,7 +236,7 @@ export class ContextAgentRunner implements ContextAgent {
       try {
         const compactResult = await contextStore.compactIfNeeded({
           model: this.model,
-          system: baseSystemMessages,
+          system: currentBaseSystemMessages,
           keepLastMessages: compactPolicy.keepLastMessages,
           maxInputTokensApprox: compactPolicy.maxInputTokensApprox,
           archiveOnCompact: compactPolicy.archiveOnCompact,
@@ -245,8 +245,6 @@ export class ContextAgentRunner implements ContextAgent {
       } catch {
         // ignore compact failure; fallback to un-compacted context messages
       }
-
-      let currentProviderResult = providerResult;
       if (compacted) {
         // 关键点（中文）：compact 后重新聚合 provider，保证 prompt 与 activeTools 同步最新状态。
         currentProviderResult = await collectSystemPromptProviderResult({
@@ -255,17 +253,17 @@ export class ContextAgentRunner implements ContextAgent {
           requestId,
           allToolNames: Object.keys(this.tools),
         });
+        currentBaseSystemMessages = [
+          ...runtimeSystemMessages,
+          ...staticSystemMessages,
+          ...currentProviderResult.messages,
+        ];
       }
 
-      const currentBaseSystemMessages: SystemModelMessage[] = [
-        ...runtimeSystemMessages,
-        ...staticSystemMessages,
-        ...currentProviderResult.messages,
-      ];
-
-      let baseModelMessages: ModelMessage[] = await contextStore.toModelMessages(
-        { tools: this.tools },
-      );
+      let baseModelMessages: ModelMessage[] =
+        await contextStore.toModelMessages({
+          tools: this.tools,
+        });
       if (!Array.isArray(baseModelMessages) || baseModelMessages.length === 0) {
         baseModelMessages = [{ role: "user", content: userText }];
       }
@@ -395,10 +393,18 @@ export class ContextAgentRunner implements ContextAgent {
                   : 0;
               }
 
-              const stepOverrides = this.buildStepOverrides({
-                providerResult: currentProviderResult,
-                baseSystemMessages: currentBaseSystemMessages,
-              });
+              const stepOverrides: {
+                system?: Array<SystemModelMessage>;
+                activeTools?: string[];
+              } = {
+                system: currentBaseSystemMessages,
+              };
+              if (
+                Array.isArray(currentProviderResult.activeTools) &&
+                currentProviderResult.activeTools.length > 0
+              ) {
+                stepOverrides.activeTools = currentProviderResult.activeTools;
+              }
 
               return {
                 ...stepOverrides,
@@ -514,11 +520,6 @@ export class ContextAgentRunner implements ContextAgent {
             (parsed as { success?: boolean }).success === false
           ) {
             hadToolFailure = true;
-            const parsedObj = parsed as { error?: string; stderr?: string };
-            const err = parsedObj.error ?? parsedObj.stderr ?? "unknown error";
-            toolFailureSummaries.push(
-              `${tc.tool}: ${String(err)}`.slice(0, 200),
-            );
           }
         } catch {
           // ignore
@@ -634,39 +635,6 @@ export class ContextAgentRunner implements ContextAgent {
   }
 
   /**
-   * 构造 step 覆盖配置。
-   *
-   * 关键点（中文）
-   * - provider 有 messages 时，用运行时系统消息替换默认系统消息。
-   * - provider 有 activeTools 时，收敛可用工具集合。
-   */
-  private buildStepOverrides(input: {
-    providerResult: SystemPromptProviderResult;
-    baseSystemMessages: SystemModelMessage[];
-  }): {
-    system?: Array<SystemModelMessage>;
-    activeTools?: string[];
-  } {
-    const out: {
-      system?: Array<SystemModelMessage>;
-      activeTools?: string[];
-    } = {};
-
-    if (Array.isArray(input.providerResult.messages)) {
-      out.system = input.baseSystemMessages;
-    }
-
-    if (
-      Array.isArray(input.providerResult.activeTools) &&
-      input.providerResult.activeTools.length > 0
-    ) {
-      out.activeTools = input.providerResult.activeTools;
-    }
-
-    return out;
-  }
-
-  /**
    * 计算 compact 重试策略。
    *
    * 算法说明（中文）
@@ -685,10 +653,7 @@ export class ContextAgentRunner implements ContextAgent {
       typeof contextMessagesConfig?.keepLastMessages === "number"
         ? Math.max(
             6,
-            Math.min(
-              5000,
-              Math.floor(contextMessagesConfig.keepLastMessages),
-            ),
+            Math.min(5000, Math.floor(contextMessagesConfig.keepLastMessages)),
           )
         : 30;
     const baseMaxInputTokensApprox =
@@ -727,10 +692,10 @@ export class ContextAgentRunner implements ContextAgent {
   /**
    * 确保当前用户消息已经落盘。
    *
-  * 关键点（中文）
-  * - 某些入口可能未提前 append user message；这里兜底补写。
-  * - 通过“最后一条 user 文本相等”做幂等，避免重复写入。
-  */
+   * 关键点（中文）
+   * - 某些入口可能未提前 append user message；这里兜底补写。
+   * - 通过“最后一条 user 文本相等”做幂等，避免重复写入。
+   */
   private async ensureCurrentUserRecorded(params: {
     contextStore: ContextStore;
     userText: string;

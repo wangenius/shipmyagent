@@ -5,7 +5,7 @@
  * - 创建 run 目录（timestamp）
  * - 以“干净历史”调用当前 runtime 的 Agent（逻辑与正常 chat 一致）
  * - 把执行过程与结果写入 run 目录（messages.jsonl / output.md / result.md / error.md）
- * - 执行结束后向 task.frontmatter.chatKey 推送一条结果消息（成功/失败都会发）
+ * - 执行结束后向 task.frontmatter.contextId 推送一条结果消息（成功/失败都会发）
  */
 
 import fs from "fs-extra";
@@ -298,7 +298,7 @@ async function appendExecutorAssistantMessage(params: {
           extra: {
             via: "task_runner",
             note: "assistant_message_missing",
-            chatKey: params.runContextId,
+            contextId: params.runContextId,
           },
         },
         kind: "normal",
@@ -371,7 +371,7 @@ async function validateTaskResult(params: {
  * 1) 解析 task + 创建 run 目录
  * 2) 在 scheduler 上下文里执行 agent
  * 3) 产物落盘（input/output/result/error/run.json）
- * 4) 向 chatKey 发送执行通知（成功/失败都通知）
+ * 4) 向 contextId 发送执行通知（成功/失败都通知）
  *
  * 返回值（中文）
  * - `ok`/`status`：任务执行结果。
@@ -438,7 +438,7 @@ export async function runTaskNow(params: {
       `- title: ${task.frontmatter.title}`,
       `- cron: \`${task.frontmatter.cron}\``,
       `- status: \`${task.frontmatter.status}\``,
-      `- chatKey: \`${task.frontmatter.chatKey}\``,
+      `- contextId: \`${task.frontmatter.contextId}\``,
       task.frontmatter.timezone ? `- timezone: \`${task.frontmatter.timezone}\`` : null,
       Array.isArray(task.frontmatter.requiredArtifacts) && task.frontmatter.requiredArtifacts.length > 0
         ? `- requiredArtifacts: \`${task.frontmatter.requiredArtifacts.join(", ")}\``
@@ -723,7 +723,7 @@ export async function runTaskNow(params: {
     v: 1,
     taskId: task.taskId,
     timestamp,
-    chatKey: task.frontmatter.chatKey,
+    contextId: task.frontmatter.contextId,
     trigger: params.trigger,
     status,
     executionStatus,
@@ -805,7 +805,7 @@ export async function runTaskNow(params: {
 
   await fs.writeFile(resultMdPath, resultLines.join("\n"), "utf-8");
 
-  // phase 3：通知 chatKey（成功/失败都发，便于可观测）
+  // phase 3：通知 contextId（成功/失败都发，便于可观测）
   // 通知策略（中文）：通知失败不影响任务主状态，只记录 `notifyError` 供排查。
   let notified = false;
   let notifyError: string | undefined;
@@ -832,8 +832,8 @@ export async function runTaskNow(params: {
       textLines.push("");
       textLines.push(`error: ${summarizeText(errorText, 500)}`);
     }
-    const send = await getServiceChatRuntimeBridge(context).sendTextByChatKey({
-      chatKey: task.frontmatter.chatKey,
+    const send = await getServiceChatRuntimeBridge(context).sendTextByContextId({
+      contextId: task.frontmatter.contextId,
       text: textLines.join("\n"),
     });
     if (!send.success) {

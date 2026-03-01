@@ -16,9 +16,9 @@ import {
   updateTaskDefinition,
   setTaskStatus,
 } from "./Service.js";
-import { callDaemonJsonApi } from "../../process/daemon/Client.js";
+import { callDaemonJsonApi } from "../../process/server/daemon/Client.js";
 import { printResult } from "../../process/utils/CliOutput.js";
-import { resolveChatKey } from "../../process/runtime/ChatKey.js";
+import { resolveContextId } from "../../process/context/ContextId.js";
 import type {
   TaskCreateRequest,
   TaskCreateResponse,
@@ -85,7 +85,7 @@ type TaskCreateCliOptions = BaseTaskCliOptions & {
   title: string;
   cron?: string;
   description: string;
-  chatKey?: string;
+  contextId?: string;
   status?: ShipTaskStatus;
   timezone?: string;
   requiredArtifact?: string[];
@@ -99,7 +99,7 @@ type TaskUpdateCliOptions = BaseTaskCliOptions & {
   title?: string;
   cron?: string;
   description?: string;
-  chatKey?: string;
+  contextId?: string;
   status?: ShipTaskStatus;
   timezone?: string;
   clearTimezone?: boolean;
@@ -198,13 +198,25 @@ async function runTaskListCommand(options: TaskListCliOptions): Promise<void> {
 async function runTaskCreateCommand(options: TaskCreateCliOptions): Promise<void> {
   const projectRoot = resolveProjectRoot(options.path);
 
-  const chatKey = resolveChatKey({ chatKey: options.chatKey });
+  const contextId = resolveContextId({ contextId: options.contextId });
+  if (!contextId) {
+    printResult({
+      asJson: options.json,
+      success: false,
+      title: "task create failed",
+      payload: {
+        error: "Missing contextId. Provide --context-id or ensure SMA_CTX_CONTEXT_ID is available.",
+      },
+    });
+    return;
+  }
+
   const request: TaskCreateRequest = {
     ...(options.taskId ? { taskId: options.taskId } : {}),
     title: String(options.title || "").trim(),
     cron: String(options.cron || "@manual").trim() || "@manual",
     description: String(options.description || "").trim(),
-    chatKey: String(chatKey || "").trim(),
+    contextId,
     status: options.status,
     ...(options.timezone ? { timezone: options.timezone } : {}),
     ...(Array.isArray(options.requiredArtifact) && options.requiredArtifact.length > 0
@@ -360,7 +372,7 @@ async function runTaskUpdateCommand(params: {
     typeof opts.title === "string" ||
     typeof opts.cron === "string" ||
     typeof opts.description === "string" ||
-    typeof opts.chatKey === "string" ||
+    typeof opts.contextId === "string" ||
     typeof opts.status === "string" ||
     typeof opts.timezone === "string" ||
     Boolean(opts.clearTimezone) ||
@@ -391,7 +403,7 @@ async function runTaskUpdateCommand(params: {
     ...(typeof opts.description === "string"
       ? { description: opts.description }
       : {}),
-    ...(typeof opts.chatKey === "string" ? { chatKey: String(opts.chatKey || "").trim() } : {}),
+    ...(typeof opts.contextId === "string" ? { contextId: String(opts.contextId || "").trim() } : {}),
     ...(typeof opts.status === "string" ? { status: opts.status } : {}),
     ...(typeof opts.timezone === "string" ? { timezone: opts.timezone } : {}),
     ...(opts.clearTimezone ? { clearTimezone: true } : {}),
@@ -511,7 +523,7 @@ function setupCli(registry: Parameters<SmaService["registerCli"]>[0]): void {
         .requiredOption("--description <description>", "任务描述")
         .option("--task-id <taskId>", "任务 ID（不传则自动生成）")
         .option("--cron <cron>", "cron 表达式（默认 @manual）", "@manual")
-        .option("--chat-key <chatKey>", "通知目标 chatKey（不传尝试使用 SMA_CTX_CHAT_KEY）")
+        .option("--context-id <contextId>", "通知目标 contextId（不传尝试使用 SMA_CTX_CONTEXT_ID）")
         .option("--status <status>", "状态（enabled|paused|disabled）", "paused")
         .option("--timezone <timezone>", "IANA 时区")
         .option(
@@ -558,7 +570,7 @@ function setupCli(registry: Parameters<SmaService["registerCli"]>[0]): void {
         .option("--title <title>", "任务标题")
         .option("--description <description>", "任务描述")
         .option("--cron <cron>", "cron 表达式")
-        .option("--chat-key <chatKey>", "通知目标 chatKey")
+        .option("--context-id <contextId>", "通知目标 contextId")
         .option("--status <status>", "状态（enabled|paused|disabled）")
         .option("--timezone <timezone>", "IANA 时区")
         .option("--clear-timezone", "清空 timezone", false)
@@ -652,7 +664,7 @@ function setupServer(
         title: getStringField(body, "title"),
         cron: getStringField(body, "cron"),
         description: getStringField(body, "description"),
-        chatKey: getStringField(body, "chatKey"),
+        contextId: getStringField(body, "contextId"),
         status: getOptionalTaskStatusField(body, "status"),
         timezone: getOptionalStringField(body, "timezone"),
         body: getOptionalStringField(body, "body"),
@@ -709,8 +721,8 @@ function setupServer(
         ...(getOptionalStringField(body, "cron")
           ? { cron: getOptionalStringField(body, "cron") }
           : {}),
-        ...(getOptionalStringField(body, "chatKey")
-          ? { chatKey: getOptionalStringField(body, "chatKey") }
+        ...(getOptionalStringField(body, "contextId")
+          ? { contextId: getOptionalStringField(body, "contextId") }
           : {}),
         ...(getOptionalTaskStatusField(body, "status")
           ? { status: getOptionalTaskStatusField(body, "status") }

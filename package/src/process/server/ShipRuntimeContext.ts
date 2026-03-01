@@ -1,17 +1,15 @@
 import { DEFAULT_SHIP_PROMPTS } from "../../core/prompts/System.js";
+import "../../core/services/ProcessBindings.js";
 import { logger as defaultLogger, type Logger } from "../../utils/logger/Logger.js";
-import { McpManager } from "../../services/mcp/runtime/Manager.js";
 import { ContextManager } from "../../core/context/ContextManager.js";
 import {
   contextRequestContext,
   withContextRequestContext,
 } from "../../core/context/RequestContext.js";
 import { createModel } from "../../core/llm/CreateModel.js";
-import { runContextMemoryMaintenance } from "../../services/memory/runtime/Service.js";
-import { pickLastSuccessfulChatSendText } from "../../services/chat/runtime/UserVisibleText.js";
-import { sendTextByChatKey } from "../../services/chat/runtime/ChatkeySend.js";
-import { getChatSender } from "../../services/chat/runtime/ChatSendRegistry.js";
-import { registerServiceSystemPromptProviders } from "./SystemPromptProviders.js";
+import {
+  getProcessServiceBindings,
+} from "../runtime/ServiceProcessBindings.js";
 import type { ServiceRuntimeDependencies } from "../runtime/types/ServiceRuntimeTypes.js";
 import {
   loadProjectDotenv,
@@ -44,7 +42,7 @@ import path from "path";
  *
  * 初始化时序（关键节点）
  * - 启动入口先 `setShipRuntimeContextBase(...)`
- * - 初始化 MCP/ContextManager 后再 `setShipRuntimeContext(...)`
+ * - 初始化 ContextManager 后再 `setShipRuntimeContext(...)`
  * - 业务模块只调用 `getShipRuntimeContext()`（未 ready 会抛错）
  */
 export type ShipRuntimeContextBase = {
@@ -63,7 +61,6 @@ export type ShipRuntimeContextBase = {
 };
 
 export type ShipRuntimeContext = ShipRuntimeContextBase & {
-  mcpManager: McpManager;
   contextManager: ContextManager;
 };
 
@@ -95,20 +92,29 @@ const serviceModelFactory = {
  * - 通过 `getShipServiceContext()` 延迟获取依赖，确保拿到最新 contextManager。
  */
 const serviceChatRuntimeBridge = {
-  pickLastSuccessfulChatSendText,
-  sendTextByChatKey: (params: { chatKey: string; text: string }) =>
-    sendTextByChatKey({
+  pickLastSuccessfulChatSendText: (
+    toolCalls: Parameters<
+      ReturnType<typeof getProcessServiceBindings>["pickLastSuccessfulChatSendText"]
+    >[0],
+  ) => getProcessServiceBindings().pickLastSuccessfulChatSendText(toolCalls),
+  sendTextByContextId: async (params: { contextId: string; text: string }) => {
+    const result = await getProcessServiceBindings().sendTextByContextId({
       context: getShipServiceContext(),
-      chatKey: params.chatKey,
+      contextId: params.contextId,
       text: params.text,
-    }),
+    });
+    return {
+      success: Boolean(result.success),
+      ...(result.success ? {} : { error: result.error || "chat send failed" }),
+    };
+  },
 };
 
 /**
  * 构建基础 service context（不含 contextManager）。
  *
  * 场景（中文）
- * - runtime 尚未 ready（例如 MCP 初始化阶段）也可安全使用。
+ * - runtime 尚未 ready（例如 ContextManager 初始化阶段）也可安全使用。
  */
 function buildServiceContextBase(
   input: ShipRuntimeContextBase,
@@ -141,7 +147,7 @@ function buildServiceContextReady(
  * 获取基础 service context。
  */
 export function getShipServiceContextBase(): ServiceRuntimeDependencies {
-  return buildServiceContextBase(getShipRuntimeContextBase());
+  return buildServiceContextBase(getRuntimeContextBase());
 }
 
 /**
@@ -176,7 +182,7 @@ export function setShipRuntimeContext(next: ShipRuntimeContext): void {
  * 失败语义（中文）
  * - 未初始化直接抛错，提示启动阶段必须先调用 init。
  */
-export function getShipRuntimeContextBase(): ShipRuntimeContextBase {
+export function getRuntimeContextBase(): ShipRuntimeContextBase {
   if (base) return base;
   throw new Error(
     "Ship runtime context (base) is not initialized. Call initShipRuntimeContext() during startup.",
@@ -198,7 +204,7 @@ export function getShipRuntimeContext(): ShipRuntimeContext {
     );
   }
   throw new Error(
-    "Ship runtime context is not ready yet. Ensure MCP/ContextManager are initialized before access.",
+    "Ship runtime context is not ready yet. Ensure ContextManager is initialized before access.",
   );
 }
 
@@ -209,7 +215,7 @@ export function getShipRuntimeContext(): ShipRuntimeContext {
  * 1) 解析 rootPath + 绑定 logger 落盘目录
  * 2) 校验关键文件并确保 `.ship` 目录结构
  * 3) 加载 dotenv + ship.json，建立 base context
- * 4) 初始化 MCP / ContextManager，建立 ready context
+ * 4) 初始化 ContextManager，建立 ready context
  * 5) 注册 service system prompt providers
  */
 
@@ -259,11 +265,7 @@ You are a helpful project assistant.`;
     systems,
   });
 
-  const mcpManager = new McpManager({
-    context: getShipServiceContextBase(),
-  });
-  await mcpManager.initialize();
-
+  const bindings = getProcessServiceBindings();
   let contextManager: ContextManager;
   contextManager = new ContextManager({
     sendAction: async ({ context, action }) => {
@@ -273,11 +275,8 @@ You are a helpful project assistant.`;
       }
       const chatId = String(context.targetId || "").trim();
       if (!chatId) return;
-
-      const dispatcher = getChatSender(channel);
-      if (!dispatcher || typeof dispatcher.sendAction !== "function") return;
-
-      await dispatcher.sendAction({
+      await bindings.sendChatAction({
+        channel,
         chatId,
         action,
         ...(typeof context.threadId === "number"
@@ -292,7 +291,7 @@ You are a helpful project assistant.`;
       });
     },
     runMemoryMaintenance: async (contextId) =>
-      runContextMemoryMaintenance({
+      bindings.runMemoryMaintenance({
         context: getShipServiceContext(),
         contextId,
         getContextStore: (id) => contextManager.getContextStore(id),
@@ -305,13 +304,12 @@ You are a helpful project assistant.`;
     logger: defaultLogger,
     config,
     systems,
-    mcpManager,
     contextManager,
   });
-
-  registerServiceSystemPromptProviders({
+  getProcessServiceBindings().registerSystemPromptProviders({
     getContext: () => getShipServiceContext(),
   });
+
 }
 
 /**

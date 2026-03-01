@@ -18,7 +18,7 @@ export type TaskCreateRequest = {
   title: string;
   cron: string;
   description: string;
-  chatKey: string;
+  contextId: string;
   status?: ShipTaskStatus;
   timezone?: string;
   requiredArtifacts?: string[];
@@ -40,7 +40,7 @@ export type TaskUpdateRequest = {
   title?: string;
   cron?: string;
   description?: string;
-  chatKey?: string;
+  contextId?: string;
   status?: ShipTaskStatus;
   timezone?: string;
   clearTimezone?: boolean;
@@ -67,7 +67,7 @@ export type TaskListItemView = {
   description: string;
   cron: string;
   status: string;
-  chatKey: string;
+  contextId: string;
   timezone?: string;
   requiredArtifacts?: string[];
   minOutputChars?: number;

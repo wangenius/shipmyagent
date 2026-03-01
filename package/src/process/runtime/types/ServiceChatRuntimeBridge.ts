@@ -10,17 +10,17 @@ import type { AgentResult } from "../../../core/types/Agent.js";
  */
 
 /**
- * 按 chatKey 发送文本参数。
+ * 按 contextId 发送文本参数。
  */
-export type ServiceChatSendByKeyParams = {
-  chatKey: string;
+export type ServiceChatSendByContextIdParams = {
+  contextId: string;
   text: string;
 };
 
 /**
- * 按 chatKey 发送结果。
+ * 按 contextId 发送结果。
  */
-export type ServiceChatSendByKeyResult = {
+export type ServiceChatSendByContextIdResult = {
   success: boolean;
   error?: string;
 };
@@ -29,11 +29,11 @@ export type ServiceChatSendByKeyResult = {
  * Chat 运行时桥接端口。
  *
  * - `pickLastSuccessfulChatSendText`：从 toolCalls 还原用户可见文本。
- * - `sendTextByChatKey`：向指定会话回发消息。
+ * - `sendTextByContextId`：向指定会话回发消息。
  */
 export type ServiceChatRuntimeBridge = {
   pickLastSuccessfulChatSendText(toolCalls: AgentResult["toolCalls"]): string;
-  sendTextByChatKey(
-    params: ServiceChatSendByKeyParams,
-  ): Promise<ServiceChatSendByKeyResult>;
+  sendTextByContextId(
+    params: ServiceChatSendByContextIdParams,
+  ): Promise<ServiceChatSendByContextIdResult>;
 };

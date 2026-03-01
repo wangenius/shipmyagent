@@ -10,6 +10,7 @@ import type { Command } from "commander";
 import type { Hono } from "hono";
 import type { ServiceRuntimeDependencies } from "../../process/runtime/types/ServiceRuntimeTypes.js";
 import type { JsonValue } from "../../types/Json.js";
+import "./ProcessBindings.js";
 import type {
   ServerRouteRegistry,
   SmaService,

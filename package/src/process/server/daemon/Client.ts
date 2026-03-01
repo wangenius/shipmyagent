@@ -12,9 +12,9 @@ import {
   type DaemonJsonApiCallParams,
   type DaemonJsonApiCallResult,
 } from "./Api.js";
-import { getShipJsonPath } from "../project/Paths.js";
-import { loadShipConfig } from "../project/Config.js";
-import type { JsonObject, JsonValue } from "../../types/Json.js";
+import { getShipJsonPath } from "../../project/Paths.js";
+import { loadShipConfig } from "../../project/Config.js";
+import type { JsonObject, JsonValue } from "../../../types/Json.js";
 
 /**
  * 解析端口值。
